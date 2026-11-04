@@ -11,7 +11,6 @@
 // 词缀数值缩放分组
 const AFFIX_PCT  = ["dmgPct","fireRatePct","accPct","magPct","reloadPct","elemPct","elemChance","splashPct","projSpeed","lifesteal",
                     "recoil","moveSpeed","range","splashDmg","shieldOnHit","ammoEff"];
-const AFFIX_FLAT = ["critDmg","critChance"];   // 百分点点数（20 = +20%）
 const AFFIX_INT  = ["pierce","pellets"];       // 整数，不缩放
 // 反向语义：数值越高越「减负」（后坐力-、省弹）的词缀，文案用减号呈现
 const AFFIX_INVERT = { recoil:true, ammoEff:true };
@@ -46,7 +45,7 @@ function affixFits(a, ctx){
   if(a.elem && ctx.element!==a.elem) return false;      // 弹种专属词缀只落在对应弹种武器上
   if(a.elemOnly && ctx.element==="none") return false;
   if(a.needSplash && !(ctx.splash>0)) return false;
-  // v0.12.5 品质门槛：minQ 词条（双管的 / 蜂群的）只在足够高品质的枪上出现
+  // 品质门槛：minQ 词条（双管的 / 蜂群的）只在足够高品质的枪上出现
   if(a.minQ!==undefined){
     const q = (ctx.q===undefined||ctx.q===null) ? -1 : ctx.q;
     if(q < a.minQ) return false;
@@ -111,12 +110,6 @@ const GUN_SLOTS = [
 const GUN_SLOT_BY_ID = {};
 for(const s of GUN_SLOTS) GUN_SLOT_BY_ID[s.id]=s;
 
-const PART_PREFIX = {
-  white:"标准", green:"改良", blue:"制式", purple:"军规", orange:"精工",
-  pearl:"特种", ancient:"试验", rainbow:"原型", mythic:"定制",
-  primordial:"竞赛", celestial:"收藏", singularity:"出厂",
-};
-
 // 单条配件词缀数值
 function partStatValue(stat, ilvl, R){
   if(AFFIX_INT.includes(stat)) return Math.max(1, Math.round(2 + ilvl*0.06 + R.mult*0.6));
@@ -141,7 +134,7 @@ function rollPart(slotId, ilvl, rarityId){
     mods.push({ stat:st, value:partStatValue(st, ilvl, R) });
   }
   // 所有部件必带 1 前缀 + 1 后缀（参数直接计入部件与武器属性）
-  // v0.15.0：改装词条池已全部为现实工艺参数，不再需要按「弹种/额外弹丸」过滤
+  // 改装词条池已全部为现实工艺参数，不再需要按「弹种/额外弹丸」过滤
   const cleanPool = arr => arr.filter(a=>!a.elem && !a.elemOnly && !a.needSplash && a.minQ===undefined);
   const pre = RNG.pick(cleanPool(AFFIXES.prefix));
   const suf = RNG.pick(cleanPool(AFFIXES.suffix));
@@ -202,7 +195,7 @@ function partValue(p){
 class Weapon {
   constructor(spec){
     Object.assign(this, spec);
-    this.laser=false;   // v0.15.0：一律实体弹丸（旧存档的 laser 字段强制归一）
+    this.laser=false;   // 一律实体弹丸（旧存档的 laser 字段强制归一）
     if(!this.affixes) this.affixes=[];
     if(this.power===undefined) this.power=null;
     if(this.ilvl===undefined) this.ilvl=1;
@@ -234,7 +227,7 @@ class Weapon {
   get elemName(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].name : AMMO_TYPES.none.name; }
   get elemColor(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].color : "#cfcabb"; }
   get value(){ return weaponPrice(this); }
-  // 改装等级标记（v0.15.0：代表高膛压装药与更精密的配件公差）
+  // 改装等级标记：代表高膛压装药与更精密的配件公差
   get mayhemTag(){ return (this.mayhem||0)>0 ? `改装${this.mayhem}级` : ""; }
 
   // 实际弹匣容量（叠加玩家弹匣加成）
@@ -295,7 +288,7 @@ class Weapon {
     const effAcc = M.clamp(s.accuracy * acc, 0.3, 0.999);
     this.cd = 1/effFR;
 
-    // v0.15.0：移除「换弹即扔枪」——现实枪械打空弹匣只会触发换弹
+    // 移除「换弹即扔枪」——现实枪械打空弹匣只会触发换弹
     const dm = owner&&owner.effDamageMul ? owner.effDamageMul() : 1;
     const dmgMul = dm;
     const pellets = s.pellets||1;
@@ -308,6 +301,7 @@ class Weapon {
       let spread = baseSpread * moveMul;
       if(mv>0.05 && !isSMG(this.type)) spread = Math.min(spread, Math.max(baseSpread*1.35, moveSpreadCap(this.type)));
       const a = angle + RNG.gauss()*spread;
+      // Projectile 构造器强制直线实体弹道，不再传 homing / laser / lifesteal / elemChance
       spawnProjectile(game, {
         x, y, angle:a,
         speed:s.speed,
@@ -315,19 +309,14 @@ class Weapon {
         element:this.element,
         radius: s.splash?6:4,
         splash:s.splash||0,
-        homing: false,                 // v0.15.0：直线弹道
         life,
         owner, weapon:this,
         shape: this.projShape,
-        laser: false,                  // v0.15.0：无能量光束
         pierce: s.pierce||0,
-        lifesteal: 0,                  // v0.15.0：无急救效率
-        elemChance: 0,                // v0.15.0：无「弹种增益」
         color: (AMMO_TYPES[this.element]||AMMO_TYPES.none).color,
       });
     }
     this.mag--;
-    // v0.15.0：删除失效的省弹逻辑（原代码读 this.ammoEff，该字段从未定义，恒不生效）
     SFX.shoot();
     if(owner && owner.applyRecoil) owner.applyRecoil(angle, 6);
     return true;
@@ -347,9 +336,9 @@ function generateWeapon(level, opts={}){
   const base = WEAPON_TYPES[type];
   const manKeys = Object.keys(MANUFACTURERS);
   const man = opts.manufacturer || RNG.pick(manKeys);
-  const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;   // v0.15.0：旧存档的未知厂商不再导致启动崩溃
+  const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;   // 旧存档的未知厂商不再导致启动崩溃
 
-  // 适配弹种（v0.15.0：现实弹药，不再有火焰/电击/腐蚀等制式属性）
+  // 适配弹种：现实弹药，不再有火焰 / 电击 / 腐蚀等属性
   let element = "none";
   if(type==="launcher") element = "explosive";
   else if(M0.forceExplosive) element = "explosive";
@@ -370,8 +359,6 @@ function generateWeapon(level, opts={}){
   let pellets  = base.pellets;
   let splash   = base.splash || 0;
   let pierce   = 0;
-  let lifesteal= 0;
-  let elemChance = 0;
   const spread = base.spread;
 
   // 品质：低档词缀多、高档倍率猛
@@ -383,7 +370,7 @@ function generateWeapon(level, opts={}){
   const allParts = (opts.parts && opts.parts.length!==undefined)
     ? opts.parts
     : rollGunParts(type, ilvl, quality);
-  // v0.13.5：改装模块部件（slot:"core"）单独解析 —— 取最高膛压组件等级为改装等级，弹种适配组件定弹种
+  // 改装模块部件（slot:"core"）单独解析 —— 取最高膛压组件等级为改装等级，弹种适配组件定弹种
   const _cores = allParts.filter(p=>p && p.core);
   const _plain = allParts.filter(p=>!(p && p.core));
   let _coreMayhem = Math.max(0, Math.round(opts.mayhem||0));
@@ -410,7 +397,7 @@ function generateWeapon(level, opts={}){
   speed    *= 1 + (t.projSpeed||0)/100;
   if(splash>0) splash *= 1 + (t.splashPct||0)/100;
   pellets  += t.pellets||0;
-  /* v0.12.5 发数规则（重要）：
+  /* 发数规则（重要）：
    *   · 霰弹枪底材本身多发，照旧；
    *   · 其余枪「一次一发」——配件/随机词缀一律不再加发数，
    *     只有枪身自带「双管的（稀有）」+1 或「蜂群的（试验型）」+2 才突破。 */
@@ -420,27 +407,23 @@ function generateWeapon(level, opts={}){
     pellets = 1 + M.clamp(Math.round(pb), 0, 3);
   }
   pierce   += t.pierce||0;
-  lifesteal+= t.lifesteal||0;
   crit     += (t.critDmg||0)/100;
   critChance += (t.critChance||0)/100;
-  elemChance += (t.elemChance||0)/100;
-  // 扩展词缀：后坐力减免 / 移速 / 射程 / 溅射伤害；命中回血与省弹在 v0.15.0 起恒为 0
+  // 扩展词缀：后坐力减免 / 移速 / 射程 / 溅射伤害（命中回血与省弹恒为 0）
   const recoil      = (t.recoil||0);
   const moveSpeed   = (t.moveSpeed||0);
   const rangePct    = (t.range||0);
   const splashDmg   = (t.splashDmg||0);
-  const shieldOnHit = (t.shieldOnHit||0);
-  const ammoEff     = (t.ammoEff||0);
 
   // 品质全局倍率（传奇以上是碾压级）
   dmg *= R.mult;
   if(R.mult>1) fireRate *= 1 + (R.mult-1)*0.10;
 
-  // 改装等级：按工程余量线性小幅放大（v0.15.0 由 1.12 / 1.18 下调为 1.05 / 1.06）
-  // v0.13.5：改装等级由装入的「最高级膛压组件」决定（_coreMayhem 已在部件解析阶段算出）
+  // 改装等级：按工程余量线性小幅放大
+  // 改装等级由装入的「最高级膛压组件」决定（_coreMayhem 已在部件解析阶段算出）
   const mh = _coreMayhem;
   if(mh>0){
-    const gp = _chaosFromCore>0 ? MAYHEM.corePower : MAYHEM.gearPower;   // v0.14.5：改装模块更猛
+    const gp = _chaosFromCore>0 ? MAYHEM.corePower : MAYHEM.gearPower;   // 改装模块更猛
     const k = Math.pow(gp, mh);
     dmg *= k;
     fireRate *= 1 + (k-1)*0.06;
@@ -465,29 +448,29 @@ function generateWeapon(level, opts={}){
     mayhem: mh>0 ? mh : 0,
     power: R.power ? true : null,
     affixes,
-    laser: false,                      // v0.15.0：实体弹丸
+    laser: false,                      // 实体弹丸
     projShape: projShapeFor(man, element, type),
     stats:{
       damage:dmg, fireRate, accuracy, mag:magSize, reload,
-      speed, pellets, splash, homing:!!M0.homing, crit, critChance,
+      speed, pellets, splash, crit, critChance,
       auto: base.auto, charge:!!base.charge, spread,
       ammoType: base.ammoType, pierce,
-      homing: false,                   // v0.15.0：直线弹道
-      lifesteal: 0,                   // v0.15.0：无急救效率
-      elemChance: 0,                  // v0.15.0：无弹种增益
+      homing: false,                   // 直线弹道
+      lifesteal: 0,                   // 无急救效率
+      elemChance: 0,                  // 无弹种增益
       recoil: M.clamp(recoil,0,80),
       moveMul: 1 + moveSpeed/100,
       rangeMul: 1 + rangePct/100,
       splashDmgMul: 1 + splashDmg/100,
-      shieldOnHit: 0,                 // v0.15.0：命中不再回复插板耐久
-      ammoEff: 0,                     // v0.15.0：无省弹
+      shieldOnHit: 0,                 // 命中不再回复插板耐久
+      ammoEff: 0,                     // 无省弹
     },
     parts: allParts,
   });
 }
 
 /* ----------------------------- 命名 ----------------------------- */
-// v0.15.0：厂商显示中文兵工厂名，具名档用真实枪械型号，不再拼接奇幻词与弹种标签
+// 厂商显示中文兵工厂名，具名档用真实枪械型号，不再拼接奇幻词与弹种标签
 function weaponName(man, base, R, element, affixes){
   const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;
   const ammoTag = element!=="none" && AMMO_TYPES[element] ? " · "+AMMO_TYPES[element].short : "";
@@ -508,7 +491,7 @@ function weaponPrice(w){
   p += (w.affixes?w.affixes.length:0) * 140;
   for(const pt of (w.parts||[])) p += pt.core ? (pt.value||0) : partValue(pt);   // 配件 / 改装模块计入估值
   if(w.power) p *= 1.35;
-  if((w.mayhem||0)>0) p *= 1 + w.mayhem*0.12;     // 改装等级溢价（v0.15.0：0.18 → 0.12，匹配下调后的收益）
+  if((w.mayhem||0)>0) p *= 1 + w.mayhem*0.12;     // 改装等级溢价 0.12/级
   return Math.round(p/10)*10;
 }
 
@@ -529,11 +512,6 @@ function affixText(m){
   if(m.stat==="lifesteal") return `${nm} ${v}%`;
   if(AFFIX_INVERT[m.stat]) return `${nm} -${Math.abs(v)}%`;   // 越高越减负（后坐力/省弹）
   return v>=0 ? `${nm} +${v}%` : `${nm} ${v}%`;
-}
-
-// 保底传奇（Boss 掉落 / 封存枪箱）
-function generateLegendary(level, type){
-  return generateWeapon(level, { rarity:"orange", type });
 }
 
 /* ----------------------------- 战术模式转换器 ----------------------------- */
@@ -600,7 +578,7 @@ function gunRarColor(r){
 
 /* ----------------------------- 枪匠台：精密改装 -----------------------------
 /*
- * v0.15.0：原「精密改装 / 更换弹种」改为现实枪械工位操作。
+ * 原「精密改装 / 更换弹种」改为现实枪械工位操作。
  * 做法是把枪的固定参数（类型/兵工厂/品级/等级/改装等级/弹种）喂回 generateWeapon，
  * 由同一条生成管线重算数值与词条，保证动能·射速·弹匣·估值全部自洽。
  *   op = "reroll"  重调部件（类型/兵工厂/弹种/品级不变，词条重掷）
@@ -664,7 +642,7 @@ function gunSellPrice(gun){
 
 /* =========================================================================
  * 枪械外观系统：弹头形状 + 枪模型变化
- * v0.15.0：形状只由枪型 / 弹头类型 / 兵工厂决定，全部为实体弹丸轮廓。
+ * 形状只由枪型 / 弹头类型 / 兵工厂决定，全部为实体弹丸轮廓。
  * ========================================================================= */
 function projShapeFor(man, elem, type){
   if(type==="launcher" || elem==="explosive") return "bomb";   // 榴弹战斗部

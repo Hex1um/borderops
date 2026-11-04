@@ -9,7 +9,7 @@ const Net = {
   online:false,
   code:"",
   peerId:"",
-  secret:"",              // v0.14.8：服务端下发的 peer 密钥，只存本地，不再暴露在 room 列表
+  secret:"",              // 服务端下发的 peer 密钥，只存本地，不再暴露在 room 列表
   isHost:false,
   name:"",
   seed:0,
@@ -170,7 +170,7 @@ const Net = {
     this.room=r.room;
     this.cursor=r.cursor||this.cursor;
 
-    // v0.14.8：每次以服务端返回的 host 为准；房主转移时接管 ghost AI。
+    // 每次以服务端返回的 host 为准；房主转移时接管 ghost AI。
     const wasHost=this.isHost;
     if(typeof r.host==="boolean") this.isHost=r.host;
     if(this.isHost && !wasHost) this._becomeHost();

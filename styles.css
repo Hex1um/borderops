@@ -126,8 +126,6 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .skill-node h4{margin:0 0 4px;font-size:14px;color:var(--accent);}
 .skill-node .desc{font-size:12px;color:var(--muted);min-height:34px;}
 .skill-node .pts{position:absolute;top:6px;right:8px;font-weight:800;font-size:13px;color:var(--green);}
-.tree-col{margin-bottom:14px;}
-.tree-col h3{color:var(--accent-2);border-bottom:2px solid #000;padding-bottom:4px;font-size:15px;letter-spacing:1px;}
 
 /* 背包 */
 .inv-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:10px;}
@@ -135,7 +133,6 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .inv-item:hover{background:#0007;}
 .inv-item .iname{font-weight:800;font-size:14px;}
 .inv-item .istat{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;}
-.inv-item .ielem{font-size:11px;font-weight:700;}
 
 .loot-white{border-left-color:var(--white);} .c-white{color:var(--white);}
 .loot-green{border-left-color:var(--green);} .c-green{color:var(--green);}
@@ -194,7 +191,7 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .shop-bar .shop-gold{order:2;margin-left:auto;}
 .shop-bar .btn{order:3;}
 .shop-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;}
-/* v0.14.1：局内摊位改为独立经营，去掉跨店标签页 */
+/* 局内摊位改为独立经营，去掉跨店标签页 */
 .shop-solo{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12px;color:#9fb0c2;
   background:rgba(0,0,0,0.22);border:1px solid rgba(120,150,180,0.2);border-radius:9px;
   padding:8px 12px;margin:0 0 12px;}
@@ -243,10 +240,10 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 }
 
 /* =========================================================================
- * v0.4.0 新增：模式选择 / 装备库分区 / 沙二购买菜单
+ * 新增：模式选择 / 装备库分区 / 沙二购买菜单
  * ========================================================================= */
 /* =========================================================================
- * v0.13.9 标题页：塔科夫主模式 Hero + 其他模式折叠
+ * 标题页：塔科夫主模式 Hero + 其他模式折叠
  * ========================================================================= */
 .mode-hero{position:relative;margin:2px 0 14px;padding:20px 22px 20px;text-align:left;cursor:pointer;
   border:3px solid var(--ink);border-radius:12px;overflow:hidden;
@@ -278,7 +275,6 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
   border:3px solid var(--ink);box-shadow:0 4px 0 #0007;}
 .hero-arrow{transition:transform .12s;}
 .mode-hero:hover .hero-arrow{transform:translateX(4px);}
-.mode-more-btn{margin:0 0 12px;}
 .title-actions{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 12px;}
 .title-actions .btn{box-shadow:0 3px 0 #0007;}
 .mm-short,.kick-short,.live-short{display:none;}
@@ -419,7 +415,7 @@ body.mode-br .touch-btn.ability{display:none !important;}
 .raid-balance{font-size:13px;color:#cbd6e2;background:rgba(0,0,0,0.25);border:1px solid rgba(120,150,180,0.2);
   border-radius:10px;padding:8px 14px;margin-bottom:14px;display:inline-block;}
 .raid-balance b{color:#8fe07a;}
-/* v0.14.1：出发条 —— 进场 / 联机放在配装上方，滚到哪都能直接开 */
+/* 出发条 —— 进场 / 联机放在配装上方，滚到哪都能直接开 */
 .raid-launch{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
   background:linear-gradient(100deg,rgba(79,214,255,0.10),rgba(126,224,138,0.06) 60%,transparent);
   border:1px solid rgba(120,180,220,0.28);border-radius:14px;padding:12px 16px;margin-bottom:14px;}
@@ -488,7 +484,7 @@ body.mode-br .touch-btn.ability{display:none !important;}
 }
 
 /* =========================================================================
- * 移动端触屏按钮重排（v0.9.1）
+ * 移动端触屏按钮重排
  *   解决竖屏上按钮互相压叠、并压住 canvas HUD 的问题：
  *   右列 fire / 医疗 / AUTO 纵向排列，中列 reload / switch，左上角新增物品栏
  * ========================================================================= */
@@ -505,7 +501,6 @@ body.mode-raid .touch-btn.med:active{transform:scale(.88);}
 .touch-btn.inv{display:none !important;}
 body.mode-raid .touch-btn.inv,
 body.mode-br   .touch-btn.inv{display:flex !important;}
-body.mode-br   .touch-btn.med{display:flex !important;}
 body.mode-raid .touch-btn.buy,
 body.mode-raid .touch-btn.use,
 body.mode-br   .touch-btn.buy,
@@ -555,7 +550,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 }
 
 /* =========================================================================
- * v0.10.3 新增：拍卖行
+ * 新增：拍卖行
  * ========================================================================= */
 .auc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:10px;}
 .auc-card{border:2px solid var(--ink);border-left-width:6px;border-radius:7px;padding:9px 11px;
@@ -596,7 +591,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 }
 
 /* =========================================================================
- * v0.10.4 新增：命名传奇装备标签 / 删除存档确认
+ * 新增：命名传奇装备标签 / 删除存档确认
  * ========================================================================= */
 .uniq-perk{font-size:11px;line-height:1.45;color:#c8a86a;background:#c8a86a12;
   border:1px solid #c8a86a33;border-radius:5px;padding:3px 7px;}
@@ -612,7 +607,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 .auc-card{min-width:0;}
 
 /* =========================================================================
- * v0.10.5：核心只从箱子 / 拍卖行获取 —— 大厅分类筛选
+ * 核心只从箱子 / 拍卖行获取 —— 大厅分类筛选
  * ========================================================================= */
 .auc-filter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}
 .auc-filter .btn{padding:5px 10px;font-size:12px;}
@@ -622,7 +617,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 }
 
 /* =========================================================================
- * v0.11.0：联机突袭大厅
+ * 联机突袭大厅
  * ========================================================================= */
 .online-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:6px;}
 .online-card{border:2px solid #0006;border-left:5px solid #7ee08a;border-radius:8px;padding:14px 16px;
@@ -659,7 +654,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
   .online-grid{grid-template-columns:1fr;}
 }
 
-/* ---- v0.12 合成材料槽位 ---- */
+/* ---- 合成材料槽位 ---- */
 .mat-slot{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;
   padding:4px 9px;border-radius:6px;border:2px dashed #2a3a44;color:#5d6b78;
   background:#0b101608;letter-spacing:.5px;}
@@ -667,7 +662,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 .mat-slot.on:hover{filter:brightness(1.25);}
 .shop-item.noicon{padding-left:12px;}
 
-/* ---- v0.12.1 投料进度 / 材料芯片 ---- */
+/* ---- 投料进度 / 材料芯片 ---- */
 .craft-fill{display:flex;align-items:center;gap:8px;margin:6px 0 2px;font-size:11px;color:#9aa4b2;}
 .craft-bar{flex:1 1 auto;height:5px;border-radius:3px;background:#0d141a;overflow:hidden;border:1px solid #1b2a33;}
 .craft-bar i{display:block;height:100%;transition:width .16s ease;}
@@ -678,17 +673,17 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
   border:2px solid #22333d;border-left:none;background:#101820;color:#7fd0ff;cursor:pointer;}
 .chip-max:hover{background:#16222c;color:#cfeaff;}
 
-/* ---- v0.12.9 组装按钮「可点但缺料」状态 + 拍卖合并堆叠徽标 ---- */
+/* ---- 组装按钮「可点但缺料」状态 + 拍卖合并堆叠徽标 ---- */
 .btn-disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.3);}
 .btn-disabled:hover{filter:grayscale(.3);}
-/* ---- v0.13.8 所有原生 disabled 按钮统一显示为不可点（此前点上去毫无反馈） ---- */
+/* ---- 所有原生 disabled 按钮统一显示为不可点（此前点上去毫无反馈） ---- */
 button:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.35);}
 button:disabled:hover{filter:grayscale(.35);}
 .stk{display:inline-block;margin-left:6px;padding:0 7px;border-radius:9px;font-size:12px;font-weight:800;
   color:#0b0f14;background:#7fd0ff;vertical-align:middle;}
 .auc-val .stk{background:#22303a;color:#9fe3ff;}
 
-/* ---- v0.12.5 塔科夫模式介绍折叠 ---- */
+/* ---- 塔科夫模式介绍折叠 ---- */
 .tarkov-intro{margin:0 0 14px;border:1px solid #1d2a33;border-radius:10px;background:#0d141a;overflow:hidden;}
 .tarkov-intro>summary{cursor:pointer;list-style:none;padding:10px 14px;font-weight:700;color:#cdd7e2;
   background:linear-gradient(90deg,#16222c,#0f181f);user-select:none;display:flex;align-items:center;gap:8px;}
@@ -697,7 +692,7 @@ button:disabled:hover{filter:grayscale(.35);}
 .tarkov-intro[open]>summary::before{transform:rotate(90deg);}
 .tarkov-intro-body{padding:10px 14px 14px;line-height:1.7;font-size:13px;}
 
-/* ===== v0.14.4 局内物品栏（DOM 层，带丢弃按钮；不遮挡摇杆区域） ===== */
+/* ===== 局内物品栏（DOM 层，带丢弃按钮；不遮挡摇杆区域） ===== */
 #inv-layer{position:absolute;inset:0;z-index:25;pointer-events:none;}
 #inv-layer.hidden{display:none;}
 .inv-card{position:absolute;right:16px;top:62px;bottom:96px;width:min(470px,46vw);
@@ -728,14 +723,14 @@ button:disabled:hover{filter:grayscale(.35);}
   .inv-row{padding:7px 8px;}
 }
 
-/* v0.14.6 物品栏「拿在手上」 */
+/* 物品栏「拿在手上」 */
 .inv-take{flex:0 0 auto;border:1px solid rgba(120,200,255,0.42);background:rgba(90,170,255,0.12);
   color:#8fd0ff;font-size:11px;line-height:1;padding:6px 10px;border-radius:7px;cursor:pointer;
   font-family:inherit;transition:background .12s,border-color .12s;}
 .inv-take:hover{background:rgba(90,170,255,0.24);border-color:rgba(140,210,255,0.75);}
 .inv-take:active{transform:translateY(1px);}
 
-/* ===== v0.14.6 配装大厅「带入现金」 ===== */
+/* ===== 配装大厅「带入现金」 ===== */
 .raid-carry{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px;padding:9px 12px;
   background:rgba(10,18,26,0.62);border:1px solid rgba(120,150,180,0.22);border-radius:10px;}
 .rc-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}

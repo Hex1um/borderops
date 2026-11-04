@@ -21,7 +21,6 @@ class Player {
     this.abilityBaseCD=C.ability.cd;
     this.abilityName=C.ability.name;
     this.abilityCD=0; this.abilityActive=0;
-    this.statusEffects=[];
     this.moveX=0; this.moveY=0;
     this.meleeCd=0;
     this.gold=300;                     // 起始金币（通用货币）
@@ -96,7 +95,6 @@ class Player {
       critDmgAdd: (rm.critDmg||0),
       magMul: m.magMul * (1+(rm.magPct||0)/100),
       reloadMul: m.reloadMul / (1+(rm.reloadPct||0)/100),
-      lifesteal: m.lifesteal + (rm.lifesteal||0)/100,
       lootMul: m.lootMul,
       mf: Math.round((m.lootMul-1)*120 + pMf + (rm.mfFlat||0)),   // 掉落加成 + 重新部署寻宝 + 随身装备
       goldMul: (m.lootMul-1)*0.8 + pGf/100 + (rm.goldPct||0)/100,
@@ -105,7 +103,6 @@ class Player {
       abilityCDMul: m.abilityCDMul * (1-Math.min(0.4,(rm.abilityCD||0)/100)),
       xpMul: m.xpMul * (1+(rm.xpPct||0)/100),
       meleeMul: m.meleeMul,
-      statusMul: m.statusMul,
       accuracyMul: m.accuracyMul,
       shieldRegen: shieldRate,
     };
@@ -125,13 +122,11 @@ class Player {
     }
     return mul;
   }
-  effElemMul(){ return this.stats.elemMul; }
   effFireRateMul(){ return this.stats.fireRateMul * (this.abilityActive>0&&this.abilityType==="overload"?1.8:1); }
   effAccuracyMul(){ return this.stats.accuracyMul; }
   effReloadMul(){ return this.stats.reloadMul; }
   effCritAdd(){ return this.stats.critAdd; }
   effSpeed(){ return this.stats.speed * (this.abilityActive>0&&this.abilityType==="bloodlust"?1.28:1); }
-  effLifesteal(){ return 0; }   // v0.15.0：命中不再回血
   // 持枪移速加成（枪身/枪托词缀「移动速度」）
   effMoveMul(){ const w=this.activeWeapon; return w&&w.stats&&w.stats.moveMul ? w.stats.moveMul : 1; }
   // 后坐力减免（握把/枪口/扳机词缀「后坐力」）
@@ -223,7 +218,6 @@ class Player {
     this.relics = []; this.relicIdx=-1;
     this.wi=0;    this.gold=PRESTIGE.keepGold;
     this.ammo=startAmmo();
-    this.statusEffects=[];
     this.iframe=0;
     this.mayhem=0;                       // 改装等级归零（解锁与上限保留）
     this.computeStats();
@@ -343,14 +337,7 @@ class Player {
   /* ----------------------------- 每帧更新 ----------------------------- */
   update(dt, game){
     this.recoil.x*=0.85; this.recoil.y*=0.85;
-    // 状态效果（减速等）
-    let slow=1;
-    for(let i=this.statusEffects.length-1;i>=0;i--){
-      const s=this.statusEffects[i]; s.t-=dt;
-      if(s.type==="slow") slow=Math.min(slow,1-s.amt);
-      if(s.t<=0) this.statusEffects.splice(i,1);
-    }
-    const sp=this.effSpeed()*slow*this.effMoveMul();
+    const sp=this.effSpeed()*this.effMoveMul();
     this.x += (this.moveX*sp + this.recoil.x)*dt;
     this.y += (this.moveY*sp + this.recoil.y)*dt;
     if(this.bounds){ this.x=M.clamp(this.x,this.bounds.minX,this.bounds.maxX); this.y=M.clamp(this.y,this.bounds.minY,this.bounds.maxY); }
@@ -377,7 +364,7 @@ class Player {
     if(this.iframe>0) return;          // 无敌帧：多只怪同时贴身时不会被一帧打死
     this.iframe=0.4;
     const ammo = AMMO_TYPES[element] || AMMO_TYPES.none;
-    const mult = (ammo.mult && ammo.mult[armorType||"flesh"]) || 1;   // v0.15.0：弹种对软目标 / 护甲的终点效应
+    const mult = (ammo.mult && ammo.mult[armorType||"flesh"]) || 1;   // 弹种对软目标 / 护甲的终点效应
     let dmg=amount*mult;
     // 任何伤害都会重置整备计时——插板不能边打边自动复原
     this.shieldTimer=this.stats.shieldDelay;
@@ -401,7 +388,7 @@ class Player {
     }
   }
 
-  /* 插板失效：v0.15.0 移除冲击波 / 反伤 / 生命虹吸，只保留「快拆扣具」的整备加速 */
+  /* 插板失效：移除冲击波 / 反伤 / 生命虹吸，只保留「快拆扣具」的整备加速 */
   _onShieldBreak(game, attacker){
     const sh=this.shieldItem;
     const ev=(sh&&sh.effectVal)||0;

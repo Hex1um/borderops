@@ -22,7 +22,7 @@ const UI = {
     const hud=document.getElementById('hud'); if(hud) hud.classList.add('hidden');
     const tl=document.getElementById('touch-layer'); if(tl) tl.classList.add('hidden');
   },
-  /* v0.14.0：滚动位置快照 —— 记录 overlay 内**所有**可滚动容器（面板本身、
+  /* 滚动位置快照 —— 记录 overlay 内**所有**可滚动容器（面板本身、
    * 武器/护甲/仓库/商店列表……），重绘后按「选择器 + 同类序号」原位恢复。
    * 之前只存了 panel 的 scrollTop，选枪时列表自己弹回顶部，正是漏了 .raid-list。 */
   _snapScroll(){
@@ -216,7 +216,7 @@ const UI = {
   },
 
   pickMode(mode){
-    // v0.14.9：默认只开放塔科夫模式；其他模式代码保留，但入口隐藏且禁止绕过。
+    // 默认只开放塔科夫模式；其他模式代码保留，但入口隐藏且禁止绕过。
     if(CFG.onlyRaid !== false && mode!=="raid") mode="raid";
     this._mode=mode;
     if(mode==="dust2") this.dustSetup();

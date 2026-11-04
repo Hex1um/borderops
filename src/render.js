@@ -455,7 +455,7 @@ const Render = {
         ctx.rect(-r,-r,r*2,r*2); break;
       case "bomb":
         ctx.arc(0,0,r,0,6.2832); break;
-      default:                // v0.15.0：旧存档中的特殊弹型统一回落为实体弹头
+      default:                // 旧存档中的特殊弹型统一回落为实体弹头
         ctx.arc(0,0,r,0,6.2832);
     }
     ctx.fill();

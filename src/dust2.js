@@ -87,20 +87,6 @@ const DUST_BLOCKS = [
   [36,44,2,1],   // 外部箱
 ];
 
-const DUST_CALL = {
-  tSpawn:   { x:17, y:48 },
-  mid:      { x:28, y:30 },
-  midDoors: { x:28, y:21 },
-  catwalk:  { x:31, y:16 },
-  aShort:   { x:33, y:13 },
-  aSite:    { x:44, y:8 },
-  longDoor: { x:42, y:44 },
-  longA:    { x:46, y:30 },
-  bTunnel:  { x:10, y:30 },
-  bSite:    { x:8,  y:9 },
-  ctSpawn:  { x:28, y:5 },
-};
-
 const DUST_SITE_RECT = {
   A: { x0:38, y0:4,  x1:50, y1:14 },
   B: { x0:3,  y0:5,  x1:14, y1:13 },

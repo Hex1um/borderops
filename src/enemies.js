@@ -53,8 +53,8 @@ class Enemy {
     this.xp=Math.round(MONSTER_BASE.xp(level) * (this.isBoss?12:this.isMini?3.5:1) * (d.xpMul||1) * (1+this.mayhem*MAYHEM.xpAdd));
     this.behavior=d.behavior; this.faction="enemy";
     this.alive=true;
-    this.statuses=[]; this.fireCd=RNG.fr(0.3,1.2); this.attackCd=0;
-    this.phaselocked=0; this.flash=0; this.slowT=0; this.slowAmt=0;
+    this.fireCd=RNG.fr(0.3,1.2); this.attackCd=0;
+    this.phaselocked=0; this.flash=0;
     this.bossTimer=2.5; this.summonTimer=6; this.phase=1; this.chargeCd=0;
     this.wanderA=RNG.fr(0,6.28);
     // 差异化属性状态
@@ -63,21 +63,15 @@ class Enemy {
     this.summonCd=RNG.fr(4,7);                              // 增援呼叫计时
     this.elemResist=d.elemResist||null;                    // 弹种抗性
     this.shieldFront=!!d.shieldFront;                       // 盾卫正面减伤
-    // v0.13.5：AI 行为优化 —— 个体差异横移方向 + 周期性换向，避免全体同向漂移
+    // AI 行为优化 —— 个体差异横移方向 + 周期性换向，避免全体同向漂移
     this.strafeDir = RNG.chance(0.5)?1:-1;
     this.strafeFlip = RNG.fr(2.0,4.5);
-  }
-
-  applyStatus(s){
-    const ex=this.statuses.find(x=>x.type===s.type);
-    if(ex){ ex.t=Math.max(ex.t,s.t); if(s.dps)ex.dps=Math.max(ex.dps,s.dps); if(s.amt!==undefined)ex.amt=Math.max(ex.amt,s.amt); }
-    else this.statuses.push({...s});
   }
 
   takeDamage(dmg, element, armorType, game, attacker){
     if(this.phasing) return;                                  // 标记中：完全无敌
     const ammo=AMMO_TYPES[element]||AMMO_TYPES.none;
-    const mult=(ammo.mult&&ammo.mult[armorType||"flesh"])||1;   // v0.15.0：未知弹种/护甲类型不再产生 NaN 伤害
+    const mult=(ammo.mult&&ammo.mult[armorType||"flesh"])||1;   // 未知弹种/护甲类型不再产生 NaN 伤害
     if(this.elemResist && this.elemResist[element]!==undefined) mult*=this.elemResist[element];  // 弹种抗性
     // 盾卫：正面（朝向玩家一侧）承受伤害大幅降低
     if(this.shieldFront && attacker){
@@ -92,22 +86,12 @@ class Enemy {
 
   update(dt, game){
     if(this.flash>0) this.flash-=dt;
-    // 状态结算
-    let slow=1;
-    for(let i=this.statuses.length-1;i>=0;i--){
-      const s=this.statuses[i]; s.t-=dt;
-      if(s.type==="slow"){ slow=Math.min(slow,1-s.amt); this.slowT=1; this.slowAmt=s.amt; }
-      else if(s.dps){ this.hp-=s.dps*dt; if(this.hp<=0)this.alive=false; }
-      if(s.t<=0) this.statuses.splice(i,1);
-    }
-    if(this.slowT>0){ this.slowT-=dt; if(this.slowT<=0) this.slowAmt=0; }
-
     if(this.phaselocked>0){ this.phaselocked-=dt; return; } // 标记锁：冻结
 
     const pl=game.player; if(!pl||!pl.alive) return;
     const d=M.dist(this.x,this.y,pl.x,pl.y);
     this.angle=M.angle(this.x,this.y,pl.x,pl.y);
-    const sp=this.speed*slow;
+    const sp=this.speed;
 
     if(this.behavior==="melee"){
       this._moveToward(pl.x,pl.y,sp,dt,game);
@@ -209,11 +193,11 @@ class Enemy {
       if(d<this.radius+pl.radius+4){ const a=M.angle(this.x,this.y,pl.x,pl.y); pl.x+=Math.cos(a)*6; pl.y+=Math.sin(a)*6; }  // 接触击退
     }
 
-    // v0.13.5：横移周期性换向 —— 避免所有敌人朝同一侧漂移，观感更像各自判断
+    // 横移周期性换向 —— 避免所有敌人朝同一侧漂移，观感更像各自判断
     this.strafeFlip-=dt;
     if(this.strafeFlip<=0){ this.strafeDir*=-1; this.strafeFlip=RNG.fr(2.0,4.5); }
 
-    // v0.13.5：分离力 —— 防止敌群叠在一起、己方子弹互相遮挡，提升战斗可读性
+    // 分离力 —— 防止敌群叠在一起、己方子弹互相遮挡，提升战斗可读性
     let sx=0, sy=0;
     for(const o of game.enemies){
       if(o===this || !o.alive) continue;

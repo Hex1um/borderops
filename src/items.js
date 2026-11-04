@@ -1,6 +1,6 @@
 /* =========================================================================
  * items.js — 防弹插板 / 随身装备（可掉落、可购买的装备）
- * v0.15.0：全部改为现实军械名词，插板特效概率置 0（不再产生冲击波 / 反伤 / 虹吸）。
+ * 全部改为现实军械名词，插板特效概率置 0（不再产生冲击波 / 反伤 / 虹吸）。
  * 插板容量 / 受击后整备延迟 / 每秒整备量三重约束防护恢复。
  * 随身装备是纯被动参数，一个槽位，数值随 ilvl 与品级缩放。
  * ========================================================================= */
@@ -8,6 +8,8 @@
 const RARITY_ORDER = ["white","green","blue","purple","orange","pearl","ancient","rainbow","mythic","primordial","celestial","singularity"];
 const RARITY_INDEX = {};
 RARITY_ORDER.forEach((r,i)=>RARITY_INDEX[r]=i);
+// 高规格品相的名称前缀（插板与随身装备共用一份）
+const TOP_PREFIX = { mythic:"定制·", primordial:"竞赛·", celestial:"收藏·", singularity:"封存·" };
 
 /* ----------------------------- 防弹插板 ----------------------------- */
 function generateShield(ilvl, opts={}){
@@ -21,24 +23,16 @@ function generateShield(ilvl, opts={}){
   const rechDur  = S.rech * RNG.fr(0.9,1.1);
   const rate     = Math.round(capacity/rechDur*10)/10;
 
-  // 特效：品质越高越可能出现，且数值更强
-  let effect=null, effectVal=0;
-  if(RNG.chance(S.effect)){
-    const id = RNG.pick(Object.keys(SHIELD_EFFECTS));
-    effect = id;
-    const t = (RARITY_INDEX[q]||0)/(RARITY_ORDER.length-1);   // 0..1
-    if(id==="nova")       effectVal = Math.round(capacity*(0.55+t*0.75));
-    else if(id==="amp")   effectVal = Math.round((10+t*22)*10)/10;
-    else if(id==="thorns")effectVal = Math.round((12+t*22)*10)/10;
-    else if(id==="reboot")effectVal = Math.round((55+t*25)*10)/10;
-    else if(id==="vamp")  effectVal = Math.round(capacity*(0.20+t*0.30));
-  }
+  // SHIELD_RARITY[*].effect 全为 0，不再生成新插板特效。
+  // 保留一次 RNG 消耗，使 RNG.setSeed 确定性重播的随机数序列与旧版一致；
+  // 旧存档插板的 effect / effectVal 仍由 shieldLines() 与结算路径读取。
+  RNG.chance(S.effect);
+  const effect=null, effectVal=0;
 
   const base = RNG.pick(SHIELD_NAMES[q] || SHIELD_NAMES.white);
   const idx = RARITY_INDEX[q]||0;
-  const SH_TOP = { mythic:"定制·", primordial:"竞赛·", celestial:"收藏·", singularity:"封存·" };
   const adj  = ["加固","加厚","轻量","模块化","军规","陶瓷","复合","层压","缓冲","精工"];
-  const nm   = (SH_TOP[q] ? SH_TOP[q] : (idx>=3 ? RNG.pick(adj) : "")) + base;
+  const nm   = (TOP_PREFIX[q] ? TOP_PREFIX[q] : (idx>=3 ? RNG.pick(adj) : "")) + base;
 
   return {
     kind:"shield", name:nm, rarity:q, ilvl,
@@ -96,7 +90,6 @@ function generateRelic(ilvl, opts={}){
   }
   const base = RNG.pick(RELIC_NAMES[q] || RELIC_NAMES.white);
   const idx = RARITY_INDEX[q]||0;
-  const TOP_PREFIX = { mythic:"定制·", primordial:"竞赛·", celestial:"收藏·", singularity:"封存·" };
   const nm = (TOP_PREFIX[q] ? TOP_PREFIX[q] : (idx>=4 ? "档案·" : "")) + base;
 
   return { kind:"relic", name:nm, rarity:q, ilvl, mods, mayhem:Math.max(0, Math.round(opts.mayhem||0)) };

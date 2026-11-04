@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.15.2 — 2026-11-04
+
+### 代码精简：移除 0 引用声明与恒 0 死计算链
+
+全库审计发现两类确定性冗余：一是被 v0.15.0 拟真化改造替换后遗留的旧数据表，二是「算完但从未被读取」的局部变量与分支。本版只删这些，不动任何内部键名、存档结构或战斗数值。
+
+- **删除 0 引用声明 12 处（约 70 行）**：`config.js` 的 `PARTS` 旧部件词缀池（33 行）、`PREFIX` / `SUFFIX`、`SHOP_REFRESH`；`dust2.js` 的 `DUST_CALL`；`br.js` 的 `BR_RARITY`；`weapons.js` 的 `PART_PREFIX`、`generateLegendary`、`AFFIX_FLAT`；`raid.js` 的 `RAID_QUALITY_W`、`RAID_MAT_W`、`raidKeyLabel`、`raidConsumeMats`。全部经 21 个脚本 + HTML 的跨文件词边界引用计数确认为 0 引用，项目无 `eval` / 字符串动态调用，判定可靠。
+- **删除恒 0 死计算链（约 45 行）**：`weapons.js` 的 `lifesteal` / `elemChance` / `shieldOnHit` / `ammoEff` 局部变量（stats 里本就硬编码 0，变量无人读）；`combat.js` 的 `Projectile._nearestTarget()` 与 2 个恒 0 字段；`enemies.js` 的 `applyStatus()` 与状态结算循环（无任何调用点，`statuses` 恒空，`slow` 恒 1）；`player.js` 的 `statusEffects` 减速循环、`effElemMul()` / `effLifesteal()` 两个 0 引用方法；`raid.js` 全 0 的 `RAID_RARITY_REGEN` 查表改为直接 `armorRegen: 0`。
+- **修复重复对象键**：`generateWeapon()` 的 stats 里 `homing` 被写了两次（`!!M0.homing` 与 `false`），后者静默覆盖前者；删除前者。同时移除 4 个 `spawnProjectile` 死参数（`homing` / `laser` / `lifesteal` / `elemChance`，`Projectile` 构造器硬编码忽略）。
+- **合并重复与清理死样式**：`items.js` 的 `SH_TOP` / `TOP_PREFIX` 两份逐字相同的品相前缀表合为一份；插板特效生成分支（`SHIELD_RARITY[*].effect` 全 0，永不进入）删除，但**保留一次 `RNG.chance()` 空消耗**——否则 `RNG.setSeed` 确定性重播的随机数序列会整体错位，导致插板名称与修饰词改变；`styles.css` 删除 3 个无引用选择器和 1 条逐字重复规则。
+- **注释简化**：307 行源码注释去掉「v0.x.y：」变更流水账前缀，保留说明文字本身；版本变更史统一由本文件承载。修正 2 处与当前数值矛盾的过期说明（`0.6 → 0.75`、`0.75 → 0.42` 合并为当前值 `0.42`）。
+- **净减 141 行代码与注释**（19711 → 19570，为本条日志写入前的统计；本条目新增 19 行文档）。
+
+**行为等价性验证**：新增确定性基线对照，用同一 `RNG` 种子分别加载 v0.15.1 与 v0.15.2 的生成链脚本，生成 30 把枪 / 15 件插板 / 15 件随身装备 / 15 次品质抽样，结果**逐字段完全一致**。过程中发现 `partStatValue()` 走的是不受种子控制的 `Math.random()`，对照实验需额外注入固定实现才能复现，这一点已写进验证脚本。
+
+**明确未删**：内部键名、存档字段、`ELEMENTS` 兼容别名、被 `CFG.onlyRaid` 屏蔽但刻意保留的其他模式代码，以及 `br.js` ↔ `raid.js` 约 153 行同源绘制代码（属重构而非删减，且当前模式不可达、回归覆盖不到）。
+
+- 版本号同步到 **0.15.2**（`package.json` / `src/config.js` / `index.html` 的 22 处 `?v=`）。
+
 ## v0.15.1 — 2026-11-04
 
 ### 收尾：清掉最后一处奇幻品质配色与过时注释

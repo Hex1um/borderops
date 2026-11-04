@@ -179,7 +179,7 @@ function auctionRollCoreItem(){
 function auctionMakeListing(now, forceKind){
   const g=auctionRollItem(forceKind);
   const val=auctionValue(g.kind, g.item);
-  // v0.12.5 低价货不再被硬性抬到 50：起拍真实反映估值（最低 5 卢布，避免出现 ₽0 挂单）
+  // 低价货不再被硬性抬到 50：起拍真实反映估值（最低 5 卢布，避免出现 ₽0 挂单）
   const start=Math.max(5, auctionRound(val*RNG.fr(0.42,0.70)));
   const buyout=Math.max(start+10, auctionRound(val*RNG.fr(1.12,1.42)));
   return {
@@ -503,7 +503,7 @@ UI.raidAuction=function(opts){
     const kind = tab==="core" ? "part" : tab;
     const arr = tab==="core" ? stash.parts.filter(p=>p.core) : (stash[AUCTION_KIND_MAP[tab]]||[]);
     if(!arr.length) return `<div class="empty-hint">仓库里没有${AUCTION_KIND_NAME[tab]}可卖 · 先去突袭搜刮</div>`;
-    // v0.12.9：相同物品合并成一张卡（×N），挂单按钮每次售出其中一件
+    // 相同物品合并成一张卡（×N），挂单按钮每次售出其中一件
     const groups={};
     arr.forEach(it=>{
       const key=auctionItemKey(kind,it);

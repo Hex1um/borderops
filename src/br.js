@@ -39,7 +39,7 @@ const BR_FORESTS = [
 // 吃鸡模式已全面改用「旧刷宝体系」程序化枪械（blGunGen / blGunConvert），
 // 此处只保留 AI / 地面掉落所用的枪型池（含火箭筒作为空投级武器）
 const BR_GUN_TYPES = ["pistol","smg","shotgun","rifle","sniper","launcher"];
-// v0.9.9：高级甲曲线大幅抬升，T7/T8 为「空投级」重装
+// 高级甲曲线大幅抬升，T7/T8 为「空投级」重装
 const BR_ARMORS = {
   vest1: { name:"一级甲", dr:0.10, maxArmor:30,  value:180 },
   vest2: { name:"二级甲", dr:0.17, maxArmor:50,  value:420 },
@@ -60,7 +60,6 @@ const BR_HELMETS = {
   helm7: { name:"七级盔", dr:0.65, maxArmor:220, value:33000 },
   helm8: { name:"八级盔", dr:0.74, maxArmor:320, value:88000 },
 };
-const BR_RARITY = ["#9aa4b2","#5bd75b","#4aa3ff","#c77dff","#ffd200","#ff5c5c"];
 const BR_MED = { small:{ name:"绷带", heal:35, value:40 }, big:{ name:"医疗包", heal:75, value:110 } };
 
 function brGunFromItem(it){ return Object.assign({}, it); }
@@ -162,7 +161,7 @@ const BR = {
     this.shrinkFrom=null;
     this.zoneState="wait"; this.zoneTimer=this._waitDur=20; this.zoneDPS=1.5; this.zonePhase=1;
     this._shrinkDur=15;
-    this.graceT=8;   // v0.13.5：出生保护期（秒）—— 落地数秒内圈外不掉血，给新手熟悉操作的时间
+    this.graceT=8;   // 出生保护期（秒）—— 落地数秒内圈外不掉血，给新手熟悉操作的时间
 
     this.pregame=3;
     this.placement=this.total;
@@ -553,7 +552,7 @@ const BR = {
       return;
     }
     const pellets=sh.gun.pellets||1;
-    // v0.12.5 与塔科夫模式一致：非霰弹枪的多发是稀有词条，总伤害只 +30%
+    // 与塔科夫模式一致：非霰弹枪的多发是稀有词条，总伤害只 +30%
     const pelletMul = pellets<=1 ? 1
       : ((sh.gun.type==="shotgun"||sh.gun.cat==="shotgun") ? 0.9 : (1.30/pellets));
     const mv=sh._mv||0;

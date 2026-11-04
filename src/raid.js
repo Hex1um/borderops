@@ -16,7 +16,6 @@
  * ========================================================================= */
 
 /* ----------------------------- 地图 / 房间 ----------------------------- */
-// v0.13.6：地图从 7000×5600 极大幅度扩张到 13000×9600，并新增「北境密林 / 中央河谷 / 铁路枢纽」
 // 三大生态区（树林、河流、铁路），不再只有海关工业集群。
 const RAID_MAP_W = 13000, RAID_MAP_H = 9600;
 
@@ -52,7 +51,7 @@ const RAID_ROOMS = [
   { id:"extC",   name:"撤离点·V-EX 雇车", x:150,  y:450,  w:280, h:180, tint:"#22462f", extract:true },
   { id:"extD",   name:"撤离点·沼泽小径", x:2950, y:2300, w:320, h:240, tint:"#22462f", extract:true },
   { id:"extE",   name:"撤离点·林间空投", x:620,  y:2500, w:300, h:220, tint:"#22462f", extract:true },
-  // —— v0.9.3 扩建区（地图扩到 4400×3600，新增东部/南部据点）——
+  // —— 扩建区（地图扩到 4400×3600，新增东部/南部据点）——
   { id:"factory",name:"机械工厂",   x:3360, y:380,  w:380, h:300, tint:"#3a4a44" },
   { id:"sawmill",name:"东锯木厂",   x:3360, y:1850, w:340, h:260, tint:"#4a3f30" },
   { id:"village",name:"废弃村庄",   x:3500, y:1300, w:360, h:280, tint:"#3a4a38" },
@@ -63,7 +62,7 @@ const RAID_ROOMS = [
   { id:"extF",   name:"撤离点·东港",     x:4040, y:1500, w:300, h:220, tint:"#22462f", extract:true },
   { id:"extG",   name:"撤离点·南岸哨站", x:2000, y:3320, w:340, h:220, tint:"#22462f", extract:true },
   { id:"extH",   name:"撤离点·北关检查", x:2450, y:200,  w:320, h:200, tint:"#22462f", extract:true },
-  // —— v0.10.2 东部 / 南部大区（地图扩到 7000×5600）——
+  // —— 东部 / 南部大区（地图扩到 7000×5600）——
   { id:"nx1",  name:"北岭哨所",   x:4520, y:230,  w:360, h:270, tint:"#3a3030" },
   { id:"nx2",  name:"炼油厂",     x:4980, y:180,  w:470, h:340, tint:"#3f3a30" },
   { id:"nx3",  name:"铁路调度站", x:5570, y:240,  w:400, h:290, tint:"#3a3a3a" },
@@ -89,7 +88,7 @@ const RAID_ROOMS = [
   { id:"extI", name:"撤离点·东岭索道", x:6700, y:1320, w:270, h:230, tint:"#22462f", extract:true },
   { id:"extJ", name:"撤离点·南港货轮", x:6660, y:4820, w:300, h:230, tint:"#22462f", extract:true },
   { id:"extK", name:"撤离点·医院天台", x:4900, y:3130, w:260, h:200, tint:"#22462f", extract:true },
-  // —— v0.13.6 生态扩张：北境密林 / 中央河谷 / 铁路枢纽 ——
+  // —— 生态扩张：北境密林 / 中央河谷 / 铁路枢纽 ——
   { id:"fWatch", name:"林间哨站",     x:7100, y:700,  w:320, h:240, tint:"#2e3a2c" },
   { id:"fMill",  name:"伐木场",       x:7400, y:2050, w:360, h:260, tint:"#3a3326" },
   { id:"fRanger",name:"护林站",       x:7100, y:5200, w:340, h:260, tint:"#2e3a2c" },
@@ -114,7 +113,7 @@ const RAID_ROOMS = [
   { id:"extP", name:"撤离点·北桥栈道", x:7600, y:1920, w:260, h:180, tint:"#22462f", extract:true },
   { id:"extQ", name:"撤离点·货运专线", x:10700,y:8300, w:280, h:200, tint:"#22462f", extract:true },
   { id:"extR", name:"撤离点·南岭索道", x:11800,y:7600, w:260, h:200, tint:"#22462f", extract:true },
-  // —— v0.14.0 西南开发区：监狱 / 小镇 / 大坝（填补 x<4500 · y>4500 的大片空白）——
+  // —— 西南开发区：监狱 / 小镇 / 大坝（填补 x<4500 · y>4500 的大片空白）——
   { id:"prisonYard", name:"监狱操场",   x:1150, y:5250, w:900, h:620, tint:"#2f3238", open:true },
   { id:"prisonA", name:"监狱主楼",     x:1180, y:4850, w:460, h:300, tint:"#3a3a44" },
   { id:"prisonB", name:"狱警办公楼",   x:1720, y:4850, w:300, h:260, tint:"#3f3a42" },
@@ -135,8 +134,8 @@ const RAID_ROOMS = [
   { id:"extS",    name:"撤离点·大坝坝顶", x:3300, y:8180, w:300, h:220, tint:"#22462f", extract:true },
 ];
 
-// v0.13.6：三大生态区布局（树林 / 河流 / 铁路）。全部为确定性生成，联机两端完全一致。
-// 河流以中心线 + 半宽表示，按段离散成「水圆」用于碰撞与渲染；v0.14.2 起河面可缓慢涉水（停留过久失温扣血），桥面（8 座，含 3 座大桥）完全免减速。
+// 三大生态区布局（树林 / 河流 / 铁路）。全部为确定性生成，联机两端完全一致。
+// 河流以中心线 + 半宽表示，按段离散成「水圆」用于碰撞与渲染；此后河面可缓慢涉水（停留过久失温扣血），桥面（8 座，含 3 座大桥）完全免减速。
 const RAID_BIOMES = {
   forest: [
     { x:7000, y:200,  w:2300, h:1500 }, { x:9400, y:200,  w:1800, h:1500 },
@@ -145,7 +144,7 @@ const RAID_BIOMES = {
     { x:9500, y:5600, w:1800, h:1600 }, { x:7000, y:8600, w:2000, h:800  },
   ],
   // 河流中心线（自北向南，略带蛇曲），半宽 220
-  // v0.14.2：桥从 4 座加到 8 座，其中 3 座是双向四车道的「大桥」（big），
+  // 桥从 4 座加到 8 座，其中 3 座是双向四车道的「大桥」（big），
   //   桥面豁免涉水判定；河面本身改成可缓慢涉水通过（停留过久会失温扣血）。
   river: { half:220, pts:[
     [8400,-200],[8200,1500],[8700,3100],[8200,4700],[9000,6300],[8600,7900],[9300,9800]
@@ -157,7 +156,7 @@ const RAID_BIOMES = {
     { x:9170, y:9430, w:560, h:300 },             // 南下便桥
   ] },
   // 铁路：纵向主线 + 横向支线（与河流交叉处为铁路桥，纯视觉）
-  // v0.14.0：新增 3 条支线 —— 西南干线 / 监狱支线 / 工业南延线，把左下半张图串起来
+  // 新增 3 条支线 —— 西南干线 / 监狱支线 / 工业南延线，把左下半张图串起来
   rails: [
     { pts:[ [11100,200],[11100,9400] ] },
     { pts:[ [7000,5400],[12600,5400] ] },
@@ -175,7 +174,7 @@ const RAID_BIOMES = {
 };
 
 // 撤离点规则（塔科夫式：条件撤离 / 付费撤离）
-// v0.13.7：付费撤离不再固定 4000~6000 的高价，改为「基础价 + 带入装备估值 × 费率」，
+// 付费撤离不再固定 4000~6000 的高价，改为「基础价 + 带入装备估值 × 费率」，
 //          轻装跑刀几乎白坐，重装才多付一点（见 raidExtractFee）。
 const RAID_EXTRACT_RULES = {
   extA: { need:7, cost:0,    openChance:0.5,  note:"每局随机开放" },
@@ -199,7 +198,7 @@ const RAID_EXTRACT_RULES = {
   extS: { need:8, cost:0,    openChance:0.75, note:"大坝坝顶 · 每局随机开放" },
 };
 
-/* v0.13.7：撤离费 = 基础价×0.28 + 带入装备估值×费率
+/* 撤离费 = 基础价×0.28 + 带入装备估值×费率
  *   · 裸装跑刀：约 300~500 卢布（旧版 4000+，等于直接把新手劝退）
  *   · 带 ₽50,000：约 1,300~1,700
  *   · 带 ₽300,000：约 6,000~7,500（重装才该多付）
@@ -220,28 +219,28 @@ const RAID_PATROL = [
   [300,1130],[670,1110],[720,2020],[1170,2000],[1370,2330],[2080,2030],[1740,1780],
   [2690,880],[2720,1310],[3070,1830],[2500,1500],[2450,2000],[900,2500],[1650,2450],
   [600,1750],[2200,2400],[3000,2450],
-  // v0.9.3 扩建区巡逻点
+  // 扩建区巡逻点
   [3550,530],[3680,1450],[3900,2400],[2220,3110],[1160,3150],[3500,1980],
   [4060,1620],[2140,3430],[980,3300],[3300,2200],[3900,2050],[4100,2900],
-  // v0.10.2 东部 / 南部大区巡逻点
+  // 东部 / 南部大区巡逻点
   [4700,700],[5150,620],[5750,650],[6320,620],[4720,1250],[5250,1260],
   [5900,1230],[6480,1220],[4750,2250],[5300,2250],[5980,2260],[6520,2280],
   [4760,3150],[5350,3170],[6000,3200],[5350,4150],[6000,4150],[4760,4150],
   [5400,5050],[6180,5050],[6800,1450],[6800,4980],[5050,3230],[4200,2600],
   [4150,3750],[5600,3300],[6300,3700],[4900,2400],[5700,2550],
-  // v0.13.6 生态扩张：北境密林 / 河谷 / 铁路枢纽巡逻点
+  // 生态扩张：北境密林 / 河谷 / 铁路枢纽巡逻点
   [7250,850],[7550,2150],[7250,5300],[7450,7800],[7250,8700],[7650,1850],
   [10950,2450],[9850,6100],[11550,5150],[11600,7000],[11950,7500],
   [10650,8300],[9850,7800],[7750,8100],[7800,4800],[7600,5500],
   [7700,1550],[8950,4500],[9500,6300],[9450,8800],[10800,3600],[10200,1200],
-  // v0.14.0 西南开发区：监狱 / 小镇 / 大坝巡逻点（全部避开水域）
+  // 西南开发区：监狱 / 小镇 / 大坝巡逻点（全部避开水域）
   [1450,5050],[1950,5350],[1620,5600],[1560,6250],[1220,6900],
   [2000,6900],[2120,7300],[2450,7420],[1800,7660],[2620,7800],
   [3050,8300],[3560,8690],[3900,8130],[2760,8600],[4180,7800],
 ];
 
 /* ----------------------------- 户外掩体 / 装饰 ----------------------------- */
-// v0.11.2：地图原先只有「房间 + 十几条手写遮挡墙」，房门外大片空地既没有掩体
+// 地图原先只有「房间 + 十几条手写遮挡墙」，房门外大片空地既没有掩体
 // 也没有视觉层次。这里改为按网格程序化撒点，物件分「硬掩体（挡子弹+视线）」
 // 与「软掩体（只挡移动，不挡视线）」两类，避免地图变成一览无余的靶场。
 const RAID_PROPS = [
@@ -281,7 +280,7 @@ const RAID_INDOOR = [
 const RAID_GUN_TYPES = ["pistol","smg","shotgun","rifle","sniper"];
 
 // 1~9 级护甲：现实防护等级（软质内衬 → 陶瓷/钢制插板 → 全防护重型）
-// v0.15.0：移除超现实护甲命名与自动回复设定，改用现实防护等级
+// 移除超现实护甲命名与自动回复设定，改用现实防护等级
 const RAID_ARMORS = {
   1: { name:"T1 软质防护背心", dr:0.10, maxArmor:25,   value:180     },
   2: { name:"T2 轻型战术背心", dr:0.17, maxArmor:45,   value:420     },
@@ -309,10 +308,10 @@ const RAID_ARMOR_TIERS = [1,2,3,4,5,6,7,8,9];
 // 局内物品栏容量上限（超出则无法继续拾取，提示「物品栏已满」）
 const RAID_INV_CAP = { weapons:6, armors:4, helmets:4, parts:16, materials:24, meds:6, receivers:4, keys:8 };
 
-/* ----------------------------- 9 阶统一品级（v0.10.2 / v0.15.0 拟真化） -----------------------------
+/* ----------------------------- 9 阶统一品级 -----------------------------
  * 塔科夫全战利品共用同一套品级刻度（共 9 阶，严格由低到高）：
  *   民用 · 翻新 · 制式 · 军规 · 精工 · 特种 · 试验 · 原型 · 竞赛
- * v0.15.0：改为军工品相刻度和低饱和军规配色；
+ * 改为军工品相刻度和低饱和军规配色；
  *   regen（护甲自动回复）全部归零 —— 现实护甲耐久只能维修，不会待维修。
  * 护甲等级 T1~T9、枪械品级、部件品级、原材料品级全部共用此刻度。 */
 const RAID_TIERS = [
@@ -332,7 +331,6 @@ const RAID_RARITY_COLOR = RAID_TIERS.map(t=>t.color);
 const RAID_RARITY_DR    = RAID_TIERS.map(t=>t.dr);
 const RAID_RARITY_ARM   = RAID_TIERS.map(t=>t.arm);
 const RAID_RARITY_VAL   = RAID_TIERS.map(t=>t.val);
-const RAID_RARITY_REGEN = RAID_TIERS.map(t=>t.regen);
 
 // 9 阶品质图例（配装大厅 / 商店展示用）
 function raidTierLegend(){
@@ -342,10 +340,10 @@ function raidTierLegend(){
 // 枪械生成：把塔科夫品质档位映射到全局 RARITIES 的 id（仅取数值/词缀，显示色由 qColor 覆盖）
 const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","ancient","mythic","rainbow"];
 
-/* ----------------------------- 具名装备（v0.10.4 / v0.15.0 拟真化） -----------------------------
+/* ----------------------------- 具名装备 -----------------------------
  * 高档位除了随机改装枪甲之外，还会掉落现实型号 + 出厂改装方案的「具名装备」：
  * 词条全部手工配置，同档数值远高于随机生成，名字固定（如「AK-74N 战术型」）。
- * v0.15.0：移除制式/定制命名与急救效率、额外弹丸、特殊弹触发、溅射等超现实词条。 */
+ * 移除制式/定制命名与急救效率、额外弹丸、特殊弹触发、溅射等超现实词条。 */
 const RAID_UNIQUES = [
   // —— 枪械：现实型号 + 出厂改装方案 ——
   { id:"u_dawn", name:"AK-74N 战术型", kind:"weapon", type:"rifle", tier:5, elem:"fire", ilvl:30,
@@ -473,17 +471,15 @@ function raidLuckPick(baseW, luck, mults){
   for(let i=0;i<w.length;i++){ r-=w[i]; if(r<=0) return i; }
   return w.length-1;
 }
-// v0.12：携带价值只给「很小的」品质加成（原表满配会把顶档权重放大 12 倍，太容易出神装）
-const RAID_LUCK_MULT = [0, 0.07, 0.14, 0.24, 0.38, 0.58, 0.85, 1.15, 1.50];  // v0.14.4：高阶倍率再压低
-/* v0.13.1：只要携带了任何装备，就不再算「裸装进场」——
+// 携带价值只给「很小的」品质加成（原表满配会把顶档权重放大 12 倍，太容易出神装）
+const RAID_LUCK_MULT = [0, 0.07, 0.14, 0.24, 0.38, 0.58, 0.85, 1.15, 1.50];  // 高阶倍率再压低
+/* 只要携带了任何装备，就不再算「裸装进场」——
  *   RAID_LUCK_FLOOR：最低运气档（≈携带估值 ₽7000），箱子不会全是垫底货
  *   RAID_GEAR_BASE：AI 装备强度下限（≈常规配装），裸手才是 0 */
 const RAID_LUCK_FLOOR = 0.06;
 const RAID_GEAR_BASE  = 0.32;
-// 枪械 / 部件的 9 阶品级基础权重（民用→竞赛）——仅做参考表，实际出货走下面的「硬预算」
-const RAID_QUALITY_W = [34, 25, 17, 11, 6.2, 3.2, 1.30, 0.45, 0.12];
 
-/* ---------------- v0.12.5 硬性稀有度预算（v0.14.4 收紧） ----------------
+/* ---------------- 硬性稀有度预算 ----------------
  * 目标（用户明确要求）：每 100 件战利品里
  *   · 稀有及以上（T3 稀有 / T4 军规）≈ 3.2 件（原 5 件）
  *   · 特种及以上（T5 特种 ~ T8 原型）≈ 0.55 件（原 1 件）
@@ -497,7 +493,7 @@ function raidBudgetTier(luck){
   const pL=Math.min(RAID_BUDGET.lgCap, RAID_BUDGET.lg0*(1+k*0.40));
   const pR=Math.min(RAID_BUDGET.lvCap, RAID_BUDGET.lv0*(1+k*0.30));
   const r=RNG.f();
-  if(r<pL){   // 特种段 T5~T8：运气越好越偏 T7 / T8（v0.14.4：底档更集中）
+  if(r<pL){   // 特种段 T5~T8：运气越好越偏 T7 / T8
     return 5 + RNG.weighted([{weight:0.82-0.30*k},{weight:0.15},{weight:0.025+0.20*k},{weight:0.005+0.10*k}]);
   }
   if(r<pR){   // 稀有段 T3 / T4
@@ -507,7 +503,7 @@ function raidBudgetTier(luck){
 }
 
 // 高级护甲天然偏向高稀有度（T9 基本不出普通），但顶端受等级上限约束、始终极稀有
-// v0.12.5：品质也走「硬预算」，护甲不再满地图刷紫 / 橙
+// 品质也走「硬预算」，护甲不再满地图刷紫 / 橙
 function raidRollArmorRarity(tier, luck){
   const t=M.clamp(Math.round(tier||1),1,9);
   const maxRar=M.clamp(t-1, 0, 8);
@@ -515,15 +511,15 @@ function raidRollArmorRarity(tier, luck){
 }
 
 // 掉落等级权重：T7+ 极稀有（上锁箱 / 增援封锁者才较常见）
-const RAID_TIER_W    = [23, 30, 25, 14, 4.0, 1.3, 0.28, 0.055, 0.010];   // v0.14.4：T6+ 掉落率再降约 40~50%
+const RAID_TIER_W    = [23, 30, 25, 14, 4.0, 1.3, 0.28, 0.055, 0.010];   // T6+ 掉落率再降约 40~50%
 function raidRollArmorTier(luck){
   return 1 + raidLuckPick(RAID_TIER_W, luck, RAID_LUCK_MULT);   // 1..9
 }
 
 /* ----------------------------- 原材料（18 种，每阶 2 种） ----------------------------- */
-/* v0.10.6 经济收紧：低阶材料估值大幅下调；v0.12.5 进一步大幅压低低价值材料
+/* 经济收紧：低阶材料估值大幅下调；进一步大幅压低低价值材料
  * （T0/T1/T2 再砍约 40~55%），高价值材料依旧稀有但捡一局卖不出好价钱。 */
-// v0.15.0：全部改为现实中能在仓库 / 军械所找到的物资，保留 id 以兼容旧存档与合成配方
+// 全部改为现实中能在仓库 / 军械所找到的物资，保留 id 以兼容旧存档与合成配方
 const RAID_MATERIALS = [
   { id:"scrap",    name:"废金属",     tier:0, value:7,    tag:"金属" },
   { id:"cloth",    name:"破布",       tier:0, value:5,    tag:"织物" },
@@ -547,7 +543,7 @@ const RAID_MATERIALS = [
 const RAID_MAT_BY_ID = {};
 for(const m of RAID_MATERIALS) RAID_MAT_BY_ID[m.id]=m;
 
-/* v0.12.5 悬赏保底战利品：击杀悬赏目标「至少 3 件稀有及以上」
+/* 悬赏保底战利品：击杀悬赏目标「至少 3 件稀有及以上」
  *   ① 一件 T4~T6 原材料　② 一件稀有 / 特种配件　③ 一件稀有以上护甲 / 头盔 / 整枪 */
 function raidBountyLoot(){
   const out=[];
@@ -577,15 +573,13 @@ function raidBountyLoot(){
   }
   return out;
 }
-const RAID_MAT_W = [44, 30, 14, 7, 3.2, 1.4, 0.55, 0.16, 0.03];   // 旧权重表（保留兼容），实际走 raidBudgetTier
-// v0.12.9：仓库直售回收比例 0.6 → 0.75
-// v0.13.7：大幅下调 0.75 → 0.42（外场直售被压价，鼓励带进图卖给回收超市 / 黑市，形成经济循环）
+// 仓库直售回收比例 0.42：外场直售被压价，鼓励带进图卖给回收超市 / 黑市，形成经济循环
 const RAID_VENDOR_RATE = 0.42;
 // 局内「回收超市」收购价：比仓库直售高，但要冒死在局内跑一趟
 const RAID_FIELD_SELL_RATE = 0.62;
 
 /* ----------------------------- 钥匙（5 级，开对应等级的上锁箱） -----------------------------
- * v0.13.8：上锁箱按保险等级分成 5 档（lockLv），钥匙也分 5 级。
+ * 上锁箱按保险等级分成 5 档（lockLv），钥匙也分 5 级。
  * 一把钥匙能开「同级或更低」的箱子，有使用次数（用尽即报废）。
  * 获取：材料商店（I~II，卢布）/ 黑市（III~V，代币）/ 上锁箱与精英 AI 掉落（不可合成）。
  */
@@ -596,7 +590,7 @@ const RAID_KEYS = [
   { lv:4, name:"钛合金钥匙", color:"#7fd0ff", uses:3, value:86000,  shop:0,     token:14 },
   { lv:5, name:"V 级电子钥匙",color:"#b8946a", uses:2, value:210000, shop:0,    token:34 },
 ];
-/* v0.14.7：黑市代币 → 卢布 的「估值汇率」（按黑市 III~V 级钥匙定价反推：
+/* 黑市代币 → 卢布 的「估值汇率」（按黑市 III~V 级钥匙定价反推：
  *   34000/5 = 6800 · 86000/14 ≈ 6143 · 210000/34 ≈ 6176 → 取 6200）
  * 只用于配装大厅的「总价值」展示，代币仍是黑市专用货币，不提供任何兑换入口。 */
 const RAID_TOKEN_RATE = 6200;
@@ -610,8 +604,7 @@ function raidMakeKey(lv, uses){
     uses:Math.max(1, Math.round(uses||d.uses)), maxUses:d.uses, value:d.value,
     uid:"ky"+Math.floor(Math.random()*1e9).toString(36) };
 }
-function raidKeyLabel(it){ return it ? `${it.name}（${RAID_LOCK_NAME[it.lv]}·剩 ${it.uses} 次）` : "钥匙"; }
-/* v0.14.5：钥匙不再可合成 —— 只有两条获取路径：
+/* 钥匙不再可合成 —— 只有两条获取路径：
  *   ① 掉落：上锁保险箱（等级 i 的箱子最多掉 i+1 级的钥匙）与精英干员；
  *   ② 购买：材料商店 I~II（卢布）、黑市 III~V（代币）。
  * 由此钥匙成为真正的稀缺资源，开箱决策成本更高。 */
@@ -662,7 +655,7 @@ function raidRollMed(luck){
 }
 
 /* ----------------------------- 改装模块（slot:"core"） -----------------------------
- * v0.15.0：原「弹种适配组件 / 膛压组件 / 改装模块」全部改为现实可解释的改装模块，
+ * 原「弹种适配组件 / 膛压组件 / 改装模块」全部改为现实可解释的改装模块，
  *   内部 core 字段值（elem / chaos / boost）保留，兼容旧存档与联机快照。
  * 三类模块：
  *   · 弹种适配组件(core:"elem")  → 更换枪械适配弹种，附加弹药效能词条
@@ -675,11 +668,11 @@ const RAID_ROMAN = ["","I","II","III","IV","V"];
 const RAID_ELEM_CORE_ELEMS = ["fire","shock","corrosive","cryo","explosive","radiation"];
 const RAID_CORE_RARITY = ["green","blue","purple","orange","pearl"];   // lv1~5 对应稀有度 id
 function raidCoreValue(coreType, lv){
-  const base = coreType==="chaos" ? 3900 : coreType==="boost" ? 3000 : 3300;   // v0.14.5：增益提升后估值同步上调
+  const base = coreType==="chaos" ? 3900 : coreType==="boost" ? 3000 : 3300;   // 增益提升后估值同步上调
   return Math.round(base * Math.pow(2.35,(lv||1)-1)/10)*10;
 }
 // 改装模块定义：每种给出名称/颜色/属性词缀/每级基础值
-/* v0.15.1：7 类现实改装模块，全部为可解释的工艺参数；内部 id 保留以兼容旧存档。
+/* 7 类现实改装模块，全部为可解释的工艺参数；内部 id 保留以兼容旧存档。
  * 模块只能掉落或购买，不可合成；估值随等级按 2.35 倍递增。 */
 const BOOST_CORE_TYPES = {
   berserk:   { name:"导气增压模块", color:"#b07a4a", stats:["dmgPct","fireRatePct"],        base:[26,23] },
@@ -691,7 +684,7 @@ const BOOST_CORE_TYPES = {
   omni:      { name:"综合改装套件", color:"#b09a4c", stats:["dmgPct","accPct","critChance"],base:[15,15,12] },
 };
 const BOOST_CORE_IDS = Object.keys(BOOST_CORE_TYPES);
-function raidCoreModValue(stat, lv){ return Math.round((BASE_FOR_STAT(stat))*(1+(lv-1)*0.95)*10)/10; }   // v0.14.5：每级 +95%
+function raidCoreModValue(stat, lv){ return Math.round((BASE_FOR_STAT(stat))*(1+(lv-1)*0.95)*10)/10; }   // 每级 +95%
 function BASE_FOR_STAT(stat){
   for(const k in BOOST_CORE_TYPES){ const i=BOOST_CORE_TYPES[k].stats.indexOf(stat); if(i>=0) return BOOST_CORE_TYPES[k].base[i]; }
   if(stat==="elemPct") return 30; if(stat==="elemChance") return 13;   // 弹种适配组件
@@ -703,12 +696,12 @@ function raidCoreMods(coreType, sub, lv){
     const E=ELEMENTS[sub]||ELEMENTS.fire;
     return [
       { stat:"elemPct",    value: raidCoreModValue("elemPct", lv) },
-      { stat:"elemChance", value: 0 },   // v0.15.0：不再有弹种增益
+      { stat:"elemChance", value: 0 },   // 不再有弹种增益
     ];
   }
   if(coreType==="chaos") return [];   // 膛压组件：效果由「改装等级」承载，无词条
   const def=BOOST_CORE_TYPES[sub];
-  if(def) return def.stats.map((s,i)=>({ stat:s, value: Math.round(def.base[i]*(1+(lv-1)*0.95)*10)/10 }));   // v0.14.5：每级 +95%
+  if(def) return def.stats.map((s,i)=>({ stat:s, value: Math.round(def.base[i]*(1+(lv-1)*0.95)*10)/10 }));   // 每级 +95%
   return [];
 }
 function raidCoreName(c){
@@ -764,7 +757,7 @@ function raidReindexCores(gun){
   let i=0;
   for(const p of (gun.parts||[])){ if(p && p.core){ p.slot="core"+i; i++; } }
 }
-/* v0.13.2：膛压组件掉落分布单独走一套权重 —— 每高一级权重减半（i+1 = i / 2）。
+/* 膛压组件掉落分布单独走一套权重 —— 每高一级权重减半（i+1 = i / 2）。
  * 高改装等级需要极其罕见的对应组件，膛压组件在模块掉落里占 25%。 */
 const RAID_CHAOS_LV_W = [40, 20, 10, 5, 2.5];
 const RAID_CHAOS_CORE_SHARE = 0.25;
@@ -794,7 +787,7 @@ const RAID_RECEIVERS = [
 ];
 const RAID_RECEIVER_BY_ID={}; for(const r of RAID_RECEIVERS) RAID_RECEIVER_BY_ID[r.id]=r;
 function raidMakeReceiver(r, tier){
-  // v0.12：机匣等级不再写死，由合成时投入的材料等级决定
+  // 机匣等级不再写死，由合成时投入的材料等级决定
   const t = (tier===undefined || tier===null) ? r.tier : M.clamp(Math.round(tier),0,8);
   const name = t===r.tier ? r.name : `${RAID_TIERS[t].name}·${r.name}`;
   return { kind:"receiver", id:r.id, name, short:r.short, gunType:r.type,
@@ -804,7 +797,7 @@ function raidMakeReceiver(r, tier){
 }
 
 /* ----------------------------- 合成表（自选原材料 → 产物） -----------------------------
- * v0.12：配方不再写死材料，改成「槽位 + 自选材料」。
+ * 配方不再写死材料，改成「槽位 + 自选材料」。
  * 产物品质 = 所选材料平均等级（T0 材料 → 普通，T8 材料 → 原型），
  * 材料越混搭浮动越大，同阶材料越多产物越稳定、越贴近材料本身等级。 */
 function raidAvgMatTier(mats){
@@ -838,7 +831,7 @@ function raidCraftFee(mats, slots){
 
 // slots: 需要几个原材料；make(mats, qTier) 产出成品
 const RAID_RECIPES = [
-  // 注意：弹种适配组件 / 膛压组件 不在合成表内（v0.10.5）——只能从突袭箱子里搜出，或在拍卖行竞拍
+  // 注意：弹种适配组件 / 膛压组件 不在合成表内——只能从突袭箱子里搜出，或在拍卖行竞拍
   { id:"r_medkit", name:"医疗品", kind:"med", tag:"医疗", slots:2,
     desc:"按材料等级产出 绷带 / 止血针 / 急救包 / 强心针 / 手术包",
     make:(mats,q)=>{
@@ -856,7 +849,7 @@ const RAID_RECIPES = [
     desc:"产出与材料同档的头盔（品质在档位内浮动）",
     make:(mats,q)=>raidMakeHelmet(M.clamp(q+1,1,9), M.clamp(q,0,8)) },
 ];
-// v0.12.1：底材按枪型定投料量——枪越大结构越复杂，要的材料越多
+// 底材按枪型定投料量——枪越大结构越复杂，要的材料越多
 const RAID_RECV_SLOTS = { rifle:16, sniper:20, smg:6, shotgun:12, pistol:2 };
 for(const r of RAID_RECEIVERS){
   const slots = RAID_RECV_SLOTS[r.type] || 3;
@@ -957,7 +950,7 @@ function raidArmorStats(base, rar, affixes){
     affixes: affixes||[],
     dr: Math.round(Math.min(0.92, base.dr + RAID_RARITY_DR[rar] + aDr)*1000)/1000,
     maxArmor: Math.round(base.maxArmor*(1+RAID_RARITY_ARM[rar])*(1+aArm/100)),
-    armorRegen: RAID_RARITY_REGEN[rar],
+    armorRegen: 0,   // 现实护甲耐久只能维修，不自动回复
     value: Math.round(base.value*(1+RAID_RARITY_VAL[rar]+(affixes?0.24:0))/100)*100,
   };
 }
@@ -1001,10 +994,10 @@ function priceTextShort(v){
   return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 // 护甲/头盔等级 → 颜色（T1 灰 → T9 黄铜）
-// v0.15.0：补上索引 9（原表缺 T9，护甲卡片会渲染出 color:undefined），并统一为低饱和军规色
+// 补上索引 9（原表缺 T9，护甲卡片会渲染出 color:undefined），并统一为低饱和军规色
 const ARMOR_TIER_COLOR = ["#9aa4b2","#9aa4b2","#9db39a","#93ad7c","#7b9ab5","#9c8fb5","#c68b4c","#b06a62","#c2a76a","#c9b878"];
 
-// v0.14.8：所有新物品统一用尽量唯一的 uid；商店反复购买不再产生重复 uid。
+// 所有新物品统一用尽量唯一的 uid；商店反复购买不再产生重复 uid。
 function raidUniqueUid(prefix){
   try{
     if(typeof crypto!=="undefined" && typeof crypto.randomUUID==="function")
@@ -1030,7 +1023,7 @@ function ensureGunParts(w){
   out.uid=w.uid; out.kind="weapon";
   return out;
 }
-// 旧护甲（light/heavy）→ 新 tier 格式；v0.9.9 数值重做后统一按新表重算
+// 旧护甲（light/heavy）→ 新 tier 格式；数值重做后统一按新表重算
 function ensureArmorTier(a){
   if(!a) return a;
   const isHelm = a.kind==="helmet" || (a.name||"").indexOf("盔")>=0;
@@ -1078,7 +1071,7 @@ const RaidStash = {
             d.gunVer=3;
             d.weapons=(d.weapons||[]).map(ensureGunParts);
           }
-          // 护甲 / 头盔：无论档位版本，一律按当前数值表校正（v0.9.9 重做）
+          // 护甲 / 头盔：无论档位版本，一律按当前数值表校正
           d.armors=(d.armors||[]).map(ensureArmorTier);
           d.helmets=(d.helmets||[]).map(ensureArmorTier);
           if(!d.armors) d.armors=[];
@@ -1088,7 +1081,7 @@ const RaidStash = {
           if(!d.cores) d.cores=[];
           if(!d.receivers) d.receivers=[];
           if(!d.meds) d.meds={hemo:0,medkit:0,stim:0,surgery:0};
-          // v0.13.5：旧独立改装模块库存 stash.cores → 并入配件池（slot:"core"）
+          // 旧独立改装模块库存 stash.cores → 并入配件池（slot:"core"）
           if(d.cores && d.cores.length){
             for(const c of d.cores){
               const lv=c.lv||1;
@@ -1103,14 +1096,14 @@ const RaidStash = {
           }
           if(d.bandages===undefined) d.bandages=1;
           if(d.creds===undefined) d.creds=800;
-          if(d.tokens===undefined) d.tokens=0;      // v0.13.7：黑市代币
-          if(!Array.isArray(d.keys)) d.keys=[];      // v0.13.8：钥匙（5 级）
+          if(d.tokens===undefined) d.tokens=0;      // 黑市代币
+          if(!Array.isArray(d.keys)) d.keys=[];      // 钥匙（5 级）
           for(const k of d.keys){ if(!k.uses) k.uses=raidKeyDef(k.lv).uses; if(!k.maxUses) k.maxUses=raidKeyDef(k.lv).uses; }
           return d;
         }
       }
     }catch(e){}
-    // v0.14.4：首次进游戏就把默认档落盘 —— 否则每次 load 都会重新生成一把
+    // 首次进游戏就把默认档落盘 —— 否则每次 load 都会重新生成一把
     // 带随机 uid 的钥匙，导致「钥匙勾选」状态在每次重渲染时被当成已失效而清空。
     const d=seed(); this.save(d); return d;
   },
@@ -1123,7 +1116,7 @@ class RaidOperator {
     this.id=o.id; this.name=o.name; this.isPlayer=!!o.isPlayer; this.cls=o.cls||"pmc"; this.bounty=!!o.bounty;
     this.x=o.x; this.y=o.y; this.angle=o.angle!==undefined?o.angle:0;
     this.r=13; this.speed=o.speed||150; this.color=o.color||"#e06a4a";
-    // v0.13：护甲 / 头盔按 tier 给角色额外血量，高 tier 装备更耐打
+    // 护甲 / 头盔按 tier 给角色额外血量，高 tier 装备更耐打
     const eqHP=(o.armorTier||0)*14 + (o.helmetTier||0)*8;
     this.hp=(o.hp||100)+eqHP; this.maxHP=this.hp;
     this.armor=o.armor||0; this.maxArmor=this.armor; this.dr=o.dr||0;
@@ -1131,7 +1124,7 @@ class RaidOperator {
     this.helmetArmor=o.helmetArmor||0; this.maxHelmetArmor=this.helmetArmor;
     this.helmetDr=o.helmetDr||0; this.helmetTier=o.helmetTier||0;
     this.armorTier=o.armorTier||0;
-    this.armorRegen=o.armorRegen||0;   // v0.15.0：护甲耐久不再自动回复，仅保留字段兼容旧存档
+    this.armorRegen=o.armorRegen||0;   // 护甲耐久不再自动回复，仅保留字段兼容旧存档
     this.gun=o.gun||null; this.secondary=o.secondary||null;
     // 每把枪独立记录弹药（修复：换枪瞬间满弹的漏洞）
     if(this.gun){ this.gun.ammoMag=this.gun.mag; this.gun.ammoRes=this.gun.reserve; }
@@ -1140,7 +1133,7 @@ class RaidOperator {
     this.inv=o.inv||{ weapons:[], armors:[], helmets:[], parts:[], materials:[], meds:[], cores:[], receivers:[] };
     this.creds=o.creds||0;
     this.smart=!!o.smart;
-    // v0.10.1：增援小队 / 撤离点封锁者
+    // 增援小队 / 撤离点封锁者
     this.squadId=o.squadId||null;
     this.isLeader=!!o.isLeader;
     this.blockZone=o.blockZone||null;
@@ -1150,7 +1143,7 @@ class RaidOperator {
     this.medT=0;
     this._lastSeen=0;
     this.fireCd=0; this.reloadT=0; this.alive=true;
-    this._dodgeT=0; this._dodgeSide=1;   // v0.14.6：子弹擦身时的侧闪计时 / 方向
+    this._dodgeT=0; this._dodgeSide=1;   // 子弹擦身时的侧闪计时 / 方向
     this.moveX=0; this.moveY=0; this.vx=0; this.vy=0;
     this.roamT=0; this.roamPt=null; this.state="roam"; this._stuck=0;
     this.kills=0;
@@ -1190,11 +1183,11 @@ const Raid = {
   uidN:0,
   showInv:false,
   _shownWarn:false,
-  // v0.10.1：战利品品质随携带装备估值浮动 + 增援系统
+  // 战利品品质随携带装备估值浮动 + 增援系统
   carriedValue:0,
-  carryVal:0,          // v0.13.7：带入装备估值（撤离费 / 商店定价基准）
-  tokens:0,            // v0.13.7：黑市代币（局内拾取 + 撤离结算）
-  shops:[],            // v0.13.7：局内商店摊位
+  carryVal:0,          // 带入装备估值（撤离费 / 商店定价基准）
+  tokens:0,            // 黑市代币（局内拾取 + 撤离结算）
+  shops:[],            // 局内商店摊位
   shopOpen:null,       // 当前打开的商店（DOM 面板）
   _rtCache:null,       // 枪械运行时缓存（多枪切换时保留各自弹药）
   lootLuck:0,
@@ -1204,7 +1197,7 @@ const Raid = {
   maxOps:42,
 
   /* ----------------------------- 启动 ----------------------------- */
-  // v0.14.8：启动失败时把已从仓库扣除的装备/现金/钥匙/医疗品原样退回，避免“局没进去装备没了”。
+  // 启动失败时把已从仓库扣除的装备/现金/钥匙/医疗品原样退回，避免“局没进去装备没了”。
   start(game, opts={}){
     try{ this._start(game, opts); }
     catch(err){
@@ -1272,13 +1265,13 @@ const Raid = {
     this.inv={weapons:[],armors:[],helmets:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[]};
     this.uidN=0;
     this.elapsed=0; this.reinforceT=0; this._squadN=0;
-    this.spawnGrace=8;                        // v0.14.3：开局 8 秒 AI 不主动锁定（玩家先开枪即失效）
+    this.spawnGrace=8;                        // 开局 8 秒 AI 不主动锁定（玩家先开枪即失效）
     this.spectate=false; this._ended=false;
 
     this.stash=RaidStash.load();
-    this.tokens=0;                            // v0.13.7：本局拾取的黑市代币（撤离才落袋）
-    this._firstKillToken=false;               // v0.14.3：本局首杀名额（首个击杀必得 1 枚）
-    /* v0.14.8：医疗品/绷带也要从仓库扣除——阵亡后不能“用掉的还在仓库里”，
+    this.tokens=0;                            // 本局拾取的黑市代币（撤离才落袋）
+    this._firstKillToken=false;               // 本局首杀名额（首个击杀必得 1 枚）
+    /* 医疗品/绷带也要从仓库扣除——阵亡后不能“用掉的还在仓库里”，
      * 成功撤离时再把本局剩余量写回。bandages 用显式判断，0 卷不会再被 ||1 变成 1 卷。 */
     this.medsIn = Object.assign({hemo:0,medkit:0,stim:0,surgery:0}, this.stash.meds||{});
     this.bandagesIn = (this.stash.bandages===undefined || this.stash.bandages===null)
@@ -1288,10 +1281,10 @@ const Raid = {
     this.stash.meds = { hemo:0, medkit:0, stim:0, surgery:0 };
     this.stash.bandages = 0;
     this._applyLoadout(opts);
-    // v0.13.8：仓库钥匙串随入场携带（最多 8 把，死了就丢；撤离成功才带回）
+    // 仓库钥匙串随入场携带（最多 8 把，死了就丢；撤离成功才带回）
     this.stash.keys=this.stash.keys||[];
     if(Array.isArray(opts.keys)){
-      // v0.14.4：只带玩家勾选的钥匙，未选的留在仓库（不会因为死一局被清空）
+      // 只带玩家勾选的钥匙，未选的留在仓库（不会因为死一局被清空）
       const want=new Set(opts.keys), take=[], keep=[];
       for(const k of this.stash.keys){ if(want.has(k.uid)) take.push(k); else keep.push(k); }
       this.inv.keys=take.slice(0, RAID_INV_CAP.keys);
@@ -1303,7 +1296,7 @@ const Raid = {
     const baseVal=this.carried.weapons.reduce((s,w)=>s+(w.value||0),0)
       +(this.carried.armor?(this.carried.armor.value||0):0)
       +(this.carried.helmet?(this.carried.helmet.value||0):0);
-    this.carryVal=baseVal;   // v0.13.7：撤离费按带入装备估值浮动
+    this.carryVal=baseVal;   // 撤离费按带入装备估值浮动
     if(opts.insure && baseVal>0){
       const fee=Math.max(200, Math.round(baseVal*0.35));
       // 联机入口不再经过大厅的 canIns 检查，这里必须确认真的付得起，避免“0 元投保”。
@@ -1313,7 +1306,7 @@ const Raid = {
         this.stash.creds-=fee;
       }
     }
-    // v0.14.6：把玩家选择带入的卢布 / 代币从仓库搬进本局（阵亡即丢，撤离原样带回）
+    // 把玩家选择带入的卢布 / 代币从仓库搬进本局（阵亡即丢，撤离原样带回）
     {
       const cashIn2=Math.max(0, Math.min(Math.round(opts.cash||0), Math.floor(this.stash.creds||0)));
       const tokIn2=Math.max(0, Math.min(Math.round(opts.tokens||0), Math.floor(this.stash.tokens||0)));
@@ -1325,18 +1318,18 @@ const Raid = {
     this._stashPersisted = RaidStash.save(this.stash);
     if(!this._stashPersisted) throw new Error("仓库写入失败（可能是 localStorage 已满）");
 
-    // v0.13.1：只要带了任何一件装备（枪 / 甲 / 盔），就不再按「裸装」处理
+    // 只要带了任何一件装备（枪 / 甲 / 盔），就不再按「裸装」处理
     const carriedAny = this.carried.weapons.length>0 || !!this.carried.armor || !!this.carried.helmet;
 
-    // v0.10.1：携带装备估值 → 战利品品质浮动因子。
+    // 携带装备估值 → 战利品品质浮动因子。
     // 带得越值钱，箱子里刷出高等级 / 高稀有度物品的概率越高；裸装进场则大幅下降。
     this.carriedValue=baseVal;
-    // v0.12：即使带满配高价值装备入场，品质加成也被压到最多 +55%（原为最高 +93%）
+    // 即使带满配高价值装备入场，品质加成也被压到最多 +55%（原为最高 +93%）
     this.lootLuck = (1 - Math.exp(-baseVal/62000)) * 0.55;   // 30k≈0.21, 100k≈0.44, 裸装=0
     // 带了东西就给一个最低运气档（≈估值 ₽7000），不再顶着「裸装」标签刷最低阶箱子
     if(carriedAny) this.lootLuck = Math.max(this.lootLuck, RAID_LUCK_FLOOR);
 
-    // v0.13：携带装备越强，AI 入场装备也越强。
+    // 携带装备越强，AI 入场装备也越强。
     // gearStrength 归一化：0 = 真空手，≈0.5 = 常规配装，≈1.0 = 满配（ilvl45 + T8 甲 + T8 盔）
     let gIlvlSum=0, gn=0;
     for(const w of this.carried.weapons){ if(w.ilvl){ gIlvlSum+=w.ilvl; gn++; } }
@@ -1348,10 +1341,10 @@ const Raid = {
     if(carriedAny) gs = Math.max(gs, RAID_GEAR_BASE);
     this.gearStrength = M.clamp(gs, 0, 1.6);
 
-    // v0.12.3：出生点不再固定卡车停车场 —— 全图 3×3 分区抽取，避免每局都从左上角开跑
+    // 出生点不再固定卡车停车场 —— 全图 3×3 分区抽取，避免每局都从左上角开跑
     const spawnRoom=this._pickSpawnRoom();
     this.spawnRoomId=spawnRoom.id;
-    // v0.14.3：_buildShops 早于 player 创建，先把出生区中心记下来给「起点补给点」用
+    // _buildShops 早于 player 创建，先把出生区中心记下来给「起点补给点」用
     this.spawnPoint={ x:spawnRoom.x+spawnRoom.w/2, y:spawnRoom.y+spawnRoom.h/2 };
     this._buildMap();
     this.containers=[]; this._spawnContainers();
@@ -1384,7 +1377,7 @@ const Raid = {
       const pmcNames=["USEC·猎犬","BEAR·雪松","USEC·游骑兵","BEAR·极地","PMC·审判者","PMC·铁锤"];
       const scavNames=["破烂王·瓦夏","赌徒·谢尔盖","醉汉·鲍里斯","老猎人·米沙","暴躁哥·尤拉","捡漏的·科利亚"];
       const colors=["#e06a4a","#e0b84a","#b06ae0","#4ae0a0","#e04a8a","#7a9be0","#d0d04a","#4ac0d0","#d06a6a"];
-      // v0.12.4：AI 全图刷 —— 取消"只刷在距玩家>620px 房间"的限制，
+      // AI 全图刷 —— 取消"只刷在距玩家>620px 房间"的限制，
       // 改为先构建全图候选生成点池（房间内部点 + 院子/道路室外点），再均匀挑选，
       // 让整张地图（含玩家附近的房间与街道）都散布 AI，而不是只在最远端扎堆。
       const cand=[];
@@ -1413,7 +1406,7 @@ const Raid = {
       // Fisher–Yates 打乱，保证每局抽样点不同
       for(let i=cand.length-1;i>0;i--){ const j=RNG.ri(0,i); const tmp=cand[i]; cand[i]=cand[j]; cand[j]=tmp; }
       // 两遍挑选：先要求距玩家 ≥ MIN_DIST（不贴脸），挑不够再放宽到 430，保证全图都能铺满
-      const MIN_DIST=620, SEP=118;   // v0.14.3：AI 视野提到 1000，出生点最近的 AI 也拉开到 620 以外
+      const MIN_DIST=620, SEP=118;   // AI 视野提到 1000，出生点最近的 AI 也拉开到 620 以外
       const slots=[];
       const _pick=(minD)=>{
         for(const c of cand){
@@ -1433,7 +1426,7 @@ const Raid = {
         const isPMC=RNG.chance(0.36);
         let gun, hp, speed, armor, dr, armorTier, helmetArmor, helmetDr, helmetTier;
         let smart=false, creds=RNG.ri(20,70), lootLimit=4;
-        // v0.13：携带装备越强，AI 入场装备也越强
+        // 携带装备越强，AI 入场装备也越强
         const gs=this.gearStrength||0;                // 0（裸装）~ 1.0（满配）
         const gIlvl=Math.round(gs*8);                 // 枪械等级 +0 ~ +8
         const gArmor=gs>=0.30?Math.round(gs*gs*7):0;   // 护甲/头盔 tier 抬 0 ~ +7（平方曲线，低强度几乎不抬）
@@ -1470,9 +1463,9 @@ const Raid = {
           helmetTier=0; helmetArmor=0; helmetDr=0;
           creds=RNG.ri(10,40); lootLimit=2;
         }
-        // v0.13：携带装备强 → 更多 AI 带装备进场（不再一半人空手巡逻）
+        // 携带装备强 → 更多 AI 带装备进场（不再一半人空手巡逻）
         if(!smart && !RNG.chance(0.45+gs*0.18)) lootLimit=0;
-        // v0.13：满配入场（gearStrength 高）时，强制全员带枪带甲，避免一身神装却全是裸装杂兵
+        // 满配入场（gearStrength 高）时，强制全员带枪带甲，避免一身神装却全是裸装杂兵
         if(gs>0.72){
           if(!gun){ const gid=RNG.pick(["pistol","smg","shotgun"]); gun=blGunGen(RNG.ri(6,10)+gIlvl,{type:gid}); }
           if(armorTier<2){ armorTier=2; armor=RAID_ARMORS[armorTier].maxArmor; dr=RAID_ARMORS[armorTier].dr; }
@@ -1533,7 +1526,7 @@ const Raid = {
     if(this.online && typeof Net!=="undefined") Net.attach(this, opts);
   },
 
-  /* v0.14.8：房主掉线后由下一位玩家接管 AI。
+  /* 房主掉线后由下一位玩家接管 AI。
    * 客户端原本只拿到 ghost 视觉快照；这里补齐模拟所需字段并把 gun 重建成可开火的运行时枪。 */
   promoteGhostsForHost(){
     if(!this.ops || !this.player) return 0;
@@ -1617,7 +1610,7 @@ const Raid = {
     return false;
   },
   // 出生点可能正好压着家具：螺旋外扩找第一个空地，避免开局就卡在货架里
-  /* v0.14.0：巡逻点预处理 —— 手写点位可能压在墙上或水里，统一推到最近的可站位置 */
+  /* 巡逻点预处理 —— 手写点位可能压在墙上或水里，统一推到最近的可站位置 */
   _buildPatrolPoints(){
     this.patrolPts=[];
     for(const p of RAID_PATROL){
@@ -1665,7 +1658,7 @@ const Raid = {
     for(const uid of (opts.weapons||[])){
       const i=this.stash.weapons.findIndex(w=>w.uid===uid);
       if(i>=0){ this.carried.weapons.push(this.stash.weapons.splice(i,1)[0]); }
-      if(this.carried.weapons.length>=4) break;   // v0.13.7：手持 1 + 副手 1 + 背包 2
+      if(this.carried.weapons.length>=4) break;   // 手持 1 + 副手 1 + 背包 2
     }
     if(opts.armor){
       const i=this.stash.armors.findIndex(a=>a.uid===opts.armor);
@@ -1709,17 +1702,17 @@ const Raid = {
   _buildMap(){
     this.walls=[]; this.props=[]; this.extracts=[]; this.roomRects=[];
     this.doorLanes=[]; this.doorInner=[];     this.roads=[]; this.yards=[]; this.sheds=[]; this._navQ=0;
-    this.shops=[];   // v0.13.7：局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
-    this.gadgets=[]; // v0.14.0：可互动设施（医疗站 / 弹药箱 / 泄洪闸）
-    this.grounds=[]; // v0.14.2：背包溢出后落在地上的物品堆（独立数组，不打乱联机用的箱子索引）
-    // v0.13.6 生态数据（供碰撞 / 渲染 / 小地图共用）
+    this.shops=[];   // 局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
+    this.gadgets=[]; // 可互动设施（医疗站 / 弹药箱 / 泄洪闸）
+    this.grounds=[]; // 背包溢出后落在地上的物品堆（独立数组，不打乱联机用的箱子索引）
+    // 生态数据（供碰撞 / 渲染 / 小地图共用）
     this.waterCircles=[]; this.bridges=[]; this.forests=[]; this.rails=[]; this.railCars=[];
     const TH=16;
     const addWall=(x,y,w,h)=>{ if(w>0.5&&h>0.5) this.walls.push({x,y,w,h,kind:"wall"}); };
 
     for(const rm of RAID_ROOMS){
       rm._doors=[];
-      /* v0.14.0：open（操场 / 广场 / 坝顶这类开放场地）不砌围墙、不开门，
+      /* open（操场 / 广场 / 坝顶这类开放场地）不砌围墙、不开门，
          只作为地面区域参与摆放与刷箱，避免把「院子」做成密不透风的方盒子。 */
       if(rm.open){
         this.roomRects.push(rm);
@@ -1805,29 +1798,29 @@ const Raid = {
     this.roads.push({x:0, y:1160, w:RAID_MAP_W, h:84});
     this.roads.push({x:2120, y:0, w:84, h:RAID_MAP_H});
     this.roads.push({x:1200, y:3600, w:RAID_MAP_W-1200, h:96});
-    // v0.13.6：新生态区的两条纵向干道（均避开河道，AI 也据此在新区域刷新巡逻）
+    // 新生态区的两条纵向干道（均避开河道，AI 也据此在新区域刷新巡逻）
     this.roads.push({x:7000, y:0, w:96, h:RAID_MAP_H});
     this.roads.push({x:9800, y:0, w:96, h:RAID_MAP_H});
 
-    this._buildWater();    // v0.13.6：河流先建，后续建筑/物件避免长在水面上
-    this._buildDam();      // v0.14.0：大坝坝体（墙）+ 溢洪道，早于棚屋/杂物
-    this._buildPrisonCell();// v0.14.0：监狱牢房隔断
+    this._buildWater();    // 河流先建，后续建筑/物件避免长在水面上
+    this._buildDam();      // 大坝坝体（墙）+ 溢洪道，早于棚屋/杂物
+    this._buildPrisonCell();// 监狱牢房隔断
     this._clipRoads();
     this._buildYards();
     this._buildSheds();
     this._fillProps();
-    this._buildScenes();   // v0.13.3：室外场景化（集装箱堆场 / 车辆残骸群 / 铁丝网带 / 杂物堆）
-    this._buildTerrain();  // v0.13.6：北境密林 / 中央河谷 / 铁路枢纽（树林·河流·铁路）
-    this._buildShops();    // v0.13.7：局内商店（需在水面/建筑/树都就位后选点）
-    this._buildGadgets();  // v0.14.0：医疗站 / 弹药箱 / 泄洪闸（新建筑内的可互动设施）
+    this._buildScenes();   // 室外场景化（集装箱堆场 / 车辆残骸群 / 铁丝网带 / 杂物堆）
+    this._buildTerrain();  // 北境密林 / 中央河谷 / 铁路枢纽（树林·河流·铁路）
+    this._buildShops();    // 局内商店（需在水面/建筑/树都就位后选点）
+    this._buildGadgets();  // 医疗站 / 弹药箱 / 泄洪闸（新建筑内的可互动设施）
     this._buildNavGrid();
-    this._buildPatrolPoints();  // v0.14.0：把落在墙里/水里的巡逻点推开，AI 不再卡住
-    this._buildDecals();   // v0.12.4：地表细节（油渍/血迹/裂缝/草簇/停车线/涂鸦），纯视觉、确定性生成
-    this._buildFloodlights();   // v0.13.3：探照灯（确定性位置，强化氛围）
-    this._buildAmbient();       // v0.13.3：区域明暗分级（暗斑，确定性生成）
+    this._buildPatrolPoints();  // 把落在墙里/水里的巡逻点推开，AI 不再卡住
+    this._buildDecals();   // 地表细节（油渍/血迹/裂缝/草簇/停车线/涂鸦），纯视觉、确定性生成
+    this._buildFloodlights();   // 探照灯（确定性位置，强化氛围）
+    this._buildAmbient();       // 区域明暗分级（暗斑，确定性生成）
   },
 
-  /* -------------------- v0.14.0 监狱牢房隔断 --------------------
+  /* -------------------- 监狱牢房隔断 --------------------
      主楼中间一道带 96px 中央过道的隔断，把大房间切成上下两排牢房；
      只是多两段墙，AI 寻路与家具摆放都沿用现有逻辑。 */
   _buildPrisonCell(){
@@ -1840,7 +1833,7 @@ const Raid = {
     this.doorLanes.push({ x:rm.x+rm.w/2-60, y:y-40, w:120, h:96 });
   },
 
-  /* -------------------- v0.14.0 大坝坝体 --------------------
+  /* -------------------- 大坝坝体 --------------------
      横跨水库北缘的两段混凝土坝 + 中间 210px 溢洪闸。闸门由 gadget「泄洪闸」控制，
      开启后水库水圆移除，水底露出高级保险箱。 */
   _buildDam(){
@@ -1852,7 +1845,7 @@ const Raid = {
     this.yards.push({ x:3390, y:8820, w:290, h:140, tint:"#20262b" });   // 溢洪道口
   },
 
-  /* -------------------- v0.13.6 生态扩张：河流（先建，供避让） -------------------- */
+  /* -------------------- 生态扩张：河流（先建，供避让） -------------------- */
   // 河流：沿中心线按步长离散成「水圆」；桥梁处额外记录豁免矩形，桥面视作干地。
   // 必须在 _buildSheds / _fillProps / _buildScenes 之前调用，这样建筑与物件不会长在河面上。
   _buildWater(){
@@ -1867,7 +1860,7 @@ const Raid = {
       }
     }
     // 桥：轴对齐矩形净空（横向桥面横跨河道，安全通行带与画面对齐）
-    // v0.14.2：支持 [x,y] 简写与 {x,y,w,h,big} 完整写法
+    // 支持 [x,y] 简写与 {x,y,w,h,big} 完整写法
     for(const b of R.bridges){
       if(Array.isArray(b)) this.bridges.push({ x:b[0], y:b[1], w:half*2.5, h:half*1.1 });
       else this.bridges.push({ x:b.x, y:b.y, w:b.w||half*2.5, h:b.h||half*1.1, big:!!b.big });
@@ -1884,13 +1877,13 @@ const Raid = {
     }
     this._waterBox={ x0:x0-40, y0:y0-40, x1:x1+40, y1:y1+40 };
 
-    /* v0.14.0：大坝水库（西南开发区）。用矩形库区（视觉与碰撞一致，比水圆拼合更干净），
+    /* 大坝水库（西南开发区）。用矩形库区（视觉与碰撞一致，比水圆拼合更干净），
      * 开闸后 damOpen=true，库区不再判定为水，露出库底与两个高级保险箱。 */
     this.reservoirRect={ x:2260, y:8790, w:2290, h:810 };
     this.reservoir=[];
   },
 
-  /* -------------------- v0.13.6 生态扩张：密林 / 铁路 -------------------- */
+  /* -------------------- 生态扩张：密林 / 铁路 -------------------- */
   _buildTerrain(){
     const B=RAID_BIOMES;
     const TREE={ kind:"tree", w:46, h:46, sight:true, fill:"#2f3a22", edge:"#1c2614" };
@@ -1931,7 +1924,7 @@ const Raid = {
     }
   },
 
-  /* 水域种类（v0.14.2）：
+  /* 水域种类：
    *   0 = 干地 / 桥面     1 = 河流浅水（可缓慢涉水，停留过久失温扣血）
    *   2 = 深水（大坝水库未开闸，不可通行，只能先开泄洪闸）
    * 桥面在此处就短路返回 0，所以踩桥既不会减速也不会扣血。 */
@@ -1960,10 +1953,10 @@ const Raid = {
     }
     return false;
   },
-  // 生成避让（v0.14.2）：水面 + 桥面都不长树/箱子/工棚 —— 桥是通行带，别被杂物堵住
+  // 生成避让：水面 + 桥面都不长树/箱子/工棚 —— 桥是通行带，别被杂物堵住
   _blockedSpawn(x,y){ return this._waterKind(x,y) > 0 || this._onBridge(x,y); },
 
-  /* -------------------- 室外场景化（v0.13.3） --------------------
+  /* -------------------- 室外场景化 --------------------
      把零散物件聚成「据点」：集装箱堆场 / 车辆残骸群 / 铁丝网带 / 杂物堆。
      仅 push 进 props+walls（碰撞/视线沿用现有空间索引），所有候选都用
      _canPlaceSceneBox 做整群避让，确保不堵门、不压房、不重叠既有物件。 */
@@ -2069,7 +2062,7 @@ const Raid = {
     }
   },
 
-  /* 探照灯（v0.13.3）：确定性位置——每个撤离点 1 盏 + 主干道交点 + 院子抽样，
+  /* 探照灯：确定性位置——每个撤离点 1 盏 + 主干道交点 + 院子抽样，
      联机同 seed 下地图一致。渲染在 _lightLayer 中以暖色光池叠加。 */
   _buildFloodlights(){
     this.floodlights=[];
@@ -2081,7 +2074,7 @@ const Raid = {
     for(const yd of this.yards){ if((yi++)%3===0 && this.floodlights.length<18) push(yd.x+yd.w/2, yd.y+yd.h/2, 240); }
   },
 
-  /* 区域明暗（v0.13.3）：基于确定性哈希生成暗斑，纯视觉，渲染在地面层之上、
+  /* 区域明暗：基于确定性哈希生成暗斑，纯视觉，渲染在地面层之上、
      props 之下，让大地图有「受光/背光」的层次而非一整片均色。 */
   _buildAmbient(){
     this.darkSpots=[];
@@ -2244,7 +2237,7 @@ const Raid = {
   _fillIndoor(){
     for(const rm of RAID_ROOMS){
       if(rm.extract || rm.open || rm.id===this.spawnRoomId) continue;
-      const n=RNG.ri(3,5)+Math.floor(rm.w*rm.h/62000);   // v0.14.0：大房间不再空荡
+      const n=RNG.ri(3,5)+Math.floor(rm.w*rm.h/62000);   // 大房间不再空荡
       for(let i=0;i<n;i++){
         const t=RAID_INDOOR[RNG.weighted(RAID_INDOOR)];
         if(!t) continue;
@@ -2401,8 +2394,8 @@ const Raid = {
   },
 
   /* 碰撞 / 视线空间索引（256px 网格）：物件从 300 涨到上千，逐一遍历会拖慢帧率 */
-  /* -------------------- v0.13.7 局内商店（枪店 / 材料店 / 回收超市 / 黑市） -------------------- */
-  /* v0.14.3：摊位不再钉死在固定坐标 —— 每局按「区域锚点池」随机落点，数量 6 → 9。
+  /* -------------------- 局内商店（枪店 / 材料店 / 回收超市 / 黑市） -------------------- */
+  /* 摊位不再钉死在固定坐标 —— 每局按「区域锚点池」随机落点，数量 6 → 9。
    *   · 同类多摊位各有名字后缀，货架依然完全独立（见 _shopStock / URL 里的 sid）
    *   · 锚点池按地貌分区（工业区 / 北境 / 中央河谷 / 东部铁路 / 西南监狱·小镇 / 南岭），
    *     每局从池里随机抽，再叠 ±420 抖动 → 玩家每局都得重新摸商店位置。 */
@@ -2465,7 +2458,7 @@ const Raid = {
     }
   },
 
-  /* ------------- v0.14.0 可互动设施（医疗站 / 弹药箱 / 泄洪闸） ------------- */
+  /* ------------- 可互动设施（医疗站 / 弹药箱 / 泄洪闸） ------------- */
   _buildGadgets(){
     this.gadgets=[];
     const byId=id=>RAID_ROOMS.find(r=>r.id===id);
@@ -2611,7 +2604,7 @@ const Raid = {
         g.shopPrice=Math.round((g.value||1000)*1.15/10)*10;
         out.guns.push(g);
       }
-      // v0.14.5：改装模块不可合成 —— 枪械店常备一枚低阶改装模块（卢布可买）
+      // 改装模块不可合成 —— 枪械店常备一枚低阶改装模块（卢布可买）
       {
         const c=raidMakeBoostCore(RNG.pick(BOOST_CORE_IDS), 2+RNG.ri(0,1));
         c.shopPrice=Math.round(raidCoreValue("boost", c.lv)*2.6/10)*10;
@@ -2629,7 +2622,7 @@ const Raid = {
         out.parts.push(pt);
       }
       out.meds=[{id:"bandage",n:2,price:180},{id:"medkit",n:1,price:1900},{id:"surgery",n:1,price:9400},{id:"stim",n:1,price:4200}];
-      // 钥匙（v0.13.8）：材料商店只卖低阶 I~II，卢布结算
+      // 钥匙：材料商店只卖低阶 I~II，卢布结算
       out.keys=[raidMakeKey(1), raidMakeKey(2)];
       for(const k of out.keys) k.shopPrice=raidKeyDef(k.lv).shop;
     } else if(kind==="black"){
@@ -2639,7 +2632,7 @@ const Raid = {
         g.tokenPrice=tokenPrice[t]||60;
         out.guns.push(g);
       }
-      // v0.14.5：改装模块不可合成，黑市是唯一能稳定买到高阶改装模块的地方
+      // 改装模块不可合成，黑市是唯一能稳定买到高阶改装模块的地方
       {
         const c1=raidMakeBoostCore(RNG.pick(BOOST_CORE_IDS), 4+RNG.ri(0,1));
         c1.tokenPrice=c1.lv>=5?18:10;
@@ -2650,7 +2643,7 @@ const Raid = {
         c2.tokenPrice = c2.core==="chaos" ? (c2.lv>=4?24:12) : (c2.lv>=4?14:8);
         out.parts.push(c2);
       }
-      // 钥匙（v0.13.8）：黑市卖高阶 III~V，只收代币
+      // 钥匙：黑市卖高阶 III~V，只收代币
       out.keys=[raidMakeKey(3), raidMakeKey(4), raidMakeKey(5)];
       for(const k of out.keys) k.tokenPrice=raidKeyDef(k.lv).token;
     }
@@ -2733,8 +2726,8 @@ const Raid = {
       this.containers.push({ x:p.x, y:p.y, tier:RNG.weighted([{weight:38},{weight:36},{weight:26}]),
         kind:randKind(), searched:false, drop:null });
     }
-    // 上锁保险箱（v0.13.8）：分 5 档保险等级（lockLv），必须用对应等级钥匙打开
-    //   v0.14.2：V 级（军火箱）改为「全图随机、每局 20% 概率一口」，不再固定藏在大坝库底。
+    // 上锁保险箱：分 5 档保险等级（lockLv），必须用对应等级钥匙打开
+    //   V 级（军火箱）改为「全图随机、每局 20% 概率一口」，不再固定藏在大坝库底。
     //   其余 13 口：I 约六成、II 两成半、III 零星，IV 只保底一口（最大房间的军械库）。
     const rooms=RAID_ROOMS.filter(r=>!r.extract);
     const bigRooms=rooms.slice().sort((a,b)=>b.w*b.h-a.w*a.h);
@@ -2768,7 +2761,7 @@ const Raid = {
       this.containers.push({ x:p.x, y:p.y, tier:2, locked:true, lockLv:5,
         kind:"weapon", searched:false, drop:null });
     }
-    // v0.14.0：水库底的高级保险箱 —— 先开泄洪闸放水，才能走进去拿
+    // 水库底的高级保险箱 —— 先开泄洪闸放水，才能走进去拿
     this.containers.push({ x:3250, y:9200, tier:2, locked:true, lockLv:4, kind:"weapon",
       searched:false, drop:null, damLoot:true });
     this.containers.push({ x:3720, y:9250, tier:2, locked:true, lockLv:3, kind:"weapon",
@@ -2782,12 +2775,12 @@ const Raid = {
     return raidBudgetTier(luck);
   },
 
-  // 通用战利品骰点（v0.10.2）：箱子以「原材料 + 配件」为主，整枪 / 护甲大幅降低
+  // 通用战利品骰点：箱子以「原材料 + 配件」为主，整枪 / 护甲大幅降低
   // 无论带什么装备，任意品质都可能出现——携带估值只改变权重，不封顶。
   _rollGear(cls, luck){
     luck=luck||0;
     // 命名具名装备：独立骰点（裸装约 0.08%，满配约 0.3%）—— 特种总量仍受 1% 预算约束
-    if(RNG.chance(0.0005 + luck*0.0014)) return raidRollUnique(luck);   // v0.14.4：命名特种更稀有
+    if(RNG.chance(0.0005 + luck*0.0014)) return raidRollUnique(luck);   // 命名特种更稀有
     const r=RNG.f();
     if(r < 0.78) return this._rollMaterial(cls==="scav"?0:luck);   // 78% 原材料
     if(r < 0.905) return this._rollPartGear(cls, luck);            // 12.5% 配件
@@ -2841,7 +2834,7 @@ const Raid = {
 
   _rollMaterial(luck){ return raidMakeMaterial(luck); },
 
-  /* ------------------------- 钥匙 / 上锁保险箱（v0.13.8） ------------------------- */
+  /* ------------------------- 钥匙 / 上锁保险箱 ------------------------- */
   _keysInInv(){ return (this.inv && this.inv.keys) || []; },
   // 能不能开 lockLv 级箱子：优先用「刚好够级、剩余次数最少」的钥匙，把高级钥匙留给更硬的箱子
   _bestKeyFor(lv){
@@ -2909,7 +2902,7 @@ const Raid = {
     if(this.hitFlash>0) this.hitFlash-=dt;
     if(this.stimT>0) this.stimT=Math.max(0,this.stimT-dt);
 
-    // v0.15.0：护甲耐久不再自动回复，以下分支仅为兼容旧存档字段而保留
+    // 护甲耐久不再自动回复，以下分支仅为兼容旧存档字段而保留
     for(const o of this.ops){
       if(o.alive && o.armorRegen>0 && o.armor<o.maxArmor)
         o.armor=Math.min(o.maxArmor, o.armor+o.armorRegen*dt);
@@ -2922,7 +2915,7 @@ const Raid = {
       if(o.reloadT>0){
         o.reloadT-=dt;
         if(o.reloadT<=0){
-          if(!o.isPlayer && o.gun.ammoRes < o.gun.mag) o.gun.ammoRes = o.gun.mag;   // v0.14.6：AI 会翻尸补弹
+          if(!o.isPlayer && o.gun.ammoRes < o.gun.mag) o.gun.ammoRes = o.gun.mag;   // AI 会翻尸补弹
           const need=o.gun.mag-o.gun.ammoMag, take=Math.min(need,o.gun.ammoRes);
           o.gun.ammoMag+=take; o.gun.ammoRes-=take;
         }
@@ -3044,7 +3037,7 @@ const Raid = {
     this.medUse=null; this.medT=0;
   },
 
-  /* -------------------- v0.13.7 多枪：手持 / 副手 / 背包 -------------------- */
+  /* -------------------- 多枪：手持 / 副手 / 背包 -------------------- */
   // 每把枪的运行时对象按 uid 缓存：切回来时弹药状态连续，也不会出现「换手满弹」
   _rtGun(it){
     if(!it) return null;
@@ -3065,7 +3058,7 @@ const Raid = {
     return [p.gun, p.secondary, ...this._gunBag()].filter(Boolean);
   },
 
-  /* -------------------- v0.13.7 局内商店交互 -------------------- */
+  /* -------------------- 局内商店交互 -------------------- */
   _nearestShop(x,y,range){
     let best=null, bd=range||120;
     for(const s of (this.shops||[])){
@@ -3084,7 +3077,7 @@ const Raid = {
   _closeShop(){
     this.shopOpen=null;
     UI.hide();
-    // v0.14.1：UI.show() 会藏起 HUD / 触屏按钮，关商店后必须还回来，
+    // UI.show() 会藏起 HUD / 触屏按钮，关商店后必须还回来，
     // 否则「退出商店所有按钮都消失」（手机上摇杆与★/+ 键全没了）。
     // 注意塔科夫/沙二/大逃杀用的是 _showDustHUD（DOM 血条隐藏、只留触屏层），
     // 不能一律调 _showHUD，否则会多出一套战役 HUD。
@@ -3140,7 +3133,7 @@ const Raid = {
     p.moveX=mx; p.moveY=my;
 
     // 换枪（弹药状态跟随枪支，不再瞬间满弹）
-    // v0.13.7：手上 1 把 + 副手 1 把 + 背包 N 把，Q 循环取背包里的下一把
+    // 手上 1 把 + 副手 1 把 + 背包 N 把，Q 循环取背包里的下一把
     if(act.switch) this._cycleGun();
     if(act.slot>0){
       const list=this._gunList();
@@ -3170,7 +3163,7 @@ const Raid = {
     this._moveOp(p, mx*sp*dt, my*sp*dt);
     p.vx=mx*sp; p.vy=my*sp;
 
-    /* v0.14.2：涉水失温 —— 河流可以慢慢趟过去（4.5 秒安全期覆盖整条河宽），
+    /* 涉水失温 —— 河流可以慢慢趟过去（4.5 秒安全期覆盖整条河宽），
      * 但泡在水里不动超过安全期就开始掉血，越泡掉得越快，逼玩家别把河当掩体。 */
     if(this._waterKind(p.x,p.y)===1){
       this.wadeT=(this.wadeT||0)+dt;
@@ -3215,8 +3208,8 @@ const Raid = {
     }
   },
 
-  /* v0.14.0：按 E 时到底该操作什么 —— 商铺 / 设施 / 箱子按「贴脸程度」决胜。
-   * v0.14.1：商铺不再无条件抢优先级（站在保险箱前、商铺在 110px 外时也要能开箱），
+  /* 按 E 时到底该操作什么 —— 商铺 / 设施 / 箱子按「贴脸程度」决胜。
+   * 商铺不再无条件抢优先级（站在保险箱前、商铺在 110px 外时也要能开箱），
    *   改成各自用「距离 ÷ 触发半径」归一化比较，越贴脸越优先。 */
   _interactTarget(){
     const p=this.player;
@@ -3233,7 +3226,7 @@ const Raid = {
     return { kind:cands[0].kind, ref:cands[0].ref };
   },
 
-  /* v0.14.2：涉水失温伤害 —— 直接扣血（泡水不是被子弹打，护甲不吸收） */
+  /* 涉水失温伤害 —— 直接扣血（泡水不是被子弹打，护甲不吸收） */
   _wadeHurt(d){
     const p=this.player;
     if(!p.alive || this._ended) return;
@@ -3252,7 +3245,7 @@ const Raid = {
 
   _moveOp(o, dx, dy){
     const px=o.x, py=o.y;
-    /* v0.14.2：河流不再整条封死 —— 浅水可涉水通过，但速度只剩 45%；
+    /* 河流不再整条封死 —— 浅水可涉水通过，但速度只剩 45%；
      * 深水（大坝水库未开闸）依旧硬阻挡，踩桥面（kind=0）不受影响。 */
     const wetHere=this._waterKind(o.x,o.y)===1;
     const wetNext=this._waterKind(o.x+dx,o.y+dy)===1;
@@ -3297,7 +3290,7 @@ const Raid = {
     for(const b of this.ops){
       if(b.isPlayer||b.remote||b.ghost||!b.alive) continue;
       // 联机房主：AI 会在「自己 + 所有远端玩家」里挑最近的可见目标
-      // v0.12.5：AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
+      // AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
       let tgt=p, d=M.dist(b.x,b.y,p.x,p.y);
       const _consider=(o)=>{
         if(o===b || !o.alive || o.ghost) return;
@@ -3309,7 +3302,7 @@ const Raid = {
         else enemy=true;
         if(!enemy) return;
         const dd=M.dist(b.x,b.y,o.x,o.y);
-        // v0.14.6：AI 之间也不再「视而不见」（720 → 1000），玩家在 720px 内一律优先当目标
+        // AI 之间也不再「视而不见」（720 → 1000），玩家在 720px 内一律优先当目标
         const sight = (o.isPlayer||o.remote) ? 1000 : 1000;
         const pri = (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;   // 玩家近身时强行抢目标
         if((dd+pri)<d && dd<sight && this._los(b.x,b.y,o.x,o.y)){ d=dd; tgt=o; }
@@ -3318,12 +3311,12 @@ const Raid = {
       if(this.online){ for(const o of this.ops){ if(o.isPlayer||o.remote) _consider(o); } }
       for(const o of this.ops){ if(!o.isPlayer && !o.remote) _consider(o); }
       if(!tgt.alive) tgt=p;
-      // v0.14.3：视野 840 → 1000，记忆时间 4.5 → 7 秒（更早发现、更死咬不放）
+      // 视野 840 → 1000，记忆时间 4.5 → 7 秒（更早发现、更死咬不放）
       const grace = this.spawnGrace>0 && (tgt.isPlayer || tgt.remote);
       const canSee = tgt.alive && d<1000 && !grace && this._los(b.x,b.y,tgt.x,tgt.y);
       if(canSee) b.lastSeen={ x:tgt.x, y:tgt.y, t:7.0 };   // 记住最后位置，丢失视线也不马上忘
 
-      /* v0.14.6：所有 AI 都会用医疗品 —— 血量低于阈值且暂时脱离火线时自行包扎 */
+      /* 所有 AI 都会用医疗品 —— 血量低于阈值且暂时脱离火线时自行包扎 */
       if(b.medT>0){
         b.medT-=dt;
         if(b.medT<=0 && b.bandages>0){
@@ -3348,12 +3341,12 @@ const Raid = {
         b.state="engage"; b.lootTarget=null; b.lootT=0;
         b.angle=M.lerpAngle(b.angle, M.angle(b.x,b.y,tgt.x,tgt.y), b.smart?0.26:0.19);
         let mx=0,my=0;
-        // v0.14.3：压得更狠（170 才开始保持距离，60 以内才后退）
+        // 压得更狠（170 才开始保持距离，60 以内才后退）
         if(d>170){ mx=Math.cos(b.angle); my=Math.sin(b.angle); }
         else if(d<60){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); }
-        // v0.14.6：换弹时不再「端着空枪往前冲」——拉开距离等装填完
+        // 换弹时不再「端着空枪往前冲」——拉开距离等装填完
         if(b.reloadT>0 && d<620){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); b.state="reload"; }
-        // v0.14.3：交战时左右游走，不再站桩对射（玩家更难被「固定靶」式预瞄）
+        // 交战时左右游走，不再站桩对射（玩家更难被「固定靶」式预瞄）
         b._strafeT=(b._strafeT||0)-dt;
         if(b._strafeT<=0){ b._strafeT=RNG.fr(0.7,1.7); b._strafe=RNG.chance(0.5)?1:-1; }
         const inRange = d <= Math.min(560, (b.gun.range||700)*0.82);
@@ -3361,7 +3354,7 @@ const Raid = {
           const sw=(b.smart?0.72:0.52)*b._strafe;
           mx+=-Math.sin(b.angle)*sw; my+=Math.cos(b.angle)*sw;
         }
-        // v0.14.6：子弹擦身而过就侧向急闪（精英闪得更快更远），这就是「会躲子弹」
+        // 子弹擦身而过就侧向急闪（精英闪得更快更远），这就是「会躲子弹」
         if(b._dodgeT>0){
           b._dodgeT-=dt;
           const ds=(b._dodgeSide||1)*(b.smart?1.65:1.15);
@@ -3378,15 +3371,15 @@ const Raid = {
         } else if(mx||my){ b._fleeT=0; b._fleeA=undefined; }
         if(b.fireCd<=0 && b.reloadT<=0){
           if(b.gun.ammoMag>0){
-            // v0.14.3：枪法更准、开火间隔更短（jitter 0.026→0.018 / 0.072→0.050，CD 0.04→0.02 / 0.14→0.085）
+            // 枪法更准、开火间隔更短（jitter 0.026→0.018 / 0.072→0.050，CD 0.04→0.02 / 0.14→0.085）
             const jitter = b.smart ? 0.008 : (b.cls==="scav" ? 0.050 : 0.018);
             const cd = b.smart ? 0 : (b.cls==="scav" ? 0.085 : 0.02);
             this._fire(b, b.angle+M.normAngle(Math.random()-0.5)*jitter, game);
-            // v0.14.6 修复：额外射击间隔必须放在 _fire 之后 —— _fire 开头会因 fireCd>0 直接 return，
+            // 修复：额外射击间隔必须放在 _fire 之后 —— _fire 开头会因 fireCd>0 直接 return，
             // 旧顺序导致所有非精英 AI 一枪都打不出来（表现为「看见人却不开枪」）。
             if(cd>0) b.fireCd=Math.max(b.fireCd, cd);
           } else {
-            // v0.14.6：AI 会就地摸弹 —— 备弹打完自动补两个弹匣（否则永远开不了枪）
+            // AI 会就地摸弹 —— 备弹打完自动补两个弹匣（否则永远开不了枪）
             if(b.gun.ammoRes<=0) b.gun.ammoRes=b.gun.mag*2;
             this._startReload(b);
           }
@@ -3447,7 +3440,7 @@ const Raid = {
         }
       }
 
-      /* 丢失视线后仍会朝最后位置追一段（v0.12：不再「看一眼就忘」） */
+      /* 丢失视线后仍会朝最后位置追一段 */
       if(b.lastSeen && b.gun){
         b.lastSeen.t-=dt;
         if(b.lastSeen.t<=0) b.lastSeen=null;
@@ -3466,7 +3459,7 @@ const Raid = {
         }
       }
 
-      /* 听到枪声：朝声源方向摸过去（v0.12 提升压迫感） */
+      /* 听到枪声：朝声源方向摸过去 */
       if(b.investigate){
         b.investigate.t-=dt;
         const iv=b.investigate;
@@ -3491,17 +3484,17 @@ const Raid = {
       b.state="roam";
       b.roamT-=dt;
       if(!b.roamPt || b.roamT<=0 || M.dist(b.x,b.y,b.roamPt.x,b.roamPt.y)<40){
-        // v0.12：PMC / 精英有较大概率直接朝玩家所在区域游走，而不是在固定巡逻点之间晃
+        // PMC / 精英有较大概率直接朝玩家所在区域游走，而不是在固定巡逻点之间晃
         // 只有手里有枪的 AI 才会主动压向玩家；空手的先去找装备
-        // v0.14.3：带枪 AI 主动压向玩家的概率大幅提高（精英 72% / PMC 58% / Scav 36%）
-        const huntP = b.smart?0.88 : (b.cls==="pmc"?0.74:0.56);   // v0.14.6：非悬赏 AI 也主动找上门
+        // 带枪 AI 主动压向玩家的概率大幅提高（精英 72% / PMC 58% / Scav 36%）
+        const huntP = b.smart?0.88 : (b.cls==="pmc"?0.74:0.56);   // 非悬赏 AI 也主动找上门
         const hunts = b.gun && tgt.alive && RNG.chance(huntP);
         const pt = hunts
           ? [tgt.x+RNG.fr(-560,560), tgt.y+RNG.fr(-560,560)]
           : RNG.pick((this.patrolPts&&this.patrolPts.length)?this.patrolPts:RAID_PATROL);
         b.roamPt={x:M.clamp(pt[0]+RNG.fr(-40,40),60,RAID_MAP_W-60),
                   y:M.clamp(pt[1]+RNG.fr(-40,40),60,RAID_MAP_H-60)};
-        b.roamT=RNG.fr(3,7);   // v0.14.6：巡逻换点更勤
+        b.roamT=RNG.fr(3,7);   // 巡逻换点更勤
       }
       if(b.roamPt){
         const a=M.angle(b.x,b.y,b.roamPt.x,b.roamPt.y);
@@ -3583,7 +3576,7 @@ const Raid = {
     const usable=(c)=>{
       if(c.searched || c.body || c.ground || c===b._badC) return false;
       if(this.search && this.search.c===c) return false;
-      // v0.13.8：AI 没有高级钥匙，只能撬 I~II 级保险箱，把高阶金库留给玩家
+      // AI 没有高级钥匙，只能撬 I~II 级保险箱，把高阶金库留给玩家
       if(c.locked && M.clamp(c.lockLv||1,1,5)>2) return false;
       if(b._badPtT>0 && b._badPt && M.dist2(c.x,c.y,b._badPt.x,b._badPt.y) < 350*350) return false;
       return true;
@@ -3688,7 +3681,7 @@ const Raid = {
       if(M.dist(b.x,b.y,x,y) > r) continue;
       // 已经有更近的线索就不覆盖
       if(b.investigate && b.investigate.t>2.5) continue;
-      b.investigate={ x:x+RNG.fr(-80,80), y:y+RNG.fr(-80,80), t:RNG.fr(7,12) };   // v0.14.3：听到动静后追得更久
+      b.investigate={ x:x+RNG.fr(-80,80), y:y+RNG.fr(-80,80), t:RNG.fr(7,12) };   // 听到动静后追得更久
     }
   },
 
@@ -3709,7 +3702,7 @@ const Raid = {
       const dd=M.dist2(x,y,c.x,c.y);
       if(dd<bd){ bd=dd; best=c; }
     }
-    // v0.14.2：地面物品堆同样可以按 E 拾取
+    // 地面物品堆同样可以按 E 拾取
     for(const c of (this.grounds||[])){
       if(c.searched) continue;
       const dd=M.dist2(x,y,c.x,c.y);
@@ -3728,8 +3721,8 @@ const Raid = {
     // 枪声传得远：附近待机的 AI 会摸过来（全局节流，避免每发子弹都算一遍）
     this._nzT=(this._nzT||0)+1;
     if(this._nzT%3===0 && !sh.ghost && (sh.isPlayer || !sh.remote))
-      this._noise(sh.x, sh.y, sh.isPlayer?1200:820, sh);   // v0.14.3：枪声传得更远，更多 AI 会摸过来
-    if(sh.isPlayer){ this.spawnGrace=0; SFX.shoot(); }   // v0.14.3：先开枪就先暴露
+      this._noise(sh.x, sh.y, sh.isPlayer?1200:820, sh);   // 枪声传得更远，更多 AI 会摸过来
+    if(sh.isPlayer){ this.spawnGrace=0; SFX.shoot(); }   // 先开枪就先暴露
     // 联机：房主把 AI 开火广播给客户端（只画弹道，不重复结算伤害）
     if(this.online && typeof Net!=="undefined" && Net.isHost && !sh.isPlayer && !sh.ghost && !sh.remote)
       Net.maybeSendShot(sh, angle);
@@ -3743,14 +3736,14 @@ const Raid = {
     }
 
     const pellets = sh.gun.pellets || 1;
-    /* v0.12.5 非霰弹枪的「双发的 / 蜂群的」是稀有词条，不是「8 颗霰弹」：
+    /* 非霰弹枪的「双发的 / 蜂群的」是稀有词条，不是「8 颗霰弹」：
      * 总伤害只提升 30%，平均分摊到每颗弹丸（2 发 0.65×、3 发 0.433×），
      * 换来的收益是更多命中判定 / 特殊弹触发机会，而不是直接 1.8 倍 DPS。 */
     const pelletMul = pellets<=1 ? 1
       : ((sh.gun.type==="shotgun"||sh.gun.cat==="shotgun") ? 0.9 : (1.30/pellets));
     const mv = sh._mv||0;
     const moveMul = moveSpreadMul(sh.gun.cat, mv);
-    const baseSpread = sh.gun.spread * (sh.isPlayer?1.0:2.0) * 2.3;   // v0.14.6：AI 命中率上调（6.24x → 4.6x）
+    const baseSpread = sh.gun.spread * (sh.isPlayer?1.0:2.0) * 2.3;   // AI 命中率上调（6.24x → 4.6x）
     for(let k=0;k<pellets;k++){
       let spread = baseSpread * moveMul;
       if(mv>0.05 && !isSMG(sh.gun.cat)) spread = Math.min(spread, Math.max(baseSpread*1.35, moveSpreadCap(sh.gun.cat)));
@@ -3767,7 +3760,7 @@ const Raid = {
         const dd=this._pointSeg(o.x,o.y, sh.x,sh.y, bx,by);
         if(dd < o.r+2){ const d2=M.dist(sh.x,sh.y,o.x,o.y); if(d2<hitDist){ hitDist=d2; hit=o; } }
         else if(dd < 200 && !o.isPlayer && !o.remote && !o.ghost){
-          // v0.14.6：子弹从身边飞过 → 侧向急闪（朝自己所在的一侧躲开弹道）
+          // 子弹从身边飞过 → 侧向急闪（朝自己所在的一侧躲开弹道）
           const cross=(o.x-sh.x)*Math.sin(a)-(o.y-sh.y)*Math.cos(a);
           o._dodgeT=Math.max(o._dodgeT||0, o.smart?0.55:0.38);
           o._dodgeSide=cross>=0?1:-1;
@@ -3784,7 +3777,7 @@ const Raid = {
           this._float(hit.x, hit.y-24, "-"+Math.round(dmg), "#ffd36a");
           this.spawnHit(hit.x, hit.y, "#ff9a5a");
         } else if(hit.remote){
-          // v0.13：玩家间 PvP 开启 —— 打中远程玩家照常结算，伤害经 Net.sendDamage 转发给对方本地扣血
+          // 玩家间 PvP 开启 —— 打中远程玩家照常结算，伤害经 Net.sendDamage 转发给对方本地扣血
           this.spawnHit(hit.x, hit.y, "#7fd0ff");
           this._float(hit.x, hit.y-24, "-"+Math.round(dmg), "#ff8a5a");
           this._damage(hit, dmg, sh, sh.gun);
@@ -3800,10 +3793,10 @@ const Raid = {
 
   _damage(target, dmg, attacker, gun){
     if(!target.alive) return;
-    /* v0.12.5 AI 互殴伤害折减：全图 AI 会自己打起来，但一轮交火不该两分钟清场。
+    /* AI 互殴伤害折减：全图 AI 会自己打起来，但一轮交火不该两分钟清场。
      * （玩家打 AI 不受影响，AI 打玩家也不受影响） */
     if(attacker && !attacker.isPlayer && !attacker.remote
-       && !target.isPlayer && !target.remote && target.id!=="you") dmg *= 0.45;   // v0.14.6：AI 互殴折减加深，避免 AI 自己清场
+       && !target.isPlayer && !target.remote && target.id!=="you") dmg *= 0.45;   // AI 互殴折减加深，避免 AI 自己清场
     // 远端玩家：伤害由对方本地结算（只有他知道自己的护甲/血量），这里只转发
     if(target.remote && this.online && typeof Net!=="undefined"){
       Net.sendDamage(target.peerId||String(target.id||"").replace(/^net_/,""), dmg, attacker&&attacker.name);
@@ -3845,7 +3838,7 @@ const Raid = {
         this._fail("阵亡", attacker, gun);
       }
     } else {
-      /* v0.12.9：被击中立刻锁定攻击者（转身 + 摸过去还击）。
+      /* 被击中立刻锁定攻击者（转身 + 摸过去还击）。
        * 玩家 / 远端玩家打它、或 AI 互殴都生效；友善关系由索敌逻辑决定，这里只负责「注意到」攻击者 */
       if(attacker && attacker!==target && !attacker.ghost){
         target.lastSeen={ x:attacker.x, y:attacker.y, t:5.5 };
@@ -3863,7 +3856,7 @@ const Raid = {
   _onBotDeath(victim, killer){
     if(killer && killer.isPlayer){
       killer.kills++;
-      /* v0.14.3：黑市代币改为「本局首杀必得」——
+      /* 黑市代币改为「本局首杀必得」——
        * 原来撤离时无条件发 1 枚，等于打不打架都有进账；现在只有开张见血才给，
        * 且整局只算一次，鼓励玩家真的去交火而不是绕开所有人。 */
       if(!killer.netKiller && !this._firstKillToken){
@@ -3904,12 +3897,12 @@ const Raid = {
     for(const a of (bot.inv.armors||[]).slice(0,1)) drops.push(a);
     for(const pt of (bot.inv.parts||[]).slice(0,1)) drops.push(pt);
     for(const c of (bot.inv.parts||[]).filter(p=>p.core).slice(0,1)) drops.push(c);
-    // v0.13.8：干员身上（尤其精英）可能揣着保险箱钥匙
+    // 干员身上（尤其精英）可能揣着保险箱钥匙
     if(RNG.chance(bot.smart?0.20:0.07)){
       const KLV=[{weight:52,lv:1},{weight:26,lv:2},{weight:14,lv:3},{weight:6,lv:4},{weight:2,lv:5}];
       drops.push(raidMakeKey(KLV[RNG.weighted(KLV)].lv));
     }
-    // v0.12.5 悬赏目标：保底 3 件「稀有及以上」战利品（材料 / 配件 / 装备）
+    // 悬赏目标：保底 3 件「稀有及以上」战利品（材料 / 配件 / 装备）
     if(bot.bounty) for(const it of raidBountyLoot()) drops.push(it);
     const cash=Math.max(0, Math.round((bot.creds||0)*0.3));
     if(drops.length || cash>0){
@@ -3930,7 +3923,7 @@ const Raid = {
     this.search.t+=dt;
     const need = this._searchNeed(c);
     if(this.search.t>=need){
-      /* v0.14.2：地面物品堆 —— 逐件尝试装包；装不下的留在原地，这里绝不新生成堆（否则会无限增殖） */
+      /* 地面物品堆 —— 逐件尝试装包；装不下的留在原地，这里绝不新生成堆（否则会无限增殖） */
       if(c.ground){
         const rest=[];
         for(const d of (c.drops||[])){ if(!this._collect(d, c.x, c.y, true)) rest.push(d); }
@@ -3972,10 +3965,10 @@ const Raid = {
         const gain=RNG.ri(45,120)*lv;
         this.creds+=gain;
         this._float(c.x, c.y-46, "+"+gain+" 卢布", "#8fe07a");
-        // v0.14.5：箱内可能藏着钥匙 —— 等级上限 = 本箱等级 +1（V 级封顶），越高越罕见
+        // 箱内可能藏着钥匙 —— 等级上限 = 本箱等级 +1（V 级封顶），越高越罕见
         if(RNG.chance(0.34)) this._collect(raidRollBoxKey(lv), c.x, c.y);
       } else if(c.kind==="weapon"){
-        // 武器箱也以原材料为主，整枪极少（v0.10.6：42% → 12%）
+        // 武器箱也以原材料为主，整枪极少
         const wr=RNG.f();
         if(wr<0.05) this._collect(this._rollGunLoot("pmc", this.lootLuck), c.x, c.y);
         else if(wr<0.23) this._collect(this._rollPartGear("pmc", this.lootLuck), c.x, c.y);
@@ -3998,7 +3991,7 @@ const Raid = {
         this._collect(raidRollMed(this.lootLuck), c.x, c.y);
         SFX.pickup();
       } else if(RNG.chance(0.24)){
-        // 普通箱现金：金额与概率双双下调（v0.10.6）
+        // 普通箱现金：金额与概率双双下调
         const gain=RNG.ri(18,45)*(c.tier+1);
         this.creds+=gain;
         this._float(c.x,c.y-30,"+"+gain+" 卢布","#8fe07a");
@@ -4007,8 +4000,8 @@ const Raid = {
         const it=this._rollGear("pmc", this.lootLuck);
         this._collect(it, c.x, c.y);
       }
-      // v0.13.7：黑市代币极稀有掉落（上锁军用箱 9%，普通箱 2%）
-      // v0.13.8：保险箱等级越高，代币概率越高（V 级箱 26%）
+      // 黑市代币极稀有掉落（上锁军用箱 9%，普通箱 2%）
+      // 保险箱等级越高，代币概率越高（V 级箱 26%）
       if(!c.locked && RNG.chance(0.025)){
         this._collect(raidRollBoxKey(0), c.x, c.y);   // 普通箱按 0 级算 → 最多只出 I 级钥匙
       }
@@ -4021,7 +4014,7 @@ const Raid = {
     }
   },
 
-  /* v0.14.2：背包满时溢出的物品不再凭空消失 —— 落在脚下形成「地面物品堆」，
+  /* 背包满时溢出的物品不再凭空消失 —— 落在脚下形成「地面物品堆」，
    * 腾出空间后走回来按 E 就能捡。同类物品就近合并成堆，单堆最多 8 件。 */
   _dropGround(item, x, y){
     const bx=x!==undefined?x:this.player.x, by=y!==undefined?y:this.player.y;
@@ -4029,7 +4022,7 @@ const Raid = {
     let pile=this.grounds.find(c=>!c.searched
       && (c.drops||[]).length<8 && M.dist(c.x,c.y,bx,by)<70);
     if(pile){ pile.drops.push(item); return pile; }
-    // v0.15.0：堆数达上限时只并入「仍未搜刮且未满」的堆，绝不写进已搜刮堆
+    // 堆数达上限时只并入「仍未搜刮且未满」的堆，绝不写进已搜刮堆
     // （原实现固定取 grounds[0]，若该堆 searched=true 则物品永久丢失）
     const open=this.grounds.filter(c=>!c.searched && (c.drops||[]).length<8);
     if(open.length>=60){
@@ -4068,7 +4061,7 @@ const Raid = {
       }
       return spill("材料栏");
     }
-    // 钥匙（v0.13.8）：独立钥匙串，带使用次数，不占配件位
+    // 钥匙：独立钥匙串，带使用次数，不占配件位
     if(item.kind==="key"){
       if(!this.inv.keys) this.inv.keys=[];
       if(this._invPush(this.inv.keys, "keys", item)){
@@ -4094,7 +4087,7 @@ const Raid = {
     }
     // 武器：空手或没副手 → 直接上手并放入物品栏（这是裸装跑刀能翻身的关键）
     if(item.kind==="weapon" && (!this.player.gun || !this.player.secondary)){
-      // v0.15.0：自动上手也要走容量检查，避免极端情况下 inv.weapons 超过 6 把
+      // 自动上手也要走容量检查，避免极端情况下 inv.weapons 超过 6 把
       if(this.inv.weapons.length>=RAID_INV_CAP.weapons) return spill("武器栏");
       const g=raidGunFromItem(item);
       g.ammoMag=g.mag; g.ammoRes=g.reserve;        // 捡到的枪：满弹上手
@@ -4113,7 +4106,7 @@ const Raid = {
     else { arr=this.inv.armors; key="armors"; col=RAID_RARITY_COLOR[item.rarity|0]||"#dfe7f0"; }
     if(this._invPush(arr, key, item)){
       const star=(item.kind==="armor"||item.kind==="helmet")&&item.rarity?(' '+RAID_RARITY_NAME[item.rarity]):'';
-      // v0.13.7：双手都满时捡到的枪进背包，Q 键可随时换到手上
+      // 双手都满时捡到的枪进背包，Q 键可随时换到手上
       this._float(px, py, (item.kind==="weapon"?"背包 ":"+")+item.name+star, col);
       SFX.pickup();
       return true;
@@ -4177,12 +4170,12 @@ const Raid = {
     for(const pt of this.inv.parts) this.stash.parts.push(pt);
     for(const m of this.inv.materials) this.stash.materials.push(m);   // 原材料随撤离带回仓库
     this.stash.keys=this.stash.keys||[];
-    for(const k of (this.inv.keys||[])) this.stash.keys.push(k);        // v0.13.8：钥匙带回仓库
+    for(const k of (this.inv.keys||[])) this.stash.keys.push(k);        // 钥匙带回仓库
     this.stash.receivers=this.stash.receivers||[];
     for(const r of this.inv.receivers) this.stash.receivers.push(r);
     this.stash.meds=Object.assign({hemo:0,medkit:0,stim:0,surgery:0}, this.meds||{});
     this.stash.bandages=this.bandages;
-    // v0.14.3：撤离不再保底发代币 —— 只按带出价值与击杀数结算
+    // 撤离不再保底发代币 —— 只按带出价值与击杀数结算
     // （本局首杀的那 1 枚已由 _onBotDeath 当场发放，没打到人、也没翻到货就是 0 枚）
     let lootVal=0;
     for(const w of this.inv.weapons) lootVal+=w.value||0;
@@ -4241,7 +4234,7 @@ const Raid = {
     UI.raidResult({
       success:false, reason, lost:{
         weapons:this.carried.weapons, armor:this.carried.armor, helmet:this.carried.helmet,
-        // v0.15.0：开局把 carried.weapons 也压进了 inv.weapons，这里按 uid 去重，避免结算列表重复
+        // 开局把 carried.weapons 也压进了 inv.weapons，这里按 uid 去重，避免结算列表重复
         lootW:this.inv.weapons.filter(w=>!(this.carried.weapons||[]).some(c=>c.uid===w.uid)),
         lootA:this.inv.armors.filter(a=>a!==this.carried.armor),
         lootH:(this.inv.helmets||[]).filter(h=>h!==this.carried.helmet),
@@ -4419,7 +4412,7 @@ const Raid = {
     return v;
   },
 
-  /* ================= v0.14.4：DOM 物品栏 + 逐件丢弃 ================= */
+  /* ================= DOM 物品栏 + 逐件丢弃 ================= */
   _invToggleDom(){
     const el=document.getElementById('inv-layer');
     if(!el) return;
@@ -4532,7 +4525,7 @@ const Raid = {
       };
     });
   },
-  /* v0.14.6：从物品栏直接把背包枪拿在手上（与 Q 键同逻辑，旧枪自动回背包） */
+  /* 从物品栏直接把背包枪拿在手上（与 Q 键同逻辑，旧枪自动回背包） */
   _invEquip(idx){
     const it=(this.inv.weapons||[])[idx];
     if(!it) return;
@@ -4590,7 +4583,7 @@ const RenderRaid = {
     ctx.save(); ctx.scale(z,z); ctx.translate(-cam.x,-cam.y);
     this.scene(ctx, game, cam, z);
     ctx.restore();
-    // v0.13.3：冷色雾气暗角——中心透明、边缘泛冷蓝灰，强化荒凉紧张的氛围（绘制于 HUD 之下）
+    // 冷色雾气暗角——中心透明、边缘泛冷蓝灰，强化荒凉紧张的氛围（绘制于 HUD 之下）
     const vg=ctx.createRadialGradient(v.w/2, v.h/2, Math.min(v.w,v.h)*0.30, v.w/2, v.h/2, Math.max(v.w,v.h)*0.78);
     vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(14,20,32,0.42)");
     ctx.fillStyle=vg; ctx.fillRect(0,0,v.w,v.h);
@@ -4780,7 +4773,7 @@ const RenderRaid = {
         break;
       }
       case "grass": {
-        // v0.12.4：荒野底色偏暗，草簇要更亮一点才读得出来
+        // 荒野底色偏暗，草簇要更亮一点才读得出来
         ctx.strokeStyle="rgba(96,140,72,0.62)"; ctx.lineWidth=1.8;
         for(let i=0;i<4;i++){
           const a=(i/4)*6.2832+x*0.013;
@@ -4812,7 +4805,7 @@ const RenderRaid = {
     }
   },
 
-  /* 区域明暗：确定性暗斑，叠加在地面/房间之上、道具之下（v0.13.3） */
+  /* 区域明暗：确定性暗斑，叠加在地面/房间之上、道具之下 */
   _drawAmbient(ctx, cam, vw, vh){
     const S=Raid.darkSpots; if(!S||!S.length) return;
     for(const s of S){
@@ -4824,7 +4817,7 @@ const RenderRaid = {
     }
   },
 
-  /* 光照层：探照灯（静态）+ 玩家手电（动态），暖色加色叠加（v0.13.3） */
+  /* 光照层：探照灯（静态）+ 玩家手电（动态），暖色加色叠加 */
   _lightLayer(ctx, game, cam, vw, vh){
     const R=Raid;
     ctx.save();
@@ -4856,7 +4849,7 @@ const RenderRaid = {
     const R=Raid, v=game.view;
     const vw=v.w/z, vh=v.h/z;
 
-    // 地图底面（v0.13.3：偏冷工业底色，为暖光与冷雾留出对比）
+    // 地图底面
     ctx.fillStyle="#0d1114"; ctx.fillRect(0,0,RAID_MAP_W,RAID_MAP_H);
 
     /* ---- 地表分区（大块弱色差，让荒野有“地貌”而不是一堵墙一样的纯色） ---- */
@@ -4871,7 +4864,7 @@ const RenderRaid = {
       }
     }
 
-    /* ---- v0.13.6 密林地表：树冠之下的暗绿林地底色（按视口裁剪） ---- */
+    /* ---- 密林地表：树冠之下的暗绿林地底色（按视口裁剪） ---- */
     if(R.forests){
       for(const fz of R.forests){
         if(fz.x>cam.x+vw||fz.x+fz.w<cam.x||fz.y>cam.y+vh||fz.y+fz.h<cam.y) continue;
@@ -4920,7 +4913,7 @@ const RenderRaid = {
     for(let x=gx0;x<=gx1;x+=160){ ctx.beginPath();ctx.moveTo(x,cam.y);ctx.lineTo(x,cam.y+vh);ctx.stroke(); }
     for(let y=gy0;y<=gy1;y+=160){ ctx.beginPath();ctx.moveTo(cam.x,y);ctx.lineTo(cam.x+vw,y);ctx.stroke(); }
 
-    /* ---- v0.14.0 泄洪后的库底：淤泥 + 残水洼（只在水放空时出现） ---- */
+    /* ---- 泄洪后的库底：淤泥 + 残水洼（只在水放空时出现） ---- */
     if(R.damOpen && R.reservoirRect){
       const rr=R.reservoirRect;
       const rx0=rr.x, ry0=rr.y, rx1=rr.x+rr.w, ry1=rr.y+rr.h;
@@ -4942,7 +4935,7 @@ const RenderRaid = {
       }
     }
 
-    /* ---- v0.14.0 大坝水库（矩形库区，视觉与碰撞一致） ---- */
+    /* ---- 大坝水库（矩形库区，视觉与碰撞一致） ---- */
     if(R.reservoirRect && !R.damOpen){
       const rr=R.reservoirRect;
       if(!(rr.x>cam.x+vw||rr.x+rr.w<cam.x||rr.y>cam.y+vh||rr.y+rr.h<cam.y)){
@@ -4959,7 +4952,7 @@ const RenderRaid = {
       }
     }
 
-    /* ---- v0.13.6 中央河谷：水面（水圆叠加成连续河带）+ 桥面 + 铁路 ---- */
+    /* ---- 中央河谷：水面（水圆叠加成连续河带）+ 桥面 + 铁路 ---- */
     if(R.waterCircles && R.waterCircles.length){
       const vis=(c)=>!(c.x>cam.x+vw+c.r||c.x<cam.x-c.r||c.y>cam.y+vh+c.r||c.y<cam.y-c.r);
       // 主体水面：先用略小的深蓝铺底，再用更暗的圆覆盖，避免圆边叠加出同心环
@@ -5062,7 +5055,7 @@ const RenderRaid = {
       }
     }
 
-    // v0.13.3：区域明暗（暗斑），落在地面/房间之上、道具之下，制造受光层次
+    // 区域明暗（暗斑），落在地面/房间之上、道具之下，制造受光层次
     this._drawAmbient(ctx, cam, vw, vh);
 
     /* ---- 户外掩体（先画投影再画本体，压实地面） ---- */
@@ -5076,7 +5069,7 @@ const RenderRaid = {
       if(w.kind!=="wall") continue;
       if(w.x>cam.x+vw+120||w.x+w.w<cam.x-120||w.y>cam.y+vh+120||w.y+w.h<cam.y-120) continue;
       if(w.dam){
-        /* v0.14.0：坝体 —— 混凝土色 + 顶部栏板 + 朝水面一侧的水痕 */
+        /* 坝体 —— 混凝土色 + 顶部栏板 + 朝水面一侧的水痕 */
         ctx.fillStyle="#4b545c"; ctx.fillRect(w.x,w.y,w.w,w.h);
         ctx.fillStyle="rgba(200,214,224,0.20)"; ctx.fillRect(w.x,w.y,w.w,6);
         ctx.fillStyle="rgba(10,14,17,0.45)"; ctx.fillRect(w.x,w.y+w.h-7,w.w,7);
@@ -5092,7 +5085,7 @@ const RenderRaid = {
       ctx.strokeStyle="#0b0e10"; ctx.lineWidth=2; ctx.strokeRect(w.x,w.y,w.w,w.h);
     }
 
-    // v0.13.3：光照层（探照灯 + 玩家手电），暖色加色叠加，强化荒凉紧张氛围
+    // 光照层（探照灯 + 玩家手电），暖色加色叠加，强化荒凉紧张氛围
     this._lightLayer(ctx, game, cam, vw, vh);
 
     // 撤离点（塔科夫式：关闭=灰、付费=金、开放=绿）
@@ -5122,7 +5115,7 @@ const RenderRaid = {
       ctx.fillText(blockedNow?"被封锁 · 清除封锁者":(paid?`雇车费 ${raidExtractFee(e, R.carryVal||0)} 卢布（按带入装备）· 坚守 ${e.need} 秒`:`坚守 ${e.need} 秒`), e.x+e.w/2, e.y+e.h/2+18);
     }
 
-    // v0.13.7：局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
+    // 局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
     for(const s of R.shops){
       if(s.x>cam.x+vw+200||s.x<cam.x-200||s.y>cam.y+vh+200||s.y<cam.y-200) continue;
       const pl=0.5+0.5*Math.sin(M.now()*2.2+s.x*0.013);
@@ -5152,7 +5145,7 @@ const RenderRaid = {
       ctx.restore();
     }
 
-    /* v0.14.0：可互动设施（医疗站 / 弹药箱 / 泄洪闸） */
+    /* 可互动设施（医疗站 / 弹药箱 / 泄洪闸） */
     for(const g of (R.gadgets||[])){
       if(g.x>cam.x+vw+200||g.x<cam.x-200||g.y>cam.y+vh+200||g.y<cam.y-200) continue;
       const dim = g.used && g.kind!=="dam" && g.kind!=="siren";
@@ -5209,7 +5202,7 @@ const RenderRaid = {
       ctx.fillText(rm.name, rm.x+rm.w/2, rm.y+rm.h-14);
     }
 
-    // v0.14.2：地面物品堆（背包满时溢出落地，腾出空间后可回来捡）
+    // 地面物品堆（背包满时溢出落地，腾出空间后可回来捡）
     if(R.grounds){
       for(const g of R.grounds){
         if(g.searched) continue;
@@ -5300,7 +5293,7 @@ const RenderRaid = {
       this.unit(ctx, o, game);
     }
 
-    // v0.14.2：涉水涟漪（任何踩在河里的单位脚下都有一圈扩散水波）
+    // 涉水涟漪（任何踩在河里的单位脚下都有一圈扩散水波）
     for(const o of R.ops){
       if(!o.alive || !o._wet) continue;
       if(o.x>cam.x+vw+60||o.x<cam.x-60||o.y>cam.y+vh+60||o.y<cam.y-60) continue;
@@ -5454,7 +5447,7 @@ const RenderRaid = {
     /* --- 左上角击杀提示 --- */
     ctx.textAlign="left";
     ctx.font=mob?"bold 11px system-ui,sans-serif":"bold 13px system-ui,sans-serif";
-    // v0.14.1：手机端信息流从悬赏行下面开始（原来 y=58 与悬赏提示直接压在一起），
+    // 手机端信息流从悬赏行下面开始（原来 y=58 与悬赏提示直接压在一起），
     // 并按可用宽度截断，避免长句冲出屏幕、盖住右侧战况面板。
     let y=mob?86:18;
     const feedMax=(mob? v.w*0.58 : v.w*0.46)-30;
@@ -5605,7 +5598,7 @@ const RenderRaid = {
       ctx.fillText(exLabel, v.w/2, cy+18);
     }
 
-    /* --- 涉水提示（v0.14.2） --- */
+    /* --- 涉水提示 --- */
     if(R.wadeT>0.5 && R.player.alive){
       const safe=Math.max(0, 4.5-R.wadeT);
       const warn=safe<=0;
@@ -5630,8 +5623,8 @@ const RenderRaid = {
       ctx.textAlign="center"; ctx.font="11px system-ui,sans-serif"; ctx.fillStyle="#dbe8f2";
       ctx.fillText("搜索中…", v.w/2, cy-6);
     } else {
-      // v0.13.7：靠近商店优先提示交易，其次才是搜箱
-      // v0.13.8：提示文字加暗色底衬，避免与房间名重叠时读不清
+      // 靠近商店优先提示交易，其次才是搜箱
+      // 提示文字加暗色底衬，避免与房间名重叠时读不清
       const hintAt=(txt, col, size)=>{
         ctx.font=`bold ${size||13}px system-ui,sans-serif`;
         const tw=ctx.measureText(txt).width;
@@ -5674,7 +5667,7 @@ const RenderRaid = {
       }
     }
 
-    /* --- 小地图（v0.14.9：默认隐藏，CFG.raidMinimap=true 可恢复） --- */
+    /* --- 小地图 --- */
     if(CFG.raidMinimap) this.minimap(ctx, v);
 
     /* --- 触屏瞄准指示 --- */
@@ -5685,7 +5678,7 @@ const RenderRaid = {
       ctx.beginPath(); ctx.arc(sx,sy,18,0,6.28); ctx.stroke();
     }
 
-    /* --- 物品栏（Tab 开关）：v0.14.4 起改为 DOM 面板（#inv-layer），可逐件丢弃 --- */
+    /* --- 物品栏（Tab 开关）：现为 DOM 面板（#inv-layer），可逐件丢弃 --- */
   },
 
   /* 物品栏：携带武器 / 护甲 / 头盔 / 绷带 / 战利品 */
@@ -5737,7 +5730,7 @@ const RenderRaid = {
       icon(g, gy);
     });
     if(guns.length){
-      const bagN=(R._gunBag?R._gunBag():[]).length;   // v0.13.7：多枪 = 手持 + 副手 + 背包
+      const bagN=(R._gunBag?R._gunBag():[]).length;   // 多枪 = 手持 + 副手 + 背包
       line("切换", "[Q] 循环 · [1~4] 直选", "#8fd0ff",
         `手持 ${p.gun?p.gun.name:"空手"} · 副手 ${p.secondary?p.secondary.name:"—"} · 背包 ${bagN} 把`);
     }
@@ -5778,7 +5771,7 @@ const RenderRaid = {
     const _cores=R.inv.parts.filter(p=>p.core);
     cap("改装模块",     _cores.length, RAID_INV_CAP.parts, "#8fd0ff");
     cap("底材",     R.inv.receivers.length, RAID_INV_CAP.receivers, "#8fd0ff");
-    // 钥匙串（v0.13.8）：按等级显示剩余开锁次数
+    // 钥匙串：按等级显示剩余开锁次数
     const _keys=R.inv.keys||[];
     cap("钥匙",     _keys.length, RAID_INV_CAP.keys, "#ffd23f");
     for(const k of _keys.slice(0,3)){
@@ -5807,7 +5800,7 @@ const RenderRaid = {
     ctx.fillStyle="rgba(6,10,14,0.8)"; ctx.fillRect(mx,my,mw,mh);
     ctx.strokeStyle="rgba(120,140,160,0.4)"; ctx.lineWidth=1; ctx.strokeRect(mx,my,mw,mh);
     const sx=mw/RAID_MAP_W, sy=mh/RAID_MAP_H;
-    // v0.13.6：密林绿底 + 河流蓝带 + 铁路灰线，让小地图能一眼读出地貌
+    // 密林绿底 + 河流蓝带 + 铁路灰线，让小地图能一眼读出地貌
     if(R.forests){
       ctx.fillStyle="rgba(46,74,40,0.55)";
       for(const fz of R.forests){ ctx.fillRect(mx+fz.x*sx, my+fz.y*sy, Math.max(2,fz.w*sx), Math.max(2,fz.h*sy)); }
@@ -5824,7 +5817,7 @@ const RenderRaid = {
       ctx.fillStyle="rgba(56,110,140,0.75)";
       ctx.fillRect(mx+rr.x*sx, my+rr.y*sy, Math.max(2,rr.w*sx), Math.max(2,rr.h*sy));
     }
-    // v0.14.2：桥梁（浅灰短横条，大桥更亮更粗）—— 小地图上能直接看出过河路线
+    // 桥梁（浅灰短横条，大桥更亮更粗）—— 小地图上能直接看出过河路线
     if(R.bridges){
       for(const b of R.bridges){
         ctx.fillStyle=b.big?"rgba(230,238,246,0.92)":"rgba(190,200,212,0.75)";
@@ -5850,14 +5843,14 @@ const RenderRaid = {
       } else ctx.fillStyle="rgba(150,170,190,0.35)";
       ctx.fillRect(mx+rm.x*sx, my+rm.y*sy, Math.max(2,rm.w*sx), Math.max(2,rm.h*sy));
     }
-    // v0.13.7：商店（枪=金 / 材料=绿 / 回收=蓝 / 黑市=紫），一眼决定往哪跑
+    // 商店（枪=金 / 材料=绿 / 回收=蓝 / 黑市=紫），一眼决定往哪跑
     for(const s of (R.shops||[])){
       ctx.fillStyle = s.kind==="black"?"#c07bff":s.kind==="rec"?"#62c8ff":s.kind==="mat"?"#8fe07a":"#ffb44a";
       const px2=mx+s.x*sx, py2=my+s.y*sy;
       ctx.fillRect(px2-1.6, py2-1.6, 3.2, 3.2);
       ctx.strokeStyle="rgba(0,0,0,0.7)"; ctx.lineWidth=0.8; ctx.strokeRect(px2-1.6, py2-1.6, 3.2, 3.2);
     }
-    // v0.14.0：可互动设施（医疗站=绿 / 弹药=黄 / 泄洪闸=蓝）
+    // 可互动设施（医疗站=绿 / 弹药=黄 / 泄洪闸=蓝）
     for(const g of (R.gadgets||[])){
       ctx.fillStyle = g.kind==="med"?"#8fe07a":g.kind==="ammo"?"#ffd36a":g.kind==="siren"?"#ff8a5a":"#6fb6e8";
       const gx2=mx+g.x*sx, gy2=my+g.y*sy;
@@ -5902,7 +5895,7 @@ UI.raidSetup=function(){
   if(sel.a && !stash.armors.some(a=>a.uid===sel.a)) sel.a=null;
   if(sel.h && !(stash.helmets||[]).some(h=>h.uid===sel.h)) sel.h=null;
   if(!sel.w.length && !sel.a && !sel.h) UI._raidIns=false;
-  /* v0.14.4：钥匙串改为「可选携带」——默认全带（保持老行为），点卡片可逐把取下。
+  /* 钥匙串改为「可选携带」——默认全带（保持老行为），点卡片可逐把取下。
    * 带进图的钥匙死了就丢，留在仓库的绝对安全，玩家自己权衡。 */
   if(!Array.isArray(UI._raidKeys)) UI._raidKeys=(stash.keys||[]).map(k=>k.uid);
   UI._raidKeys=UI._raidKeys.filter(uid=>(stash.keys||[]).some(k=>k.uid===uid));
@@ -5956,12 +5949,12 @@ UI.raidSetup=function(){
     </div>`;
   }).join('') : `<div class="empty-hint">仓库没有钥匙 · 只能开箱掉落，或在材料商店 / 黑市购买（不可合成）</div>`;
 
-  // v0.14.7：配装总价值 = 装备估值 + 带入卢布 + 代币折算（撤离费 / 保费仍只按装备估值）
+  // 配装总价值 = 装备估值 + 带入卢布 + 代币折算（撤离费 / 保费仍只按装备估值）
   const gearVal=sel.w.reduce((s,uid)=>{
     const w=stash.weapons.find(x=>x.uid===uid); return s+(w?w.value:0);
   },0)+(sel.a?(stash.armors.find(x=>x.uid===sel.a)||{value:0}).value:0)
     +(sel.h?((stash.helmets||[]).find(x=>x.uid===sel.h)||{value:0}).value:0);
-  // v0.14.6：入场可携带现金 / 代币（局内直接消费，阵亡即丢）
+  // 入场可携带现金 / 代币（局内直接消费，阵亡即丢）
   const cashIn=Math.max(0, Math.min(UI._raidCash||0, Math.floor(stash.creds||0)));
   const tokIn=Math.max(0, Math.min(UI._raidTok||0, Math.floor(stash.tokens||0)));
   const tokWorth=raidTokenWorth(tokIn);
@@ -6411,7 +6404,7 @@ UI.raidShop=function(opts){
         stash.parts.push(bought);
         UI._raidShopParts.splice(idx,1);
       }
-      // v0.14.8：购买后保留当前货架（keep:true），不再“买一件就免费重掷整个商店”。
+      // 购买后保留当前货架（keep:true），不再“买一件就免费重掷整个商店”。
       RaidStash.save(stash); SFX.ui(); UI.raidShop(Object.assign({}, opts, {keep:true}));
     };
   });
@@ -6443,14 +6436,14 @@ function forgeCost(op, gun){
 // 两件及以上同栏位物品熔成一件：品质、词条、改装等级有概率跃升
 function fuseCost(items){
   const v=items.reduce((sum,it)=>sum+(it.value||partValue(it)||0),0);
-  // v0.12.8：融合造价大幅下调（原 55% + 300，现 25% + 120），让融合成为可负担的品质跃升手段
+  // 融合造价大幅下调（原 55% + 300，现 25% + 120），让融合成为可负担的品质跃升手段
   return Math.round(v*0.25/10)*10 + 120;
 }
 function fuseRaidItems(items){
   if(!items || items.length<2) return null;
   const main=items[0], n=items.length;
 
-  // v0.14.5：改装模块不可融合升阶（只能掉落 / 购买），直接拒绝
+  // 改装模块不可融合升阶（只能掉落 / 购买），直接拒绝
   if(main.slot==="core" || main.core) return null;
   const rarIdx = o=>Math.max(0, RARITIES.findIndex(r=>r.id===(o.rarity||"white")));
   const mkUid = pre=>pre+Date.now().toString(36)+Math.floor(Math.random()*999).toString(36);
@@ -6550,7 +6543,7 @@ function assembleRaidGun(recv, parts, mats){
     rarity: RAID_TIER_TO_RARITY[qTier] || "white",
     parts: parts.slice(),
   }));
-  // v0.12.1：突击步枪 / 狙击枪投料最贵，给一点实打实的回报（伤害为主，狙击补射程）
+  // 突击步枪 / 狙击枪投料最贵，给一点实打实的回报（伤害为主，狙击补射程）
   const boost = RAID_TYPE_BOOST[recv.gunType];
   if(boost){
     if(boost.dmg)   out.dmg   = Math.round(out.dmg*boost.dmg*10)/10;
@@ -6559,7 +6552,7 @@ function assembleRaidGun(recv, parts, mats){
     out.value = Math.round(out.value*(boost.value||1));
     out.typeBoost = boost.label;
   }
-  // v0.13：组装枪名直接采用 generateWeapon 产出的名字（前缀+型号+后缀），
+  // 组装枪名直接采用 generateWeapon 产出的名字（前缀+型号+后缀），
   // 不再拼「品质·底材·配件」三名词组合。
   out.receiver = recv.short;   // 记录所用底材型号（结算/图鉴用，不在主名称里展示）
   // out.name 已由 generateWeapon / blGunConvert 生成好，保持原样
@@ -6573,14 +6566,6 @@ function assembleRaidGun(recv, parts, mats){
 
 function raidMatCount(stash, id){
   return (stash.materials||[]).filter(m=>m.id===id).length;
-}
-function raidConsumeMats(stash, cost){
-  for(const id in cost){
-    let need=cost[id];
-    for(let i=(stash.materials||[]).length-1;i>=0 && need>0;i--){
-      if(stash.materials[i].id===id){ stash.materials.splice(i,1); need--; }
-    }
-  }
 }
 function raidCoreGroups(cores){
   const map={};
@@ -6599,7 +6584,7 @@ UI.raidWorkshop=function(opts){
   stash.materials=stash.materials||[]; stash.parts=stash.parts||[];
   const cores = stash.parts.filter(p=>p.core);   // 改装模块已并入配件池，按 core 字段筛选
   if(!UI._wsRecv || !stash.receivers.some(r=>r.uid===UI._wsRecv)) UI._wsRecv = stash.receivers[0]?stash.receivers[0].uid:null;
-  // v0.12：配件不再限制 4 件 —— 每个槽位各装一件，最多装满 GUN_SLOTS 全部槽位
+  // 配件不再限制 4 件 —— 每个槽位各装一件，最多装满 GUN_SLOTS 全部槽位
   UI._wsParts = (UI._wsParts||[]).filter(uid=>stash.parts.some(p=>p.uid===uid));
   { const seen={};
     UI._wsParts = UI._wsParts.filter(uid=>{
@@ -6608,7 +6593,7 @@ UI.raidWorkshop=function(opts){
     });
   }
   UI._craft = UI._craft || { id:null, sel:[] };
-  // v0.12.1：组装要投 8 份材料，同一种材料可以投多份
+  // 组装要投 8 份材料，同一种材料可以投多份
   { const keep=[];
     const used={};
     for(const id of (UI._wsMats||[])){
@@ -6621,7 +6606,7 @@ UI.raidWorkshop=function(opts){
     UI._wsMats=keep;
   }
 
-  /* --- 模块一览（v0.14.5：改装模块不再可合成 / 升阶，只能掉落或购买） --- */
+  /* --- 模块一览 --- */
   const groups=raidCoreGroups(cores);
   const coreRows = groups.length ? groups.map(g=>{
     const name=raidCoreName(g.sample||g);
@@ -6917,7 +6902,7 @@ UI.raidWorkshop=function(opts){
       if(i>=0){ UI._wsMats.splice(i,1); SFX.ui(); rerender(); }
     };
   });
-  // 组装（v0.12.9：按钮始终可点，缺条件时给出具体提示，避免「点了没反应」）
+  // 组装
   const btn=document.getElementById('btn-assemble');
   if(btn) btn.onclick=()=>{
     const recv=stash.receivers.find(r=>r.uid===UI._wsRecv);
@@ -6948,7 +6933,7 @@ UI.raidWorkshop=function(opts){
 };
 
 /* =========================================================================
- * v0.13.7 · 局内商店（枪械商店 / 材料商店 / 回收超市 / 黑市）
+ * · 局内商店（枪械商店 / 材料商店 / 回收超市 / 黑市）
  *   走进摊位按 E 打开；游戏不暂停（硬核：谈生意也得看后背）。
  *   · 前两家用「局内卢布」（撤离才结算，死了就白花）
  *   · 黑市用「黑市代币」——本局首杀必得 1 枚，之后靠上锁箱 / 精英 AI 掉落与撤离结算，专门换高级武器
@@ -6956,7 +6941,7 @@ UI.raidWorkshop=function(opts){
  * ========================================================================= */
 UI.raidFieldShop=function(key){
   const R=Raid;
-  // v0.14.1：按**摊位 id** 打开，而不是按类型 —— 地图上有两处材料商店 / 回收超市，
+  // 按**摊位 id** 打开，而不是按类型 —— 地图上有两处材料商店 / 回收超市，
   // 旧写法按 kind 取第一个，等于两家共用一个货架（看起来像「四个商店被合并了」）。
   const sh=(R.shops||[]).find(s=>s.id===key) || (R.shops||[]).find(s=>s.kind===key);
   if(!sh || !R.active) return;
@@ -6982,7 +6967,7 @@ UI.raidFieldShop=function(key){
     </div>`;
   };
 
-  // 钥匙卡：开对应等级的上锁保险箱（v0.13.8）
+  // 钥匙卡：开对应等级的上锁保险箱
   const keyCard=(k, payKind, idx)=>{
     const price = payKind==="token" ? (k.tokenPrice||0) : (k.shopPrice||raidKeyDef(k.lv).shop||0);
     const can = payKind==="token" ? tokens>=price : money>=price;
@@ -7019,7 +7004,7 @@ UI.raidFieldShop=function(key){
       if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级钥匙（代币兑换 · 开同级及以下保险箱）</div>` +
         bkeys.map((k,i)=>keyCard(k,"token",i)).join("");
     } else if(kind==="gun"){
-      // v0.14.5：改装模块不可合成 —— 枪械店常备低阶改装模块，卢布直接买
+      // 改装模块不可合成 —— 枪械店常备低阶改装模块，卢布直接买
       const parts=sh.stock.parts||[];
       if(parts.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 改装模块（卢布购买 · 不可合成）</div>` +
         parts.map((c,i)=>{
@@ -7411,7 +7396,7 @@ UI.raidFusion=function(opts){
   for(const w of stash.weapons) push(w,'weapon');
   for(const a of stash.armors) push(a,'armor');
   for(const h of stash.helmets) push(h,'helmet');
-  // v0.14.5：改装模块不可融合升阶 —— 不进入融合台选材列表
+  // 改装模块不可融合升阶 —— 不进入融合台选材列表
   for(const p of stash.parts) if(!(p.slot==="core"||p.core)) push(p,'part');
   UI._fuseSel=UI._fuseSel.filter(uid=>entries.some(e=>e.it.uid===uid));
 
@@ -7569,7 +7554,7 @@ UI.toast=function(msg, ms){
 
 /* =========================================================================
  * 仓库管理 · 售卖 / 拆解
- *   · 售卖：按估值 42% 换成卢布（v0.13.7 压价；想卖高价就带进图走「回收超市」62%）
+ *   · 售卖：按估值 42% 换成卢布
  *   · 拆解：枪械拆成配件（配件进配件池，可装到别的枪上 / 在超市卖掉）
  * ========================================================================= */
 UI.raidStash=function(opts){
@@ -7618,7 +7603,7 @@ UI.raidStash=function(opts){
     </div>`;
   }).join('') : `<div class="empty-hint">配件池为空 · 拆解枪械或去超市配件页采购</div>`;
 
-  // v0.12.5 材料页：同种材料合并成堆（按 id 聚合），显示数量 / 单件估值 / 合计
+  // 材料页：同种材料合并成堆（按 id 聚合），显示数量 / 单件估值 / 合计
   const matStacks=[];
   for(const m of (stash.materials||[])){
     let s=matStacks.find(x=>x.id===m.id);
@@ -7713,7 +7698,7 @@ UI.raidStash=function(opts){
 };
 
 /* =========================================================================
- * 联机突袭 · 大厅（v0.11.0）
+ * 联机突袭 · 大厅
  *   创建 / 加入房间 → 等待房主开始 → 用同一 seed 进图
  * ========================================================================= */
 UI._onlineNick = (function(){ try{ return localStorage.getItem("raid_nick")||""; }catch(e){ return ""; } })();
@@ -7743,7 +7728,7 @@ UI._onlineEnter=function(){
   UI._onlineStop();
   const sel=UI._raidSel||{w:[],a:null,h:null};
   const st=RaidStash.load();
-  // v0.14.8：联机也必须沿用大厅选择的钥匙/现金/代币，不能默认把仓库全部钥匙带进图。
+  // 联机也必须沿用大厅选择的钥匙/现金/代币，不能默认把仓库全部钥匙带进图。
   const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():(st.keys||[]).map(k=>k.uid);
   const cash=Math.max(0,Math.min(Math.round(UI._raidCash||0),Math.floor(st.creds||0)));
   const tokens=Math.max(0,Math.min(Math.round(UI._raidTok||0),Math.floor(st.tokens||0)));

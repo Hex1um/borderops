@@ -1,6 +1,6 @@
 /* =========================================================================
  * combat.js — 抛射物 / 命中结算 / 弹种终点效应
- * v0.15.0：移除弹种增益、持续伤害、减速、连锁引爆、急救效率与吸盾；
+ * 移除弹种增益、持续伤害、减速、连锁引爆、急救效率与吸盾；
  *   伤害差异只来自 AMMO_TYPES 的穿透等级与软目标/护甲终点效应系数。
  * ========================================================================= */
 
@@ -11,7 +11,7 @@ class Projectile {
     this.element=o.element||"none";   // 兼容旧字段名，实际是弹种 id
     this.radius=o.radius||4;
     this.splash=o.splash||0;          // 仅榴弹战斗部有破片半径
-    this.homing=false;                // v0.15.0：直线弹道，字段保留兼容快照
+    this.homing=false;                // 直线弹道，字段保留兼容快照
     this.life=o.life||1.4;
     this.owner=o.owner||null;
     this.faction=o.owner&&o.owner.faction ? o.owner.faction : (o.faction||"enemy");
@@ -19,10 +19,8 @@ class Projectile {
     this.isThrown=o.isThrown||false;
     this.weapon=o.weapon||null;
     this.pierce=o.pierce||0;          // 剩余穿透次数（钢芯弹 / 大口径）
-    this.lifesteal=0;                 // v0.15.0：无急救效率
-    this.elemChance=0;                // v0.15.0：无弹种增益
     this.shape=o.shape||"round";      // 弹头形状（枪型 / 弹种 / 兵工厂决定）
-    this.laser=false;                 // v0.15.0：无能量光束
+    this.laser=false;                 // 无能量光束
     this.hits=[];                     // 已命中目标（穿透用）
     this.dead=false;
     this.trail=[];
@@ -30,7 +28,7 @@ class Projectile {
 
   update(dt, game){
     this.prevX=this.x; this.prevY=this.y;   // 供扫掠碰撞使用
-    // v0.15.0：弹道为发射瞬间的直线（受散布影响），不做飞行中修正
+    // 弹道为发射瞬间的直线（受散布影响），不做飞行中修正
     this.x+=Math.cos(this.angle)*this.speed*dt;
     this.y+=Math.sin(this.angle)*this.speed*dt;
     this.life-=dt;
@@ -39,13 +37,6 @@ class Projectile {
     // 出界
     const b=game.bounds;
     if(b && (this.x<b.minX-40||this.x>b.maxX+40||this.y<b.minY-40||this.y>b.maxY+40)) this.dead=true;
-  }
-  _nearestTarget(game){
-    if(this.faction==="player"){
-      let best=null,bd=1e9; for(const e of game.enemies){ if(!e.alive)continue; const d=M.dist2(this.x,this.y,e.x,e.y); if(d<bd){bd=d;best=e;} } return best;
-    } else {
-      return game.player&&game.player.alive?game.player:null;
-    }
   }
 }
 
