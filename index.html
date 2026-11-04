@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>边境行动 · BORDER OPS</title>
+<link rel="stylesheet" href="styles.css?v=0.14.7" />
+</head>
+<body>
+<div id="game-root">
+  <canvas id="game"></canvas>
+
+  <!-- 触摸层（仅移动端显示）：左半屏浮动摇杆由 Canvas 绘制，这里只放右侧按钮 -->
+  <div id="touch-layer" class="hidden">
+    <button id="touch-fire" class="touch-btn fire" aria-label="开火">
+      <svg viewBox="0 0 24 24" width="40" height="40"><path d="M7 10V7a3 3 0 0 1 3-3h2l3 4h3l2 3v3h-3v4h-7v-4H7zM10 7v3h2.2L10.8 7z" fill="currentColor"/></svg>
+    </button>
+    <button id="touch-auto" class="touch-btn auto on" aria-label="自动开火">AUTO</button>
+    <button id="touch-ability" class="touch-btn ability" aria-label="技能 / 搜索">
+      <svg class="ico-skill" viewBox="0 0 24 24" width="26" height="26"><path d="M12 2l2.6 6.4 6.9.5-5.3 4.6 1.7 6.7L12 16.9 6.1 20.2l1.7-6.7L2.5 8.9l6.9-.5z" fill="currentColor"/></svg>
+    </button>
+    <button id="touch-switch" class="touch-btn switch" aria-label="切换武器">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 8h13l-3-3 1.5-1.5L21 9l-5.5 5.5L14 13l3-3H4zM20 16H7l3 3-1.5 1.5L3 15l5.5-5.5L10 11l-3 3h13z" fill="currentColor"/></svg>
+    </button>
+    <button id="touch-med" class="touch-btn med" aria-label="使用医疗">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M11 3h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
+    </button>
+    <button id="touch-reload" class="touch-btn reload" aria-label="换弹">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" fill="currentColor"/></svg>
+    </button>
+    <button id="touch-inv" class="touch-btn inv" aria-label="物品栏">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M9 4h6a2 2 0 0 1 2 2v1h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2V6a2 2 0 0 1 2-2zm0 3h6V6H9v1zm-4 4v7h14v-7H5z" fill="currentColor"/></svg>
+    </button>
+    <button id="touch-pause" class="touch-btn pause" aria-label="暂停">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>
+    </button>
+    <!-- 沙二模式专用 -->
+    <button id="touch-buy" class="touch-btn buy dust-only" aria-label="购买">BUY</button>
+    <button id="touch-use" class="touch-btn use dust-only" aria-label="下包或拆包">USE</button>
+  </div>
+
+  <!-- 顶部 HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <div class="bar hp"><span class="bar-fill" id="hp-fill"></span><span class="bar-text" id="hp-text">100/100</span></div>
+      <div class="bar shield"><span class="bar-fill" id="shield-fill"></span><span class="bar-text" id="shield-text">0/0</span></div>
+      <div class="xp-wrap"><div class="bar xp"><span class="bar-fill" id="xp-fill"></span></div><span class="lvl" id="lvl-text">Lv.1</span></div>
+    </div>
+    <div class="hud-right">
+      <div class="ammo" id="ammo-text">30 / 90</div>
+      <div class="weapon-name" id="weapon-name">手枪</div>
+      <div class="gold-line"><span class="gold-ico">◈</span><span id="gold-text">0</span></div>
+      <div class="zone-name" id="zone-name">潘多拉</div>
+    </div>
+  </div>
+
+  <!-- v0.14.6：局内物品栏（不拦全屏，可边跑边看；每行带丢弃按钮） -->
+  <div id="inv-layer" class="hidden"></div>
+
+  <!-- 通用覆盖层 UI（标题/选角/技能树/背包/暂停/结算）由 JS 注入 -->
+  <div id="overlay" class="hidden"></div>
+
+  <!-- 浮动提示（伤害数字、拾取等由 canvas 绘制，此处仅做系统提示） -->
+  <div id="toast" class="toast hidden"></div>
+</div>
+
+<!-- 零构建：经典脚本顺序加载，共享全局词法作用域 -->
+<script src="src/config.js?v=0.14.7"></script>
+<script src="src/util.js?v=0.14.7"></script>
+<script src="src/weapons.js?v=0.14.7"></script>
+<script src="src/items.js?v=0.14.7"></script>
+<script src="src/skills.js?v=0.14.7"></script>
+<script src="src/player.js?v=0.14.7"></script>
+<script src="src/enemies.js?v=0.14.7"></script>
+<script src="src/combat.js?v=0.14.7"></script>
+<script src="src/world.js?v=0.14.7"></script>
+<script src="src/endless.js?v=0.14.7"></script>
+<script src="src/dust2.js?v=0.14.7"></script>
+<script src="src/shop.js?v=0.14.7"></script>
+<script src="src/input.js?v=0.14.7"></script>
+<script src="src/render.js?v=0.14.7"></script>
+<script src="src/ui.js?v=0.14.7"></script>
+<script src="src/raid.js?v=0.14.7"></script>
+<script src="src/net.js?v=0.14.7"></script>
+<script src="src/auction.js?v=0.14.7"></script>
+<script src="src/br.js?v=0.14.7"></script>
+<script src="src/save.js?v=0.14.7"></script>
+<script src="src/main.js?v=0.14.7"></script>
+</body>
+</html>

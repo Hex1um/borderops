@@ -1,0 +1,13 @@
+{
+  "name": "border-ops",
+  "version": "0.14.7",
+  "private": true,
+  "description": "边境行动 · BORDER OPS — 俯视角撤离射击，含合作联机房间",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
