@@ -209,6 +209,8 @@ function sanitizeState(s){
     maxArmor:num(s.maxArmor,0,100000)||0,
     armor:num(s.armor,0,100000)||0,
     kills:num(s.kills,0,100000)||0,
+    // v0.14.10：护甲等级决定目标类型（T4+ 装甲型 / 黄色血条），同步给其他客户端
+    at:num(s.at,0,9)||0,
     ext:!!s.ext,
   };
 }
@@ -224,6 +226,11 @@ function sanitizeAI(o){
     c:text(o.c,12), s:o.s?1:0, b:o.b?1:0,
     g:text(o.g,32), e:text(o.e,16),
     ar:num(o.ar,0,100000)||0, mar:num(o.mar,0,100000)||0,
+    t:num(o.t,0,9)||0,      // v0.14.10：AI 护甲等级
+    f:num(o.f,0,3)||0,      // v0.14.10：AI 冰冻剩余时间
+    bu:num(o.bu,0,5)||0, co:num(o.co,0,4)||0,   // v0.14.11：灼烧 / 破甲
+    zk:num(o.zk,0,2)||0, rd:num(o.rd,0,1)||0,   // v0.14.11：电磁干扰 / 辐射标记
+    sd:num(o.sd,0,100000)||0,                   // v0.14.11：护盾剩余
     st:text(o.st,16),
   };
 }

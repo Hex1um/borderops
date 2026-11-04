@@ -1,0 +1,85 @@
+{
+  "ops": 33,
+  "typeDist": {
+    "flesh": 25,
+    "shield": 1,
+    "armor": 7
+  },
+  "gunElementDist": {
+    "explosive": 6,
+    "none": 13,
+    "fire": 4,
+    "corrosive": 3,
+    "no-gun": 5,
+    "shock": 2
+  },
+  "gunsWithSplash": 0,
+  "opsWithShield": 1,
+  "t4Plus": 7,
+  "t4WithRegen": 0,
+  "regenValues": [
+    0
+  ],
+  "stashArmors": [
+    {
+      "tier": 2,
+      "regen": 0,
+      "maxArmor": 53
+    }
+  ],
+  "rarityRegen": [
+    0,
+    0,
+    0,
+    0,
+    0.4,
+    0.8,
+    1.4,
+    2.1,
+    3
+  ],
+  "elementConfig": [
+    {
+      "id": "none",
+      "dot": 0,
+      "strong": null
+    },
+    {
+      "id": "fire",
+      "dot": 6,
+      "strong": "flesh"
+    },
+    {
+      "id": "shock",
+      "dot": 0,
+      "strong": "shield"
+    },
+    {
+      "id": "corrosive",
+      "dot": 6,
+      "strong": "armor"
+    },
+    {
+      "id": "cryo",
+      "dot": 0,
+      "strong": "flesh"
+    },
+    {
+      "id": "explosive",
+      "dot": 0,
+      "strong": null
+    },
+    {
+      "id": "radiation",
+      "dot": 5,
+      "strong": null
+    }
+  ],
+  "medItems": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4"
+  ]
+}

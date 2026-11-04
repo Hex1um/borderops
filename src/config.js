@@ -4,7 +4,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.14.9",
+  version: "0.14.11",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -34,16 +34,29 @@ const CFG = {
 };
 
 /* ----------------------------- 元素系统 ----------------------------- */
-// 克制：flesh(血肉) / shield(护盾) / armor(护甲)
+// 克制：flesh(血肉) / shield(护盾) / armor(装甲)
+// v0.14.10：克制关系收紧 —— 每个元素只对一个类型高倍率，其余一律打折，
+//   让「带什么枪打什么甲」成为真实取舍，而不是元素武器无脑更强。
+//   strong 供 UI 提示「克制 / 抗性」用；塔科夫模式按护甲 T 阶判定目标类型。
 const ELEMENTS = {
-  none:      { id:"none",      name:"无",   color:"#dfd8c8", dot:0,   mult:{flesh:1,shield:1,armor:1},  desc:"物理伤害" },
-  fire:      { id:"fire",      name:"火焰", color:"#ff5a1f", dot:6,   mult:{flesh:1.6,shield:0.5,armor:1}, desc:"持续灼烧，克血肉" },
-  shock:     { id:"shock",     name:"电击", color:"#4ad6ff", dot:0,   mult:{flesh:0.8,shield:2.0,armor:1}, desc:"高伤破盾，克护盾" },
-  corrosive: { id:"corrosive", name:"腐蚀", color:"#7bff3a", dot:6,   mult:{flesh:1,shield:0.5,armor:2.0}, desc:"溶解装甲，克护甲" },
-  cryo:      { id:"cryo",      name:"冰冻", color:"#6fd6ff", dot:0,   mult:{flesh:1.5,shield:1,armor:1}, desc:"减速并被冻裂，克血肉" },
-  explosive: { id:"explosive", name:"爆炸", color:"#ffb020", dot:0,   mult:{flesh:1.25,shield:1.25,armor:1.25}, desc:"范围溅射，全面" },
-  radiation: { id:"radiation", name:"辐射", color:"#c8ff32", dot:5,   mult:{flesh:1,shield:1,armor:1}, desc:"连锁引爆周围敌人" },
+  none:      { id:"none",      name:"无",   color:"#dfd8c8", dot:0, strong:null,     mult:{flesh:1,   shield:1,   armor:1   }, desc:"物理伤害，不受克制影响" },
+  /* dot = 持续效果强度（6 为基准）：>0 时命中会附加对应状态，塔科夫模式在 raid.js 里结算。
+   * 火焰/腐蚀的 dot 决定灼烧秒数与破甲量，辐射的 dot 触发连锁；电击/冰冻靠专属命中效果，dot=0。 */
+  fire:      { id:"fire",      name:"火焰", color:"#ff5a1f", dot:6, strong:"flesh",  mult:{flesh:1.70,shield:0.65,armor:0.70}, desc:"灼烧血肉：命中附加持续掉血，对护盾/装甲乏力" },
+  shock:     { id:"shock",     name:"电击", color:"#4ad6ff", dot:0, strong:"shield", mult:{flesh:0.70,shield:2.00,armor:0.70}, desc:"击穿护盾：额外削盾并干扰开火，对血肉/装甲乏力" },
+  corrosive: { id:"corrosive", name:"腐蚀", color:"#7bff3a", dot:6, strong:"armor",  mult:{flesh:0.70,shield:0.65,armor:2.00}, desc:"溶解装甲：啃护甲耐久并降低减伤，对血肉/护盾乏力" },
+  cryo:      { id:"cryo",      name:"冰冻", color:"#6fd6ff", dot:0, strong:"flesh",  mult:{flesh:1.45,shield:0.80,armor:0.75}, desc:"冻结血肉：命中附加冰冻减速，对装甲乏力" },
+  explosive: { id:"explosive", name:"爆炸", color:"#ffb020", dot:0, strong:null,     mult:{flesh:1.20,shield:1.20,armor:1.20}, desc:"范围溅射：对各类目标都稳定" },
+  radiation: { id:"radiation", name:"辐射", color:"#c8ff32", dot:5, strong:null,     mult:{flesh:1,   shield:1,   armor:1   }, desc:"连锁引爆：向附近目标传导伤害，不受克制影响" },
 };
+const ARMOR_TYPE_NAME  = { flesh:"血肉", shield:"护盾", armor:"装甲" };
+const ARMOR_TYPE_COLOR = { flesh:"#e23b3b", shield:"#4fd6ff", armor:"#ffd23f" };
+// 元素对目标类型的伤害倍率；none / 未知元素恒为 1
+function elemMult(element, armorType){
+  if(!element || element==="none") return 1;
+  const E=ELEMENTS[element];
+  return E ? (E.mult[armorType||"flesh"] ?? 1) : 1;
+}
 
 /* ----------------------------- 稀有度 ----------------------------- */
 /*
@@ -124,6 +137,33 @@ const AFFIXES = {
     { nm:"游侠的",   lvl:7,  mods:[{stat:"moveSpeed", min:6, max:12},{stat:"reloadPct", min:8, max:16}] },
     { nm:"裂空的",   lvl:9,  mods:[{stat:"range", min:10, max:18},{stat:"projSpeed", min:10, max:18}] },
     { nm:"镇定的",   lvl:10, mods:[{stat:"recoil", min:12, max:22},{stat:"reloadPct", min:8, max:16}] },
+    // —— v0.14.10 扩充①：元素专属（只在对应元素的枪上出现）——
+    { nm:"焚风的",   lvl:12, elem:"fire",      mods:[{stat:"dmgPct",min:14,max:24},{stat:"elemChance",min:8,max:14}] },
+    { nm:"熔渣的",   lvl:24, elem:"fire",      mods:[{stat:"elemPct",min:18,max:32},{stat:"splashDmg",min:12,max:22}] },
+    { nm:"电弧的",   lvl:12, elem:"shock",     mods:[{stat:"fireRatePct",min:12,max:22},{stat:"elemChance",min:8,max:14}] },
+    { nm:"感电的",   lvl:26, elem:"shock",     mods:[{stat:"elemPct",min:18,max:32},{stat:"critChance",min:5,max:10}] },
+    { nm:"蚀骨的",   lvl:14, elem:"corrosive", mods:[{stat:"dmgPct",min:16,max:28},{stat:"pierce",min:1,max:1}] },
+    { nm:"强酸的",   lvl:26, elem:"corrosive", mods:[{stat:"elemPct",min:20,max:34},{stat:"dmgPct",min:12,max:22}] },
+    { nm:"霜噬的",   lvl:12, elem:"cryo",      mods:[{stat:"elemChance",min:10,max:18},{stat:"accPct",min:8,max:16}] },
+    { nm:"极寒的",   lvl:24, elem:"cryo",      mods:[{stat:"elemPct",min:18,max:30},{stat:"moveSpeed",min:8,max:16}] },
+    { nm:"爆震的",   lvl:14, elem:"explosive", needSplash:true, mods:[{stat:"splashDmg",min:18,max:32},{stat:"splashPct",min:12,max:22}] },
+    { nm:"辐照的",   lvl:16, elem:"radiation", mods:[{stat:"elemPct",min:14,max:26},{stat:"fireRatePct",min:10,max:18}] },
+    // —— v0.14.10 扩充②：代价权衡（高收益 + 明确负面，让词缀有取舍）——
+    { nm:"狂热的",   lvl:18, mods:[{stat:"fireRatePct",min:28,max:45},{stat:"accPct",min:-18,max:-10}] },
+    { nm:"孤注的",   lvl:20, mods:[{stat:"dmgPct",min:40,max:60},{stat:"magPct",min:-20,max:-12}] },
+    { nm:"透支的",   lvl:16, mods:[{stat:"fireRatePct",min:25,max:40},{stat:"reloadPct",min:-20,max:-12}] },
+    { nm:"重铳的",   lvl:22, mods:[{stat:"dmgPct",min:35,max:55},{stat:"moveSpeed",min:-14,max:-8}] },
+    { nm:"窄膛的",   lvl:14, mods:[{stat:"accPct",min:20,max:32},{stat:"fireRatePct",min:-16,max:-10}] },
+    { nm:"精密的",   lvl:28, mods:[{stat:"critDmg",min:60,max:100},{stat:"critChance",min:8,max:14},{stat:"fireRatePct",min:-14,max:-8}] },
+    { nm:"贪噬的",   lvl:20, mods:[{stat:"lifesteal",min:4,max:7},{stat:"dmgPct",min:-14,max:-8}] },
+    { nm:"破阵的",   lvl:24, mods:[{stat:"pierce",min:2,max:2},{stat:"dmgPct",min:-16,max:-10}] },
+    // —— v0.14.10 扩充③：机制向与高等级档位（ilvl 24+ 才开放）——
+    { nm:"穿云的",   lvl:30, mods:[{stat:"range",min:25,max:40},{stat:"projSpeed",min:20,max:35}] },
+    { nm:"永动的",   lvl:28, mods:[{stat:"ammoEff",min:18,max:30},{stat:"magPct",min:15,max:28}] },
+    { nm:"壁垒的",   lvl:20, mods:[{stat:"shieldOnHit",min:8,max:14},{stat:"dmgPct",min:-10,max:-6}] },
+    { nm:"疾影的",   lvl:22, mods:[{stat:"moveSpeed",min:14,max:24},{stat:"fireRatePct",min:8,max:14}] },
+    { nm:"齐射的",   lvl:34, minQ:8, pellet:4, mods:[{stat:"pellets",min:3,max:3},{stat:"dmgPct",min:10,max:20}] },
+    { nm:"湮核的",   lvl:36, mods:[{stat:"dmgPct",min:55,max:80},{stat:"critChance",min:10,max:18},{stat:"fireRatePct",min:-18,max:-10}] },
   ],
   suffix: [
     { nm:"之怒", lvl:1,  mods:[{stat:"dmgPct",      min:6,  max:12}] },
@@ -154,6 +194,27 @@ const AFFIXES = {
     { nm:"之裂", lvl:8,  mods:[{stat:"splashDmg",   min:12, max:24}] },
     { nm:"之衡", lvl:10, mods:[{stat:"moveSpeed", min:5, max:10},{stat:"accPct", min:5, max:10}] },
     { nm:"之韧", lvl:11, mods:[{stat:"recoil", min:10, max:20},{stat:"reloadPct", min:8, max:16}] },
+    // —— v0.14.10 扩充①：元素专属后缀（与前缀的元素组呼应）——
+    { nm:"之烬", lvl:12, elem:"fire",      mods:[{stat:"elemPct",min:12,max:22},{stat:"elemChance",min:6,max:12}] },
+    { nm:"之弧", lvl:12, elem:"shock",     mods:[{stat:"elemChance",min:10,max:18},{stat:"fireRatePct",min:6,max:12}] },
+    { nm:"之蚀", lvl:14, elem:"corrosive", mods:[{stat:"elemPct",min:12,max:22},{stat:"pierce",min:1,max:1}] },
+    { nm:"之霜", lvl:12, elem:"cryo",      mods:[{stat:"elemChance",min:10,max:18},{stat:"moveSpeed",min:6,max:12}] },
+    { nm:"之核", lvl:16, elem:"explosive", needSplash:true, mods:[{stat:"splashDmg",min:18,max:32}] },
+    { nm:"之尘", lvl:16, elem:"radiation", mods:[{stat:"elemPct",min:10,max:18},{stat:"dmgPct",min:6,max:12}] },
+    // —— v0.14.10 扩充②：代价权衡后缀 ——
+    { nm:"之献", lvl:18, mods:[{stat:"dmgPct",min:20,max:34},{stat:"lifesteal",min:-4,max:-2}] },
+    { nm:"之竭", lvl:16, mods:[{stat:"fireRatePct",min:18,max:30},{stat:"reloadPct",min:-18,max:-10}] },
+    { nm:"之钝", lvl:14, mods:[{stat:"dmgPct",min:18,max:30},{stat:"projSpeed",min:-20,max:-12}] },
+    { nm:"之迫", lvl:20, mods:[{stat:"critChance",min:8,max:14},{stat:"accPct",min:-14,max:-8}] },
+    { nm:"之契", lvl:22, mods:[{stat:"critDmg",min:40,max:70},{stat:"magPct",min:-20,max:-12}] },
+    { nm:"之壁", lvl:18, mods:[{stat:"shieldOnHit",min:8,max:14},{stat:"reloadPct",min:-14,max:-8}] },
+    // —— v0.14.10 扩充③：后期档位（ilvl 24+）——
+    { nm:"之遥", lvl:24, mods:[{stat:"range",min:20,max:34},{stat:"projSpeed",min:14,max:26}] },
+    { nm:"之澜", lvl:26, elemOnly:true, mods:[{stat:"elemPct",min:18,max:30},{stat:"elemChance",min:8,max:16}] },
+    { nm:"之穿", lvl:28, mods:[{stat:"pierce",min:2,max:2},{stat:"dmgPct",min:-14,max:-8}] },
+    { nm:"之终", lvl:30, mods:[{stat:"dmgPct",min:22,max:38},{stat:"critDmg",min:30,max:55}] },
+    { nm:"之恒", lvl:32, mods:[{stat:"ammoEff",min:16,max:28},{stat:"magPct",min:12,max:22}] },
+    { nm:"之极", lvl:36, mods:[{stat:"dmgPct",min:30,max:48},{stat:"fireRatePct",min:12,max:20},{stat:"accPct",min:-12,max:-6}] },
   ],
 };
 

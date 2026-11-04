@@ -126,6 +126,7 @@ const Net = {
       gun:p.gun?{ t:p.gun.type||"", e:p.gun.element||"none", n:p.gun.name||"" }:null,
       maxArmor:Math.round(p.maxArmor||0), armor:Math.round(p.armor||0),
       kills:R.kills||0,
+      at:Math.round(p.armorTier||0),   // v0.14.10：护甲类型同步
       ext:!!R._extractedFlag,
     };
     const pending=this._outbox||[];
@@ -143,6 +144,12 @@ const Net = {
           al:o.alive?1:0, c:o.cls, s:o.smart?1:0, b:o.bounty?1:0,
           g:o.gun?o.gun.type:"", e:o.gun?(o.gun.element||"none"):"none",
           ar:Math.round(o.armor||0), mar:Math.round(o.maxArmor||0),
+          t:Math.round(o.armorTier||0),   // v0.14.10：AI 护甲类型同步
+          f:+(o.freezeT||0).toFixed(1),  // v0.14.10：冰冻状态同步（非房主只渲染，不自行递减）
+          // v0.14.11：元素持续状态 / 护盾值同步，客户端只渲染不自行结算
+          bu:+(o.burnT||0).toFixed(1), co:+(o.corrodeT||0).toFixed(1),
+          zk:+(o.shockT||0).toFixed(1), rd:+(o.radT||0).toFixed(1),
+          sd:Math.round(o.shield||0),
           st:o.state||"" });
       }
       body.ai=arr;
@@ -245,6 +252,7 @@ const Net = {
         pr.op.hp=s.hp; pr.op.maxHP=s.mhp||100;
         pr.op.alive=!!s.alive;
         pr.op.maxArmor=s.maxArmor||0; pr.op.armor=s.armor||0;
+        pr.op.armorTier=s.at||0;
         pr.op.kills=s.kills||0;
         pr.op.gun=s.gun?{ type:s.gun.t, element:s.gun.e, name:s.gun.n, parts:[] }:null;
         pr.op.name=p.name;
@@ -265,7 +273,7 @@ const Net = {
     return {
       id:"net_"+p.id, peerId:p.id, name:p.name, isPlayer:false, remote:true, teammate:true,
       cls:"pmc", x:0, y:0, tx:0, ty:0, angle:0, ta:0, init:false,
-      hp:100, maxHP:100, alive:true, armor:0, maxArmor:0,
+      hp:100, maxHP:100, alive:true, armor:0, maxArmor:0, armorTier:0,
       dr:0, helmetArmor:0, helmetDr:0, speed:0, r:14,
       color:c, gun:null, inv:{weapons:[],armors:[],parts:[],materials:[],cores:[],meds:[]},
       kills:0, fireCd:0, reloadT:0, state:"", bandages:0, medT:0,
@@ -286,7 +294,11 @@ const Net = {
           id:b.i, name:b.n||"PMC", cls:b.c||"pmc", smart:!!b.s, bounty:!!b.b,
           isPlayer:false, ghost:true, x:b.x, y:b.y, tx:b.x, ty:b.y,
           angle:b.a||0, ta:b.a||0, hp:b.hp, maxHP:b.mhp||100, alive:!!b.al,
-          armor:b.ar||0, maxArmor:b.mar||0, dr:0, helmetArmor:0, helmetDr:0,
+          armor:b.ar||0, maxArmor:b.mar||0,           armorTier:b.t||0,
+          freezeT:b.f||0,
+          burnT:b.bu||0, corrodeT:b.co||0, shockT:b.zk||0, radT:b.rd||0,
+          shield:b.sd||0, maxShield:b.sd||0,
+          dr:0, helmetArmor:0, helmetDr:0,
           speed:0, r:b.b?16:13.5, color:b.b?"#ff5c5c":(b.c==="scav"?"#d08a4a":"#e06a4a"),
           gun:b.g?{ type:b.g, element:b.e||"none", parts:[] }:null,
           inv:{weapons:[],armors:[],parts:[],materials:[],cores:[],meds:[]},
@@ -299,6 +311,10 @@ const Net = {
       if(op._noInit){ op.x=b.x; op.y=b.y; op.angle=b.a||0; op._noInit=false; }
       op.hp=b.hp; op.maxHP=b.mhp||100; op.alive=!!b.al;
       op.armor=b.ar||0; op.maxArmor=b.mar||0;
+      op.armorTier=b.t||0;
+      op.freezeT=b.f||0;   // 以房主快照为准，避免非房主侧重复递减
+      op.burnT=b.bu||0; op.corrodeT=b.co||0; op.shockT=b.zk||0; op.radT=b.rd||0;
+      op.shield=b.sd||0; op.maxShield=Math.max(op.maxShield||0,op.shield);
       op.name=b.n||op.name;
       op.state=b.st||op.state;
       op.gun=b.g?{ type:b.g, element:b.e||"none", parts:[] }:null;

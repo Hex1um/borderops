@@ -213,11 +213,12 @@ const Render = {
     ctx.beginPath(); ctx.ellipse(x,y+r*0.5,r*0.95,r*squash,0,0,6.2832);
     ctx.fillStyle="rgba(0,0,0,0.30)"; ctx.fill();
   },
-  hpbar(ctx,x,y,w,hp,max){
+  // v0.14.10：col 由目标护甲类型决定（装甲黄 / 护盾蓝 / 血肉红）
+  hpbar(ctx,x,y,w,hp,max,col){
     if(hp>=max) return;
     const h=5;
     ctx.fillStyle="#000a"; ctx.fillRect(x-w/2-1,y-1,w+2,h+2);
-    ctx.fillStyle="#e23b3b"; ctx.fillRect(x-w/2,y,w*M.clamp(hp/max,0,1),h);
+    ctx.fillStyle=col||"#e23b3b"; ctx.fillRect(x-w/2,y,w*M.clamp(hp/max,0,1),h);
   },
 
   /* ----------------------------- 玩家 ----------------------------- */
@@ -330,7 +331,20 @@ const Render = {
       ctx.beginPath(); ctx.arc(x,y,r+5,0,6.2832);
       ctx.strokeStyle=rgba("#3fa9f5",0.45); ctx.lineWidth=2; ctx.stroke();
     }
-    this.hpbar(ctx,x,y-r-13,r*2.2,e.hp,e.maxHP);
+    // v0.14.10：装甲型即使满血（血条不显示）也能靠黄环辨认
+    if(e.armorType==="armor"){
+      ctx.beginPath(); ctx.arc(x,y,r+5,0,6.2832);
+      ctx.strokeStyle=rgba("#ffd23f",0.55); ctx.lineWidth=2; ctx.stroke();
+    }
+    // v0.14.10：冰冻状态覆一层冰蓝
+    if(e.slowT>0){
+      ctx.beginPath(); ctx.arc(x,y,r+2,0,6.2832);
+      ctx.fillStyle=rgba("#8fe4ff",0.28); ctx.fill();
+      ctx.beginPath(); ctx.arc(x,y,r+5,0,6.2832);
+      ctx.strokeStyle=rgba("#bdefff",0.65); ctx.lineWidth=2; ctx.stroke();
+    }
+    const eCol=e.armorType==="armor"?"#ffd23f":(e.armorType==="shield"?"#4fd6ff":"#e23b3b");
+    this.hpbar(ctx,x,y-r-13,r*2.2,e.hp,e.maxHP,eCol);
     if(e.type==="boss"){
       ctx.fillStyle="#ffd23f"; ctx.font="bold 14px sans-serif"; ctx.textAlign="center";
       ctx.strokeStyle="#0d0a07"; ctx.lineWidth=3;

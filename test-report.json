@@ -1,0 +1,478 @@
+{
+  "base": "http://127.0.0.1:3211/",
+  "checks": [
+    {
+      "name": "21 个脚本全部加载",
+      "ok": true,
+      "detail": "21 个"
+    },
+    {
+      "name": "window.game 就绪且处于标题页",
+      "ok": true,
+      "detail": "边境行动 · BORDER OPS"
+    },
+    {
+      "name": "标题页有塔科夫入口",
+      "ok": true,
+      "detail": "data-mode=raid"
+    },
+    {
+      "name": "配装大厅渲染完成",
+      "ok": true,
+      "detail": "仓库枪 2 / 甲 1 / 钥匙 1"
+    },
+    {
+      "name": "成功进入塔科夫战区",
+      "ok": true,
+      "detail": "ops=34 计时=479.4671s"
+    },
+    {
+      "name": "地图 / 撤离点 / 容器生成",
+      "ok": true,
+      "detail": "撤离点 19 · 容器 356 · 墙 2941 · 地图 [13000, 9600]"
+    },
+    {
+      "name": "T4+ 装甲型单位存在（黄色血条有意义）",
+      "ok": true,
+      "detail": "类型分布 {\"flesh\": 24, \"armor\": 6, \"shield\": 3}"
+    },
+    {
+      "name": "护盾型单位存在（蓝血条 / 电击 ×2.00 有目标）",
+      "ok": true,
+      "detail": "带盾单位 3"
+    },
+    {
+      "name": "raid 相机已同步给 game.camera",
+      "ok": true,
+      "detail": "worldToScreen 可用"
+    },
+    {
+      "name": "dot 元素在配置里已被消费",
+      "ok": true,
+      "detail": "['fire', 'corrosive', 'radiation']"
+    },
+    {
+      "name": "主循环持续推进（elapsed 增长）",
+      "ok": true,
+      "detail": "1.17 -> 4.18"
+    },
+    {
+      "name": "WASD 移动生效",
+      "ok": true,
+      "detail": "位移 285,-150"
+    },
+    {
+      "name": "鼠标按住能开火（弹匣消耗）",
+      "ok": true,
+      "detail": "弹药 17 -> 4"
+    },
+    {
+      "name": "3 秒实机无 JS 异常",
+      "ok": true,
+      "detail": "0"
+    },
+    {
+      "name": "火焰：命中挂上灼烧",
+      "ok": true,
+      "detail": "burnT=4.47 burnDps=3.85"
+    },
+    {
+      "name": "火焰：停火后 DOT 继续掉血",
+      "ok": true,
+      "detail": "HP 99614 -> 99610"
+    },
+    {
+      "name": "腐蚀：啃掉护甲耐久",
+      "ok": true,
+      "detail": "armor 60 -> 0"
+    },
+    {
+      "name": "改2：护甲打穿后实机类型变回血肉",
+      "ok": true,
+      "detail": "type=flesh, armor=0"
+    },
+    {
+      "name": "腐蚀：挂上破甲 debuff",
+      "ok": true,
+      "detail": "corrodeT=2.97"
+    },
+    {
+      "name": "实机出现「护甲击穿」提示",
+      "ok": true,
+      "detail": "['-64', '-64', '-64']"
+    },
+    {
+      "name": "冰冻：实机叠加冻结",
+      "ok": true,
+      "detail": "freezeT=2.7"
+    },
+    {
+      "name": "电击：实机挂上电磁干扰",
+      "ok": true,
+      "detail": "shockT=1.53"
+    },
+    {
+      "name": "辐射：附近目标吃到连锁伤害",
+      "ok": true,
+      "detail": "nearHp=99770"
+    },
+    {
+      "name": "辐射：命中挂上辐射标记",
+      "ok": true,
+      "detail": "radT=0.6"
+    },
+    {
+      "name": "爆炸：普通子弹产生范围溅射",
+      "ok": true,
+      "detail": "nearHp=99885"
+    },
+    {
+      "name": "全程无未捕获异常",
+      "ok": true,
+      "detail": "0"
+    },
+    {
+      "name": "全程无 console.error",
+      "ok": true,
+      "detail": "0"
+    },
+    {
+      "name": "游戏仍处于 playing",
+      "ok": true,
+      "detail": "{\"state\": \"playing\", \"elapsed\": 11.240100000000018, \"hp\": 100, \"ops\": 34, \"aliveAI\": 21, \"floats\": 258, \"particles\": 795}"
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "snapshots": {
+    "title": {
+      "version": "0.14.11",
+      "onlyRaid": true,
+      "mode": "campaign",
+      "state": "title",
+      "scripts": 21,
+      "title": "边境行动 · BORDER OPS",
+      "hero": true
+    },
+    "lobby": {
+      "startBtn": true,
+      "weapons": 2,
+      "armors": 1,
+      "keys": 1
+    },
+    "raid": {
+      "state": "playing",
+      "mode": "raid",
+      "elapsed": 0.5329000000000005,
+      "timer": 479.4671,
+      "ops": 34,
+      "types": {
+        "flesh": 24,
+        "armor": 6,
+        "shield": 3
+      },
+      "extracts": 19,
+      "containers": 356,
+      "walls": 2941,
+      "map": [
+        13000,
+        9600
+      ],
+      "player": {
+        "hp": 100,
+        "maxHP": 100,
+        "armor": 0,
+        "armorTier": 0,
+        "gun": null,
+        "element": null,
+        "ammo": null,
+        "x": 2460,
+        "y": 6885
+      },
+      "shieldUsers": 3,
+      "camSync": true,
+      "dotElements": [
+        "fire",
+        "corrosive",
+        "radiation"
+      ]
+    },
+    "play": {
+      "before": {
+        "hp": 100,
+        "x": 2460,
+        "y": 6885,
+        "ammo": 17,
+        "elapsed": 1.1655000000000002,
+        "ops": 34,
+        "aliveAI": 33
+      },
+      "after": {
+        "hp": 100,
+        "x": 2744.9791999999993,
+        "y": 6735.032446157653,
+        "ammo": 4,
+        "elapsed": 4.179900000000001,
+        "ops": 34,
+        "aliveAI": 33,
+        "tracers": 0,
+        "particles": 0,
+        "floats": 0
+      }
+    },
+    "fire": {
+      "gun": {
+        "dmg": 100,
+        "rpm": 600,
+        "range": 800,
+        "element": "fire",
+        "name": "Tediore步枪"
+      },
+      "hit": {
+        "hp": 99613.69493237505,
+        "armor": 60,
+        "type": "armor",
+        "burnT": 4.47,
+        "burnDps": 3.85,
+        "corrodeT": 0,
+        "shockT": 0,
+        "freezeT": 0,
+        "radT": 0,
+        "nearHp": 100000,
+        "ammo": 9993,
+        "angle": -0.01,
+        "floats": [
+          "灼烧 2.0s",
+          "火焰 抗性 ×0.70",
+          "-64",
+          "-64",
+          "-64",
+          "-64",
+          "-64",
+          "火焰 抗性 ×0.70",
+          "-64"
+        ],
+        "sawBreak": false
+      },
+      "afterDot": {
+        "hp": 99610.23733093758,
+        "armor": 60,
+        "type": "armor",
+        "burnT": 3.57,
+        "burnDps": 3.85,
+        "corrodeT": 0,
+        "shockT": 0,
+        "freezeT": 0,
+        "radT": 0,
+        "nearHp": 100000,
+        "ammo": 9993,
+        "angle": -0.01,
+        "floats": [
+          "灼烧 2.0s",
+          "火焰 抗性 ×0.70",
+          "-64",
+          "-64",
+          "-64",
+          "-64",
+          "-64",
+          "火焰 抗性 ×0.70",
+          "-64"
+        ],
+        "sawBreak": false
+      }
+    },
+    "corrosive": {
+      "gun": {
+        "dmg": 100,
+        "rpm": 600,
+        "range": 800,
+        "element": "corrosive",
+        "name": "Vladof步枪"
+      },
+      "hit": {
+        "hp": 99318,
+        "armor": 0,
+        "type": "flesh",
+        "burnT": 0,
+        "burnDps": 0,
+        "corrodeT": 2.97,
+        "shockT": 0,
+        "freezeT": 0,
+        "radT": 0,
+        "nearHp": 100000,
+        "ammo": 9991,
+        "angle": 0,
+        "floats": [
+          "腐蚀破甲 -60",
+          "腐蚀 克制 ×2.00",
+          "护甲击穿 · 转为血肉型",
+          "-183",
+          "-64",
+          "-115",
+          "-64",
+          "-64",
+          "腐蚀 抗性 ×0.70",
+          "-64",
+          "-64",
+          "-64"
+        ],
+        "sawBreak": true
+      }
+    },
+    "cryo": {
+      "gun": {
+        "dmg": 100,
+        "rpm": 600,
+        "range": 800,
+        "element": "cryo",
+        "name": "鹰扬的Atlas步枪"
+      },
+      "hit": {
+        "hp": 99545,
+        "armor": 60,
+        "type": "armor",
+        "burnT": 0,
+        "burnDps": 0,
+        "corrodeT": 0,
+        "shockT": 0,
+        "freezeT": 2.7,
+        "radT": 0,
+        "nearHp": 100000,
+        "ammo": 9994,
+        "angle": 0,
+        "floats": [
+          "冰冻 抗性 ×0.75",
+          "-69",
+          "-69",
+          "-124",
+          "-69",
+          "-124"
+        ],
+        "sawBreak": false
+      }
+    },
+    "shock": {
+      "gun": {
+        "dmg": 100,
+        "rpm": 600,
+        "range": 800,
+        "element": "shock",
+        "name": "Tediore步枪"
+      },
+      "hit": {
+        "hp": 99680,
+        "armor": 60,
+        "type": "armor",
+        "burnT": 0,
+        "burnDps": 0,
+        "corrodeT": 0,
+        "shockT": 1.53,
+        "freezeT": 0,
+        "radT": 0,
+        "nearHp": 100000,
+        "ammo": 9994,
+        "angle": 0,
+        "floats": [
+          "电磁干扰",
+          "电击 抗性 ×0.70",
+          "-64",
+          "-64",
+          "-64",
+          "-64",
+          "-64"
+        ],
+        "sawBreak": false
+      }
+    },
+    "radiation": {
+      "gun": {
+        "dmg": 100,
+        "rpm": 600,
+        "range": 800,
+        "element": "radiation",
+        "name": "Dahl步枪之献"
+      },
+      "hit": {
+        "hp": 99540,
+        "armor": 60,
+        "type": "armor",
+        "burnT": 0,
+        "burnDps": 0,
+        "corrodeT": 0,
+        "shockT": 0,
+        "freezeT": 0,
+        "radT": 0.6,
+        "nearHp": 99770,
+        "ammo": 9994,
+        "angle": 0,
+        "floats": [
+          "-92",
+          "-46",
+          "-46",
+          "辐射连锁 ×2",
+          "-92",
+          "-46",
+          "-82",
+          "辐射连锁 ×2",
+          "-92",
+          "-46",
+          "-82",
+          "辐射连锁 ×2"
+        ],
+        "sawBreak": false
+      }
+    },
+    "explosive": {
+      "gun": {
+        "dmg": 100,
+        "rpm": 600,
+        "range": 800,
+        "element": "explosive",
+        "name": "穿云的Jakobs步枪之稳"
+      },
+      "hit": {
+        "hp": 99340,
+        "armor": 60,
+        "type": "armor",
+        "burnT": 0,
+        "burnDps": 0,
+        "corrodeT": 0,
+        "shockT": 0,
+        "freezeT": 0,
+        "radT": 0,
+        "nearHp": 99885,
+        "ammo": 9993,
+        "angle": 0,
+        "floats": [
+          "-17",
+          "-110",
+          "-17",
+          "-110",
+          "-17",
+          "-110",
+          "-17",
+          "-110",
+          "-17",
+          "爆炸 克制 ×1.20",
+          "-110",
+          "-30"
+        ],
+        "sawBreak": false
+      }
+    },
+    "final": {
+      "state": "playing",
+      "elapsed": 11.240100000000018,
+      "hp": 100,
+      "ops": 34,
+      "aliveAI": 21,
+      "floats": 258,
+      "particles": 795
+    }
+  },
+  "notes": [],
+  "summary": {
+    "passed": 28,
+    "failed": 0
+  }
+}

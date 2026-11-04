@@ -20,6 +20,33 @@
 // 三大生态区（树林、河流、铁路），不再只有海关工业集群。
 const RAID_MAP_W = 13000, RAID_MAP_H = 9600;
 
+/* v0.14.10 元素克制 / 防护类型：
+ *   T4+ 护甲 → 装甲型（黄色血条，被腐蚀克制）；有护盾值 → 护盾型（被电击克制）；其余 → 血肉型（被火焰/冰冻克制）。
+ *   血条颜色即「目标类型」，让玩家一眼判断该换哪把元素枪。 */
+const RAID_ARMOR_TYPE_TIER = 4;
+const HELMET_BODY_SHARE = 0.40;   // 头盔对非爆头伤害只贡献 40% 减伤系数，爆头时全额
+const FREEZE_SLOW = 0.45;         // 冰冻时的位移倍率
+
+/* v0.14.11 元素持续效果参数（倍率之外的玩法差异） */
+const BURN_DPS_RATE = 0.06;       // 灼烧每秒伤害 = 本次命中「克制后」伤害 × 6%
+const BURN_ADD = 2.0;             // 每次命中叠加 2 秒
+const BURN_CAP = 4.5;             // 灼烧最长 4.5 秒（约 27% 额外伤害）
+const CORRODE_BITE = 0.35;        // 腐蚀立刻啃掉「命中伤害 × 35%」的护甲耐久
+const CORRODE_TIME = 3.0;         // 破甲 debuff 持续时间
+const CORRODE_DR = 0.75;          // 破甲期间护甲减伤打七五折
+const SHOCK_TIME = 1.6;           // 电击干扰持续
+const SHOCK_FIRE_CD = 0.25;       // 干扰期间最短开火间隔
+const RAD_RADIUS = 150, RAD_FACTOR = 0.5, RAD_MAX = 4;  // 辐射连锁范围 / 伤害系数 / 最多目标
+
+function raidArmorType(o){
+  if(!o) return "flesh";
+  if(o.shield>0) return "shield";
+  // v0.14.11：护甲耐久打穿后回归血肉型（黄条转红、不再被腐蚀克制）。
+  // undefined 视为「有甲」，兼容没有耐久字段的精简对象。
+  if((o.armorTier||0)>=RAID_ARMOR_TYPE_TIER && (o.armor===undefined || o.armor>0)) return "armor";
+  return "flesh";
+}
+
 // 房间沿用塔科夫「海关」地图风格的命名与相对位置
 const RAID_ROOMS = [
   { id:"dorm",   name:"宿舍楼",       x:140,  y:170,  w:340, h:250, tint:"#3a3550" },
@@ -1126,6 +1153,11 @@ class RaidOperator {
     const eqHP=(o.armorTier||0)*14 + (o.helmetTier||0)*8;
     this.hp=(o.hp||100)+eqHP; this.maxHP=this.hp;
     this.armor=o.armor||0; this.maxArmor=this.armor; this.dr=o.dr||0;
+    // 打穿即报废：纳米自愈不能把已归零的护甲救回来（否则「回归血肉」会每帧反复横跳）
+    this.armorBroken=this.maxArmor>0 && this.armor<=0;
+    // v0.14.11：能量护盾层（精锐 / 悬赏目标）——优先级高于护甲，破盾后才轮到护甲，
+    // 让「护盾型蓝血条 / 电击 ×2.00」在塔科夫模式里真的有目标。
+    this.shield=o.shield||0; this.maxShield=this.shield;
     // 头盔：独立耐久池，只吸收「头部命中」的那部分伤害
     this.helmetArmor=o.helmetArmor||0; this.maxHelmetArmor=this.helmetArmor;
     this.helmetDr=o.helmetDr||0; this.helmetTier=o.helmetTier||0;
@@ -1155,6 +1187,13 @@ class RaidOperator {
     this.kills=0;
     // 塔科夫式流血状态（玩家用）
     this.bleed=0;
+    // v0.14.10：冰冻剩余时间（秒）；元素克制提示节流
+    this.freezeT=0;
+    this._elemTipT=-99;
+    /* v0.14.11 元素持续状态（灼烧 / 破甲 / 电磁干扰 / 辐射标记）
+     * 全部只在「本地结算侧」写入：远端玩家与影子 AI 由各自权威端负责，避免联机重复结算。 */
+    this.burnT=0; this.burnDps=0; this.burnSrc=null;
+    this.corrodeT=0; this.shockT=0; this.radT=0;
   }
   activeGun(){ return this.gun; }
 }
@@ -1477,12 +1516,25 @@ const Raid = {
           if(armorTier<2){ armorTier=2; armor=RAID_ARMORS[armorTier].maxArmor; dr=RAID_ARMORS[armorTier].dr; }
           if(helmetTier<1){ helmetTier=1; helmetArmor=RAID_HELMETS[helmetTier].maxArmor; helmetDr=RAID_HELMETS[helmetTier].dr; }
         }
+        /* v0.14.11：约 1/5 的 PMC 固定编为「护盾兵」——轻甲 + 能量护盾（蓝色血条）。
+         * 保证电击 ×2.00 每局都有够多的明确目标，同时把 T4+ 重甲留给黄色装甲条，
+         * 避免「护盾优先级盖掉黄条」把用户要的装甲型藏起来。 */
+        let shieldVal=0;
+        if(isPMC && RNG.chance(0.22)){
+          armorTier=Math.min(armorTier||2, 3);
+          armor=armorTier?RAID_ARMORS[armorTier].maxArmor:0;
+          dr=armorTier?RAID_ARMORS[armorTier].dr:0;
+          shieldVal=Math.round(45+armorTier*10+gs*20);
+        } else if(smart && armorTier>0 && armorTier<RAID_ARMOR_TYPE_TIER){
+          shieldVal=Math.round(30+armorTier*7+gs*18);
+        }
         this.ops.push(new RaidOperator({
           id:"op"+i, cls:isPMC?"pmc":"scav",
           name:(smart?"◆ ":"")+(isPMC?(pmcNames[i%pmcNames.length]):(scavNames[i%scavNames.length])),
           x:pt.x, y:pt.y, angle:RNG.fr(0,6.28),
           speed, hp, color:isPMC?colors[i%4]:colors[4+(i%5)],
           gun, armor, dr, armorTier, helmetArmor, helmetDr, helmetTier,
+          shield: shieldVal,
           smart, creds, lootLimit,
         }));
       }
@@ -1510,6 +1562,7 @@ const Raid = {
           speed:RNG.fr(140,160), hp:RNG.ri(180,240), color:"#ff5c5c",
           gun:g, armor:RAID_ARMORS[at].maxArmor, dr:RAID_ARMORS[at].dr, armorTier:at,
           helmetArmor:RAID_HELMETS[ht].maxArmor, helmetDr:RAID_HELMETS[ht].dr, helmetTier:ht,
+          // 悬赏 Boss 保持 T7/T8 黄色装甲条（腐蚀克制），不叠护盾层
           smart:true, creds:RNG.ri(380,850), lootLimit:7,
         }));
       }
@@ -1550,12 +1603,16 @@ const Raid = {
       o.maxHelmetArmor=o.maxHelmetArmor||o.helmetArmor||0;
       o.helmetArmor=Math.min(o.helmetArmor||0, o.maxHelmetArmor);
       o.maxArmor=o.maxArmor||0; o.armor=Math.min(o.armor||0, o.maxArmor);
+      o.armorBroken=o.armorBroken!==undefined?o.armorBroken:(o.maxArmor>0&&o.armor<=0);
+      o.maxShield=o.maxShield||o.shield||0; o.shield=Math.min(o.shield||0,o.maxShield);
       o.speed=o.speed||150; o.r=o.r||14;
       o._dodgeT=0; o._dodgeSide=1; o._stuck=0;
       o.roamT=0; o.roamPt=null;
       o.state=o.state||"roam"; o.lastSeen=null; o.investigate=null;
       o.bandages=o.bandages||(o.smart?3:1); o.medT=0;
       o.fireCd=0; o.reloadT=0; o.kills=0; o.bleed=0;
+      o.freezeT=0; o.burnT=0; o.burnDps=0; o.burnSrc=null;
+      o.corrodeT=0; o.shockT=0; o.radT=0;   // v0.14.11：影子转真人时清掉残留元素状态
       o.squadId=null; o.isLeader=false; o.blockZone=null;
       o.tx=o.x; o.ty=o.y; o.ta=o.angle||0;
       if(o.gun && (!o.gun.mag || !o.gun.dmg)){
@@ -2908,15 +2965,15 @@ const Raid = {
     if(this.hitFlash>0) this.hitFlash-=dt;
     if(this.stimT>0) this.stimT=Math.max(0,this.stimT-dt);
 
-    // 稀有护甲的纳米自愈（★4+）
-    for(const o of this.ops){
-      if(o.alive && o.armorRegen>0 && o.armor<o.maxArmor)
-        o.armor=Math.min(o.maxArmor, o.armor+o.armorRegen*dt);
-    }
+    // 稀有护甲的纳米自愈（★4+）；打穿报废的甲不再回复
+    for(const o of this.ops) this._tickArmorRegen(o, dt);
 
-    // 冷却与换弹
+    // 冷却与换弹（v0.14.10：冰冻状态在这里统一递减，玩家与 AI 一致）
     for(const o of this.ops){
       if(!o.alive) continue;
+      if(o.freezeT>0) o.freezeT=Math.max(0, o.freezeT-dt);
+      // v0.14.11：元素持续状态统一结算；玩家被灼烧致死时 _fail 已收尾，直接退出本帧
+      if(this._tickElementStatus(o,dt)) return;
       o.fireCd=Math.max(0,o.fireCd-dt);
       if(o.reloadT>0){
         o.reloadT-=dt;
@@ -3038,7 +3095,15 @@ const Raid = {
     if(u.bleed && p.bleed>0) p.bleed=0;
     if(u.heal>0) p.hp=Math.min(p.maxHP, p.hp+u.heal);
     if(u.boost) this.stimT=8;
-    this._float(p.x,p.y-30, (u.bleed?"已止血":"") + (u.heal>0?(" +"+u.heal+" HP"):"") + (u.boost?" · 加速":""), "#8fe07a");
+    /* v0.14.11：治疗类物资顺带「净化」身上的元素状态。
+     * 之前玩家被 AI 的火焰 / 冰冻 / 电击枪命中后毫无反制手段，只能干等计时结束；
+     * 现在消耗一份医疗包可以灭火 / 解冻 / 解除干扰（破甲是装备 debuff，不在此列）。 */
+    let cleansed="";
+    if(u.heal>0 && ((p.burnT||0)>0 || (p.freezeT||0)>0 || (p.shockT||0)>0)){
+      p.burnT=0; p.burnDps=0; p.burnSrc=null; p.freezeT=0; p.shockT=0;
+      cleansed=" · 净化元素状态";
+    }
+    this._float(p.x,p.y-30, (u.bleed?"已止血":"") + (u.heal>0?(" +"+u.heal+" HP"):"") + (u.boost?" · 加速":"") + cleansed, "#8fe07a");
     SFX.pickup();
     this.medUse=null; this.medT=0;
   },
@@ -3256,6 +3321,8 @@ const Raid = {
     const wetHere=this._waterKind(o.x,o.y)===1;
     const wetNext=this._waterKind(o.x+dx,o.y+dy)===1;
     if(wetHere || wetNext){ dx*=0.45; dy*=0.45; }
+    // v0.14.10：冰冻减速与涉水减速叠乘（玩家 / AI 共用此入口）
+    if(o.freezeT>0){ dx*=FREEZE_SLOW; dy*=FREEZE_SLOW; }
     let nx=o.x+dx, ny=o.y+dy;
     // 分轴滑行：先 X 后 Y，贴墙时仍能滑动
     let r=this._resolve(nx, o.y, o.r); nx=r.x;
@@ -3664,6 +3731,7 @@ const Raid = {
           b.inv.armors.push({uid:"aiar"+Math.floor(Math.random()*1e9).toString(36),kind:"armor",tier:b.armorTier,
             name:RAID_ARMORS[b.armorTier].name,rarity:0,dr:b.dr,maxArmor:b.maxArmor,value:RAID_ARMORS[b.armorTier].value});
         b.armorTier=it.tier; b.dr=it.dr; b.maxArmor=it.maxArmor; b.armor=it.maxArmor;
+        b.armorBroken=false;   // v0.14.11：换上新甲后重新允许纳米自愈 / 恢复装甲型
       } else if(b.inv.armors.length<2) b.inv.armors.push(it);
       return;
     }
@@ -3717,6 +3785,28 @@ const Raid = {
     return best;
   },
 
+  /* v0.14.11：子弹命中的小范围溅射（爆炸元素 / splash 词缀）。
+   * 主目标已在 _fire 里吃过全额直伤，这里只打周围最多 3 个目标，不再触发元素效果。 */
+  _bulletSplash(hit, dmg, sh, gun){
+    const R=M.clamp(gun.splash||90,60,180);
+    let n=0;
+    for(const o of this.ops){
+      if(n>=3) break;
+      if(!o.alive || o===hit || o===sh || o.remote || o.ghost) continue;
+      const dd=M.dist(hit.x,hit.y,o.x,o.y);
+      if(dd>R) continue;
+      const fall=M.clamp(1-dd/R*0.5,0.5,1);
+      this._damage(o, dmg*0.35*fall, sh, {element:"none",armorPen:gun.armorPen}, {chain:true});
+      n++;
+    }
+    if(n>0){
+      for(let i=0;i<6;i++){ const a=Math.random()*6.28, s=Math.random()*90+20;
+        this.particles.push({x:hit.x,y:hit.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,
+          life:0.35,maxLife:0.35,color:i%2?"#ffd23f":"#ff7a1f",size:2.6}); }
+      this.blasts.push({x:hit.x,y:hit.y,r:R*0.35,life:0.22,maxLife:0.22});
+    }
+  },
+
   /* ----------------------------- 射击 / 伤害 ----------------------------- */
   _fire(sh, angle, game){
     if(sh.fireCd>0 || sh.reloadT>0) return;
@@ -3724,6 +3814,8 @@ const Raid = {
     if(sh.gun.ammoMag<=0){ this._startReload(sh); return; }
     sh.gun.ammoMag--;
     sh.fireCd = 60/Math.max(40, sh.gun.rpm);
+    // v0.14.11：电磁干扰期间射速被强制压到最低 SHOCK_FIRE_CD 间隔（电击的持续效果）
+    if(sh.shockT>0) sh.fireCd=Math.max(sh.fireCd, SHOCK_FIRE_CD);
     // 枪声传得远：附近待机的 AI 会摸过来（全局节流，避免每发子弹都算一遍）
     this._nzT=(this._nzT||0)+1;
     if(this._nzT%3===0 && !sh.ghost && (sh.isPlayer || !sh.remote))
@@ -3789,6 +3881,11 @@ const Raid = {
           this._damage(hit, dmg, sh, sh.gun);
         } else {
           this._damage(hit, dmg, sh, sh.gun);
+          /* v0.14.11：爆炸元素 / splash 词缀的普通子弹也要有范围溅射。
+           * 之前只有火箭筒走 _explodeRocket，普通爆炸枪只是 ×1.20 平伤，
+           * 元素描述「范围溅射」和 splash 系词缀在突袭里全是死的。 */
+          if(sh.gun.cat!=="launcher" && (sh.gun.element==="explosive" || (sh.gun.splash||0)>0))
+            this._bulletSplash(hit, dmg, sh, sh.gun);
         }
       }
       this.tracers.push({ x1:sh.x, y1:sh.y, x2:hx, y2:hy, bx:sh.x, by:sh.y, life:0.08, maxLife:0.08,
@@ -3797,35 +3894,121 @@ const Raid = {
     }
   },
 
-  _damage(target, dmg, attacker, gun){
+  /* opts.chain = 由辐射连锁触发的二次伤害，不再继续连锁，避免无限递归 */
+  _damage(target, dmg, attacker, gun, opts){
+    opts=opts||{};
     if(!target.alive) return;
     /* v0.12.5 AI 互殴伤害折减：全图 AI 会自己打起来，但一轮交火不该两分钟清场。
      * （玩家打 AI 不受影响，AI 打玩家也不受影响） */
     if(attacker && !attacker.isPlayer && !attacker.remote
        && !target.isPlayer && !target.remote && target.id!=="you") dmg *= 0.45;   // v0.14.6：AI 互殴折减加深，避免 AI 自己清场
-    // 远端玩家：伤害由对方本地结算（只有他知道自己的护甲/血量），这里只转发
+    // 远端玩家：伤害由对方本地结算（只有他知道自己的护甲/血量），这里只转发。
+    // v0.14.10：元素克制 / 冰冻只在「本地结算侧」生效，避免联机两端重复计算。
     if(target.remote && this.online && typeof Net!=="undefined"){
       Net.sendDamage(target.peerId||String(target.id||"").replace(/^net_/,""), dmg, attacker&&attacker.name);
       return;
     }
     let d=dmg;
+    const _armorAtHit=target.armor||0;   // v0.14.11：用于判定「护甲是否在本次命中被打穿」
+
+    /* ---------------- v0.14.10 元素克制 ---------------- */
+    const elem=(gun && gun.element && ELEMENTS[gun.element]) ? gun.element : "none";
+    const at=raidArmorType(target);
+    const eMul=elemMult(elem, at);
+    d*=eMul;
+    const E=elem!=="none"?ELEMENTS[elem]:null;
+    const dmgCol=E?E.color:(target.isPlayer?"#ff6a6a":"#ffd36a");
+
+    /* ---------------- v0.14.11 元素持续效果 ----------------
+     * 之前 ELEMENTS.dot 只是摆设（火焰/腐蚀 6、辐射 5），元素之间除了倍率没有任何玩法差异：
+     *   火焰   → 叠加灼烧 DOT（每秒按本次命中原始伤害结算，最长 4.5s，约 +27% 总伤）
+     *   腐蚀   → 立刻啃护甲耐久 + 3s 破甲（期间护甲减伤 ×0.75），打穿后回归血肉型
+     *   电击   → 1.6s 电磁干扰（强制拉长开火间隔 / 打断瞄准），另额外削护盾
+     *   辐射   → 命中后向附近单位连锁，连锁伤害不再二次触发连锁
+     * 状态只在权威结算侧写入；远端玩家 / 影子 AI 走上面的转发分支，不会重复结算。 */
+    if(d>0 && E){
+      const dotK=(E.dot||0)/6;
+      if(elem==="fire" && dotK>0){
+        const fresh=(target.burnT||0)<=0;
+        target.burnT=Math.min(BURN_CAP,(target.burnT||0)+BURN_ADD*dotK);
+        // 用克制后伤害 d 结算 DOT，避免「火焰对装甲 ×0.70、但灼烧照全额跳」绕过抗性
+        target.burnDps=Math.max(target.burnDps||0, d*BURN_DPS_RATE*dotK);
+        target.burnSrc=attacker||null;
+        if(fresh) this._float(target.x,target.y-58,"灼烧 "+target.burnT.toFixed(1)+"s","#ff8a3a");
+      } else if(elem==="corrosive" && dotK>0){
+        const before=target.armor||0;
+        const bite=Math.min(before, d*CORRODE_BITE*dotK);
+        if(bite>0) target.armor=before-bite;
+        target.corrodeT=Math.max(target.corrodeT||0, CORRODE_TIME);
+        if(bite>0 && (this.elapsed-(target._armorTipT||-99))>0.8){
+          target._armorTipT=this.elapsed;
+          this._float(target.x,target.y-58,"腐蚀破甲 -"+Math.round(bite),"#9bff5a");
+        }
+      } else if(elem==="radiation"){
+        target.radT=Math.max(target.radT||0,0.7);
+      } else if(elem==="shock"){
+        const fresh=(target.shockT||0)<=0;
+        target.shockT=Math.max(target.shockT||0,SHOCK_TIME);
+        if(target.shield>0) target.shield=Math.max(0,target.shield-d*0.6);   // 电击额外击穿护盾
+        if(fresh && !target.isPlayer) this._float(target.x,target.y-58,"电磁干扰","#7be3ff");
+      }
+    }
+    // 玩家命中时按目标节流给一句克制 / 抗性反馈，连发不刷屏
+    if(attacker && attacker.isPlayer && elem!=="none" && Math.abs(eMul-1)>0.05
+       && this.elapsed-(target._elemTipT||0)>0.55){
+      target._elemTipT=this.elapsed;
+      const tip=(eMul>1?"克制 ×":"抗性 ×")+eMul.toFixed(2);
+      this._float(target.x, target.y-40, (E?E.name:"")+" "+tip, eMul>1?(E?E.color:"#ffd23f"):"#9aa4b2");
+    }
+    // 冰冻命中：叠加冻结时间并撒冰晶（视觉在 unit() 里绘制）
+    if(elem==="cryo" && d>0){
+      target.freezeT=Math.min(2.8, (target.freezeT||0)+1.4);
+      this._freezeBurst(target.x, target.y);
+    }
+
+    /* ---------------- v0.14.10 护甲 / 头盔：乘法律叠加 ---------------- */
     // 护甲穿透：高穿甲武器能显著削弱高级护甲的减伤（T8 也不是无敌）
     const pen = (gun && gun.armorPen!==undefined) ? gun.armorPen : 0.10;
     const penMul = 1 - pen*0.90;
-    // 头部命中（15%）：伤害 ×1.8，头盔优先吸收
-    if(RNG.chance(0.15)){
-      d*=1.8;
-      if(target.helmetArmor>0 && target.helmetDr>0){
-        const eff = Math.max(0.03, target.helmetDr*penMul);
-        const ha=Math.min(target.helmetArmor, d*eff);
-        target.helmetArmor-=ha; d-=ha;
-        if(target.isPlayer) this._float(target.x, target.y-52, "头盔 -"+Math.round(ha), "#8fd0ff");
-      }
+    // 头部命中（15%）：伤害 ×1.8，头盔对爆头全额生效
+    const headshot=RNG.chance(0.15);
+    if(headshot) d*=1.8;
+    // 能量护盾优先于护甲吸收（护盾型 → 蓝色血条，被电击克制）。护盾破了才轮到护甲 / 头盔。
+    const hadShield=(target.shield||0)>0;
+    if(hadShield){
+      const sAbs=Math.min(target.shield,d);
+      target.shield-=sAbs; d-=sAbs;
+      if(sAbs>0 && target.isPlayer) this._float(target.x,target.y-52,"护盾 -"+Math.round(sAbs),"#7be3ff");
+      if(target.shield<=0 && target.isPlayer) this._float(target.x,target.y-70,"护盾破裂","#4fd6ff");
     }
-    if(target.armor>0){
-      const eff = Math.max(0.03, target.dr*penMul);
-      const abs=Math.min(target.armor, d*eff);
-      target.armor-=abs; d-=abs;
+    // p = 护甲减伤，q = 头盔减伤；总减伤 = 1-(1-p)(1-q)，不再线性相加成 1-p-q。
+    // 头盔对非爆头按 HELMET_BODY_SHARE 计入，因此也能「减少一定的非暴击伤害」。
+    // v0.14.11：腐蚀破甲期间护甲减伤打七五折，让「溶解装甲」有实感。
+    const corrodeMul=(target.corrodeT||0)>0?CORRODE_DR:1;
+    const p=M.clamp((target.dr||0)*penMul*corrodeMul, 0, 0.92);
+    const q=M.clamp((target.helmetDr||0)*penMul*(headshot?1:HELMET_BODY_SHARE), 0, 0.92);
+    const totalDr=1-(1-p)*(1-q);
+    const absorbWant=d*totalDr;                          // 两件装备合计应吸收的伤害
+    const armorWant=Math.max(0, d*p);                   // 护甲先吸收
+    const helmWant=Math.max(0, absorbWant-armorWant);   // 头盔吸收护甲没挡下的那部分里的份额
+    let armorAbs=0, helmAbs=0;
+    if(armorWant>0 && target.armor>0){
+      armorAbs=Math.min(target.armor, armorWant);
+      target.armor-=armorAbs;
+    }
+    if(helmWant>0 && target.helmetArmor>0){
+      helmAbs=Math.min(target.helmetArmor, helmWant);
+      target.helmetArmor-=helmAbs;
+    }
+    d-=armorAbs+helmAbs;
+    if(headshot && helmAbs>0 && target.isPlayer)
+      this._float(target.x, target.y-52, "头盔 -"+Math.round(helmAbs), "#8fd0ff");
+    /* v0.14.11 改2：T4+ 护甲耐久归零 → 不再是装甲型（黄条转红、腐蚀克制失效）。
+     * 一次性提示，避免连发刷屏；HUD 的防护类型行会同步变成「血肉」。 */
+    if(_armorAtHit>0 && (target.armor||0)<=0 && (target.armorTier||0)>=RAID_ARMOR_TYPE_TIER){
+      target.armorBroken=true;   // 报废后不再纳米自愈，类型稳定停留在血肉
+      this._float(target.x,target.y-72,"护甲击穿 · 转为血肉型","#ffd23f");
+      if(target.isPlayer) this._feed("防护", "护甲耐久耗尽 · 已转为血肉型", "", false, "warn");
     }
     d=Math.max(1, Math.round(d));
     target.hp-=d;
@@ -3850,13 +4033,63 @@ const Raid = {
         target.lastSeen={ x:attacker.x, y:attacker.y, t:5.5 };
         target.investigate={ x:attacker.x, y:attacker.y, t:Math.max((target.investigate&&target.investigate.t)||0, 6.5) };
       }
-      this._float(target.x, target.y-24, "-"+Math.round(d), "#ffd36a");
-      this.spawnHit(target.x, target.y, "#ff9a5a");
+      this._float(target.x, target.y-24, "-"+Math.round(d), dmgCol);
+      this.spawnHit(target.x, target.y, dmgCol);
       if(target.hp<=0){
         target.hp=0; target.alive=false;
         this._onBotDeath(target, attacker);
       }
     }
+    // 辐射连锁：命中后向周围 RAD_MAX 个单位传导 RAD_FACTOR 倍伤害，二次命中不再连锁。
+    if(elem==="radiation" && !opts.chain && dmg>0) this._chainRadiation(target,dmg,attacker,gun);
+  },
+
+  /* v0.14.11：辐射连锁 —— 不打自己 / 攻击者 / 远端玩家（远端由对方本地结算），
+   * 只挑最近的活单位，附一道绿色链路特效，伤害不再带元素倍率二次放大。 */
+  _chainRadiation(origin, dmg, attacker, gun){
+    const near=[];
+    for(const o of this.ops){
+      if(!o.alive || o===origin || o===attacker || o.remote || o.ghost) continue;
+      const dd=M.dist(origin.x,origin.y,o.x,o.y);
+      if(dd<=RAD_RADIUS) near.push({o,dd});
+    }
+    near.sort((a,b)=>a.dd-b.dd);
+    for(const {o} of near.slice(0,RAD_MAX)){
+      this.tracers.push({ x1:origin.x, y1:origin.y, x2:o.x, y2:o.y, bx:origin.x, by:origin.y,
+        life:0.18, maxLife:0.18, laser:false, shape:"round", color:"#c8ff32" });
+      this.spawnHit(o.x,o.y,"#c8ff32");
+      this._damage(o, dmg*RAD_FACTOR, attacker, {element:"none", armorPen:gun&&gun.armorPen, dmg:0}, {chain:true});
+    }
+    if(near.length && attacker && attacker.isPlayer)
+      this._float(origin.x,origin.y-58,"辐射连锁 ×"+Math.min(near.length,RAD_MAX),"#c8ff32");
+  },
+
+  /* v0.14.11：每帧结算元素持续状态。灼烧按真实秒数扣血（无视护甲），击杀归属点火者；
+   * 影子 AI / 远端玩家不在这里扣血，避免联机双份伤害。返回 true 表示玩家阵亡、调用方应退出本帧。 */
+  /* v0.14.11：护甲打穿后标记报废，纳米自愈不再把它救回来，
+   * 否则 T4+ 血条会在「装甲黄 → 血肉红」之间每帧反复横跳。 */
+  _tickArmorRegen(o, dt){
+    if(o.alive && o.armorRegen>0 && !o.armorBroken && o.armor<o.maxArmor)
+      o.armor=Math.min(o.maxArmor, o.armor+o.armorRegen*dt);
+  },
+
+  _tickElementStatus(o, dt){
+    const burnLeft=o.burnT||0;               // 先记住剩余时长，收尾那一帧只结算实际剩余部分
+    if(o.burnT>0)   o.burnT=Math.max(0,o.burnT-dt);
+    if(o.corrodeT>0)o.corrodeT=Math.max(0,o.corrodeT-dt);
+    if(o.shockT>0)  o.shockT=Math.max(0,o.shockT-dt);
+    if(o.radT>0)    o.radT=Math.max(0,o.radT-dt);
+    if(burnLeft>0 && o.burnDps>0 && !o.remote && !o.ghost){
+      o.hp-=o.burnDps*Math.min(dt,burnLeft);
+      if(o.isPlayer) this.hitFlash=Math.min(0.18,(this.hitFlash||0)+dt*0.15);
+      if(o.hp<=0){
+        o.hp=0; o.alive=false; o.burnT=0; o.burnDps=0;
+        if(o.isPlayer){ this._fail("灼烧致死", o.burnSrc, null); return true; }
+        this._onBotDeath(o, o.burnSrc);
+      }
+    }
+    if(o.burnT<=0){ o.burnDps=0; o.burnSrc=null; }
+    return false;
   },
 
   _onBotDeath(victim, killer){
@@ -4301,6 +4534,7 @@ const Raid = {
         color:isBlocker?"#ff7a3c":"#e0b84a",
         gun, armor:armorTier?RAID_ARMORS[armorTier].maxArmor:0, dr:armorTier?RAID_ARMORS[armorTier].dr:0, armorTier,
         helmetArmor:helmetTier?RAID_HELMETS[helmetTier].maxArmor:0, helmetDr:helmetTier?RAID_HELMETS[helmetTier].dr:0, helmetTier,
+        shield: (smart && armorTier>0 && armorTier<RAID_ARMOR_TYPE_TIER) ? Math.round(28+armorTier*6) : 0,
         smart, creds:RNG.ri(60,260), lootLimit:3,
         squadId, isLeader:(isSquad&&i===0), blocker:isBlocker,
       });
@@ -4345,6 +4579,12 @@ const Raid = {
     for(let i=0;i<6;i++){ const a=Math.random()*6.28, s=Math.random()*120+40;
       this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.3,maxLife:0.3,color,size:2.6}); }
   },
+  // v0.14.10：冰冻命中的冰晶散射（配合 unit() 里的冰霜环 / 结晶）
+  _freezeBurst(x,y){
+    for(let i=0;i<9;i++){ const a=Math.random()*6.28, s=Math.random()*80+30;
+      this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.55,maxLife:0.55,
+        color:i%2?"#bdefff":"#6fd6ff",size:2.4}); }
+  },
   _float(x,y,text,color){ this.floats.push({x,y,text,color:color||"#fff",life:0.9,maxLife:0.9,vy:-30,size:13}); },
   _feed(a,v,gun,mine,type){ this.killfeed.unshift({a,v,gun,mine:!!mine,type:type||"kill",t:6}); if(this.killfeed.length>6) this.killfeed.pop(); },
 
@@ -4366,6 +4606,9 @@ const Raid = {
     ty = RAID_MAP_H<=vh ? (RAID_MAP_H-vh)/2 : M.clamp(ty,0,RAID_MAP_H-vh);
     this.camera.x=M.lerp(this.camera.x,tx,0.2);
     this.camera.y=M.lerp(this.camera.y,ty,0.2);
+    // v0.14.11：塔科夫模式原本只维护 Raid.camera，game.camera 一直停在 (0,0)，
+    // 导致 game.worldToScreen() / 任何按屏幕坐标定位的 UI 在 raid 模式下全部算错。
+    game.camera.x=this.camera.x; game.camera.y=this.camera.y;
   },
 
   _rayWall(x1,y1,x2,y2){
@@ -4441,9 +4684,9 @@ const Raid = {
     if(p.secondary) line("副武器 · "+p.secondary.name, raidGunColor(p.secondary),
       `${p.secondary.ammoMag}/${p.secondary.mag} 发 · 备弹 ${p.secondary.ammoRes}`);
     if(p.armorTier) line("护甲 · "+RAID_ARMORS[p.armorTier].name, ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0",
-      `T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%`);
+      `T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?' · 装甲型（腐蚀 ×2.00）':' · 已击穿（血肉型）'):''}`);
     if(p.helmetTier) line("头盔 · "+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
-      `T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 爆头减伤 ${Math.round(p.helmetDr*100)}%`);
+      `T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`);
     line("卢布", "#8fe07a", "₽ "+priceText(R.creds)+" · 撤离后结算进仓库");
     if((R.tokens||0)>0) line("黑市代币", "#c07bff", "◆ "+R.tokens+" · 撤离才落袋");
 
@@ -5369,6 +5612,8 @@ const RenderRaid = {
 
   unit(ctx, o, game){
     const r=o.r;
+    // v0.14.10：血条颜色 = 目标护甲类型（血肉红 / 护盾蓝 / T4+ 装甲黄）
+    const at=raidArmorType(o), atCol=ARMOR_TYPE_COLOR[at]||ARMOR_TYPE_COLOR.flesh;
     // 阴影
     ctx.beginPath(); ctx.ellipse(o.x,o.y+r*0.5,r*0.95,r*0.5,0,0,6.2832); ctx.fillStyle="rgba(0,0,0,0.32)"; ctx.fill();
     // 枪（随枪型长度 / 元素颜色变化，瞄具配件额外描金点）
@@ -5388,6 +5633,65 @@ const RenderRaid = {
     ctx.beginPath(); ctx.arc(o.x,o.y,r,0,6.2832);
     ctx.fillStyle=o.color; ctx.fill();
     ctx.lineWidth=3; ctx.strokeStyle=(o.isPlayer||o.remote)?"#0a2a33":"#0d0a07"; ctx.stroke();
+    // v0.14.10：装甲型单位一圈黄色描边，和黄色血条呼应
+    if(at==="armor"){
+      ctx.beginPath(); ctx.arc(o.x,o.y,r+2,0,6.2832);
+      ctx.strokeStyle="rgba(255,210,63,0.60)"; ctx.lineWidth=2; ctx.stroke();
+    }
+    // v0.14.10：冰冻呈现 —— 半透明冰霜覆层 + 冰蓝外环 + 六向冰晶
+    if(o.freezeT>0){
+      const fa=M.clamp(o.freezeT/2.8,0,1);
+      ctx.save();
+      ctx.globalAlpha=0.22+0.26*fa; ctx.fillStyle="#8fe4ff";
+      ctx.beginPath(); ctx.arc(o.x,o.y,r+1,0,6.2832); ctx.fill();
+      ctx.globalAlpha=0.55+0.35*fa; ctx.strokeStyle="#bdefff"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(o.x,o.y,r+4,0,6.2832); ctx.stroke();
+      ctx.lineWidth=1.4;
+      for(let k=0;k<6;k++){
+        const a2=k*Math.PI/3+o.freezeT*0.6;
+        const cx=o.x+Math.cos(a2)*(r+4), cy=o.y+Math.sin(a2)*(r+4);
+        ctx.beginPath();
+        ctx.moveTo(cx-Math.cos(a2)*4, cy-Math.sin(a2)*4);
+        ctx.lineTo(cx+Math.cos(a2)*4, cy+Math.sin(a2)*4);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    /* v0.14.11：四种元素持续状态的可视化（不看血条也能知道身上挂了什么） */
+    if(o.burnT>0){
+      const t=o.burnT;
+      ctx.save(); ctx.globalAlpha=0.55;
+      ctx.strokeStyle="#ff7a1f"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(o.x,o.y,r+6,0,6.2832); ctx.stroke();
+      for(let k=0;k<3;k++){
+        const a2=k*2.094+t*2.1;
+        const h=6+((t*7+k*3)%9);
+        ctx.fillStyle=k%2?"#ffd23f":"#ff5a1f";
+        ctx.beginPath(); ctx.arc(o.x+Math.cos(a2)*(r*0.6), o.y+Math.sin(a2)*(r*0.6)-h, 2.4,0,6.28); ctx.fill();
+      }
+      ctx.restore();
+    }
+    if(o.corrodeT>0){
+      ctx.save(); ctx.globalAlpha=0.7; ctx.strokeStyle="#7bff3a"; ctx.lineWidth=2;
+      ctx.setLineDash([3,4]); ctx.lineDashOffset=-o.corrodeT*10;
+      ctx.beginPath(); ctx.arc(o.x,o.y,r+8,0,6.2832); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+    }
+    if(o.shockT>0){
+      ctx.save(); ctx.globalAlpha=0.8; ctx.strokeStyle="#7be3ff"; ctx.lineWidth=1.6;
+      for(let k=0;k<3;k++){
+        const a2=k*2.094+o.shockT*3;
+        ctx.beginPath();
+        ctx.moveTo(o.x+Math.cos(a2)*(r+2),o.y+Math.sin(a2)*(r+2));
+        ctx.lineTo(o.x+Math.cos(a2+0.25)*(r+10),o.y+Math.sin(a2+0.25)*(r+10));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if(o.radT>0){
+      ctx.save(); ctx.globalAlpha=0.45; ctx.strokeStyle="#c8ff32"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(o.x,o.y,r+11-o.radT*5,0,6.2832); ctx.stroke(); ctx.restore();
+    }
     if(o.isPlayer||o.remote){
       ctx.beginPath(); ctx.arc(o.x,o.y,r+4,0,6.2832);
       ctx.strokeStyle=o.remote?"rgba(126,224,138,0.9)":"rgba(79,214,255,0.85)"; ctx.lineWidth=2; ctx.stroke();
@@ -5402,11 +5706,12 @@ const RenderRaid = {
     ctx.fillStyle="#fff";
     const ex=Math.cos(o.angle)*r*0.4, ey=Math.sin(o.angle)*r*0.4;
     ctx.beginPath(); ctx.arc(o.x+ex,o.y+ey,r*0.22,0,6.28); ctx.fill();
-    // 名字 + 血条
+    // 名字 + 血条（v0.14.10：名字后缀标注护甲类型，血条按类型着色）
+    const atTag=(at!=="flesh")?(" ·"+ARMOR_TYPE_NAME[at]):"";
     if(o.remote){
       ctx.font="bold 11px system-ui,sans-serif"; ctx.textAlign="center";
       ctx.fillStyle="#8fe0a0";
-      ctx.fillText("◈ "+(o.name||"队友"), o.x, o.y-r-10);
+      ctx.fillText("◈ "+(o.name||"队友")+atTag, o.x, o.y-r-10);
       if(!o.alive){
         ctx.fillStyle="rgba(255,120,120,0.9)"; ctx.font="bold 10px system-ui,sans-serif";
         ctx.fillText("已阵亡", o.x, o.y-r-22);
@@ -5414,7 +5719,7 @@ const RenderRaid = {
     } else if(!o.isPlayer){
       ctx.font="11px system-ui,sans-serif"; ctx.textAlign="center";
       ctx.fillStyle=o.smart?"rgba(255,210,63,0.92)":"rgba(255,190,190,0.85)";
-      ctx.fillText(o.name, o.x, o.y-r-8);
+      ctx.fillText(o.name+atTag, o.x, o.y-r-8);
       if(o.state==="loot"){
         ctx.font="bold 9px system-ui,sans-serif"; ctx.fillStyle="#8fe07a";
         ctx.fillText("搜刮中", o.x, o.y-r-(o.bounty?42:24));
@@ -5422,9 +5727,26 @@ const RenderRaid = {
     }
     const w=40;
     ctx.fillStyle="rgba(0,0,0,0.55)"; ctx.fillRect(o.x-w/2-1,o.y-r-6,w+2,5);
-    ctx.fillStyle=(o.isPlayer?"#4fd6ff":(o.remote?"#7ee08a":"#e23b3b")); ctx.fillRect(o.x-w/2,o.y-r-5.5,w*M.clamp(o.hp/o.maxHP,0,1),4);
+    // 血肉型保留阵营色；装甲 / 护盾型覆盖为类型色（黄 / 蓝），旁边补一个类型色方块
+    const hpCol=(at==="flesh")?(o.isPlayer?"#4fd6ff":(o.remote?"#7ee08a":"#e23b3b")):atCol;
+    ctx.fillStyle=hpCol; ctx.fillRect(o.x-w/2,o.y-r-5.5,w*M.clamp(o.hp/o.maxHP,0,1),4);
+    if(at!=="flesh"){ ctx.fillStyle=atCol; ctx.fillRect(o.x+w/2+3, o.y-r-5.5, 4, 4); }
     if(o.maxArmor>0){
       ctx.fillStyle="rgba(120,180,255,0.85)"; ctx.fillRect(o.x-w/2,o.y-r-10.5,w*M.clamp(o.armor/o.maxArmor,0,1),3);
+    }
+    // v0.14.11：护盾条（青蓝）画在护甲条之上，三层防护一眼可读
+    if(o.maxShield>0){
+      ctx.fillStyle="rgba(79,214,255,0.92)"; ctx.fillRect(o.x-w/2,o.y-r-14.5,w*M.clamp((o.shield||0)/o.maxShield,0,1),3);
+    }
+    const tags=[];
+    if(o.freezeT>0)  tags.push({t:"冰冻",c:"#bdefff"});
+    if(o.burnT>0)    tags.push({t:"灼烧",c:"#ff8a3a"});
+    if(o.corrodeT>0) tags.push({t:"破甲",c:"#9bff5a"});
+    if(o.shockT>0)   tags.push({t:"干扰",c:"#7be3ff"});
+    if(tags.length){
+      ctx.font="bold 9px system-ui,sans-serif"; ctx.textAlign="center";
+      const line=tags.map(x=>x.t).join("·");
+      ctx.fillStyle=tags[0].c; ctx.fillText(line, o.x, o.y+r+12);
     }
   },
 
@@ -5733,9 +6055,22 @@ const RenderRaid = {
     const ar=p.armorTier?RAID_ARMORS[p.armorTier]:null;
     line("护甲", ar?ar.name:"（未穿戴）", ar?(ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0"):"#8b95a5",
       ar?`T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorRegen?(' · 自愈 '+p.armorRegen+'/s'):''}`:"无防护");
+    // v0.14.10：明示自己的护甲类型与克制关系（T4+ 头顶血条为黄色）
+    const _at=raidArmorType(p);
+    const _atHint=_at==="armor" ? "T4+ 装甲：腐蚀 ×2.00 · 火焰/电击 ×0.70"
+      : (_at==="shield" ? "护盾：电击 ×2.00 · 火焰 ×0.65"
+      : "血肉：火焰 ×1.70 · 冰冻 ×1.45 · 腐蚀 ×0.70");
+    line("防护类型", ARMOR_TYPE_NAME[_at]+(_at==="armor"?"（黄色血条）":""), ARMOR_TYPE_COLOR[_at], _atHint);
+    // v0.14.11：身上挂着的持续效果，方便判断该不该停火换枪 / 是否需要灭火
+    const _es=[];
+    if((p.burnT||0)>0)    _es.push("灼烧 "+p.burnT.toFixed(1)+"s");
+    if((p.corrodeT||0)>0) _es.push("破甲 "+p.corrodeT.toFixed(1)+"s");
+    if((p.shockT||0)>0)   _es.push("干扰 "+p.shockT.toFixed(1)+"s");
+    if((p.freezeT||0)>0)  _es.push("冰冻 "+p.freezeT.toFixed(1)+"s");
+    if(_es.length) line("元素状态", _es.join(" · "), "#ff9a5a", "灼烧持续掉血 · 破甲降低护甲减伤 · 干扰拉长开火间隔");
     const hm=p.helmetTier?RAID_HELMETS[p.helmetTier]:null;
     line("头盔", hm?hm.name:"（未佩戴）", hm?(ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0"):"#8b95a5",
-      hm?`T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 爆头减伤 ${Math.round(p.helmetDr*100)}%`:"爆头无减免");
+      hm?`T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`:"无减免");
     // 医疗 / 卢布
     const medN2=(R.meds.hemo||0)+(R.meds.medkit||0)+(R.meds.stim||0)+(R.meds.surgery||0);
     line("医疗", `绷带 ×${R.bandages} · 医疗品 ×${medN2}`, "#ff9a9a", "H 键 / 医疗键：流血自动止血，缺血自动回血");
