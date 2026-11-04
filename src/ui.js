@@ -89,10 +89,11 @@ const UI = {
     const hasSave = Save.has();
     const armed = !!this._wipeArm;
     const more = !!this._moreModes;
+    const onlyRaid = CFG.onlyRaid !== false;
     this._set(`
       <div class="panel" style="text-align:center;">
         <h1 class="title-big">边境行动</h1>
-        <div class="subtitle">BORDER OPS · WEB · v${CFG.version} · 撤离突袭 · 词缀枪械 · 混乱转生</div>
+        <div class="subtitle">BORDER OPS · WEB · v${CFG.version} · 撤离突袭 · 词缀枪械 · 黑市经济</div>
 
         <div class="mode-hero" data-mode="raid" role="button" tabindex="0" aria-label="进入塔科夫模式">
           <div class="hero-top">
@@ -113,24 +114,24 @@ const UI = {
         </div>
 
         <div class="title-actions">
-          <button class="btn ghost small" id="btn-more-modes" aria-expanded="${more?"true":"false"}" aria-controls="more-modes">
+          ${onlyRaid?'':`<button class="btn ghost small" id="btn-more-modes" aria-expanded="${more?"true":"false"}" aria-controls="more-modes">
             ${more?'▴ <span class="mm-full">收起其他模式</span><span class="mm-short">收起</span>'
                    :'▾ <span class="mm-full">其他模式 · 战役 / 无尽 / 沙二 / 大逃杀</span><span class="mm-short">其他模式</span>'}
-          </button>
-          ${hasSave?`<button class="btn ghost small" id="btn-continue">继续战役存档</button>`:''}
+          </button>`}
+          ${!onlyRaid&&hasSave?`<button class="btn ghost small" id="btn-continue">继续战役存档</button>`:''}
           <button class="btn ghost small btn-del" id="btn-wipe">删除存档</button>
         </div>
 
         ${armed?`<div class="wipe-box">
           确认删除本机全部存档？<br>
-          战役进度 · 塔科夫仓库（枪械/护甲/材料/核心）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
+          ${onlyRaid?'':'战役进度 · '}塔科夫仓库（枪械/护甲/材料/核心）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
           <div class="row">
             <button class="btn small danger" id="btn-wipe-yes">确认删除</button>
             <button class="btn small ghost" id="btn-wipe-no">取消</button>
           </div>
         </div>`:''}
 
-        <div class="mode-more ${more?"":"hidden"}" id="more-modes">
+        ${onlyRaid?'':`<div class="mode-more ${more?"":"hidden"}" id="more-modes">
           <div class="mode-grid">
             <div class="mode-card" data-mode="campaign" role="button" tabindex="0">
               <div class="mode-ico">▮</div>
@@ -157,16 +158,16 @@ const UI = {
               <p>PUBG 式缩圈生存：空降绝地岛，搜枪搜甲，安全区不断收缩，活到最后一人吃鸡。</p>
             </div>
           </div>
-        </div>
+        </div>`}
 
         <div class="hint">
-          <span class="hint-desk">
+          ${onlyRaid?'':`<span class="hint-desk">
             桌面：<span class="kbd">W A S D</span> 移动 · <span class="kbd">鼠标</span> 瞄准 · <span class="kbd">左键</span> 开火 ·
             <span class="kbd">R</span> 换弹 · <span class="kbd">空格</span> 技能 · <span class="kbd">F</span> 近战 ·
             <span class="kbd">Q</span> 切枪 · <span class="kbd">K</span> 技能树 · <span class="kbd">Tab</span> 装备 · <span class="kbd">Esc</span> 暂停<br>
             沙二：<span class="kbd">B</span> 购买 · <span class="kbd">E</span> 下包/拆包 · <span class="kbd">G</span> 手雷 ·
             大逃杀：<span class="kbd">E</span> 用医疗 · 活到最后吃鸡<br>
-          </span>
+          </span>`}
           塔科夫模式：<span class="kbd">WASD</span> 移动 · <span class="kbd">左键</span> 开火 · <span class="kbd">E</span> 搜索 ·
           <span class="kbd">H</span> 绷带止血 · <span class="kbd">Q</span> 换枪 · <span class="kbd">Tab</span> 物品栏 · 站上撤离点坚守数秒<br>
           移动端：左半屏拖动 · 右下扳机开火 · <span class="kbd">AUTO</span> 自动开火
@@ -215,6 +216,8 @@ const UI = {
   },
 
   pickMode(mode){
+    // v0.14.9：默认只开放塔科夫模式；其他模式代码保留，但入口隐藏且禁止绕过。
+    if(CFG.onlyRaid !== false && mode!=="raid") mode="raid";
     this._mode=mode;
     if(mode==="dust2") this.dustSetup();
     else if(mode==="raid") this.raidSetup();
