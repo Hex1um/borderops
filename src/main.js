@@ -166,7 +166,19 @@ class Game {
     this.zoom=0.92;
     document.body.classList.add("mode-raid");
     this.hud.classList.add("hidden");
-    Raid.start(this, opts||{});
+    try{
+      Raid.start(this, opts||{});
+    }catch(e){
+      // Raid.start 内部已把装备/现金/钥匙/医疗品退回仓库；这里只负责把界面恢复。
+      console.error("[startRaid]", e);
+      document.body.classList.remove("mode-raid");
+      const tl=document.getElementById("touch-layer"); if(tl) tl.classList.add("hidden");
+      if(typeof Net!=="undefined" && Net.online) Net.leave(true);
+      this.state="title";
+      UI.raidSetup();
+      this.toast("进入战区失败，装备已退回仓库");
+      return;
+    }
     this.state="playing";
     UI.hide();
     this._showDustHUD();
@@ -286,6 +298,9 @@ class Game {
   pause(){
     if(this.state==="playing"){
       this.state="paused"; Input.resetStick();
+      // 塔科夫商店/物品栏是自绘 DOM 弹层；暂停面板会替换它们，必须同步清掉逻辑状态，
+      // 否则 shopOpen 残留会让 E 键永久失效。
+      if(this.mode==="raid" && typeof Raid!=="undefined" && Raid.resetUiState) Raid.resetUiState();
       this.hud.classList.add("hidden");
       const tl=document.getElementById('touch-layer'); if(tl) tl.classList.add("hidden");
       if(this.mode==="dust2") UI.dustPause();
@@ -296,6 +311,7 @@ class Game {
   }
   resume(){
     if(this.state==="paused"||this.state==="skill"||this.state==="inv"||this.state==="dustbuy"){
+      if(this.mode==="raid" && typeof Raid!=="undefined" && Raid.resetUiState) Raid.resetUiState();
       this.state="playing"; Input.resetStick(); UI.hide();
       if(this.mode==="dust2"||this.mode==="raid"||this.mode==="br") this._showDustHUD(); else this._showHUD();
     }
@@ -311,7 +327,7 @@ class Game {
     document.body.classList.remove("mode-raid");
     document.body.classList.remove("mode-br");
     document.body.classList.remove("inv-open");
-    if(typeof Raid!=="undefined") Raid.showInv=false;
+    if(typeof Raid!=="undefined" && Raid.resetUiState) Raid.resetUiState();
     if(typeof BR!=="undefined") BR.showInv=false;
     const invLayer=document.getElementById("inv-layer");
     if(invLayer){ invLayer.classList.add("hidden"); invLayer.innerHTML=""; }

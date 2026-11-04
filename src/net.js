@@ -9,6 +9,7 @@ const Net = {
   online:false,
   code:"",
   peerId:"",
+  secret:"",              // v0.14.8：服务端下发的 peer 密钥，只存本地，不再暴露在 room 列表
   isHost:false,
   name:"",
   seed:0,
@@ -23,6 +24,7 @@ const Net = {
   raid:null,
   syncMs:150,
   _lastAI:0,
+  _hostNotified:false,
   _toast:(m)=>{ if(typeof game!=="undefined" && game.toast) game.toast(m); },
 
   /* ----------------------------- 房间 ----------------------------- */
@@ -54,8 +56,8 @@ const Net = {
     try{
       const r=await this._post("/api/create", { name:this.name });
       if(!r.ok) return { ok:false, msg:r.msg||"创建失败" };
-      this.code=r.code; this.peerId=r.peerId; this.seed=r.seed; this.isHost=true;
-      this.room=r.room; this.started=false; this.cursor=0; this.peers.clear();
+      this.code=r.code; this.peerId=r.peerId; this.secret=r.secret||""; this.seed=r.seed; this.isHost=true;
+      this.room=r.room; this.started=false; this.cursor=0; this.peers.clear(); this._hostNotified=false;
       this.fails=0; this.err="";
       return { ok:true, code:r.code };
     }catch(e){ return { ok:false, msg:"连不上服务器（检查网络后重试）" }; }
@@ -66,16 +68,16 @@ const Net = {
     try{
       const r=await this._post("/api/join", { code:(code||"").toUpperCase(), name:this.name });
       if(!r.ok) return { ok:false, msg:r.msg||"加入失败" };
-      this.code=r.code; this.peerId=r.peerId; this.seed=r.seed; this.isHost=!!r.host;
+      this.code=r.code; this.peerId=r.peerId; this.secret=r.secret||""; this.seed=r.seed; this.isHost=!!r.host;
       this.room=r.room; this.started=!!(r.room&&r.room.started); this.cursor=0;
-      this.peers.clear(); this.fails=0; this.err="";
+      this.peers.clear(); this.fails=0; this.err=""; this._hostNotified=false;
       return { ok:true, code:r.code };
     }catch(e){ return { ok:false, msg:"连不上服务器（检查网络后重试）" }; }
   },
 
   async startRoom(){
     if(!this.isHost) return { ok:false, msg:"只有房主能开始" };
-    const r=await this._post("/api/start", { code:this.code, peerId:this.peerId });
+    const r=await this._post("/api/start", { code:this.code, peerId:this.peerId, secret:this.secret });
     if(r.ok){ this.started=true; this.seed=r.seed; }
     return r;
   },
@@ -84,10 +86,10 @@ const Net = {
     const wasOnline=this.online;
     this.online=false; this.raid=null;
     if(this.code && this.peerId){
-      try{ await this._post("/api/leave", { code:this.code, peerId:this.peerId }); }catch(e){}
+      try{ await this._post("/api/leave", { code:this.code, peerId:this.peerId, secret:this.secret }); }catch(e){}
     }
-    this.code=""; this.peerId=""; this.isHost=false; this.seed=0;
-    this.room=null; this.peers.clear(); this.started=false; this.cursor=0;
+    this.code=""; this.peerId=""; this.secret=""; this.isHost=false; this.seed=0;
+    this.room=null; this.peers.clear(); this.started=false; this.cursor=0; this._hostNotified=false;
     if(wasOnline && !quiet) this._toast("已离开联机房间");
   },
 
@@ -100,6 +102,7 @@ const Net = {
     this.peers.clear();
     this._lastAI=0;
     this.lastSync=0;
+    this._hostNotified=false;
     raid.netTeammates=[];       // remote op 列表（引用 peers 里的 op）
     // 先拉一次，尽快拿到队友与 AI
     this.sync(true);
@@ -125,8 +128,9 @@ const Net = {
       kills:R.kills||0,
       ext:!!R._extractedFlag,
     };
-    const body={ code:this.code, peerId:this.peerId, name:this.name, state,
-      cursor:this.cursor, events:this._outbox||[] };
+    const pending=this._outbox||[];
+    const body={ code:this.code, peerId:this.peerId, secret:this.secret, name:this.name, state,
+      cursor:this.cursor, events:pending };
     this._outbox=[];
 
     // 房主：附带 AI 快照（每 150ms 全量，压缩字段名）
@@ -146,17 +150,47 @@ const Net = {
 
     let r=null;
     try{ r=await this._post("/api/sync", body); }
-    catch(e){ this.inflight=false; this.fails++; if(this.fails===3) this._toast("联机同步中断，正在重试…"); return; }
+    catch(e){
+      this.inflight=false; this.fails++;
+      // 请求失败才把这一批事件放回队列；成功后再丢弃，避免网络抖动导致 extract/dead 丢失。
+      this._outbox=(pending.concat(this._outbox||[])).slice(0,40);
+      if(this.fails===3) this._toast("联机同步中断，正在重试…");
+      return;
+    }
     this.inflight=false;
-    if(!r || !r.ok){ this.fails++; if(this.fails>10){ this._toast("房间已断开"); this.online=false; } return; }
+    if(!r || !r.ok){
+      this._outbox=(pending.concat(this._outbox||[])).slice(0,40);
+      this.fails++;
+      if(r && r.auth===false){ this.online=false; this._toast("联机身份已失效，请重新加入房间"); return; }
+      if(this.fails>10){ this._toast("房间已断开"); this.online=false; }
+      return;
+    }
     this.fails=0;
     if(typeof r.seed==="number" && r.seed!==this.seed && !this.raid) this.seed=r.seed;
     this.room=r.room;
     this.cursor=r.cursor||this.cursor;
 
+    // v0.14.8：每次以服务端返回的 host 为准；房主转移时接管 ghost AI。
+    const wasHost=this.isHost;
+    if(typeof r.host==="boolean") this.isHost=r.host;
+    if(this.isHost && !wasHost) this._becomeHost();
+    else if(!this.isHost) this._hostNotified=false;
+
     this._applyPeers(r.room ? r.room.peers : []);
     if(!this.isHost && Array.isArray(r.ai)) this._applyAI(r.ai);
     if(Array.isArray(r.events)) for(const ev of r.events) this._handle(ev);
+  },
+
+  // 房主掉线后，服务端会把 host 转给下一个 peer。这里把只读 ghost 提升为可模拟 AI，
+  // 避免“新主机 isHost=true 但全图 AI 永久冻结”。
+  _becomeHost(){
+    const R=this.raid;
+    if(!R || typeof R.promoteGhostsForHost!=="function") return;
+    if(this._hostNotified) return;
+    try{
+      const n=R.promoteGhostsForHost();
+      if(n>0){ this._hostNotified=true; this._toast("房主已离开 · 你已接管 AI 模拟"); }
+    }catch(e){ console.warn("promote ghosts failed", e); }
   },
 
   /* 房间页轻量轮询：只取房间信息，不进图 */
@@ -164,7 +198,7 @@ const Net = {
     if(!this.code || !this.peerId) return null;
     try{
       const r=await this._post("/api/sync", {
-        code:this.code, peerId:this.peerId, name:this.name,
+        code:this.code, peerId:this.peerId, secret:this.secret, name:this.name,
         state:null, events:[], cursor:this.cursor,
       });
       if(!r || !r.ok) return null;
@@ -296,7 +330,13 @@ const Net = {
   sendHitAI(id, dmg, gunName){
     this.sendEvent("hitai", { id, dmg:Math.round(dmg), g:gunName||"", by:this.name });
   },
+  // 客户端不能直接给另一个客户端扣血：先发给房主，由房主校验距离/LOS 后再发 dmg。
+  sendHitPeer(toPeerId, dmg, gunName){
+    this.sendEvent("hitpeer", { to:toPeerId, dmg:Math.round(dmg), g:gunName||"" });
+  },
   sendDamage(toPeerId, dmg, by){
+    if(!this.online) return;
+    if(!this.isHost) return this.sendHitPeer(toPeerId, dmg, by);
     this.sendEvent("dmg", { to:toPeerId, dmg:Math.round(dmg), by:by||this.name });
   },
   maybeSendShot(sh, angle){
@@ -338,7 +378,12 @@ const Net = {
         this._toast(`${d.name||"玩家"} 离开了房间`);
         break;
       case "host":
-        this.isHost=(d.id===this.peerId);
+        {
+          const was=this.isHost;
+          this.isHost=(d.id===this.peerId);
+          if(this.isHost && !was) this._becomeHost();
+          else if(!this.isHost) this._hostNotified=false;
+        }
         break;
       case "loot": {
         const c=R.containers[d.i];
@@ -349,15 +394,31 @@ const Net = {
         if(!this.isHost) break;
         const bot=R.ops.find(o=>o.id===d.id && !o.ghost);
         if(!bot || !bot.alive) break;
-        const dmg=Math.max(1, Number(d.dmg)||1);
+        const dmg=M.clamp(Math.round(Number(d.dmg)||1),1,2000);
         R._damage(bot, dmg, { isPlayer:true, netKiller:true, name:d.by||"队友", kills:R.kills||0, gun:null }, null);
+        break;
+      }
+      case "hitpeer": {
+        // 只有房主处理玩家 PvP 命中；校验距离 + 视线，再转发权威 dmg。
+        if(!this.isHost) break;
+        const R2=this.raid; if(!R2 || !R2.player) break;
+        const shooter = ev.from===this.peerId ? R2.player : R2.ops.find(o=>o.remote && o.peerId===ev.from);
+        const target  = d.to===this.peerId ? R2.player : R2.ops.find(o=>o.remote && o.peerId===d.to);
+        if(!shooter || !target || shooter===target || !target.alive) break;
+        if(M.dist(shooter.x,shooter.y,target.x,target.y) > 1400) break;
+        if(!R2._los(shooter.x,shooter.y,target.x,target.y)) break;
+        const dmg=M.clamp(Math.round(Number(d.dmg)||1),1,500);
+        if(d.to===this.peerId) R2._damage(target, dmg, shooter, shooter.gun||null);
+        else this.sendDamage(d.to, dmg, shooter.name||"队友");
         break;
       }
       case "dmg": {
         if(d.to!==this.peerId) break;
+        // 只接受房主结算的伤害；普通客户端不能直接指定别人的血量。
+        if(this.room && this.room.hostId && ev.from!==this.room.hostId) break;
         const p=R.player;
         if(p && p.alive){
-          R._damage(p, Math.max(1, Number(d.dmg)||1), null, null);
+          R._damage(p, M.clamp(Math.round(Number(d.dmg)||1),1,500), null, null);
           R._float(p.x,p.y-40, `-${d.dmg}（${d.by||"敌人"}）`, "#ff6a6a");
         }
         break;
@@ -371,6 +432,7 @@ const Net = {
         break;
       }
       case "shot": {
+        if(this.room && this.room.hostId && ev.from!==this.room.hostId) break;
         const R2=this.raid; if(!R2) break;
         const op=R2.ops.find(o=>o.id===d.id);
         const col=(d.e&&d.e!=="none"&&ELEMENTS[d.e])?ELEMENTS[d.e].color:"#ff9a5a";
@@ -381,9 +443,10 @@ const Net = {
         break;
       }
       case "corpse": {
+        if(this.room && this.room.hostId && ev.from!==this.room.hostId) break;
         if(!Array.isArray(d.d)) break;
         R.containers.push({ x:d.x, y:d.y, tier:2, searched:false, body:true,
-          drops:d.d, cash:0, botName:d.n||"PMC" });
+          drops:d.d.slice(0,6), cash:0, botName:d.n||"PMC" });
         break;
       }
       case "chat": {

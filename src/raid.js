@@ -1003,6 +1003,15 @@ function priceTextShort(v){
 // 护甲/头盔等级 → 颜色（T1 灰 → T8 金）
 const ARMOR_TIER_COLOR = ["#9aa4b2","#9aa4b2","#7fd68a","#5bd75b","#4aa3ff","#b061ff","#ff8a1e","#ffd200","#ff5c5c"];
 
+// v0.14.8：所有新物品统一用尽量唯一的 uid；商店反复购买不再产生重复 uid。
+function raidUniqueUid(prefix){
+  try{
+    if(typeof crypto!=="undefined" && typeof crypto.randomUUID==="function")
+      return String(prefix||"")+crypto.randomUUID();
+  }catch(e){}
+  return String(prefix||"")+Date.now().toString(36)+Math.random().toString(36).slice(2,9);
+}
+
 function raidGunFromItem(it){ return Object.assign({}, it); }
 
 /* ----------------------------- 仓库持久化 ----------------------------- */
@@ -1104,7 +1113,7 @@ const RaidStash = {
     // 带随机 uid 的钥匙，导致「钥匙勾选」状态在每次重渲染时被当成已失效而清空。
     const d=seed(); this.save(d); return d;
   },
-  save(d){ try{ localStorage.setItem(this.KEY, JSON.stringify(d)); }catch(e){} },
+  save(d){ try{ localStorage.setItem(this.KEY, JSON.stringify(d)); return true; }catch(e){ return false; } },
 };
 
 /* ----------------------------- PMC / Scav ----------------------------- */
@@ -1194,13 +1203,64 @@ const Raid = {
   maxOps:42,
 
   /* ----------------------------- 启动 ----------------------------- */
+  // v0.14.8：启动失败时把已从仓库扣除的装备/现金/钥匙/医疗品原样退回，避免“局没进去装备没了”。
   start(game, opts={}){
+    try{ this._start(game, opts); }
+    catch(err){
+      console.error("[Raid.start]", err);
+      try{ this.abortStart(); }catch(e){ console.error("[Raid.abortStart]", e); }
+      throw err;
+    }
+  },
+
+  abortStart(){
+    this.active=false; this.spectate=false; this._ended=true;
+    const st=this.stash;
+    // 只有开局扣装已经成功落盘时才回滚；如果那次 save 失败，旧存档本来就没变，不能再加一遍。
+    if(st && this._stashPersisted){
+      const carried=this.carried||{ weapons:[], armor:null, helmet:null };
+      for(const w of (carried.weapons||[])) if(w) st.weapons.push(w);
+      if(carried.armor) st.armors.push(carried.armor);
+      if(carried.helmet) st.helmets.push(carried.helmet);
+      for(const k of ((this.inv&&this.inv.keys)||[])) (st.keys=st.keys||[]).push(k);
+      if(this.cashIn) st.creds=(st.creds||0)+this.cashIn;
+      if(this.tokensIn) st.tokens=(st.tokens||0)+this.tokensIn;
+      if(this.insured) st.creds=(st.creds||0)+(this.insuredVal||0);
+      if(this.medsIn) st.meds=Object.assign({},this.medsIn);
+      if(this.bandagesIn!==undefined) st.bandages=this.bandagesIn;
+      try{ RaidStash.save(st); }catch(e){}
+    }
+    this.carried={ weapons:[], armor:null, helmet:null };
+    this.cashIn=0; this.tokensIn=0; this.insured=false; this.insuredVal=0;
+    this._stashPersisted=false;
+    this.resetUiState();
+  },
+
+  // 统一关闭局内所有 DOM 弹层，避免 shopOpen / showInv 跨暂停、跨局残留。
+  resetUiState(){
+    this.showInv=false;
+    this.shopOpen=null;
+    this.search=null;
+    this.medT=0; this.medUse=null;
+    if(typeof document!=="undefined"){
+      document.body.classList.remove("inv-open");
+      const el=document.getElementById("inv-layer");
+      if(el){ el.classList.add("hidden"); el.innerHTML=""; }
+    }
+  },
+
+  _start(game, opts={}){
     // 联机：所有客户端必须用同一个种子，地图 / 箱子 / 撤离点开放状态才会一致
     this.online=!!opts.online;
     if(this.online && opts.seed) RNG.setSeed(opts.seed>>>0);
     else RNG.setSeed((Date.now()^(Math.random()*1e9))>>>0);
     this.active=true;
     this.game=game;
+    this.resetUiState();
+    this.carried={ weapons:[], armor:null, helmet:null };
+    this.medsIn=null; this.bandagesIn=undefined;
+    this.cashIn=0; this.tokensIn=0; this.insured=false; this.insuredVal=0;
+    this._stashPersisted=false;
     this.map={w:RAID_MAP_W,h:RAID_MAP_H};
     this.tracers=[]; this.killfeed=[]; this.floats=[]; this.particles=[]; this.rockets=[]; this.blasts=[];
     this.timer=480; this.creds=0; this.extractT=0; this.search=null;
@@ -1217,8 +1277,15 @@ const Raid = {
     this.stash=RaidStash.load();
     this.tokens=0;                            // v0.13.7：本局拾取的黑市代币（撤离才落袋）
     this._firstKillToken=false;               // v0.14.3：本局首杀名额（首个击杀必得 1 枚）
-    this.bandages = this.stash.bandages||1;   // 军火超市购买的绷带入场携带数
-    this.meds = Object.assign({hemo:0,medkit:0,stim:0,surgery:0}, this.stash.meds||{});
+    /* v0.14.8：医疗品/绷带也要从仓库扣除——阵亡后不能“用掉的还在仓库里”，
+     * 成功撤离时再把本局剩余量写回。bandages 用显式判断，0 卷不会再被 ||1 变成 1 卷。 */
+    this.medsIn = Object.assign({hemo:0,medkit:0,stim:0,surgery:0}, this.stash.meds||{});
+    this.bandagesIn = (this.stash.bandages===undefined || this.stash.bandages===null)
+      ? 1 : Math.max(0, Math.floor(this.stash.bandages));
+    this.meds = Object.assign({}, this.medsIn);
+    this.bandages = this.bandagesIn;
+    this.stash.meds = { hemo:0, medkit:0, stim:0, surgery:0 };
+    this.stash.bandages = 0;
     this._applyLoadout(opts);
     // v0.13.8：仓库钥匙串随入场携带（最多 8 把，死了就丢；撤离成功才带回）
     this.stash.keys=this.stash.keys||[];
@@ -1237,9 +1304,13 @@ const Raid = {
       +(this.carried.helmet?(this.carried.helmet.value||0):0);
     this.carryVal=baseVal;   // v0.13.7：撤离费按带入装备估值浮动
     if(opts.insure && baseVal>0){
-      this.insured=true;
-      this.insuredVal=Math.max(200, Math.round(baseVal*0.35));
-      this.stash.creds=Math.max(0, this.stash.creds-this.insuredVal);
+      const fee=Math.max(200, Math.round(baseVal*0.35));
+      // 联机入口不再经过大厅的 canIns 检查，这里必须确认真的付得起，避免“0 元投保”。
+      if((this.stash.creds||0) >= fee){
+        this.insured=true;
+        this.insuredVal=fee;
+        this.stash.creds-=fee;
+      }
     }
     // v0.14.6：把玩家选择带入的卢布 / 代币从仓库搬进本局（阵亡即丢，撤离原样带回）
     {
@@ -1249,7 +1320,9 @@ const Raid = {
       if(tokIn2>0){ this.stash.tokens=Math.max(0,(this.stash.tokens||0)-tokIn2); this.tokens=tokIn2; }
       this.cashIn=cashIn2; this.tokensIn=tokIn2;
     }
-    RaidStash.save(this.stash);   // 携带的装备已从仓库取出并保存，防刷新复制
+    // 携带的装备已从仓库取出并保存，防刷新复制；记录是否真的落盘，供启动失败回滚判断。
+    this._stashPersisted = RaidStash.save(this.stash);
+    if(!this._stashPersisted) throw new Error("仓库写入失败（可能是 localStorage 已满）");
 
     // v0.13.1：只要带了任何一件装备（枪 / 甲 / 盔），就不再按「裸装」处理
     const carriedAny = this.carried.weapons.length>0 || !!this.carried.armor || !!this.carried.helmet;
@@ -1419,8 +1492,12 @@ const Raid = {
       const bountyRooms=["factory","village","dock","temple","depot"];
       const bountyOrder=bountyRooms.map(id=>RAID_ROOMS.find(r=>r.id===id)).filter(Boolean)
         .sort((a,b)=>M.dist(b.x+b.w/2,b.y+b.h/2,px,py)-M.dist(a.x+a.w/2,a.y+a.h/2,px,py));
+      const bountyFallback=RAID_ROOMS.filter(r=>!r.extract);
       for(let b=0;b<3;b++){
-        const rm=bountyOrder[b%bountyOrder.length]||roomPool[b%roomPool.length];
+        const rm=(bountyOrder.length ? bountyOrder[b%bountyOrder.length] : null)
+          || (bountyFallback.length ? bountyFallback[b%bountyFallback.length] : null)
+          || RAID_ROOMS[0];
+        if(!rm) continue;
         const rawB=this._openPointInRoom(rm, 80);
         const pt=this._spawnSafePoint(rawB.x, rawB.y, 18);
         const g=blGunGen(RNG.ri(13,17),{type:RNG.pick(["rifle","sniper","smg"]), rarity:"purple"});
@@ -1453,6 +1530,46 @@ const Raid = {
                   lk<0.40 ? "重装进场 · 战利品略好一点" : "满配进场 · 战利品小幅提升";
     this._feed("战利品", lkTxt+"（携带估值 ₽"+priceText(this.carriedValue)+"）", "", false, lk>=0.40?"info":"warn");
     if(this.online && typeof Net!=="undefined") Net.attach(this, opts);
+  },
+
+  /* v0.14.8：房主掉线后由下一位玩家接管 AI。
+   * 客户端原本只拿到 ghost 视觉快照；这里补齐模拟所需字段并把 gun 重建成可开火的运行时枪。 */
+  promoteGhostsForHost(){
+    if(!this.ops || !this.player) return 0;
+    let n=0;
+    for(const o of this.ops){
+      if(!o || (!o.ghost && !o.isGhost)) continue;
+      o.ghost=false; o.isGhost=false; o.isNet=false;
+      o.isPlayer=false; o.remote=false;
+      o.inv=o.inv||{ weapons:[], armors:[], helmets:[], parts:[], materials:[], meds:[], cores:[], receivers:[] };
+      o.creds=o.creds||RNG.ri(20,80);
+      o.lootLimit=o.lootLimit||(o.smart?9:4);
+      o.lootCount=0; o.lootTarget=null; o.lootT=0; o._lootProg=null; o._lootDetour=null;
+      o.aiT=RNG.f()*1.2; o._badT=0; o._badC=null; o._badPtT=0; o._badPt=null;
+      o.armorTier=o.armorTier||0; o.helmetTier=o.helmetTier||0;
+      o.maxHelmetArmor=o.maxHelmetArmor||o.helmetArmor||0;
+      o.helmetArmor=Math.min(o.helmetArmor||0, o.maxHelmetArmor);
+      o.maxArmor=o.maxArmor||0; o.armor=Math.min(o.armor||0, o.maxArmor);
+      o.speed=o.speed||150; o.r=o.r||14;
+      o._dodgeT=0; o._dodgeSide=1; o._stuck=0;
+      o.roamT=0; o.roamPt=null;
+      o.state=o.state||"roam"; o.lastSeen=null; o.investigate=null;
+      o.bandages=o.bandages||(o.smart?3:1); o.medT=0;
+      o.fireCd=0; o.reloadT=0; o.kills=0; o.bleed=0;
+      o.squadId=null; o.isLeader=false; o.blockZone=null;
+      o.tx=o.x; o.ty=o.y; o.ta=o.angle||0;
+      if(o.gun && (!o.gun.mag || !o.gun.dmg)){
+        const t=o.gun.type||"pistol";
+        const g=blGunGen(RNG.ri(8,14), { type:t, element:o.gun.element||"none" });
+        g.ammoMag=g.mag; g.ammoRes=g.reserve;
+        o.gun=g;
+      } else if(o.gun){
+        if(o.gun.ammoMag===undefined) o.gun.ammoMag=o.gun.mag;
+        if(o.gun.ammoRes===undefined) o.gun.ammoRes=o.gun.reserve;
+      }
+      n++;
+    }
+    return n;
   },
 
   _roomById(id){ return RAID_ROOMS.find(r=>r.id===id); },
@@ -4034,7 +4151,7 @@ const Raid = {
   _succeed(zone){
     if(!this.active || this._ended) return;
     this._ended=true;
-    this.showInv=false; this._invToggleDom();
+    this.resetUiState();
     if(this.online && typeof Net!=="undefined") Net.sendExtract(zone?zone.name:"");
     // 联机：自己撤离后世界继续跑（房主还要给队友模拟 AI），镜头交给观战
     this.active=!!this.online;
@@ -4068,7 +4185,8 @@ const Raid = {
     const tokenGain=M.clamp(Math.floor(lootVal/60000)+Math.floor((this.player.kills||0)/3), 0, 5);
     const tokenTotal=(this.tokens||0)+tokenGain;
     this.stash.tokens=(this.stash.tokens||0)+tokenTotal;
-    RaidStash.save(this.stash);
+    if(!RaidStash.save(this.stash) && this.game && this.game.toast)
+      this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
     this.game.state="raidover";
     UI.raidResult({
       success:true, zone:zone?zone.name:"撤离点", creds:this.creds,
@@ -4086,7 +4204,7 @@ const Raid = {
   _fail(reason, killer, gun){
     if(!this.active || this._ended) return;
     this._ended=true;
-    this.showInv=false; this._invToggleDom();
+    this.resetUiState();
     if(this.online && typeof Net!=="undefined") Net.sendDead(killer?killer.name:reason);
     this.active=!!this.online;
     this.spectate=!!this.online;
@@ -4108,7 +4226,8 @@ const Raid = {
         recovered.push(it);
       }
     }
-    RaidStash.save(this.stash);
+    if(!RaidStash.save(this.stash) && this.game && this.game.toast)
+      this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
     this.game.state="raidover";
     UI.raidResult({
       success:false, reason, lost:{
@@ -4176,7 +4295,7 @@ const Raid = {
       const helmetTier=armorTier?RNG.ri(2,5):0;
       const isBlocker = !!(blockZone && i===0);
       const op=new RaidOperator({
-        id:"re"+this.uidN, cls:"pmc", name:(smart?"◆ ":"")+(isBlocker?"封锁者":(squadId?"小队":"游骑兵")),
+        id:"re"+(this.uidN++)+"-"+(i+1), cls:"pmc", name:(smart?"◆ ":"")+(isBlocker?"封锁者":(squadId?"小队":"游骑兵")),
         x:p.x, y:p.y, angle:RNG.fr(0,6.28),
         speed:RNG.fr(140,162), hp:RNG.ri(95,140),
         color:isBlocker?"#ff7a3c":"#e0b84a",
@@ -6117,7 +6236,7 @@ UI.raidShop=function(opts){
 
   // 军火超市：每次进入刷新一批无主之地枪械（按枪型铺货）
   if(!UI._raidShopGuns){
-    const W=g=>{ const w=blGunGen(12,{type:g, weights:{white:4,green:8,blue:6,purple:2.4,orange:0.7,pearl:0.22,ancient:0.08,rainbow:0.02}}); ensureGunAffixes(w); w.uid="shop-"+g+"-"+Math.floor(Math.random()*1e6); w.kind="weapon"; return w; };
+    const W=g=>{ const w=blGunGen(12,{type:g, weights:{white:4,green:8,blue:6,purple:2.4,orange:0.7,pearl:0.22,ancient:0.08,rainbow:0.02}}); ensureGunAffixes(w); w.uid=raidUniqueUid("shop-"+g+"-"); w.kind="weapon"; return w; };
     UI._raidShopGuns = RAID_GUN_TYPES.map(W);
   }
 
@@ -6253,10 +6372,12 @@ UI.raidShop=function(opts){
         if(key==='bandage') stash.bandages=(stash.bandages||0)+1;
         else { stash.meds=stash.meds||{}; stash.meds[key]=(stash.meds[key]||0)+1; }
       } else if(type==='weapon'){
-        const src=UI._raidShopGuns.find(g=>g.uid===key);
+        const i=UI._raidShopGuns.findIndex(g=>g.uid===key);
+        const src=i>=0?UI._raidShopGuns[i]:null;
         if(!src || stash.creds<src.value) return;
         stash.creds-=src.value;
         stash.weapons.push(Object.assign({}, src));
+        UI._raidShopGuns.splice(i,1);   // 买走即下架，不能反复买同一把
       } else if(type==='armor'){
         const tier=+key, src=RAID_ARMORS[tier];
         if(!src || stash.creds<src.value) return;
@@ -6274,11 +6395,12 @@ UI.raidShop=function(opts){
         if(stash.creds<price) return;
         stash.creds-=price;
         const bought=JSON.parse(JSON.stringify(pt));
-        bought.uid="pt-"+Date.now()+"-"+Math.floor(Math.random()*9999);
+        bought.uid=raidUniqueUid("pt-");
         stash.parts.push(bought);
         UI._raidShopParts.splice(idx,1);
       }
-      RaidStash.save(stash); SFX.ui(); UI.raidShop(opts);
+      // v0.14.8：购买后保留当前货架（keep:true），不再“买一件就免费重掷整个商店”。
+      RaidStash.save(stash); SFX.ui(); UI.raidShop(Object.assign({}, opts, {keep:true}));
     };
   });
   document.getElementById('btn-shop-back').onclick=()=>{
@@ -7608,19 +7730,35 @@ UI._onlineEnter=function(){
   UI._onlineEntering=true;
   UI._onlineStop();
   const sel=UI._raidSel||{w:[],a:null,h:null};
+  const st=RaidStash.load();
+  // v0.14.8：联机也必须沿用大厅选择的钥匙/现金/代币，不能默认把仓库全部钥匙带进图。
+  const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():(st.keys||[]).map(k=>k.uid);
+  const cash=Math.max(0,Math.min(Math.round(UI._raidCash||0),Math.floor(st.creds||0)));
+  const tokens=Math.max(0,Math.min(Math.round(UI._raidTok||0),Math.floor(st.tokens||0)));
+  const hasGear=!!((sel.w||[]).length||sel.a||sel.h);
   const opts={
     weapons:[...(sel.w||[])], armor:sel.a||null, helmet:sel.h||null,
-    insure:!!UI._raidIns, online:true, seed:Net.seed,
+    insure:!!UI._raidIns&&hasGear, keys:pickedKeys, cash, tokens,
+    online:true, seed:Net.seed,
   };
   UI._raidSel={w:[],a:null,h:null}; UI._raidIns=false;
-  try{ game.startRaid(opts); }catch(e){ console.error(e); }
+  try{ game.startRaid(opts); }
+  catch(e){
+    console.error(e);
+    UI._onlineMsg="进入战区失败，装备已退回仓库";
+    UI._onlineStop();
+    try{ Net.leave(true); }catch(e2){}
+    game.toTitle();
+    UI.raidSetup();
+  }
   setTimeout(()=>{ UI._onlineEntering=false; },1600);
 };
 
 UI.raidOnline=function(){
   const inRoom = !!(Net.code && Net.peerId);
   const busy = UI._onlineBusy;
-  const msg = UI._onlineMsg ? `<div class="hint" style="color:#ffb347">${UI._onlineMsg}</div>` : "";
+  const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const msg = UI._onlineMsg ? `<div class="hint" style="color:#ffb347">${esc(UI._onlineMsg)}</div>` : "";
 
   let body="";
   if(!inRoom){
@@ -7630,7 +7768,7 @@ UI.raidOnline=function(){
           <h3>创建房间</h3>
           <p>你是房主：负责模拟 AI，其他人加入你的战区。</p>
           <label class="online-label">呼号</label>
-          <input class="online-input" id="online-nick" maxlength="16" placeholder="例如：雪松" value="${(UI._onlineNick||"").replace(/"/g,"&quot;")}">
+          <input class="online-input" id="online-nick" maxlength="16" placeholder="例如：雪松" value="${esc(UI._onlineNick||"")}">
           <button class="btn" id="online-create" ${busy?'disabled':''}>创建房间</button>
         </div>
         <div class="online-card">
@@ -7649,7 +7787,7 @@ UI.raidOnline=function(){
     const rows=peers.map(p=>`
       <div class="online-peer ${p.id===Net.peerId?'me':''}">
         <span class="online-dot" style="background:${p.host?'#ffd23f':'#7ee08a'}"></span>
-        <b>${p.name||"PMC"}</b>
+        <b>${esc(p.name||"PMC")}</b>
         ${p.host?'<span class="online-tag host">房主</span>':''}
         ${p.id===Net.peerId?'<span class="online-tag me">你</span>':''}
       </div>`).join("");
@@ -7664,7 +7802,7 @@ UI.raidOnline=function(){
           <div class="online-sec">玩家 ${peers.length}/4</div>
           <div class="online-peers">${rows}</div>
           <div class="online-sec">你的携带</div>
-          <div class="online-carry">${UI._onlineCarryText()}</div>
+          <div class="online-carry">${esc(UI._onlineCarryText())}</div>
           <div class="online-sec">规则</div>
           <div class="online-rules">同一张地图 / 同一批 AI / 箱子先到先得 · 队友无友伤 · 撤离与战利品各自结算</div>
           <div class="row" style="margin-top:14px;justify-content:flex-start;">
@@ -7687,7 +7825,7 @@ UI.raidOnline=function(){
         <button class="btn ghost" id="online-back">返回配装大厅</button>
       </div>
       ${body}
-      <div class="hint" style="margin-top:14px;">联机只影响突袭内：大厅、仓库、拍卖行仍然是<b>各自独立</b>的。掉线 20 秒内可用同一房间重新加入。</div>
+      <div class="hint" style="margin-top:14px;">联机只影响突袭内：大厅、仓库、拍卖行仍然是<b>各自独立</b>的。掉线后 60 秒内可用同一房间重新加入（需要原 peer 身份）。</div>
     </div>`, !!UI._onlineKeep);
   if(!UI._onlineKeep){
     UI._onlineKeep=true;
