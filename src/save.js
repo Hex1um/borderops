@@ -46,7 +46,7 @@ const Save = {
     }catch(e){ console.warn("load failed",e); return null; }
   },
 
-  // 只取跨局进度（功勋 / 配给券 / 永久升级 / 改装）——死亡重开与无尽模式复用
+  // 只取跨局进度（功勋 / 美元 / 永久升级 / 改装）——死亡重开与无尽模式复用
   loadMeta(){
     const d=this.load(); if(!d) return null;
     return {
@@ -59,7 +59,7 @@ const Save = {
     };
   },
 
-  // 死亡时只保底保留「跨局进度」：功勋 / 配给券 / 永久升级 / 改装解锁
+  // 死亡时只保底保留「跨局进度」：功勋 / 美元 / 永久升级 / 改装解锁
   saveMeta(game){
     try{
       const p=game.player;

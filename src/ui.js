@@ -108,7 +108,7 @@ const UI = {
             <span>13000×9600 大地图</span>
             <span>密林 · 河谷 · 铁路枢纽</span>
             <span>五级钥匙金库</span>
-            <span>黑市代币</span>
+            <span>GP 币</span>
           </div>
           <div class="hero-cta">进入配装大厅 <span class="hero-arrow">→</span></div>
         </div>
@@ -237,7 +237,7 @@ const UI = {
       </div>`).join('');
     this._set(`
       <div class="panel">
-        <h2 class="title-big" style="font-size:34px;">选择你的猎人</h2>
+        <h2 class="title-big" style="font-size:34px;">选择你的 PMC</h2>
         <div class="subtitle">${mode==="endless"?"ENDLESS TRIAL · 无尽试炼":"CHOOSE YOUR VAULT HUNTER"}</div>
         <div class="grid-class">${cards}</div>
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
@@ -400,7 +400,7 @@ const UI = {
           <span class="si-price">${i===p.shieldIdx?'已装备':'点击装备'}</span>
         </div>
       </div>`;
-    }).join('') : `<div class="empty-hint">没有护甲 · 护甲只能靠掉落或在黑市用配给券购买</div>`;
+    }).join('') : `<div class="empty-hint">没有护甲 · 护甲只能靠掉落或在黑市用美元购买</div>`;
 
     const relicItems=p.relics.length ? p.relics.map((r,i)=>`
       <div class="inv-item loot-${r.rarity} ${i===p.relicIdx?'sel':''}" data-relic="${i}">
@@ -468,7 +468,7 @@ const UI = {
         if(p.weapons.length<=1) return;
         const r=p.sellWeapon(i);
         SFX.pickup();
-        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 配给券`:""}`);
+        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 美元`:""}`);
         rerender();
       };
     });
@@ -477,7 +477,7 @@ const UI = {
         e.stopPropagation();
         const r=p.sellShield(parseInt(b.dataset.ssell));
         SFX.pickup();
-        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 配给券`:""}`);
+        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 美元`:""}`);
         rerender();
       };
     });
@@ -486,7 +486,7 @@ const UI = {
         e.stopPropagation();
         const r=p.sellRelic(parseInt(b.dataset.rsell));
         SFX.pickup();
-        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 配给券`:""}`);
+        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 美元`:""}`);
         rerender();
       };
     });
@@ -511,7 +511,7 @@ const UI = {
     for(const key of ["marcus","black","gamble"]){
       const d=SHOPS[key];
       tabs += `<button class="shop-tab ${key===id?'on':''}" data-shop="${key}">
-        <b>${d.icon} ${d.name}</b><span class="tab-tag">${d.currency==="eridium"?"配给券结算":d.tag}</span></button>`;
+        <b>${d.icon} ${d.name}</b><span class="tab-tag">${d.currency==="eridium"?"美元结算":d.tag}</span></button>`;
     }
 
     let body="";
@@ -544,7 +544,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">军火市场</h2>
           <div class="shop-gold">◈ ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span></div>
         </div>
-        <div class="subtitle">MARKET · 金币买军火，配给券才能进黑市</div>
+        <div class="subtitle">MARKET · 金币买军火，美元才能进黑市</div>
         <div class="shop-tabs">${tabs}</div>
         ${body}
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
@@ -688,7 +688,7 @@ const UI = {
               <div class="meta-num">本次重新部署可得 <b style="color:var(--accent);font-size:15px;">${gain} 功勋</b></div>
               <div class="meta-num" style="margin-top:4px;">
                 重置：等级 / 技能 / 武器库与护甲随身装备 / 金币。
-                保留：功勋 / 配给券 / 永久升级 / 改装解锁与上限 / 重新部署次数。
+                保留：功勋 / 美元 / 永久升级 / 改装解锁与上限 / 重新部署次数。
               </div>
             </div>
             <button class="btn small" id="btn-rebirth" ${p.canRebirth()?'':'disabled style="opacity:.35"'}>重新部署</button>
@@ -918,7 +918,7 @@ const UI = {
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:34px;">区域肃清！</h2>
         <div class="subtitle">${zone.name} 已清除</div>
-        <p style="color:var(--muted);">等级 Lv.${p.level} · 技能点 ${p.skillPoints} · 金币 <b style="color:var(--accent)">◈${p.gold.toLocaleString()}</b> · 配给券 <b style="color:#b061ff">◆${p.eridium}</b></p>
+        <p style="color:var(--muted);">等级 Lv.${p.level} · 技能点 ${p.skillPoints} · 金币 <b style="color:var(--accent)">◈${p.gold.toLocaleString()}</b> · 美元 <b style="color:#b061ff">◆${p.eridium}</b></p>
         <p style="color:var(--muted);font-size:13px;">${last?'前方就是军械库':'下一片区域等级更高，先去军火市场补一补？'}</p>
         <div class="row" style="justify-content:center;">
           <button class="btn ghost" id="btn-shop-zone">军火市场</button>
@@ -941,7 +941,7 @@ const UI = {
         ${endless
           ? `<p style="color:var(--muted);">${CLASSES[p.classId].name} · 撑到第 <b style="color:var(--accent);font-size:22px;">${wave}</b> 波 · Lv.${p.level}</p>`
           : `<p style="color:var(--muted);">${CLASSES[p.classId].name} · 到达 Lv.${p.level} · ${this.game.zoneIndex+1}/${ZONES.length} 区域</p>`}
-        <p style="color:var(--muted);font-size:13px;">功勋、配给券、永久升级与改装上限已保留</p>
+        <p style="color:var(--muted);font-size:13px;">功勋、美元、永久升级与改装上限已保留</p>
         <div class="row" style="justify-content:center;">
           <button class="btn" id="btn-retry">再来一次</button>
           <button class="btn ghost" id="btn-title">返回标题</button>

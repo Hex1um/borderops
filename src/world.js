@@ -109,7 +109,7 @@ class Zone {
         game.loot.push(new Loot(c.x,c.y,"health"));
         game.loot.push(new Loot(c.x+12,c.y,"ammo"));
         if(RNG.chance(0.4)) game.loot.push(new Loot(c.x-12,c.y+16,"shieldcell"));
-        if(pl.eridium!==undefined){ pl.eridium+=ERIDIUM.chest; game.addFloatText(c.x,c.y-40,"+"+ERIDIUM.chest+" 配给券","#b061ff",11); }
+        if(pl.eridium!==undefined){ pl.eridium+=ERIDIUM.chest; game.addFloatText(c.x,c.y-40,"+"+ERIDIUM.chest+" 美元","#b061ff",11); }
         const gold=Math.round((40+this.level*22)*RNG.fr(0.8,1.6)*(pl.mayhemLootMul?pl.mayhemLootMul():1));
         pl.gold+=gold;
         game.addFloatText(c.x,c.y-24,"+"+gold+" 金","#ffd23f",13);
@@ -164,11 +164,11 @@ class Loot {
         game.toast("获得 "+this.item.name);
         game.addFloatText(this.x,this.y-20,(RARITY_BY_ID[this.item.rarity]||RARITIES[0]).name,"#ffd23f",13);
       } else {
-        // 背包已满：自动分解成金币 + 配给券，避免白捡
+        // 背包已满：自动分解成金币 + 美元，避免白捡
         const gold=Math.max(10, Math.floor(itemPrice(this.item)*0.25));
         const eri=itemSellEridium(this.item);
         pl.gold+=gold; pl.eridium+=eri;
-        game.toast(`背包已满 · 分解 +${gold} 金${eri?` +${eri} 配给券`:""}`);
+        game.toast(`背包已满 · 分解 +${gold} 金${eri?` +${eri} 美元`:""}`);
         game.addFloatText(this.x,this.y-20,"+"+gold,"#ffd23f",12);
       }
       SFX.pickup();
@@ -200,14 +200,14 @@ function dropLoot(game, e){
   // 物品等级：区域与怪物取高，首领/精英加成，改装再整体抬高
   const ilvl = Math.max(zd.level, e.level) + (e.isBoss?4:e.isMini?2:0) + RNG.ri(0,2) + mh;
 
-  /* ---- 配给券：精英 / 首领 / 小概率精英怪 ---- */
+  /* ---- 美元：Raider / Boss / 小概率 Raider ---- */
   let eri=0;
   if(e.isBoss) eri=ERIDIUM.boss;
   else if(e.isMini) eri=ERIDIUM.mini;
   else if(RNG.chance(ERIDIUM.eliteChance)) eri=ERIDIUM.eliteAmount;
   if(eri>0 && pl.eridium!==undefined){
     pl.eridium+=eri;
-    game.addFloatText(e.x+18, e.y-36, "+"+eri+" 配给券", "#b061ff", 12);
+    game.addFloatText(e.x+18, e.y-36, "+"+eri+" 美元", "#b061ff", 12);
   }
 
   // 金币：直接入账，不落地

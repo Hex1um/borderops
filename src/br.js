@@ -2,7 +2,7 @@
  * br.js — 大逃杀模式（BATTLE ROYALE · 绝地岛）
  *
  * 参考《PUBG》玩法：
- *   · 所有玩家空降同一张绝地岛地图（本页用 1 名玩家 + 49 名 AI 干员模拟满员服务器）
+ *   · 所有玩家空降同一张绝地岛地图（本页用 1 名玩家 + 49 名 AI PMC模拟满员服务器）
  *   · 开局空手跳伞，落地后搜刮地面武器 / 护甲 / 医疗包
  *   · 安全区（白圈）会不断缩小，圈外持续掉血，逼迫所有人向中心交火
  *   · 只有活到最后一人才能吃鸡；阵亡即淘汰，结算显示最终排名
@@ -64,7 +64,7 @@ const BR_MED = { small:{ name:"绷带", heal:35, value:40 }, big:{ name:"医疗�
 
 function brGunFromItem(it){ return Object.assign({}, it); }
 
-/* ----------------------------- 干员 ----------------------------- */
+/* ----------------------------- PMC ----------------------------- */
 class BROperator {
   constructor(o){
     this.id=o.id; this.name=o.name; this.isPlayer=!!o.isPlayer;
@@ -136,7 +136,7 @@ const BR = {
       speed:180, hp:100, color:"#4fd6ff", gun:blGunGen(6,{type:"pistol",rarity:"green"}),
     });
 
-    // AI 干员：补满服务器
+    // AI PMC：补满服务器
     this.ops=[this.player];
     const names=["Vortex","Nova","Ghost","Razor","Echo","Titan","Blaze","Frost","Onyx","Saber",
       "Viper","Hawk","Wolf","Cobra","Lynx","Drift","Ember","Quill","Slate","Pyre",
@@ -170,7 +170,7 @@ const BR = {
     this.camera.y=p0.y-game.view.h/(2*(game.zoom||1));
     this._updateCamera(game);
 
-    this._feed("系统", this.total+" 名干员已空降绝地岛", "准备", false, "info");
+    this._feed("系统", this.total+" 名玩家已空降绝地岛", "准备", false, "info");
   },
 
   _spawnPoints(n){
@@ -413,7 +413,7 @@ const BR = {
     return {x,y};
   },
 
-  /* ----------------------------- AI 干员 ----------------------------- */
+  /* ----------------------------- AI PMC ----------------------------- */
   _botsUpdate(dt, game){
     for(const b of this.ops){
       if(b.isPlayer||!b.alive) continue;
@@ -502,7 +502,7 @@ const BR = {
   _pickup(dt){
     for(let i=this.loot.length-1;i>=0;i--){
       const l=this.loot[i];
-      // 找最近的可拾取干员
+      // 找最近的可拾取PMC
       let taker=null, td=34*34;
       for(const o of this.ops){
         if(!o.alive) continue;
@@ -858,7 +858,7 @@ const RenderBR = {
     // 安全区（圈外红雾 + 蓝圈 + 白圈目标）
     this._drawZone(ctx, R);
 
-    // 干员
+    // PMC
     for(const o of R.ops){
       if(!o.alive) continue;
       if(o.x>cam.x+vw+60||o.x<cam.x-60||o.y>cam.y+vh+60||o.y<cam.y-60) continue;
@@ -1135,7 +1135,7 @@ const RenderBR = {
     // 资源点
     ctx.fillStyle="rgba(150,170,190,0.4)";
     for(const b of R.buildings){ ctx.fillRect(mx+b.x*sx,my+b.y*sy,Math.max(1,b.w*sx),Math.max(1,b.h*sy)); }
-    // 干员
+    // PMC
     for(const o of R.ops){
       if(!o.alive) continue;
       ctx.fillStyle=o.isPlayer?"#4fd6ff":"#ff5a5a";
@@ -1156,7 +1156,7 @@ UI.brSetup=function(){
       <h2 class="title-big" style="font-size:34px;">大逃杀 · 绝地岛</h2>
       <div class="subtitle">BATTLE ROYALE · 最后一人存活</div>
       <p style="color:var(--muted);max-width:680px;margin:0 0 14px;">
-        你与另外 <b style="color:#ffd23f">${lobby-1}</b> 名干员空降同一张绝地岛。落地搜刮武器护甲，
+        你与另外 <b style="color:#ffd23f">${lobby-1}</b> 名玩家空降同一张绝地岛。落地搜刮武器护甲，
         在安全区（白圈）收缩中活到最后——<b style="color:#8fe07a">吃鸡</b>即胜利，阵亡即淘汰。</p>
 
       <div class="raid-cols">

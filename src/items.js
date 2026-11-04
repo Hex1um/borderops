@@ -8,7 +8,7 @@
 const RARITY_ORDER = ["white","green","blue","purple","orange","pearl","ancient","rainbow","mythic","primordial","celestial","singularity"];
 const RARITY_INDEX = {};
 RARITY_ORDER.forEach((r,i)=>RARITY_INDEX[r]=i);
-// 高规格品相的名称前缀（插板与随身装备共用一份）
+// 高规格品质的名称前缀（插板与随身装备共用一份）
 const TOP_PREFIX = { mythic:"定制·", primordial:"竞赛·", celestial:"收藏·", singularity:"封存·" };
 
 /* ----------------------------- 防弹插板 ----------------------------- */

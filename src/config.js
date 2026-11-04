@@ -1,13 +1,13 @@
 /* =========================================================================
  * config.js — 全局常量与平衡数值
- * 边境行动：弹药 / 枪械成色 / 配件词缀 / 枪型 / 干员 定义
+ * 边境行动：弹药 / 枪械成色 / 配件词缀 / 枪型 / PMC 定义
  * 移除全部超现实与制式词条，改为拟真军械体系；v0.16.1 起弹药按塔科夫口径 + 弹种代号命名。
  *   内部键名（element / mayhem / elemPct 等）一律保留，仅语义与显示改名，
  *   保证旧 localStorage 存档、联机快照与拍卖行数据可直接读取。
  * ========================================================================= */
 
 const CFG = {
-  version: "0.17.0",
+  version: "0.17.1",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -70,7 +70,7 @@ function elemMult(element, armorType){
  * 12 档品级，权重极度偏斜（民用 : 出厂封存 ≈ 1000 : 1）。
  * 低档靠「改装词条数量」，高档靠「工艺倍率」补偿。
  * affixes:[最少,最多] / mult:全局数值倍率 / price:物价倍率
- * 名称与颜色改为军工品相刻度，不再使用奇幻稀有度配色。
+ * 名称与颜色改为军工品质刻度，不再使用奇幻稀有度配色。
  */
 const RARITIES = [
   { id:"white",   name:"民用",     color:"#cfc9bb", weight:40,    mult:1.00, affixes:[0,0], minLv:1,  price:1   },
@@ -347,7 +347,7 @@ const SHOPS = {
   },
   black: {
     id:"black", name:"地下军械商", icon:"◐", tag:"不开发票",
-    desc:"好东西都在这儿，价格嘛……只收配给券，不谈现金。",
+    desc:"好东西都在这儿，价格嘛……只收美元，不谈现金。",
     slots:3, refreshBase:600, refreshLv:420, priceMul:1.45,
     currency:"eridium",
     weights:{ blue:3, purple:3.2, orange:1.1, pearl:0.7, ancient:0.35, rainbow:0.06, mythic:0.022, primordial:0.008, celestial:0.003, singularity:0.001 },
@@ -425,21 +425,21 @@ const SCAV_GUN_ILVL_MAX = 8;   // 枪械等级硬上限：再肥的 Scav 也只�
 const SCAV_ARMOR_TIER_MAX = 3; // 护甲等级上限（塔科夫 Scav 极少出 4 级甲）
 const SCAV_HELMET_TIER_MAX = 2;
 
-/* ----------------------------- 干员 ----------------------------- */
-// 移除「侦察兵 / 标记法师 / 掩护火力 / 突入 / 压制」等超能力设定，改为现实干员分工
+/* ----------------------------- PMC ----------------------------- */
+// 移除「侦察兵 / 标记法师 / 掩护火力 / 突入 / 压制」等超能力设定，改为现实PMC分工
 const CLASSES = {
   siren: {
-    id:"siren", name:"侦察兵", en:"Scout", color:"#9a86b5",
+    id:"siren", name:"侦察手", en:"Scout", color:"#9a86b5",
     tag:"前沿观察", desc:"观察与标记目标，优先获取交战信息。",
     hp:90, shield:70, speed:235, dmgMul:1.0, elemMul:1.5, ability:{name:"目标标记", cd:14, type:"phaselock"},
   },
   soldier: {
-    id:"soldier", name:"突击兵", en:"Assault", color:"#5b86ad",
+    id:"soldier", name:"突击手", en:"Assault", color:"#5b86ad",
     tag:"火力掩护", desc:"依托掩体压制火线，防护与持续输出均衡。",
     hp:120, shield:60, speed:220, dmgMul:1.1, elemMul:1.0, ability:{name:"掩护火力", cd:16, type:"turret"},
   },
   psycho: {
-    id:"psycho", name:"突入手", en:"Breacher", color:"#a35c4c",
+    id:"psycho", name:"破门手", en:"Breacher", color:"#a35c4c",
     tag:"近距离突入", desc:"高机动近距离交战，擅长快速清房。",
     hp:140, shield:30, speed:250, dmgMul:1.2, elemMul:0.9, ability:{name:"突入冲刺", cd:18, type:"bloodlust"},
   },
@@ -515,7 +515,7 @@ const RELIC_MODS = [
 
 const RELIC_NAMES = {
   white:  ["旧识别牌","磨损臂章"],
-  green:  ["猎人臂章","野战标尺"],
+  green:  ["PMC 臂章","野战标尺"],
   blue:   ["测距卡","弹道计算尺"],
   purple: ["战术手册","急救记录本"],
   orange: ["军械库通行证","射击考核徽章"],
@@ -531,7 +531,7 @@ const RELIC_NAMES = {
 // 掉落权重：武器为主，插板次之，随身装备最少
 const ITEM_DROP = { weapon:0.72, shield:0.20, relic:0.08 };
 
-/* 配给券（地下军械商货币） */
+/* 美元（地下军械商货币） */
 const ERIDIUM = {
   mini: 2,
   boss: 14,

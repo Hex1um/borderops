@@ -13,11 +13,11 @@ const ENEMY_DEFS = {
   marauder: { name:"拾荒者", radius:18, hpMul:3.2,  dmgMul:1.15, speed:82,  armor:"shield", color:"#6f8a5a", xpMul:1.8, behavior:"ranged",  ranged:{range:400,cd:1.05,bs:470} },
   skag:     { name:"军犬", radius:18, hpMul:2.4,  dmgMul:1.20, speed:175, armor:"flesh",  color:"#e07b1f", xpMul:1.6, behavior:"charger", melee:{range:30,cd:0.7} },
   turret:   { name:"固定火力点",   radius:16, hpMul:2.2,  dmgMul:0.95, speed:0,   armor:"shield", color:"#9aa0a6", xpMul:1.3, behavior:"turret",  ranged:{range:380,cd:0.85,bs:430} },
-  badass:   { name:"精英 PMC",   radius:24, hpMul:8.0,  dmgMul:1.55, speed:72,  armor:"armor",  color:"#b0413a", xpMul:1.0, behavior:"ranged",  ranged:{range:430,cd:0.7,bs:520} },
+  badass:   { name:"Raider",   radius:24, hpMul:8.0,  dmgMul:1.55, speed:72,  armor:"armor",  color:"#b0413a", xpMul:1.0, behavior:"ranged",  ranged:{range:430,cd:0.7,bs:520} },
   boss:     { name:"封锁区指挥官",radius:42, hpMul:65.0, dmgMul:1.90, speed:62,  armor:"armor",  color:"#c0392b", xpMul:1.0, behavior:"boss" },
   /* ---- 以下为「不同属性」的差异化怪物（参考 Rakanishu 的多属性设计）---- */
   wraith:     { name:"潜行侦察兵",   radius:14, hpMul:1.9,  dmgMul:1.05, speed:188, armor:"flesh",  color:"#9be7ff", xpMul:1.4, behavior:"wraith",   melee:{range:26,cd:0.6} },
-  berserker:  { name:"突入手",   radius:19, hpMul:2.6,  dmgMul:1.10, speed:120, armor:"flesh",  color:"#ff7a3d", xpMul:1.5, behavior:"berserker",melee:{range:30,cd:0.65} },
+  berserker:  { name:"破门手",   radius:19, hpMul:2.6,  dmgMul:1.10, speed:120, armor:"flesh",  color:"#ff7a3d", xpMul:1.5, behavior:"berserker",melee:{range:30,cd:0.65} },
   shieldbearer:{name:"防盾手",     radius:20, hpMul:3.6,  dmgMul:0.95, speed:78,  armor:"armor",  color:"#8a93a6", xpMul:1.7, behavior:"shieldbearer", ranged:{range:420,cd:1.0,bs:480}, shieldFront:true },
   bomber:     { name:"爆破手",   radius:14, hpMul:1.4,  dmgMul:0.6,  speed:200, armor:"flesh",  color:"#ffd24a", xpMul:1.1, behavior:"bomber",   melee:{range:24,cd:0.5} },
   cryomancer: { name:"震撼弹射手",   radius:17, hpMul:1.7,  dmgMul:0.9,  speed:120, armor:"flesh",  color:"#6fd6ff", xpMul:1.4, behavior:"cryomancer",ranged:{range:380,cd:1.3,bs:430}, elemResist:{cryo:0.2} },

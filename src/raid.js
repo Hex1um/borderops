@@ -237,7 +237,7 @@ function raidExtractFee(zone, carryVal){
   return Math.round(M.clamp(raw, 120, zone.cost*1.4)/10)*10;
 }
 
-// 干员/拾荒者巡逻点（开阔处）
+// PMC / Scav巡逻点（开阔处）
 const RAID_PATROL = [
   [310,295],[290,790],[690,790],[1150,260],[1240,890],[1870,275],[2200,275],[2200,550],
   [1690,750],[1850,1005],[500,1420],[1420,1300],[1900,1470],[760,560],[940,470],[1400,540],
@@ -338,7 +338,7 @@ const RAID_INV_CAP = { weapons:6, armors:4, helmets:4, shields:3, parts:16, mate
 /* ----------------------------- 9 阶统一品级 -----------------------------
  * 塔科夫全战利品共用同一套品级刻度（共 9 阶，严格由低到高）：
  *   民用 · 翻新 · 制式 · 军规 · 精工 · 特种 · 试验 · 原型 · 竞赛
- * 改为军工品相刻度和低饱和军规配色；
+ * 改为军工品质刻度和低饱和军规配色；
  *   regen（护甲自动回复）全部归零 —— 现实护甲耐久只能维修，不会待维修。
  * 护甲等级 T1~T9、枪械品级、部件品级、原材料品级全部共用此刻度。 */
 const RAID_TIERS = [
@@ -371,7 +371,7 @@ const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","a
  * 高档位除了随机改装枪甲之外，还会掉落现实型号 + 出厂改装方案的「具名装备」：
  * 词条全部手工配置，同档数值远高于随机生成，名字固定（如「AK-74N 5.45×39 战术型」）。
  * 移除制式/定制命名与急救效率、额外弹丸、特殊弹触发、溅射等超现实词条。 */
-/* AI 索敌感知分级：Scav 迟钝、PMC 警觉、Boss（悬赏目标）提前锁定。
+/* AI 索敌感知分级：Scav 迟钝、PMC 警觉、Boss 提前锁定。
  * 只影响「发现目标」这一段；射击精度 / 走位 / 包扎仍按 smart 与 cls 原逻辑结算。
  * 旧值（v0.16.0 全档统一）：视距 1000、视线记忆 7.0s、无反应延迟、
  *   主动搜寻 smart 0.88 / pmc 0.74 / scav 0.56、枪声听距系数 1.0。 */
@@ -382,8 +382,8 @@ const RAID_AI_SENSE = {
 };
 function raidAISense(b){
   if(!b) return RAID_AI_SENSE.scav;
-  if(b.bounty) return RAID_AI_SENSE.boss;                    // Boss = 悬赏目标
-  if(b.cls==="pmc") return RAID_AI_SENSE.pmc;                // Raider / 精英 Scav 由 smart 单独判定
+  if(b.bounty) return RAID_AI_SENSE.boss;                    // Boss
+  if(b.cls==="pmc") return RAID_AI_SENSE.pmc;                // Raider 由 smart 单独判定
   if(b.smart) return RAID_AI_SENSE.pmc;
   return RAID_AI_SENSE.scav;
 }
@@ -599,7 +599,7 @@ const RAID_MATERIALS = [
 const RAID_MAT_BY_ID = {};
 for(const m of RAID_MATERIALS) RAID_MAT_BY_ID[m.id]=m;
 
-/* 悬赏保底战利品：击杀悬赏目标「至少 3 件稀有及以上」
+/* Boss 保底战利品：击杀 Boss「至少 3 件稀有及以上」
  *   ① 一件 T4~T6 原材料　② 一件稀有 / 特种配件　③ 一件稀有以上护甲 / 头盔 / 整枪 */
 function raidBountyLoot(){
   const out=[];
@@ -638,7 +638,7 @@ const RAID_FIELD_SELL_RATE = 0.62;
 /* ----------------------------- 钥匙（5 级，开对应等级的上锁箱） -----------------------------
  * 上锁箱按保险等级分成 5 档（lockLv），钥匙也分 5 级。
  * 一把钥匙能开「同级或更低」的箱子，有使用次数（用尽即报废）。
- * 获取：材料商店（I~II，卢布）/ 黑市（III~V，代币）/ 上锁箱与精英 AI 掉落（不可合成）。
+ * 获取：材料商店（I~II，卢布）/ 黑市（III~V，GP 币）/ 上锁箱与 Raider 掉落（不可合成）。
  */
 const RAID_KEYS = [
   { lv:1, name:"生锈钥匙",   color:"#b08e60", uses:6, value:4200,   shop:2600,  token:0  },
@@ -647,9 +647,9 @@ const RAID_KEYS = [
   { lv:4, name:"钛合金钥匙", color:"#7fd0ff", uses:3, value:86000,  shop:0,     token:14 },
   { lv:5, name:"V 级电子钥匙",color:"#b8946a", uses:2, value:210000, shop:0,    token:34 },
 ];
-/* 黑市代币 → 卢布 的「估值汇率」（按黑市 III~V 级钥匙定价反推：
+/* GP 币 → 卢布 的「估值汇率」（按黑市 III~V 级钥匙定价反推：
  *   34000/5 = 6800 · 86000/14 ≈ 6143 · 210000/34 ≈ 6176 → 取 6200）
- * 只用于配装大厅的「总价值」展示，代币仍是黑市专用货币，不提供任何兑换入口。 */
+ * 只用于配装大厅的「总价值」展示，GP 币仍是黑市专用货币，不提供任何兑换入口。 */
 const RAID_TOKEN_RATE = 6200;
 function raidTokenWorth(n){ return Math.max(0, Math.round((n||0)*RAID_TOKEN_RATE)); }
 
@@ -662,8 +662,8 @@ function raidMakeKey(lv, uses){
     uid:"ky"+Math.floor(Math.random()*1e9).toString(36) };
 }
 /* 钥匙不再可合成 —— 只有两条获取路径：
- *   ① 掉落：上锁保险箱（等级 i 的箱子最多掉 i+1 级的钥匙）与精英干员；
- *   ② 购买：材料商店 I~II（卢布）、黑市 III~V（代币）。
+ *   ① 掉落：上锁保险箱（等级 i 的箱子最多掉 i+1 级的钥匙）与 Raider；
+ *   ② 购买：材料商店 I~II（卢布）、黑市 III~V（GP 币）。
  * 由此钥匙成为真正的稀缺资源，开箱决策成本更高。 */
 function raidRollBoxKey(boxLv){
   // 箱子等级 i → 掉落上限 i+1（V 级封顶），越接近上限越罕见
@@ -718,7 +718,7 @@ function raidRollMed(luck){
  *   · 弹种适配组件(core:"elem")  → 更换枪械适配弹种，附加弹药效能词条
  *   · 膛压组件(core:"chaos")     → 「最高等级膛压组件」决定改装等级（1.06^m 工程余量）
  *   · 改装模块(core:"boost")     → 7 类工艺增益（导气 / 扳机 / 供弹 / 枪管 / 枪口 / 人体工学 / 综合）
- * 模块不可合成、不可融合升阶，只能从保险箱、精英干员掉落，或在商店购买。
+ * 模块不可合成、不可融合升阶，只能从保险箱、Raider 掉落，或在商店购买。
  * 模块槽数量由枪械品级决定，1~8 个。 */
 const RAID_CORE_MAX = 5;
 const RAID_ROMAN = ["","I","II","III","IV","V"];
@@ -1160,7 +1160,7 @@ const RaidStash = {
           }
           if(d.bandages===undefined) d.bandages=1;
           if(d.creds===undefined) d.creds=800;
-          if(d.tokens===undefined) d.tokens=0;      // 黑市代币
+          if(d.tokens===undefined) d.tokens=0;      // GP 币
           if(!Array.isArray(d.keys)) d.keys=[];      // 钥匙（5 级）
           for(const k of d.keys){ if(!k.uses) k.uses=raidKeyDef(k.lv).uses; if(!k.maxUses) k.maxUses=raidKeyDef(k.lv).uses; }
           return d;
@@ -1186,7 +1186,7 @@ class RaidOperator {
     this.armor=o.armor||0; this.maxArmor=this.armor; this.dr=o.dr||0;
     // 打穿即报废：纳米自愈不能把已归零的护甲救回来（否则「回归血肉」会每帧反复横跳）
     this.armorBroken=this.maxArmor>0 && this.armor<=0;
-    // v0.14.11：能量护盾层（精锐 / 悬赏目标）——优先级高于护甲，破盾后才轮到护甲，
+    // v0.14.11：能量护盾层（精锐 / Boss）——优先级高于护甲，破盾后才轮到护甲，
     // 让「护盾型蓝血条 / 电击 ×2.00」在塔科夫模式里真的有目标。
     this.shieldGear=o.shieldGear||null;
     this.shieldPerks=(o.shieldPerks||[]).slice();
@@ -1271,7 +1271,7 @@ const Raid = {
   // 战利品品质随携带装备估值浮动 + 增援系统
   carriedValue:0,
   carryVal:0,          // 带入装备估值（撤离费 / 商店定价基准）
-  tokens:0,            // 黑市代币（局内拾取 + 撤离结算）
+  tokens:0,            // GP 币（局内拾取 + 撤离结算）
   shops:[],            // 局内商店摊位
   shopOpen:null,       // 当前打开的商店（DOM 面板）
   _rtCache:null,       // 枪械运行时缓存（多枪切换时保留各自弹药）
@@ -1355,7 +1355,7 @@ const Raid = {
     this.spectate=false; this._ended=false;
 
     this.stash=RaidStash.load();
-    this.tokens=0;                            // 本局拾取的黑市代币（撤离才落袋）
+    this.tokens=0;                            // 本局拾取的 GP 币（撤离才落袋）
     this._firstKillToken=false;               // 本局首杀名额（首个击杀必得 1 枚）
     /* 医疗品/绷带也要从仓库扣除——阵亡后不能“用掉的还在仓库里”，
      * 成功撤离时再把本局剩余量写回。bandages 用显式判断，0 卷不会再被 ||1 变成 1 卷。 */
@@ -1393,7 +1393,7 @@ const Raid = {
         this.stash.creds-=fee;
       }
     }
-    // 把玩家选择带入的卢布 / 代币从仓库搬进本局（阵亡即丢，撤离原样带回）
+    // 把玩家选择带入的卢布 / GP 币从仓库搬进本局（阵亡即丢，撤离原样带回）
     {
       const cashIn2=Math.max(0, Math.min(Math.round(opts.cash||0), Math.floor(this.stash.creds||0)));
       const tokIn2=Math.max(0, Math.min(Math.round(opts.tokens||0), Math.floor(this.stash.tokens||0)));
@@ -1525,7 +1525,7 @@ const Raid = {
         const gIlvl=Math.round(gs*8);                 // 枪械等级 +0 ~ +8
         const gArmor=gs>=0.30?Math.round(gs*gs*7):0;   // 护甲/头盔 tier 抬 0 ~ +7（平方曲线，低强度几乎不抬）
         if(isPMC){
-          // v1.0：PMC 也从低配起步，靠搜刮升级；30% 为「精英」（更聪明、会优先抢好箱）
+          // v1.0：PMC 也从低配起步，靠搜刮升级；30% 为「Raider」（更聪明、会优先抢好箱）
           smart = RNG.chance(0.45);
           if(smart){
             const gid=RNG.pick(["rifle","smg","sniper","rifle"]);
@@ -1596,7 +1596,7 @@ const Raid = {
         }));
       }
 
-      // 悬赏目标（Boss）：2 名精锐，掉落保底好枪 + 带词条配件，HUD/小地图高亮
+      // Boss：2 名精锐，掉落保底好枪 + 带词条配件，HUD/小地图高亮
       // 塔科夫 Boss 名称：Reshala / Killa / Shturman。
       const bountyNames=["Reshala","Killa","Shturman"];
       const bountyRooms=["factory","village","dock","temple","depot"];
@@ -1620,7 +1620,7 @@ const Raid = {
           speed:RNG.fr(140,160), hp:RNG.ri(180,240), color:"#ff5c5c",
           gun:g, armor:RAID_ARMORS[at].maxArmor, dr:RAID_ARMORS[at].dr, armorTier:at,
           helmetArmor:RAID_HELMETS[ht].maxArmor, helmetDr:RAID_HELMETS[ht].dr, helmetTier:ht,
-          // 悬赏 Boss 保持 T7/T8 黄色装甲条（腐蚀克制），不叠护盾层
+          // Boss 保持 T7/T8 黄色装甲条（腐蚀克制），不叠护盾层
           smart:true, creds:RNG.ri(380,850), lootLimit:7,
         }));
       }
@@ -2777,7 +2777,7 @@ const Raid = {
         c2.tokenPrice = c2.core==="chaos" ? (c2.lv>=4?24:12) : (c2.lv>=4?14:8);
         out.parts.push(c2);
       }
-      // 钥匙：黑市卖高阶 III~V，只收代币
+      // 钥匙：黑市卖高阶 III~V，只收 GP 币
       out.keys=[raidMakeKey(3), raidMakeKey(4), raidMakeKey(5)];
       for(const k of out.keys) k.tokenPrice=raidKeyDef(k.lv).token;
     }
@@ -3442,7 +3442,7 @@ const Raid = {
     return {x,y};
   },
 
-  /* ----------------------------- AI 干员 ----------------------------- */
+  /* ----------------------------- AI PMC ----------------------------- */
   _botsUpdate(dt, game){
     // 联机非房主：AI 完全由房主模拟，这里只渲染影子
     if(this.online && typeof Net!=="undefined" && !Net.isHost) return;
@@ -3458,7 +3458,7 @@ const Raid = {
         if(o===b || !o.alive || o.ghost) return;
         let enemy;
         if(o.isPlayer || o.remote) enemy=true;                              // 玩家永远是敌人
-        else if(b.bounty || o.bounty) enemy=true;                           // 悬赏目标敌对所有
+        else if(b.bounty || o.bounty) enemy=true;                           // Boss 敌对所有
         else if(b.cls==="scav" && o.cls==="scav") enemy=false;             // 流浪 Scav 之间友好
         else if(o.squadId && o.squadId===b.squadId && b.squadId) enemy=false; // 同小队不互打
         else enemy=true;
@@ -3519,7 +3519,7 @@ const Raid = {
           const sw=(b.smart?0.72:0.52)*b._strafe;
           mx+=-Math.sin(b.angle)*sw; my+=Math.cos(b.angle)*sw;
         }
-        // 子弹擦身而过就侧向急闪（精英闪得更快更远），这就是「会躲子弹」
+        // 子弹擦身而过就侧向急闪（Raider 闪得更快更远），这就是「会躲子弹」
         if(b._dodgeT>0){
           b._dodgeT-=dt;
           const ds=(b._dodgeSide||1)*(b.smart?1.65:1.15);
@@ -3541,7 +3541,7 @@ const Raid = {
             const cd = b.smart ? 0 : (b.cls==="scav" ? 0.085 : 0.02);
             this._fire(b, b.angle+M.normAngle(Math.random()-0.5)*jitter, game);
             // 修复：额外射击间隔必须放在 _fire 之后 —— _fire 开头会因 fireCd>0 直接 return，
-            // 旧顺序导致所有非精英 AI 一枪都打不出来（表现为「看见人却不开枪」）。
+            // 旧顺序导致所有非 Raider 一枪都打不出来（表现为「看见人却不开枪」）。
             if(cd>0) b.fireCd=Math.max(b.fireCd, cd);
           } else {
             // AI 会就地摸弹 —— 备弹打完自动补两个弹匣（否则永远开不了枪）
@@ -3649,7 +3649,7 @@ const Raid = {
       b.state="roam";
       b.roamT-=dt;
       if(!b.roamPt || b.roamT<=0 || M.dist(b.x,b.y,b.roamPt.x,b.roamPt.y)<40){
-        // PMC / 精英有较大概率直接朝玩家所在区域游走，而不是在固定巡逻点之间晃
+        // PMC / Raider 有较大概率直接朝玩家所在区域游走，而不是在固定巡逻点之间晃
         // 只有手里有枪的 AI 才会主动压向玩家；空手的先去找装备
         // 主动搜寻概率按索敌等级：Scav 0.30 / PMC 0.70 / Boss 0.95
         const huntP = sense.hunt;
@@ -3730,7 +3730,7 @@ const Raid = {
     const need = c.locked?2.2:1.25;
     if(b.lootT>=need){
       c.searched=true;
-      this._botLoot(b, c, b.smart?0.35:0.10);   // AI 按自身水平掷品质，精英 AI 搜到更好的货
+      this._botLoot(b, c, b.smart?0.35:0.10);   // AI 按自身水平掷品质，Raider 搜到更好的货
       b.lootTarget=null; b.lootT=0; b.lootCount++;
     }
     return true;
@@ -4261,14 +4261,14 @@ const Raid = {
         killer.shield=Math.min(killer.maxShield,(killer.shield||0)+killer.maxShield*0.18);
         this._float(killer.x,killer.y-58,"击杀回充","#8fe07a");
       }
-      /* 黑市代币改为「本局首杀必得」——
+      /* GP 币改为「本局首杀必得」——
        * 原来撤离时无条件发 1 枚，等于打不打架都有进账；现在只有开张见血才给，
        * 且整局只算一次，鼓励玩家真的去交火而不是绕开所有人。 */
       if(!killer.netKiller && !this._firstKillToken){
         this._firstKillToken=true;
         this.tokens=(this.tokens||0)+1;
-        this._float(victim.x, victim.y-72, "◆ 首杀 · 黑市代币 +1", "#c07bff");
-        this._feed("黑市", "首杀确认 · 黑市代币 +1（撤离才落袋）", "奖励", false, "info");
+        this._float(victim.x, victim.y-72, "◆ 首杀 · GP 币 +1", "#c07bff");
+        this._feed("黑市", "首杀确认 · GP 币 +1（撤离才落袋）", "奖励", false, "info");
       }
       this._feed(killer.netKiller?(killer.name||"队友"):"你", victim.name, killer.gun?killer.gun.name:"徒手", !killer.netKiller, "kill");
       const drops=this._dropFromBot(victim);
@@ -4304,12 +4304,12 @@ const Raid = {
     for(const a of (bot.inv.armors||[]).slice(0,1)) drops.push(a);
     for(const pt of (bot.inv.parts||[]).slice(0,1)) drops.push(pt);
     for(const c of (bot.inv.parts||[]).filter(p=>p.core).slice(0,1)) drops.push(c);
-    // 干员身上（尤其精英）可能揣着保险箱钥匙
+    // PMC 身上（尤其 Raider）可能揣着保险箱钥匙
     if(RNG.chance(bot.smart?0.20:0.07)){
       const KLV=[{weight:52,lv:1},{weight:26,lv:2},{weight:14,lv:3},{weight:6,lv:4},{weight:2,lv:5}];
       drops.push(raidMakeKey(KLV[RNG.weighted(KLV)].lv));
     }
-    // 悬赏目标：保底 3 件「稀有及以上」战利品（材料 / 配件 / 装备）
+    // Boss：保底 3 件「稀有及以上」战利品（材料 / 配件 / 装备）
     if(bot.bounty) for(const it of raidBountyLoot()) drops.push(it);
     const cash=Math.max(0, Math.round((bot.creds||0)*0.3));
     if(drops.length || cash>0){
@@ -4408,14 +4408,14 @@ const Raid = {
         const it=this._rollGear("pmc", this.lootLuck);
         this._collect(it, c.x, c.y);
       }
-      // 黑市代币极稀有掉落（上锁军用箱 9%，普通箱 2%）
-      // 保险箱等级越高，代币概率越高（V 级箱 26%）
+      // GP 币极稀有掉落（上锁军用箱 9%，普通箱 2%）
+      // 保险箱等级越高，GP 币概率越高（V 级箱 26%）
       if(!c.locked && RNG.chance(0.025)){
         this._collect(raidRollBoxKey(0), c.x, c.y);   // 普通箱按 0 级算 → 最多只出 I 级钥匙
       }
       if(RNG.chance(c.locked ? (0.06+0.04*(c.lockLv||1)) : 0.02)){
         this.tokens=(this.tokens||0)+1;
-        this._float(c.x, c.y-64, "◆ 黑市代币 +1", "#c07bff");
+        this._float(c.x, c.y-64, "◆ GP 币 +1", "#c07bff");
         SFX.levelup();
       }
       this.search=null;
@@ -4593,7 +4593,7 @@ const Raid = {
     for(const r of this.inv.receivers) this.stash.receivers.push(r);
     this.stash.meds=Object.assign({hemo:0,medkit:0,stim:0,surgery:0}, this.meds||{});
     this.stash.bandages=this.bandages;
-    // 撤离不再保底发代币 —— 只按带出价值与击杀数结算
+    // 撤离不再保底发 GP 币 —— 只按带出价值与击杀数结算
     // （本局首杀的那 1 枚已由 _onBotDeath 当场发放，没打到人、也没翻到货就是 0 枚）
     let lootVal=0;
     for(const w of this.inv.weapons) lootVal+=w.value||0;
@@ -4885,7 +4885,7 @@ const Raid = {
     if(p.maxShield>0) line("护盾 · "+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
       `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`);
     line("卢布", "#8fe07a", "₽ "+priceText(R.creds)+" · 撤离后结算进仓库");
-    if((R.tokens||0)>0) line("黑市代币", "#c07bff", "◆ "+R.tokens+" · 撤离才落袋");
+    if((R.tokens||0)>0) line("GP 币", "#c07bff", "◆ "+R.tokens+" · 撤离才落袋");
 
     /* 背包战利品（全部可丢，丢在脚下还能捡回来） */
     const capTxt=`武器 ${R.inv.weapons.length}/${RAID_INV_CAP.weapons} · 材料 ${R.inv.materials.length}/${RAID_INV_CAP.materials} · 钥匙 ${(R.inv.keys||[]).length}/${RAID_INV_CAP.keys}`;
@@ -5685,7 +5685,7 @@ const RenderRaid = {
       if(c.x>cam.x+vw+80||c.x<cam.x-80||c.y>cam.y+vh+80||c.y<cam.y-80) continue;
       const s=13;
       if(c.body){
-        // 干员尸体：暗红色
+        // 尸体：暗红色
         ctx.save(); ctx.translate(c.x,c.y);
         ctx.fillStyle=c.searched?"#3a2a2a":"#5a3030"; ctx.beginPath(); ctx.ellipse(0,0,s*0.9,s*0.6,0.6,0,6.28); ctx.fill();
         ctx.restore();
@@ -5727,7 +5727,7 @@ const RenderRaid = {
       ctx.beginPath(); ctx.arc(c.x,c.y,20,-Math.PI/2,-Math.PI/2+t*6.2832); ctx.stroke();
     }
 
-    // 干员
+    // PMC
     for(const o of R.ops){
       if(!o.alive) continue;
       if(o.x>cam.x+vw+60||o.x<cam.x-60||o.y>cam.y+vh+60||o.y<cam.y-60) continue;
@@ -5900,7 +5900,7 @@ const RenderRaid = {
       ctx.strokeStyle=o.remote?"rgba(126,224,138,0.9)":"rgba(79,214,255,0.85)"; ctx.lineWidth=2; ctx.stroke();
     }
     if(o.bounty){
-      // 悬赏目标：金色外环 + 脉冲星标
+      // Boss：金色外环 + 脉冲星标
       ctx.beginPath(); ctx.arc(o.x,o.y,r+6,0,6.2832); ctx.strokeStyle="#ffd23f"; ctx.lineWidth=2.5; ctx.stroke();
       ctx.fillStyle="#ffd23f"; ctx.font="bold 14px system-ui,sans-serif"; ctx.textAlign="center";
       ctx.fillText("★", o.x, o.y-r-20);
@@ -5974,7 +5974,7 @@ const RenderRaid = {
     /* --- 左上角击杀提示 --- */
     ctx.textAlign="left";
     ctx.font=mob?"bold 11px system-ui,sans-serif":"bold 13px system-ui,sans-serif";
-    // 手机端信息流从悬赏行下面开始（原来 y=58 与悬赏提示直接压在一起），
+    // 手机端信息流从 Boss 行下面开始（原来 y=58 与 Boss 提示直接压在一起），
     // 并按可用宽度截断，避免长句冲出屏幕、盖住右侧战况面板。
     let y=mob?86:18;
     const feedMax=(mob? v.w*0.58 : v.w*0.46)-30;
@@ -6010,14 +6010,14 @@ const RenderRaid = {
       y+=24;
     }
 
-    // 悬赏目标存活数（顶部居中偏下提示）
+    // Boss 存活数（顶部居中偏下提示）
     const bountyN=R.ops.filter(o=>o.alive && o.bounty).length;
     if(bountyN>0){
       ctx.textAlign="center"; ctx.font=mob?"bold 11px system-ui,sans-serif":"bold 12px system-ui,sans-serif";
       ctx.fillStyle="#ffd23f";
-      // 避免和左侧信息流叠在一起：信息流每行 24px，悬赏行随之下移
+      // 避免和左侧信息流叠在一起：信息流每行 24px，Boss 行随之下移
       const by=Math.max(mob?62:66, (mob?86:18)+Math.min(4,R.killfeed.length)*24);
-      ctx.fillText(`★ 悬赏目标 ×${bountyN}（击杀保底 3 件稀有+ 战利品）`, v.w/2, by);
+      ctx.fillText(`★ Boss ×${bountyN}（击杀保底 3 件稀有+ 战利品）`, v.w/2, by);
     }
 
     /* --- 顶部计时 --- */
@@ -6308,7 +6308,7 @@ const RenderRaid = {
     const medN2=(R.meds.hemo||0)+(R.meds.medkit||0)+(R.meds.stim||0)+(R.meds.surgery||0);
     line("医疗", `绷带 ×${R.bandages} · 医疗品 ×${medN2}`, "#ff9a9a", "H 键 / 医疗键：流血自动止血，缺血自动回血");
     line("卢布", "₽ "+R.creds, "#8fe07a", "撤离后结算进仓库");
-    if((R.tokens||0)>0) line("黑市代币", "◆ "+R.tokens, "#c07bff", "黑市专用货币 · 撤离才落袋");
+    if((R.tokens||0)>0) line("GP 币", "◆ "+R.tokens, "#c07bff", "黑市专用货币 · 撤离才落袋");
 
     // 物品栏汇总（含容量上限，超出将无法继续拾取）
     const cap = (label, n, capN, col) => {
@@ -6526,13 +6526,13 @@ UI.raidSetup=function(){
     </div>`;
   }).join('') : `<div class="empty-hint">仓库没有钥匙 · 只能开箱掉落，或在材料商店 / 黑市购买（不可合成）</div>`;
 
-  // 配装总价值 = 装备估值 + 带入卢布 + 代币折算（撤离费 / 保费仍只按装备估值）
+  // 配装总价值 = 装备估值 + 带入卢布 + GP 币折算（撤离费 / 保费仍只按装备估值）
   const gearVal=sel.w.reduce((s,uid)=>{
     const w=stash.weapons.find(x=>x.uid===uid); return s+(w?w.value:0);
   },0)+(sel.a?(stash.armors.find(x=>x.uid===sel.a)||{value:0}).value:0)
     +(sel.h?((stash.helmets||[]).find(x=>x.uid===sel.h)||{value:0}).value:0)
     +(sel.s?(stash.shields.find(x=>x.uid===sel.s)||{value:0}).value:0);
-  // 入场可携带现金 / 代币（局内直接消费，阵亡即丢）
+  // 入场可携带现金 / GP 币（局内直接消费，阵亡即丢）
   const cashIn=Math.max(0, Math.min(UI._raidCash||0, Math.floor(stash.creds||0)));
   const tokIn=Math.max(0, Math.min(UI._raidTok||0, Math.floor(stash.tokens||0)));
   const tokWorth=raidTokenWorth(tokIn);
@@ -6554,29 +6554,29 @@ UI.raidSetup=function(){
       <details class="tarkov-intro">
         <summary>塔科夫模式 · 玩法说明（点此展开 / 折叠）</summary>
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
-          与 15 名 <b style="color:#e0b84a">PMC / Scav</b> 加 2 名 <b style="color:#ffd23f">悬赏目标</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">◆</b> 的精英 AI 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
+          与 15 名 <b style="color:#e0b84a">PMC / Scav</b> 加 2 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">◆</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
           <b style="color:#ffd23f">战利品 9 阶品质</b>：${raidTierLegend()}。箱子<b style="color:#ffd76a">绝大多数是原材料与配件</b>，整枪 / 护甲只是少数——想拿到好枪，要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料，名字与品质由它们决定）。任意品质都可能刷出，但<b style="color:#8fd0ff">携带装备总估值</b>会显著抬高高阶物资的权重。<br>
           <b style="color:#ff7a3c">开局 3 分钟后</b>全图开始缓慢刷入<b>带装备的增援</b>：有的<b style="color:#e0b84a">组队推进</b>，有的会<b style="color:#ff7a3c">封锁撤离点</b>（封锁者存活时无法读条撤离）。<br>
-          <b style="color:#ff8a5a">AI 更像真人</b>：视野 <b>1000px</b>、枪声能传 <b>1200px</b>，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（精英 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#c07bff">本局第一次击杀</b>必得 <b>1 枚 ◆ 黑市代币</b>（撤离才落袋）—— 想攒代币就得真开打，绕开所有人只会两手空空。<br>
+          <b style="color:#ff8a5a">AI 更像真人</b>：视野 <b>1000px</b>、枪声能传 <b>1200px</b>，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（Raider 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#c07bff">本局第一次击杀</b>必得 <b>1 枚 ◆ GP 币</b>（撤离才落袋）—— 想攒 GP 币就得真开打，绕开所有人只会两手空空。<br>
           <b style="color:#8fe07a">只有成功撤离</b>，携带装备与战利品才写回仓库；阵亡或超时全部丢失。<br>
           <b style="color:#4fd6ff">护盾装备</b>：血条<b>上方</b>那条独立蓝色条，伤害<b>先扣盾、再扣护甲耐久、最后扣血</b>；
           <b>充能延迟</b>= 不受伤害多少秒后开始回盾，<b>充能速度</b>= 每秒回多少；<b>破盾瞬间有一小段无敌</b>，
           之后按延迟重新起盾。护盾由电池组 / 充能模块 / 延时继电器 / 承载框架 4 个配件组成，
-          带前后缀与独特加成，可工坊合成、融合升阶、箱子和精英掉落、军火超市购买。<br>
-          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与代币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">62%</b> 收你的货，远高于仓库直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#c07bff">◆ 黑市代币</b>，出售高稀有度成品枪与高级改装模块。<br>
-          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 橙装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。<b style="color:#ff9a3a">钥匙无法合成</b>，只有两条路：<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V 代币；精英干员身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
-          <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与精英干员</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · 代币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
+          带前后缀与独特加成，可工坊合成、融合升阶、箱子和 Raider 掉落、军火超市购买。<br>
+          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与 GP 币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">62%</b> 收你的货，远高于仓库直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#c07bff">◆ GP 币</b>，出售高稀有度成品枪与高级改装模块。<br>
+          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 橙装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。<b style="color:#ff9a3a">钥匙无法合成</b>，只有两条路：<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V GP 币；Raider 身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
+          <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · GP 币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
           <b style="color:#8fe07a">可互动设施</b>：<b>监狱 / 小镇 / 大坝</b>里有医疗站（回 45 血并止血）、弹药柜（补满备弹）、警报器（拉响把 AI 引过去，撤离前调虎离山）与<b style="color:#8fd0ff">泄洪闸</b>——闸门一开，水库放空，水底露出 <b style="color:#ffd23f">IV 级 + III 级保险箱</b>各一口，代价是巨响会招来一票人。<br>
           <b style="color:#62c8ff">河流与桥</b>：河道可<b>缓慢涉水</b>通过（速度只剩 45%），泡在水里超过 4.5 秒开始<b style="color:#ff9a8a">失温扣血</b>且越拖越疼——桥面（8 座，含 3 座带双黄线的大桥）完全免减速，赶路还是走桥。<b style="color:#ffd76a">背包满时</b>捡到的多余物资不会消失，会<b>掉在脚下变成发光的小包裹</b>，腾出空间后按 E 还能捡回来；<b style="color:#ff8a5a">Tab 物品栏</b>里每件战利品都有 <b>✕ 丢弃</b> 按钮，丢掉的同样落在脚下，随时能回头捡。<br>
           <b style="color:#e0b84a">撤离费按带入装备估价浮动</b>：裸装跑刀约 ₽300，带 ₽30 万的满配才需要一两千 —— 贵重装备多、护送成本高。<br>
-          <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◆ 黑市代币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。</div>
+          <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◆ GP 币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。</div>
       </details>
-      <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · 黑市代币 <b style="color:#c07bff">◆ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 护盾 ${stash.shields.length} · 配件 ${(stash.parts||[]).length} · 改装模块 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
+      <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · GP 币 <b style="color:#c07bff">◆ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 护盾 ${stash.shields.length} · 配件 ${(stash.parts||[]).length} · 改装模块 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
 
       <div class="raid-launch">
         <div class="rl-text">
           <div class="rl-title">${carryVal>0?`${gearVal>0?'已配装':'只带现金'} · 总价值 ₽${priceText(carryVal)}`:'裸装跑刀'}</div>
-          <div class="rl-sub">${carryVal>0?`装备 ₽${priceText(gearVal)}${cashVal>0?` + 带入现金 ₽${priceText(cashVal)}（卢布 ₽${priceText(cashIn)}${tokWorth>0?` · 代币 ◆${tokIn}≈₽${priceText(tokWorth)}`:''}）`:''} · `:''}撤离费按装备估值浮动：雇车撤离约 <b style="color:#ffd36a">₽${priceText(feeMin)} ~ ${priceText(feeMax)}</b> · 免费撤离点需坚守 7~10 秒</div>
+          <div class="rl-sub">${carryVal>0?`装备 ₽${priceText(gearVal)}${cashVal>0?` + 带入现金 ₽${priceText(cashVal)}（卢布 ₽${priceText(cashIn)}${tokWorth>0?` · GP 币 ◆${tokIn}≈₽${priceText(tokWorth)}`:''}）`:''} · `:''}撤离费按装备估值浮动：雇车撤离约 <b style="color:#ffd36a">₽${priceText(feeMin)} ~ ${priceText(feeMax)}</b> · 免费撤离点需坚守 7~10 秒</div>
         </div>
         <div class="rl-btns">
           <button class="btn ghost" id="btn-raid-online" style="border-color:#7ee08a66;color:#9fe0a8;">联机突袭 · 2~4 人</button>
@@ -6596,7 +6596,7 @@ UI.raidSetup=function(){
           </span>
         </div>
         <div class="rc-row">
-          <span class="rc-label">带入代币</span>
+          <span class="rc-label">带入 GP 币</span>
           <span class="rc-val" style="color:#c07bff">◆ <b>${tokIn}</b>${tokIn>0?`<span style="font-size:11px;color:#8b7ba8"> ≈ ₽${priceText(tokWorth)}</span>`:''}</span>
           <span class="rc-btns">
             <button class="btn ghost small ${tRatio<=0.02?'on':''}" data-carry="tokens:0">不带</button>
@@ -6604,8 +6604,8 @@ UI.raidSetup=function(){
             <button class="btn ghost small ${nearR(tRatio,1)?'on':''}" data-carry="tokens:1">全带</button>
           </span>
         </div>
-        <div class="rc-hint">带进图的现金可以在局内商店 / 黑市直接花（黑市只收代币）；<b style="color:#ff8a5a">阵亡即丢失</b>，撤离成功则连本局所得一起带回仓库。<br>
-          卢布与代币<b style="color:#8fd0ff">都计入配装总价值</b>（1 枚 ◆ 代币按 <b>₽${priceText(RAID_TOKEN_RATE)}</b> 折算，仅用于估值显示，不可兑换）；撤离费与保费只按<b>装备</b>估值计算。</div>
+        <div class="rc-hint">带进图的现金可以在局内商店 / 黑市直接花（黑市只收 GP 币）；<b style="color:#ff8a5a">阵亡即丢失</b>，撤离成功则连本局所得一起带回仓库。<br>
+          卢布与 GP 币<b style="color:#8fd0ff">都计入配装总价值</b>（1 枚 ◆ GP 币按 <b>₽${priceText(RAID_TOKEN_RATE)}</b> 折算，仅用于估值显示，不可兑换）；撤离费与保费只按<b>装备</b>估值计算。</div>
       </div>
 
       <div class="raid-cols" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));">
@@ -6777,7 +6777,7 @@ UI.raidResult=function(res){
         <div><span class="rr-k">存活时长</span><b>${mm}分${ss}秒</b></div>
         <div><span class="rr-k">击杀数</span><b>${res.kills}</b></div>
         ${res.success?`<div><span class="rr-k">带出卢布</span><b style="color:#8fe07a">₽ ${res.creds}</b></div>`:``}
-        ${res.success&&res.tokens?`<div><span class="rr-k">黑市代币</span><b style="color:#c07bff">◆ ${res.tokens}</b></div>`:``}
+        ${res.success&&res.tokens?`<div><span class="rr-k">GP 币</span><b style="color:#c07bff">◆ ${res.tokens}</b></div>`:``}
         ${res.success&&res.returned.materials?`<div><span class="rr-k">原材料</span><b style="color:#ffd76a">${res.returned.materials}</b></div>`:``}
       </div>
       <div class="raid-result-label">${res.success?"带出并入库：":"丢失："}</div>
@@ -6919,7 +6919,7 @@ UI.raidShop=function(opts){
     </div>`;
   }).join('');
 
-  // v0.16.0：护盾货架（每次进店刷新一批，9 个等级各一件普通品相）
+  // v0.16.0：护盾货架（每次进店刷新一批，9 个等级各一件普通品质）
   if(!UI._raidShopShields){
     UI._raidShopShields=SHIELD_TIERS.map(t=>raidMakeShield(t,0));
   }
@@ -6945,7 +6945,7 @@ UI.raidShop=function(opts){
       <div class="subtitle">ARMS SUPERMARKET · 用卢布采购装备入库，带入下一局突袭</div>
       <div class="shop-bar">
         <div class="shop-desc">这里只卖<b style="color:#ffd23f">成品</b>：枪械 / 护甲 / 头盔 / 护盾 / 配件 / 医疗品，
-          护盾按<b style="color:#4fd6ff">容量 / 充能速度 / 充能延迟</b>三数值与配件、前后缀、独特加成区分；价格随品质阶梯暴涨；<b style="color:#ff9a3a">原材料、底材、改装模块一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">改装模块完全不能合成</b>，只能从保险箱 / 精英干员掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
+          护盾按<b style="color:#4fd6ff">容量 / 充能速度 / 充能延迟</b>三数值与配件、前后缀、独特加成区分；价格随品质阶梯暴涨；<b style="color:#ff9a3a">原材料、底材、改装模块一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">改装模块完全不能合成</b>，只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
         护甲等级 T1~T9 与品质一一对应；每件装备、每个配件都自带 <b style="color:#8fe07a">1 前缀 + 1 后缀</b> 词条，买之前先看词条。仅撤离成功才会真正带走。<br>
         <span style="color:var(--muted)">品质阶梯（低 → 高）：</span>${raidTierLegend()}</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
@@ -7247,7 +7247,7 @@ UI.raidWorkshop=function(opts){
       <div class="si-meta">${body}</div>
       <div class="si-stats" style="opacity:.6;font-size:11px">估值 ₽${priceTextShort(raidCoreValue(g.core,g.lv))} · 仅掉落 / 购买</div>
     </div>`;
-  }).join('') : `<div class="empty-hint">还没有改装模块 · 只能从<b>保险箱 / 精英干员</b>身上掉落，或在<b>枪械商店 / 黑市</b>购买</div>`;
+  }).join('') : `<div class="empty-hint">还没有改装模块 · 只能从<b>保险箱 / Raider</b>身上掉落，或在<b>枪械商店 / 黑市</b>购买</div>`;
   stash.keys=stash.keys||[];
 
   /* --- 合成表：自选材料，产物品质随材料等级走 --- */
@@ -7374,14 +7374,14 @@ UI.raidWorkshop=function(opts){
       <div class="subtitle">WORKSHOP · 模块一览 / 材料合成 / 用机匣与部件组装枪械</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
-        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / 精英干员掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
+        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-ws-back">${opts.from==='title'?'返回主菜单':'前往配装大厅'}</button>
       </div>
 
       <h3 style="font-size:18px;margin:14px 0 8px;">① 模块一览 <span style="color:var(--muted);font-size:12px;font-weight:400;">不可合成 · 只能掉落或购买</span></h3>
       <div class="shop-list">${coreRows}</div>
-      <div class="hint" style="margin:2px 0 6px;color:var(--muted)">改装模块既不能用材料合成，也不能两两升阶：I~V 级只能从<b>保险箱与精英干员</b>身上掉落，或在<b>枪械商店（低阶）</b>、<b>黑市（高阶）</b>购买。作为补偿，单枚改装模块的属性增益比过去强得多（每级 +95%）。</div>
+      <div class="hint" style="margin:2px 0 6px;color:var(--muted)">改装模块既不能用材料合成，也不能两两升阶：I~V 级只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶）</b>、<b>黑市（高阶）</b>购买。作为补偿，单枚改装模块的属性增益比过去强得多（每级 +95%）。</div>
 
       <h3 style="font-size:18px;margin:18px 0 8px;">② 合成表 <span style="color:var(--muted);font-size:12px;font-weight:400;">自选材料 · 只产出机匣 / 配件，不出改装模块</span></h3>
       <div class="shop-list">${recipeRows}</div>
@@ -7563,7 +7563,7 @@ UI.raidWorkshop=function(opts){
  * · 局内商店（枪械商店 / 材料商店 / 回收超市 / 黑市）
  *   走进摊位按 E 打开；游戏不暂停（硬核：谈生意也得看后背）。
  *   · 前两家用「局内卢布」（撤离才结算，死了就白花）
- *   · 黑市用「黑市代币」——本局首杀必得 1 枚，之后靠上锁箱 / 精英 AI 掉落与撤离结算，专门换高级武器
+ *   · 黑市用「GP 币」——本局首杀必得 1 枚，之后靠上锁箱 / Raider 掉落与撤离结算，专门换高级武器
  *   · 回收超市收购价 0.62，高于仓库直售 0.42：想卖好价就得活着把货带进图
  * ========================================================================= */
 UI.raidFieldShop=function(key){
@@ -7616,7 +7616,7 @@ UI.raidFieldShop=function(key){
       : `<div class="empty-hint">货架已空 · 本局不再补货</div>`;
     if(kind==="black"){
       const parts=sh.stock.parts||[];
-      body += parts.length ? `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 高级改装模块（代币兑换）</div>` +
+      body += parts.length ? `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 高级改装模块（GP 币兑换）</div>` +
         parts.map((c,i)=>{
           const can=tokens>=(c.tokenPrice||10);
           return `<div class="si">
@@ -7628,7 +7628,7 @@ UI.raidFieldShop=function(key){
         }).join("")
         : "";
       const bkeys=sh.stock.keys||[];
-      if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级钥匙（代币兑换 · 开同级及以下保险箱）</div>` +
+      if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级钥匙（GP 币兑换 · 开同级及以下保险箱）</div>` +
         bkeys.map((k,i)=>keyCard(k,"token",i)).join("");
     } else if(kind==="gun"){
       // 改装模块不可合成 —— 枪械店常备低阶改装模块，卢布直接买
@@ -7705,7 +7705,7 @@ UI.raidFieldShop=function(key){
   }
 
   const wallet = kind==="black"
-    ? `<div class="shop-gold" style="color:#c07bff">◆ 黑市代币 ${tokens}</div><div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`
+    ? `<div class="shop-gold" style="color:#c07bff">◆ GP 币 ${tokens}</div><div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`
     : `<div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`;
 
   UI._set(`
@@ -7722,14 +7722,14 @@ UI.raidFieldShop=function(key){
         <div class="shop-desc">${kind==="rec"
           ? `回收超市按装备估值的 <b style="color:#62c8ff">${Math.round(RAID_FIELD_SELL_RATE*100)}%</b> 收购（仓库直售只有 ${Math.round(RAID_VENDOR_RATE*100)}%）。带进图卖能多赚，但要先活着走到这里。`
           : kind==="black"
-            ? `黑市只认 <b style="color:#c07bff">◆ 黑市代币</b>：<b>本局首杀必得 1 枚</b>，之后靠上锁箱与精英 AI 掉落，撤离时再按带出价值结算。这里出售 <b style="color:#ffd23f">高稀有度成品枪</b>、高级改装模块与 <b style="color:#c07bff">III~V 级保险箱钥匙</b>，卢布买不到。`
+            ? `黑市只认 <b style="color:#c07bff">◆ GP 币</b>：<b>本局首杀必得 1 枚</b>，之后靠上锁箱与 Raider 掉落，撤离时再按带出价值结算。这里出售 <b style="color:#ffd23f">高稀有度成品枪</b>、高级改装模块与 <b style="color:#c07bff">III~V 级保险箱钥匙</b>，卢布买不到。`
             : `用<b style="color:#ffd23f">局内卢布</b>交易 —— 卢布要先在局内搜刮到，撤离后才真正落袋。死了，钱和货一起没。`}</div>
         ${wallet}
         <button class="btn ghost" data-fclose="1">离开（继续突袭）</button>
       </div>
       <div class="shop-solo">
         <span class="solo-badge" style="border-color:${sh.color}66;color:${sh.color}">独立摊位</span>
-        <span>${sh.name}${kind==="gun"?"只卖成品枪":kind==="mat"?"只卖原材料 / 配件 / 医疗 / I~II 级钥匙":kind==="rec"?"只收货，不卖货":"只收 ◆ 黑市代币，换高级枪 / 改装模块 / III~V 级钥匙"} · 货架与其他摊位各算各的，不互通。</span>
+        <span>${sh.name}${kind==="gun"?"只卖成品枪":kind==="mat"?"只卖原材料 / 配件 / 医疗 / I~II 级钥匙":kind==="rec"?"只收货，不卖货":"只收 ◆ GP 币，换高级枪 / 改装模块 / III~V 级钥匙"} · 货架与其他摊位各算各的，不互通。</span>
       </div>
       <div class="shop-list">${body}</div>
       <div class="hint" style="margin-top:12px;">关闭面板后游戏继续 —— 谈生意时背后随时可能来人。</div>
@@ -7906,7 +7906,7 @@ UI.raidForge=function(opts){
     const avail=(stash.parts||[]).filter(p=>p.core && !instUids.has(p.uid));
     const poolHtml = avail.length
       ? `<div class="core-pool">可用改装模块（点一下装入首个空槽）：${avail.map(a=>`<button class="btn ghost core-chip" data-addcore="${a.uid}" style="border-color:${a.color};color:${a.color}">${a.name}</button>`).join('')}</div>`
-      : `<div class="hint" style="margin-top:6px;color:var(--muted)">仓库暂无可用改装模块 · 只能从保险箱 / 精英干员掉落，或在局内枪械商店、黑市购买</div>`;
+      : `<div class="hint" style="margin-top:6px;color:var(--muted)">仓库暂无可用改装模块 · 只能从保险箱 / Raider 掉落，或在局内枪械商店、黑市购买</div>`;
     partPanel = `
       <h3 style="font-size:18px;margin:18px 0 8px;">配件装配 <span style="color:var(--muted);font-size:12px;font-weight:400;">共 ${normalParts.length} / ${GUN_SLOTS.length} 槽位 · 配件只能用仓库实物换装</span></h3>
       <div class="forge-partbox">${rows}</div>
@@ -8377,7 +8377,7 @@ UI._onlineEnter=function(){
   UI._onlineStop();
   const sel=UI._raidSel||{w:[],a:null,h:null};
   const st=RaidStash.load();
-  // 联机也必须沿用大厅选择的钥匙/现金/代币，不能默认把仓库全部钥匙带进图。
+  // 联机也必须沿用大厅选择的钥匙/现金/GP 币，不能默认把仓库全部钥匙带进图。
   const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():(st.keys||[]).map(k=>k.uid);
   const cash=Math.max(0,Math.min(Math.round(UI._raidCash||0),Math.floor(st.creds||0)));
   const tokens=Math.max(0,Math.min(Math.round(UI._raidTok||0),Math.floor(st.tokens||0)));

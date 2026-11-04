@@ -24,7 +24,7 @@ class Player {
     this.moveX=0; this.moveY=0;
     this.meleeCd=0;
     this.gold=300;                     // 起始金币（通用货币）
-    this.eridium=0;                    // 配给券（黑市专用货币，不与金币互换）
+    this.eridium=0;                    // 美元（黑市专用货币，不与金币互换）
     this.ammo=startAmmo();
     this.weapons=[]; this.wi=0;
     this.weapons.push(generateWeapon(1,{type:"pistol",rarity:"green"}));
@@ -299,7 +299,7 @@ class Player {
     return this.addWeapon(it);
   }
 
-  // 卖出：回收 25% 价值（高品质额外给配给券）
+  // 卖出：回收 25% 价值（高品质额外给美元）
   sellWeapon(i){
     if(this.weapons.length<=1 || i<0 || i>=this.weapons.length) return 0;
     const w=this.weapons[i];

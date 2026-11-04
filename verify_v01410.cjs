@@ -524,5 +524,16 @@ const s2 = mkScav();
 Raid._botTakeItem(s2, { kind:'weapon', type:'shotgun', ilvl:6, rarity:'green', value:100, dmg:20, mag:6, reserve:30 });
 check('Scav 可以换用低阶枪', s2.gun.type === 'shotgun' ? 1 : 0, 1, 0.001);
 
+console.log('\n=== 19. 去三角洲痕迹 / 塔科夫术语 ===');
+const uiSrc = fs.readFileSync(path.join(SRC, 'ui.js'), 'utf8');
+const nameFiles = ['config', 'raid', 'ui', 'shop', 'player', 'world', 'endless', 'save', 'skills', 'items', 'shields', 'br'];
+const allNameSrc = nameFiles.map(f => fs.readFileSync(path.join(SRC, f + '.js'), 'utf8')).join('\n') + cfgSrc;
+const deltaHits = ['干员', '悬赏', '黑市代币', '配给券', '三角洲', '曼德尔', '烽火地带', '哈夫克'].filter(w => allNameSrc.includes(w));
+check('源码中无三角洲术语', deltaHits.length, 0, 0.001);
+check('Boss 使用塔科夫名称', /Reshala/.test(raidSrc) && /Killa/.test(raidSrc) && /Shturman/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('选角文案为「选择你的 PMC」', /选择你的 PMC/.test(uiSrc) ? 1 : 0, 1, 0.001);
+check('精英 AI 改称 Raider', /Raider/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('货币文案为 GP 币 / 美元', /GP 币/.test(raidSrc) && !/黑市代币|配给券/.test(allNameSrc) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

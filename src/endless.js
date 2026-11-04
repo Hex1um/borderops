@@ -4,7 +4,7 @@
  * 与战役模式共用战斗系统，但不设区域、不设终点：
  *   · 波次制：清空当前波 → 短暂间歇 → 下一波；
  *   · 每波怪物生命 +28%、伤害 +10%、数量 +1.1、等级随波次抬升；
- *   · 每 5 波刷一个首领，掉落与配给券同步提高；
+ *   · 每 5 波刷一个首领，掉落与美元同步提高；
  *   · 波次奖励随 wave 线性增长，越往后越撑不住 —— 这就是玩法本身。
  * ========================================================================= */
 
@@ -130,7 +130,7 @@ class EndlessWorld {
     }
     if(this.bossWave){
       pl.eridium += ENDLESS.eriPerBoss;
-      game.addFloatText(pl.x, pl.y-58, "+"+ENDLESS.eriPerBoss+" 配给券", "#b061ff", 13);
+      game.addFloatText(pl.x, pl.y-58, "+"+ENDLESS.eriPerBoss+" 美元", "#b061ff", 13);
       game.toast(`第 ${this.wave} 波首领已击破`);
     }
     this.bestWave=Math.max(this.bestWave, this.wave);

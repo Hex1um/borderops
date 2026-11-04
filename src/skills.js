@@ -1,7 +1,7 @@
 /* =========================================================================
- * skills.js — 四类干员的训练树
+ * skills.js — 四类PMC的训练树
  * 技能名与描述改为现实战术训练；内部 id 与 mods 字段保持兼容。
- * 每干员 6 项可加点训练（3 层 x 2 支），主动战术动作见 CLASSES[].ability
+ * 每PMC 6 项可加点训练（3 层 x 2 支），主动战术动作见 CLASSES[].ability
  * ========================================================================= */
 
 // 每点修正结构（与 Player.computeStats 解析一致）
@@ -48,7 +48,7 @@ const SKILLS = {
   ],
 };
 
-// 计算某干员当前加点累计 mods
+// 计算某PMC当前加点累计 mods
 function computeSkillMods(classId, skillsMap){
   const mods = emptyMods();
   const list = SKILLS[classId]||[];
