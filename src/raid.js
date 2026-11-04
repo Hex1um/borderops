@@ -369,44 +369,60 @@ const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","a
 
 /* ----------------------------- 具名装备 -----------------------------
  * 高档位除了随机改装枪甲之外，还会掉落现实型号 + 出厂改装方案的「具名装备」：
- * 词条全部手工配置，同档数值远高于随机生成，名字固定（如「AK-74N 战术型」）。
+ * 词条全部手工配置，同档数值远高于随机生成，名字固定（如「AK-74N 5.45×39 战术型」）。
  * 移除制式/定制命名与急救效率、额外弹丸、特殊弹触发、溅射等超现实词条。 */
+/* AI 索敌感知分级：Scav 迟钝、PMC 警觉、Boss（悬赏目标）提前锁定。
+ * 只影响「发现目标」这一段；射击精度 / 走位 / 包扎仍按 smart 与 cls 原逻辑结算。
+ * 旧值（v0.16.0 全档统一）：视距 1000、视线记忆 7.0s、无反应延迟、
+ *   主动搜寻 smart 0.88 / pmc 0.74 / scav 0.56、枪声听距系数 1.0。 */
+const RAID_AI_SENSE = {
+  scav: { sight:520,  memory:2.5, react:0.55, hunt:0.30, hear:0.65 },
+  pmc:  { sight:900,  memory:5.5, react:0.22, hunt:0.70, hear:1.00 },
+  boss: { sight:1250, memory:9.0, react:0.06, hunt:0.95, hear:1.40 },
+};
+function raidAISense(b){
+  if(!b) return RAID_AI_SENSE.scav;
+  if(b.bounty) return RAID_AI_SENSE.boss;                    // 悬赏目标 = Boss
+  if(b.cls==="pmc" || b.smart) return RAID_AI_SENSE.pmc;   // PMC 与精英 Scav 同级
+  return RAID_AI_SENSE.scav;
+}
+
 const RAID_UNIQUES = [
   // —— 枪械：现实型号 + 出厂改装方案 ——
-  { id:"u_dawn", name:"AK-74N 战术型", kind:"weapon", type:"rifle", tier:5, elem:"fire", ilvl:30,
+  { id:"u_dawn", name:"AK-74N 5.45×39 战术型", kind:"weapon", type:"rifle", tier:5, elem:"fire", ilvl:30,
     perk:"军规冷锻枪管 · 枪口动能 +30%，理论射速 +14%",
     affixes:[ { kind:"prefix", nm:"冷锻枪管", mods:[{stat:"dmgPct",value:30},{stat:"projSpeed",value:20}] },
               { kind:"suffix", nm:"·军用批次", mods:[{stat:"fireRatePct",value:14},{stat:"magPct",value:30}] } ] },
-  { id:"u_humming", name:"PP-19-01 短突型", kind:"weapon", type:"pistol", tier:5, elem:"none", ilvl:28,
+  { id:"u_humming", name:"PP-19-01 Vityaz 9×19 短突型", kind:"weapon", type:"pistol", tier:5, elem:"none", ilvl:28,
     perk:"轻量枪机 · 理论射速 +48%，换弹速度 +30%",
     affixes:[ { kind:"prefix", nm:"轻量枪机", mods:[{stat:"fireRatePct",value:48}] },
               { kind:"suffix", nm:"·快拔套", mods:[{stat:"magPct",value:35},{stat:"reloadPct",value:30}] } ] },
-  { id:"u_butcher", name:"Saiga-12 破门型", kind:"weapon", type:"shotgun", tier:5, elem:"none", ilvl:30,
+  { id:"u_butcher", name:"Saiga-12K 12/70 破门型", kind:"weapon", type:"shotgun", tier:5, elem:"none", ilvl:30,
     perk:"短管鹿弹配置 · 枪口动能 +46%，弹头初速 +18%",
     affixes:[ { kind:"prefix", nm:"加重枪管", mods:[{stat:"dmgPct",value:46}] },
               { kind:"suffix", nm:"·高初速", mods:[{stat:"projSpeed",value:18},{stat:"recoil",value:20}] } ] },
-  { id:"u_plague", name:"MP5SD 消音型", kind:"weapon", type:"smg", tier:6, elem:"cryo", ilvl:36,
+  { id:"u_plague", name:"MP5 9×19 消音型", kind:"weapon", type:"smg", tier:6, elem:"cryo", ilvl:36,
     perk:"一体消音器 + 亚音速弹 · 射击精度 +35%，有效射程 +20%",
     affixes:[ { kind:"prefix", nm:"精磨枪管", mods:[{stat:"accPct",value:35},{stat:"range",value:20}] },
               { kind:"suffix", nm:"·亚音速", mods:[{stat:"fireRatePct",value:16},{stat:"magPct",value:40}] } ] },
-  { id:"u_fox", name:"HK416 侦察型", kind:"weapon", type:"rifle", tier:6, elem:"none", ilvl:36,
+  { id:"u_fox", name:"HK 416A5 5.56×45 侦察型", kind:"weapon", type:"rifle", tier:6, elem:"none", ilvl:36,
     perk:"浮置枪管 + 光学座 · 射击精度 +40%，有效射程 +30%",
     affixes:[ { kind:"prefix", nm:"浮置枪管", mods:[{stat:"accPct",value:40},{stat:"range",value:30}] },
               { kind:"suffix", nm:"·归零", mods:[{stat:"dmgPct",value:22},{stat:"projSpeed",value:35}] } ] },
-  { id:"u_guillotine", name:"SV-98 精确型", kind:"weapon", type:"sniper", tier:7, elem:"shock", ilvl:42,
+  { id:"u_guillotine", name:"SV-98 7.62×54R 精确型", kind:"weapon", type:"sniper", tier:7, elem:"shock", ilvl:42,
     perk:"比赛级枪管 + 钢芯弹 · 要害命中 +20%，要害伤害 +80%",
     affixes:[ { kind:"prefix", nm:"比赛级膛线", mods:[{stat:"dmgPct",value:55},{stat:"critChance",value:20}] },
               { kind:"suffix", nm:"·精修", mods:[{stat:"critDmg",value:80}] } ] },
-  { id:"u_thousand", name:"RPK-16 轻机枪型", kind:"weapon", type:"rifle", tier:7, elem:"radiation", ilvl:42,
+  { id:"u_thousand", name:"RPK-16 5.45×39 轻机枪型", kind:"weapon", type:"rifle", tier:7, elem:"radiation", ilvl:42,
     perk:"重枪管 + 弹鼓 · 枪口动能 +35%，弹匣容量 +50%",
     affixes:[ { kind:"prefix", nm:"重枪管", mods:[{stat:"dmgPct",value:35},{stat:"magPct",value:50}] },
               { kind:"suffix", nm:"·大容量", mods:[{stat:"fireRatePct",value:12},{stat:"reloadPct",value:25}] } ] },
-  { id:"u_thor", name:"ORSIS T-5000 远程型", kind:"weapon", type:"sniper", tier:8, elem:"shock", ilvl:48,
+  { id:"u_thor", name:"ORSIS T-5000 .338 LM 远程型", kind:"weapon", type:"sniper", tier:8, elem:"shock", ilvl:48,
     perk:"加长枪管 + 高膛压装药 · 枪口动能 +70%，要害伤害 +100%",
     affixes:[ { kind:"prefix", nm:"高膛压装药", mods:[{stat:"dmgPct",value:70},{stat:"critChance",value:15}] },
               { kind:"suffix", nm:"·精选批次", mods:[{stat:"critDmg",value:100},{stat:"projSpeed",value:40}] } ] },
-  { id:"u_tsunami", name:"KS-23 重型霰弹型", kind:"weapon", type:"shotgun", tier:8, elem:"none", ilvl:48,
-    perk:"23mm 重弹头 · 枪口动能 +65%，后坐控制 +30%",
+  { id:"u_tsunami", name:"KS-23M 23×75 重型霰弹型", kind:"weapon", type:"shotgun", tier:8, elem:"none", ilvl:48,
+    perk:"23×75 重弹头 · 枪口动能 +65%，后坐控制 +30%",
     affixes:[ { kind:"prefix", nm:"加重枪管", mods:[{stat:"dmgPct",value:65},{stat:"recoil",value:30}] },
               { kind:"suffix", nm:"·低后坐", mods:[{stat:"dmgPct",value:35}] } ] },
   // —— 护甲 / 头盔：现实装备型号 ——
@@ -3393,6 +3409,7 @@ const Raid = {
     let p=this.player;
     for(const b of this.ops){
       if(b.isPlayer||b.remote||b.ghost||!b.alive) continue;
+      const sense=raidAISense(b);
       // 联机房主：AI 会在「自己 + 所有远端玩家」里挑最近的可见目标
       // AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
       let tgt=p, d=M.dist(b.x,b.y,p.x,p.y);
@@ -3406,8 +3423,8 @@ const Raid = {
         else enemy=true;
         if(!enemy) return;
         const dd=M.dist(b.x,b.y,o.x,o.y);
-        // AI 之间也不再「视而不见」（720 → 1000），玩家在 720px 内一律优先当目标
-        const sight = (o.isPlayer||o.remote) ? 1000 : 1000;
+        // 视距按 Scav / PMC / Boss 分级；玩家在近身范围内仍强行抢目标
+        const sight = sense.sight;
         const pri = (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;   // 玩家近身时强行抢目标
         if((dd+pri)<d && dd<sight && this._los(b.x,b.y,o.x,o.y)){ d=dd; tgt=o; }
       };
@@ -3415,10 +3432,13 @@ const Raid = {
       if(this.online){ for(const o of this.ops){ if(o.isPlayer||o.remote) _consider(o); } }
       for(const o of this.ops){ if(!o.isPlayer && !o.remote) _consider(o); }
       if(!tgt.alive) tgt=p;
-      // 视野 840 → 1000，记忆时间 4.5 → 7 秒（更早发现、更死咬不放）
+      /* 索敌分级：Scav 视距短、反应慢、忘得快；PMC 更警觉；Boss 几乎即时锁定。
+       * _detectT 累积「持续看见」的时间，视线中断会快速衰减；已警觉的 AI 重新发现目标时不再重复反应延迟。 */
       const grace = this.spawnGrace>0 && (tgt.isPlayer || tgt.remote);
-      const canSee = tgt.alive && d<1000 && !grace && this._los(b.x,b.y,tgt.x,tgt.y);
-      if(canSee) b.lastSeen={ x:tgt.x, y:tgt.y, t:7.0 };   // 记住最后位置，丢失视线也不马上忘
+      const seenNow = tgt.alive && d<sense.sight && !grace && this._los(b.x,b.y,tgt.x,tgt.y);
+      b._detectT = seenNow ? (b._detectT||0)+dt : Math.max(0,(b._detectT||0)-dt*1.5);
+      const canSee = seenNow && (b._detectT>=sense.react || !!b.lastSeen);
+      if(canSee) b.lastSeen={ x:tgt.x, y:tgt.y, t:sense.memory };   // 记住最后位置，丢失视线也不马上忘
 
       /* 所有 AI 都会用医疗品 —— 血量低于阈值且暂时脱离火线时自行包扎 */
       if(b.medT>0){
@@ -3590,8 +3610,8 @@ const Raid = {
       if(!b.roamPt || b.roamT<=0 || M.dist(b.x,b.y,b.roamPt.x,b.roamPt.y)<40){
         // PMC / 精英有较大概率直接朝玩家所在区域游走，而不是在固定巡逻点之间晃
         // 只有手里有枪的 AI 才会主动压向玩家；空手的先去找装备
-        // 带枪 AI 主动压向玩家的概率大幅提高（精英 72% / PMC 58% / Scav 36%）
-        const huntP = b.smart?0.88 : (b.cls==="pmc"?0.74:0.56);   // 非悬赏 AI 也主动找上门
+        // 主动搜寻概率按索敌等级：Scav 0.30 / PMC 0.70 / Boss 0.95
+        const huntP = sense.hunt;
         const hunts = b.gun && tgt.alive && RNG.chance(huntP);
         const pt = hunts
           ? [tgt.x+RNG.fr(-560,560), tgt.y+RNG.fr(-560,560)]
@@ -3783,7 +3803,7 @@ const Raid = {
       if(b.state==="engage" || b.state==="heal") continue;
       if(!b.gun) continue;            // 空手的 AI 忙着找枪，听到枪声也不去送
       if(this.online && !Net.isHost) continue;
-      if(M.dist(b.x,b.y,x,y) > r) continue;
+      if(M.dist(b.x,b.y,x,y) > r*raidAISense(b).hear) continue;   // 枪声听距按索敌等级缩放
       // 已经有更近的线索就不覆盖
       if(b.investigate && b.investigate.t>2.5) continue;
       b.investigate={ x:x+RNG.fr(-80,80), y:y+RNG.fr(-80,80), t:RNG.fr(7,12) };   // 听到动静后追得更久
@@ -4085,7 +4105,7 @@ const Raid = {
       /* 被击中立刻锁定攻击者（转身 + 摸过去还击）。
        * 玩家 / 远端玩家打它、或 AI 互殴都生效；友善关系由索敌逻辑决定，这里只负责「注意到」攻击者 */
       if(attacker && attacker!==target && !attacker.ghost){
-        target.lastSeen={ x:attacker.x, y:attacker.y, t:5.5 };
+        target.lastSeen={ x:attacker.x, y:attacker.y, t:raidAISense(target).memory };
         target.investigate={ x:attacker.x, y:attacker.y, t:Math.max((target.investigate&&target.investigate.t)||0, 6.5) };
       }
       this._float(target.x, target.y-24, "-"+Math.round(d), dmgCol);
@@ -7766,7 +7786,7 @@ UI.raidForge=function(opts){
     const on = w.uid===UI._forgeSel;
     const col=raidGunColor(w);
     const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:w.cat;
-    const elem=w.element&&w.element!=="none"?(AMMO_TYPES[w.element]?AMMO_TYPES[w.element].name:"特种弹"):"FMJ 全被甲弹";
+    const elem=w.element&&w.element!=="none"?(AMMO_TYPES[w.element]?AMMO_TYPES[w.element].name:"特种弹"):AMMO_TYPES.none.name;
     return `<div class="shop-item ${on?'sel':''}" data-pick="${w.uid}" style="border-left-color:${col};cursor:pointer;${on?('box-shadow:inset 0 0 0 2px '+col+';'):''}">
       <div class="si-thumb">${gunSvg(w,46)}</div>
       <div class="si-name" style="color:${col}">${w.name}</div>

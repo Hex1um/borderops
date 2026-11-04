@@ -1,13 +1,13 @@
 /* =========================================================================
  * config.js — 全局常量与平衡数值
  * 边境行动：弹药 / 枪械成色 / 配件词缀 / 枪型 / 干员 定义
- * 移除全部超现实与制式词条，改为拟真军械体系。
+ * 移除全部超现实与制式词条，改为拟真军械体系；v0.16.1 起弹药按塔科夫口径 + 弹种代号命名。
  *   内部键名（element / mayhem / elemPct 等）一律保留，仅语义与显示改名，
  *   保证旧 localStorage 存档、联机快照与拍卖行数据可直接读取。
  * ========================================================================= */
 
 const CFG = {
-  version: "0.16.0",
+  version: "0.16.1",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -45,13 +45,13 @@ const CFG = {
  * status 状态在 HUD 与头顶标签上的名称（拟真化后的元素状态名）
  */
 const AMMO_TYPES = {
-  none:      { id:"none",      name:"FMJ 全被甲弹", short:"FMJ", color:"#cfcabb", pen:12, dot:0, strong:null,     status:"",         mult:{flesh:1.00,shield:0.95,armor:0.80}, desc:"铅芯全被甲，穿深低，对软目标停止作用一般" },
-  fire:      { id:"fire",      name:"T 曳光弹",      short:"T",   color:"#d97a3c", pen:14, dot:6, strong:"flesh",  status:"引燃",     mult:{flesh:1.20,shield:0.90,armor:0.80}, desc:"曳光剂附着引燃，命中后持续燃烧；对护盾与插板乏力" },
-  shock:     { id:"shock",     name:"AP 钢芯穿甲弹", short:"AP",  color:"#9fb0bd", pen:36, dot:0, strong:"armor",  status:"钝击失能", mult:{flesh:0.90,shield:1.30,armor:1.45}, desc:"淬火钢芯，插板穿深高；冲击造成短暂失能并额外削护盾" },
-  corrosive: { id:"corrosive", name:"HP 空尖弹",     short:"HP",  color:"#8fae72", pen:5,  dot:6, strong:"flesh",  status:"撕裂",     mult:{flesh:1.55,shield:1.10,armor:0.42}, desc:"扩张弹头撕裂创口、啃噬软质防护，几乎打不穿硬质插板" },
-  cryo:      { id:"cryo",      name:"US 亚音速弹",   short:"US",  color:"#7fa2b8", pen:11, dot:0, strong:"flesh",  status:"迟滞",     mult:{flesh:1.15,shield:0.95,armor:0.78}, desc:"配重亚音速弹头，枪声传播距离短；命中失衡造成短暂迟滞" },
-  explosive: { id:"explosive", name:"HE 破片弹",     short:"HE",  color:"#c2a05a", pen:6,  dot:0, strong:null,     status:"",         mult:{flesh:1.30,shield:1.15,armor:0.95}, desc:"仅榴弹发射器使用的破片战斗部，溅射半径有限" },
-  radiation: { id:"radiation", name:"BT 穿甲曳光弹", short:"BT",  color:"#b6b073", pen:30, dot:5, strong:"armor",  status:"跳弹",     mult:{flesh:1.05,shield:1.05,armor:1.30}, desc:"钢芯 + 曳光剂，穿透后的跳弹可伤及附近目标" },
+  none:      { id:"none",      name:"5.45×39mm PS gs",  short:"PS",   color:"#cfcabb", pen:12, dot:0, strong:null,     status:"",         mult:{flesh:1.00,shield:0.95,armor:0.80}, desc:"7N6 钢芯全被甲弹，AK-74 系列制式弹，穿深低、对软目标停止作用一般" },
+  fire:      { id:"fire",      name:"5.45×39mm T gs",   short:"T",    color:"#d97a3c", pen:14, dot:6, strong:"flesh",  status:"引燃",     mult:{flesh:1.20,shield:0.90,armor:0.80}, desc:"T-45 曳光弹，弹尾曳光剂便于修正弹道，命中可引燃；对护盾与插板乏力" },
+  shock:     { id:"shock",     name:"7.62×39mm BP gzh", short:"BP",   color:"#9fb0bd", pen:36, dot:0, strong:"armor",  status:"钝击失能", mult:{flesh:0.90,shield:1.30,armor:1.45}, desc:"7N23 淬火钢芯穿甲弹，对硬质插板穿深高；冲击造成短暂失能并额外削护盾" },
+  corrosive: { id:"corrosive", name:"9×19mm RIP",       short:"RIP",  color:"#8fae72", pen:5,  dot:6, strong:"flesh",  status:"撕裂",     mult:{flesh:1.55,shield:1.10,armor:0.42}, desc:"RIP 扩张弹头撕裂创口、啃噬软质防护，几乎打不穿硬质插板" },
+  cryo:      { id:"cryo",      name:"9×39mm SP-6 gs",   short:"SP-6", color:"#7fa2b8", pen:11, dot:0, strong:"flesh",  status:"迟滞",     mult:{flesh:1.15,shield:0.95,armor:0.78}, desc:"SP-6 亚音速穿甲弹，配消音器枪声传播距离短；命中失衡造成短暂迟滞" },
+  explosive: { id:"explosive", name:"40mm VOG-25",      short:"VOG",  color:"#c2a05a", pen:6,  dot:0, strong:null,     status:"",         mult:{flesh:1.30,shield:1.15,armor:0.95}, desc:"GP-25 系列用破片榴弹战斗部，溅射半径有限" },
+  radiation: { id:"radiation", name:"5.45×39mm BT gs",  short:"BT",   color:"#b6b073", pen:30, dot:5, strong:"armor",  status:"跳弹",     mult:{flesh:1.05,shield:1.05,armor:1.30}, desc:"7N24 钢芯穿甲曳光弹，兼顾穿深与弹道观察，穿透后跳弹可伤及附近目标" },
 };
 // ELEMENTS 作为兼容别名保留 —— 21 个脚本、旧 localStorage 存档与联机快照仍按 element 字段读写。
 const ELEMENTS = AMMO_TYPES;
@@ -395,17 +395,17 @@ const MANUFACTURERS = {
 // 具名池全部改为现实枪械型号
 const WEAPON_TYPES = {
   pistol:  { name:"手枪",   baseDmg:11, fireRate:3.2, accuracy:0.92, mag:12, reload:1.1, speed:760, pellets:1, ammoType:"pistol",  spread:0.05, auto:false,
-             named:["PM","GSh-18","P226","MP-443","USP .45","P-07"] },
+             named:["PM","GSh-18","MP-443 Grach","PB","PL-15","Glock 17"] },
   smg:     { name:"冲锋枪", baseDmg:6,  fireRate:11,  accuracy:0.82, mag:30, reload:1.5, speed:720, pellets:1, ammoType:"smg",     spread:0.10, auto:true,
-             named:["PP-19-01","MP5A3","MP7A1","UMP .45","PP-9 Klin","P90"] },
+             named:["PP-19-01 Vityaz","MP5","MP7A1","PP-9 Klin","PPSh-41","FN P90"] },
   shotgun: { name:"霰弹枪", baseDmg:7,  fireRate:1.8, accuracy:0.65, mag:6,  reload:2.2, speed:680, pellets:8, ammoType:"shotgun", spread:0.22, auto:false,
-             named:["Saiga-12","TOZ-106","MP-153","M870","SPAS-12","KS-23"] },
+             named:["Saiga-12","TOZ-106","MP-153","MP-155","M870","KS-23M"] },
   rifle:   { name:"步枪", baseDmg:16, fireRate:6.0, accuracy:0.9,  mag:24, reload:1.8, speed:820, pellets:1, ammoType:"rifle",   spread:0.06, auto:true,
-             named:["AK-74N","AK-103","AKM","M4A1","HK416","FN SCAR-L"] },
+             named:["AK-74N","AK-103","AKM","M4A1","HK 416A5","ADAR 2-15"] },
   sniper:  { name:"狙击枪", baseDmg:55, fireRate:1.1, accuracy:0.99, mag:5,  reload:2.0, speed:1100,pellets:1, ammoType:"sniper",  spread:0.01, auto:false, charge:true,
-             named:["SVD-S","SV-98","VSS Vintorez","M24","DVL-10","ORSIS T-5000"] },
+             named:["SVD-S","SV-98","VSS Vintorez","M700","DVL-10","ORSIS T-5000"] },
   launcher:{ name:"榴弹发射器", baseDmg:70, fireRate:0.9, accuracy:0.88, mag:4,  reload:2.6, speed:300, pellets:1, ammoType:"launcher",spread:0.04, auto:false, splash:120,
-             named:["GP-25","GM-94","RG-6","M203","AGS-17","RGM-40"] },
+             named:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","FN40GL","M32A1 MSGL"] },
 };
 
 /* ----------------------------- 干员 ----------------------------- */

@@ -464,5 +464,27 @@ check('引燃 DOT 也重置充能延迟', /shieldTimer=o\.shieldDelay/.test(raid
 check('server.js 白名单含 sm/iv', /sm:num/.test(srvSrc) && /iv:num/.test(srvSrc) ? 1 : 0, 1, 0.001);
 check('net.js 影子同步 sm/iv', /b\.sm/.test(netSrc) && /b\.iv/.test(netSrc) ? 1 : 0, 1, 0.001);
 
+
+console.log('\n=== 17. AI 索敌分级 / 塔科夫制式命名 ===');
+const cfgSrc = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
+const AI_SENSE = G('RAID_AI_SENSE'), senseOf = G('raidAISense');
+check('Scav 视距 520', AI_SENSE.scav.sight, 520, 0.001);
+check('PMC 视距 900', AI_SENSE.pmc.sight, 900, 0.001);
+check('Boss 视距 1250', AI_SENSE.boss.sight, 1250, 0.001);
+check('Scav 反应慢于 PMC', AI_SENSE.scav.react > AI_SENSE.pmc.react ? 1 : 0, 1, 0.001);
+check('PMC 反应慢于 Boss', AI_SENSE.pmc.react > AI_SENSE.boss.react ? 1 : 0, 1, 0.001);
+check('Scav 视线记忆短于 PMC', AI_SENSE.scav.memory < AI_SENSE.pmc.memory ? 1 : 0, 1, 0.001);
+check('Boss 视线记忆最长', AI_SENSE.boss.memory > AI_SENSE.pmc.memory ? 1 : 0, 1, 0.001);
+check('Boss 主动搜寻最积极', AI_SENSE.boss.hunt > AI_SENSE.pmc.hunt ? 1 : 0, 1, 0.001);
+check('Boss 枪声听距最远', AI_SENSE.boss.hear > AI_SENSE.pmc.hear ? 1 : 0, 1, 0.001);
+check('普通 Scav -> scav 档', senseOf({cls:'scav'}) === AI_SENSE.scav ? 1 : 0, 1, 0.001);
+check('精英 Scav -> pmc 档', senseOf({cls:'scav',smart:true}) === AI_SENSE.pmc ? 1 : 0, 1, 0.001);
+check('PMC -> pmc 档', senseOf({cls:'pmc'}) === AI_SENSE.pmc ? 1 : 0, 1, 0.001);
+check('悬赏目标 -> boss 档', senseOf({cls:'pmc',bounty:true}) === AI_SENSE.boss ? 1 : 0, 1, 0.001);
+check('7 种弹药均带塔科夫口径', Object.values(ELEMENTS).every(e => /^(5\.45|7\.62|9×|40mm)/.test(e.name)) ? 1 : 0, 1, 0.001);
+check('弹种代号已塔科夫化', Object.values(ELEMENTS).every(e => /^(PS|T|BP|RIP|SP-6|VOG|BT)$/.test(e.short)) ? 1 : 0, 1, 0.001);
+check('枪型池无旧型号残留', /"P226"|"USP \.45"|"P-07"|"UMP \.45"|"SPAS-12"|"M24"|"FN SCAR-L"/.test(cfgSrc) ? 1 : 0, 0, 0.001);
+check('旧弹种名已清除', /FMJ 全被甲弹|T 曳光弹|AP 钢芯穿甲弹/.test(cfgSrc) ? 1 : 0, 0, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);
