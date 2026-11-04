@@ -21,16 +21,15 @@ class Player {
     this.abilityBaseCD=C.ability.cd;
     this.abilityName=C.ability.name;
     this.abilityCD=0; this.abilityActive=0;
-    this.statusEffects=[];
     this.moveX=0; this.moveY=0;
     this.meleeCd=0;
     this.gold=300;                     // 起始金币（通用货币）
-    this.eridium=0;                    // 镒矿（黑市专用货币，不与金币互换）
+    this.eridium=0;                    // 配给券（黑市专用货币，不与金币互换）
     this.ammo=startAmmo();
     this.weapons=[]; this.wi=0;
     this.weapons.push(generateWeapon(1,{type:"pistol",rarity:"green"}));
     this.weapons.push(generateWeapon(1,{type:"smg",rarity:"green"}));
-    /* ---- 护盾 / 圣物（装备槽） ---- */
+    /* ---- 护甲 / 随身装备（装备槽） ---- */
     this.shields=[]; this.shieldIdx=-1;
     this.relics=[];  this.relicIdx=-1;
     this.shields.push(generateShield(1,{rarity:"white"}));
@@ -38,20 +37,20 @@ class Player {
     this._shieldBrokenFx=0;
     this._leveledUp=false;
     this.iframe=0;                     // 受击无敌帧（防被围殴瞬秒）
-    /* ---- 混乱 / 转生 ---- */
-    this.souls=0;                      // 灵魂（转生货币，跨转生保留）
-    this.rebirths=0;                   // 累计转生次数
+    /* ---- 改装 / 重新部署 ---- */
+    this.souls=0;                      // 功勋（重新部署货币，跨重新部署保留）
+    this.rebirths=0;                   // 累计重新部署次数
     this.perm={ hp:0, dmg:0, mf:0, gf:0, soul:0, drop:0 };  // 永久升级等级
-    this.mayhem=0;                     // 当前混乱等级
+    this.mayhem=0;                     // 当前改装等级
     this.mayhemUnlocked=false;         // 通关后解锁
-    this.mayhemCapBonus=0;             // 灵魂购买的额外上限次数
+    this.mayhemCapBonus=0;             // 功勋购买的额外上限次数
     this.computeStats();
     this.hp=this.stats.maxHP; this.shield=this.stats.maxShield;
     this.bounds=null;
   }
 
   get activeWeapon(){ return this.weapons[this.wi]; }
-  get mf(){ return this.stats.mf; }     // 魔法寻找（影响高品质权重）
+  get mf(){ return this.stats.mf; }     // 搜集效率（影响高品质权重）
   get shieldItem(){ return this.shields[this.shieldIdx] || null; }
   get relicItem(){ return this.relics[this.relicIdx] || null; }
 
@@ -70,15 +69,15 @@ class Player {
     const m=computeSkillMods(this.classId,this.skills);
     const pHp=this.permVal("hp"), pDmg=this.permVal("dmg"), pMf=this.permVal("mf"),
           pGf=this.permVal("gf"), pDrop=this.permVal("drop");
-    // 等级成长：生命每级 +6%、护盾每级 +5%，否则高混乱下永远是 90 血必死
+    // 等级成长：生命每级 +6%、护甲每级 +5%，否则高改装下永远是 90 血必死
     const lvHp = 1 + (this.level-1)*0.06;
     const lvSh = 1 + (this.level-1)*0.05;
 
-    /* ---- 护盾 / 圣物 ---- */
+    /* ---- 护甲 / 随身装备 ---- */
     const sh = this.shieldItem, rl = this.relicItem;
     const rm = relicModMap(rl);
     const shieldCap = sh ? sh.capacity : 0;
-    // 护盾不再是「职业白送、脱战自动满」：职业只提供薄薄一层缓冲，主体来自装备
+    // 护甲不再是「职业白送、脱战自动满」：职业只提供薄薄一层缓冲，主体来自装备
     const maxShield = Math.round(((C.shield*0.32 + shieldCap) * lvSh) * (1+(rm.shieldPct||0)/100));
     const shieldDelay = Math.max(0.8, (sh ? sh.delay : CFG.player.shieldDelay) - (rm.shieldDelay||0));
     const shieldRate  = sh ? sh.rate : CFG.player.shieldRegen*0.35;
@@ -96,16 +95,14 @@ class Player {
       critDmgAdd: (rm.critDmg||0),
       magMul: m.magMul * (1+(rm.magPct||0)/100),
       reloadMul: m.reloadMul / (1+(rm.reloadPct||0)/100),
-      lifesteal: m.lifesteal + (rm.lifesteal||0)/100,
       lootMul: m.lootMul,
-      mf: Math.round((m.lootMul-1)*120 + pMf + (rm.mfFlat||0)),   // 掉落加成 + 转生寻宝 + 圣物
+      mf: Math.round((m.lootMul-1)*120 + pMf + (rm.mfFlat||0)),   // 掉落加成 + 重新部署寻宝 + 随身装备
       goldMul: (m.lootMul-1)*0.8 + pGf/100 + (rm.goldPct||0)/100,
       dropBonus: pDrop/100,
       abilityPower: m.abilityPower,
       abilityCDMul: m.abilityCDMul * (1-Math.min(0.4,(rm.abilityCD||0)/100)),
       xpMul: m.xpMul * (1+(rm.xpPct||0)/100),
       meleeMul: m.meleeMul,
-      statusMul: m.statusMul,
       accuracyMul: m.accuracyMul,
       shieldRegen: shieldRate,
     };
@@ -118,20 +115,18 @@ class Player {
     let mul=this.stats.damageMul;
     if(this.abilityActive>0&&this.abilityType==="bloodlust") mul*=1.6;
     if(this.abilityActive>0&&this.abilityType==="overload") mul*=1.3;
-    // 圣物/护盾：满盾增幅
+    // 随身装备 / 防弹插板：贴合剪裁（完整贴合时防护与稳定更好）
     const sh=this.shieldItem;
     if(sh && sh.effect==="amp" && this.stats.maxShield>0 && this.shield>=this.stats.maxShield-0.01){
       mul*=1+(sh.effectVal||0)/100;
     }
     return mul;
   }
-  effElemMul(){ return this.stats.elemMul; }
   effFireRateMul(){ return this.stats.fireRateMul * (this.abilityActive>0&&this.abilityType==="overload"?1.8:1); }
   effAccuracyMul(){ return this.stats.accuracyMul; }
   effReloadMul(){ return this.stats.reloadMul; }
   effCritAdd(){ return this.stats.critAdd; }
   effSpeed(){ return this.stats.speed * (this.abilityActive>0&&this.abilityType==="bloodlust"?1.28:1); }
-  effLifesteal(){ return this.stats.lifesteal + (this.abilityActive>0&&this.abilityType==="bloodlust"?0.06:0); }
   // 持枪移速加成（枪身/枪托词缀「移动速度」）
   effMoveMul(){ const w=this.activeWeapon; return w&&w.stats&&w.stats.moveMul ? w.stats.moveMul : 1; }
   // 后坐力减免（握把/枪口/扳机词缀「后坐力」）
@@ -161,12 +156,12 @@ class Player {
     this.skills[id]=(this.skills[id]||0)+1; this.skillPoints--; this.computeStats(); return true;
   }
 
-  /* ----------------------------- 混乱等级 ----------------------------- */
+  /* ----------------------------- 改装等级 ----------------------------- */
   mayhemHpMul(){ return this.mayhem>0 ? Math.pow(MAYHEM.hpMul, this.mayhem) : 1; }
   mayhemDmgMul(){ return this.mayhem>0 ? Math.pow(MAYHEM.dmgMul, this.mayhem) : 1; }
   mayhemXpMul(){ return 1 + this.mayhem*MAYHEM.xpAdd; }
   mayhemLootMul(){ return 1 + this.mayhem*MAYHEM.lootAdd; }
-  // 可开启的混乱上限：解锁后 1 起步，每次转生 +1，灵魂购买每次 +5
+  // 可开启的改装上限：解锁后 1 起步，每次重新部署 +1，功勋购买每次 +5
   maxMayhem(){
     if(!this.mayhemUnlocked) return 0;
     return M.clamp(MAYHEM.capBase + this.rebirths*MAYHEM.capPerRebirth
@@ -174,21 +169,21 @@ class Player {
   }
   setMayhem(n){
     const cap=this.maxMayhem();
-    if(cap<=0) return { ok:false, msg:"击败秘藏守卫后才能开启混乱" };
+    if(cap<=0) return { ok:false, msg:"击败军械库守卫后才能开启改装" };
     this.mayhem=M.clamp(Math.round(n), 0, cap);
     this.computeStats();
-    return { ok:true, msg:`混乱等级 ${this.mayhem}` };
+    return { ok:true, msg:`改装等级 ${this.mayhem}` };
   }
   mayhemCapCost(){ return MAYHEM.capBuyBase + this.mayhemCapBonus*MAYHEM.capBuyPer; }
   buyMayhemCap(){
-    if(!this.mayhemUnlocked) return { ok:false, msg:"尚未解锁混乱等级" };
+    if(!this.mayhemUnlocked) return { ok:false, msg:"尚未解锁改装等级" };
     const cost=this.mayhemCapCost();
-    if(this.souls<cost) return { ok:false, msg:`灵魂不足（需要 ${cost}）` };
+    if(this.souls<cost) return { ok:false, msg:`功勋不足（需要 ${cost}）` };
     this.souls-=cost; this.mayhemCapBonus++;
-    return { ok:true, msg:`混乱上限提升至 ${this.maxMayhem()}` };
+    return { ok:true, msg:`改装上限提升至 ${this.maxMayhem()}` };
   }
 
-  /* ----------------------------- 转生 ----------------------------- */
+  /* ----------------------------- 重新部署 ----------------------------- */
   gearScore(){
     let s=0;
     for(const w of this.weapons) s+=weaponPrice(w);
@@ -196,7 +191,7 @@ class Player {
     for(const r of this.relics) s+=itemPrice(r);
     return s;
   }
-  // 本次转生可得灵魂：等级 + 装备评分 + 混乱，整体 ×0.5
+  // 本次重新部署可得功勋：等级 + 装备评分 + 改装，整体 ×0.5
   soulsGain(){
     const lvlPart=Math.max(0, this.level-1);
     const gearPart=Math.floor(this.gearScore()/PRESTIGE.gearDiv);
@@ -207,11 +202,11 @@ class Player {
   }
   canRebirth(){ return this.level>=PRESTIGE.minLevel; }
   /*
-   * 转生：等级 / 经验 / 技能 / 武器库 / 金币全部重置，
-   * 只保留一把「传承武器」（价值最高的那把），灵魂、永久升级、混乱上限保留。
+   * 重新部署：等级 / 经验 / 技能 / 武器库 / 金币全部重置，
+   * 只保留一把「传承武器」（价值最高的那把），功勋、永久升级、改装上限保留。
    */
   rebirth(){
-    if(!this.canRebirth()) return { ok:false, msg:`至少 Lv.${PRESTIGE.minLevel} 才能转生` };
+    if(!this.canRebirth()) return { ok:false, msg:`至少 Lv.${PRESTIGE.minLevel} 才能重新部署` };
     const gain=this.soulsGain();
     const keep=this.weapons.slice().sort((a,b)=>weaponPrice(b)-weaponPrice(a))[0];
     this.souls += gain;
@@ -223,19 +218,18 @@ class Player {
     this.relics = []; this.relicIdx=-1;
     this.wi=0;    this.gold=PRESTIGE.keepGold;
     this.ammo=startAmmo();
-    this.statusEffects=[];
     this.iframe=0;
-    this.mayhem=0;                       // 混乱等级归零（解锁与上限保留）
+    this.mayhem=0;                       // 改装等级归零（解锁与上限保留）
     this.computeStats();
     if(keep) keep.mag=keep.getMagSize(this);
     this.hp=this.stats.maxHP; this.shield=this.stats.maxShield;
-    return { ok:true, msg:`转生完成 · +${gain} 灵魂`, gain };
+    return { ok:true, msg:`重新部署完成 · +${gain} 功勋`, gain };
   }
   buyPerm(id){
     const u=PERM_UPGRADES.find(x=>x.id===id);
     if(!u) return { ok:false, msg:"无效的升级" };
     const cost=this.permCost(id);
-    if(this.souls<cost) return { ok:false, msg:`灵魂不足（需要 ${cost}）` };
+    if(this.souls<cost) return { ok:false, msg:`功勋不足（需要 ${cost}）` };
     this.souls-=cost; this.perm[id]=(this.perm[id]||0)+1;
     this.computeStats();
     return { ok:true, msg:`${u.name} → ${this.perm[id]} 级` };
@@ -251,7 +245,7 @@ class Player {
   equip(i){ if(i>=0&&i<this.weapons.length){ this.wi=i; const w=this.weapons[i]; if(w.mag>w.getMagSize(this)) w.mag=w.getMagSize(this); } }
   switchWeapon(){ if(this.weapons.length>1){ this.wi=(this.wi+1)%this.weapons.length; } }
 
-  /* ---- 护盾 / 圣物 ---- */
+  /* ---- 护甲 / 随身装备 ---- */
   addShield(s){
     if(this.shields.length>=12) return false;
     this.shields.push(s);
@@ -262,7 +256,7 @@ class Player {
     if(i<0||i>=this.shields.length) return;
     const ratio=this.stats.maxShield>0?this.shield/this.stats.maxShield:0;
     this.shieldIdx=i; this.computeStats();
-    this.shield=this.stats.maxShield*ratio;            // 换盾按比例保留当前护盾
+    this.shield=this.stats.maxShield*ratio;            // 换盾按比例保留当前护甲
   }
   sellShield(i){
     if(i<0||i>=this.shields.length) return 0;
@@ -297,7 +291,7 @@ class Player {
     this.computeStats();
     return { gold, eri };
   }
-  // 通用拾取：武器 / 护盾 / 圣物
+  // 通用拾取：武器 / 护甲 / 随身装备
   addItem(it){
     if(!it) return false;
     if(it.kind==="shield") return this.addShield(it);
@@ -305,7 +299,7 @@ class Player {
     return this.addWeapon(it);
   }
 
-  // 卖出：回收 25% 价值（高品质额外给镒矿）
+  // 卖出：回收 25% 价值（高品质额外给配给券）
   sellWeapon(i){
     if(this.weapons.length<=1 || i<0 || i>=this.weapons.length) return 0;
     const w=this.weapons[i];
@@ -343,14 +337,7 @@ class Player {
   /* ----------------------------- 每帧更新 ----------------------------- */
   update(dt, game){
     this.recoil.x*=0.85; this.recoil.y*=0.85;
-    // 状态效果（减速等）
-    let slow=1;
-    for(let i=this.statusEffects.length-1;i>=0;i--){
-      const s=this.statusEffects[i]; s.t-=dt;
-      if(s.type==="slow") slow=Math.min(slow,1-s.amt);
-      if(s.t<=0) this.statusEffects.splice(i,1);
-    }
-    const sp=this.effSpeed()*slow*this.effMoveMul();
+    const sp=this.effSpeed()*this.effMoveMul();
     this.x += (this.moveX*sp + this.recoil.x)*dt;
     this.y += (this.moveY*sp + this.recoil.y)*dt;
     if(this.bounds){ this.x=M.clamp(this.x,this.bounds.minX,this.bounds.maxX); this.y=M.clamp(this.y,this.bounds.minY,this.bounds.maxY); }
@@ -359,7 +346,7 @@ class Player {
     if(w){ w.cd=Math.max(0,w.cd-dt); w.updateReload(dt,this); }
 
     this.shieldTimer-=dt;
-    // 护盾只能按「充能延迟 + 充能速度」恢复，不能随时补满
+    // 护甲只能按「充能延迟 + 充能速度」恢复，不能随时补满
     if(this.shieldTimer<=0 && this.shield<this.stats.maxShield){
       this.shield=Math.min(this.stats.maxShield, this.shield+this.stats.shieldRate*dt);
     }
@@ -376,9 +363,10 @@ class Player {
   takeDamage(amount, element, armorType, game, attacker){
     if(this.iframe>0) return;          // 无敌帧：多只怪同时贴身时不会被一帧打死
     this.iframe=0.4;
-    const mult = ELEMENTS[element] ? ELEMENTS[element].mult[armorType||"flesh"] : 1;
+    const ammo = AMMO_TYPES[element] || AMMO_TYPES.none;
+    const mult = (ammo.mult && ammo.mult[armorType||"flesh"]) || 1;   // 弹种对软目标 / 护甲的终点效应
     let dmg=amount*mult;
-    // 任何伤害都会重置充能计时——护盾不能边打边回
+    // 任何伤害都会重置整备计时——插板不能边打边自动复原
     this.shieldTimer=this.stats.shieldDelay;
     let broke=false;
     if(this.shield>0){
@@ -390,42 +378,24 @@ class Player {
     if(this.hp<=0){ this.hp=0; this.alive=false; }
     SFX.hurt(); if(game&&game.shake) game.shake(6);
     if(game&&game.addFloatText) game.addFloatText(this.x,this.y-22,"-"+Math.round(amount),"#ff5555");
-    // 护盾吸收提示：0.45 秒内只弹一次，避免连击时糊成一堆字
+    // 护甲吸收提示：0.45 秒内只弹一次，避免连击时糊成一堆字
     if(this.shield>0 && amount>0 && game && game.addFloatText){
       const now=performance.now()/1000;
       if(!this._shieldTipT || now-this._shieldTipT>0.45){
         this._shieldTipT=now;
-        game.addFloatText(this.x+10,this.y-30,"护盾吸收","#7fd0ff");
+        game.addFloatText(this.x+10,this.y-30,"插板吸收","#9fb0bd");
       }
     }
   }
 
-  /* 护盾破碎特效 */
+  /* 插板失效：移除冲击波 / 反伤 / 生命虹吸，只保留「快拆扣具」的整备加速 */
   _onShieldBreak(game, attacker){
-    const sh=this.shieldItem; if(!sh||!sh.effect) return;
-    const ev=sh.effectVal||0;
-    if(sh.effect==="nova" && game){
-      const R=150;
-      for(const e of game.enemies){
-        if(!e.alive) continue;
-        const d=M.dist(this.x,this.y,e.x,e.y);
-        if(d<R) e.takeDamage(ev*ELEMENTS.shock.mult[e.armorType||"flesh"],"shock",e.armorType,game,this);
-      }
-      game.spawnExplosion(this.x,this.y,R,"#ffb020");
-      game.shake(5);
-      game.addFloatText(this.x,this.y-30,"破裂冲击","#ffb020",14);
-    } else if(sh.effect==="vamp"){
-      this.heal(ev);
-      game && game.addFloatText && game.addFloatText(this.x,this.y-30,"+"+Math.round(ev),"#5bd66a");
-    } else if(sh.effect==="reboot"){
-      // 破碎后立刻进入「加速充能」：延迟 ×(1 - val%)
+    const sh=this.shieldItem;
+    const ev=(sh&&sh.effectVal)||0;
+    if(sh && sh.effect==="reboot"){
       this.shieldTimer = Math.max(0.35, this.stats.shieldDelay*(1-ev/100));
-    } else if(sh.effect==="thorns" && attacker && attacker.takeDamage){
-      const back=(attacker.dmg||20)*0.4*ev/100;
-      attacker.takeDamage(back,"none",attacker.armorType||"flesh",game,this);
-      game && game.spawnHitFx && game.spawnHitFx(attacker.x,attacker.y,"#7bff3a");
     }
-    if(game && game.addFloatText) game.addFloatText(this.x,this.y-40,"护盾破碎","#7fd0ff",12);
+    if(game && game.addFloatText) game.addFloatText(this.x,this.y-40,"插板失效","#9fb0bd",12);
   }
   heal(n){ this.hp=Math.min(this.stats.maxHP,this.hp+n); }
   healShield(n){ this.shield=Math.min(this.stats.maxShield,this.shield+n); }
@@ -463,15 +433,15 @@ class Player {
     if(this.abilityType==="phaselock"){
       let best=null,bd=1e9;
       for(const e of game.enemies){ if(!e.alive)continue; const d=M.dist(this.x,this.y,e.x,e.y); if(d<420&&d<bd){bd=d;best=e;} }
-      if(best){ best.phaselocked=2.2+power*1.5; best.phaseLockedBy=this; game.addFloatText(best.x,best.y-30,"相位锁","#b061ff"); game.spawnHitFx(best.x,best.y,"#b061ff"); }
+      if(best){ best.phaselocked=2.2+power*1.5; best.phaseLockedBy=this; game.addFloatText(best.x,best.y-30,"标记锁","#b061ff"); game.spawnHitFx(best.x,best.y,"#b061ff"); }
       else { game.toast("范围内无目标"); return false; }
     } else if(this.abilityType==="turret"){
       spawnTurret(game,this.x,this.y,this);
-      game.toast("部署炮塔");
+      game.toast("部署掩护火力");
     } else if(this.abilityType==="bloodlust"){
-      this.abilityActive=5+power*3; game.toast("狂暴！"); game.shake(4);
+      this.abilityActive=5+power*3; game.toast("突入！"); game.shake(4);
     } else if(this.abilityType==="overload"){
-      this.abilityActive=5+power*3; game.toast("火力过载！"); game.shake(4);
+      this.abilityActive=5+power*3; game.toast("火力压制！"); game.shake(4);
     }
     this.abilityCD=this.abilityBaseCD*(1-Math.min(0.4,power*0.2));
     SFX.levelup();

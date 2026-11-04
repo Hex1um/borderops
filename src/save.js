@@ -23,7 +23,7 @@ const Save = {
         classId:p.classId, name:p.name, level:p.level, xp:p.xp, skillPoints:p.skillPoints,
         skills:{...p.skills}, ammo:{...p.ammo}, wi:p.wi, hp:Math.round(p.hp), shield:Math.round(p.shield),
         gold:p.gold, eridium:p.eridium||0,
-        /* 混乱 / 转生 */
+        /* 改装 / 重新部署 */
         souls:p.souls, rebirths:p.rebirths, perm:{...p.perm},
         mayhem:p.mayhem, mayhemUnlocked:p.mayhemUnlocked, mayhemCapBonus:p.mayhemCapBonus,
         zoneIndex:game.state==="victory" ? 0 : game.zoneIndex,
@@ -46,7 +46,7 @@ const Save = {
     }catch(e){ console.warn("load failed",e); return null; }
   },
 
-  // 只取跨局进度（灵魂 / 镒矿 / 永久升级 / 混乱）——死亡重开与无尽模式复用
+  // 只取跨局进度（功勋 / 配给券 / 永久升级 / 改装）——死亡重开与无尽模式复用
   loadMeta(){
     const d=this.load(); if(!d) return null;
     return {
@@ -59,7 +59,7 @@ const Save = {
     };
   },
 
-  // 死亡时只保底保留「跨局进度」：灵魂 / 镒矿 / 永久升级 / 混乱解锁
+  // 死亡时只保底保留「跨局进度」：功勋 / 配给券 / 永久升级 / 改装解锁
   saveMeta(game){
     try{
       const p=game.player;

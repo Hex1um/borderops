@@ -10,8 +10,7 @@
 
 // 词缀数值缩放分组
 const AFFIX_PCT  = ["dmgPct","fireRatePct","accPct","magPct","reloadPct","elemPct","elemChance","splashPct","projSpeed","lifesteal",
-                    "recoil","moveSpeed","range","splashDmg","shieldOnHit","ammoEff"];
-const AFFIX_FLAT = ["critDmg","critChance"];   // 百分点点数（20 = +20%）
+                    "recoil","moveSpeed","range","splashDmg","shieldOnHit","ammoEff","critDmg","critChance"];
 const AFFIX_INT  = ["pierce","pellets"];       // 整数，不缩放
 // 反向语义：数值越高越「减负」（后坐力-、省弹）的词缀，文案用减号呈现
 const AFFIX_INVERT = { recoil:true, ammoEff:true };
@@ -43,10 +42,10 @@ function scaleModValue(m, ilvl){
 }
 
 function affixFits(a, ctx){
-  if(a.elem && ctx.element!==a.elem) return false;      // 元素专属词缀只落在对应元素武器上
+  if(a.elem && ctx.element!==a.elem) return false;      // 弹种专属词缀只落在对应弹种武器上
   if(a.elemOnly && ctx.element==="none") return false;
   if(a.needSplash && !(ctx.splash>0)) return false;
-  // v0.12.5 品质门槛：minQ 词条（双管的 / 蜂群的）只在足够高品质的枪上出现
+  // 品质门槛：minQ 词条（双管的 / 蜂群的）只在足够高品质的枪上出现
   if(a.minQ!==undefined){
     const q = (ctx.q===undefined||ctx.q===null) ? -1 : ctx.q;
     if(q < a.minQ) return false;
@@ -74,7 +73,7 @@ function rollAffixes(R, ilvl, ctx){
       break;
     }
   }
-  // 远古 / 彩虹：额外一条专属威能
+  // 试验型 / 原型：额外一条专属威能
   if(R.power){
     const pool = POWERS.filter(p=>affixFits(p, ctx));
     const p = pool.length ? RNG.pick(pool) : null;
@@ -93,29 +92,23 @@ function affixTotals(affixes){
 
 /* ----------------------------- 枪械配件 ----------------------------- */
 /*
- * 一把枪 = 底材 + 若干配件。每个配件自带稀有度与词缀，
- * 配件词缀会并入总词缀池参与属性计算（所以换配件 = 换属性）。
- * 塔科夫/吃鸡 里可以直接拆解枪械得到配件，再装到别的枪上。
+ * 一把枪 = 底材 + 若干改装件。每个部件自带品级与工艺参数，
+ * 部件参数会并入总词条池参与属性计算（所以换部件 = 换性能）。
+ * 拆解枪械可得到部件，再装到别的枪上。
  */
 const GUN_SLOTS = [
   { id:"barrel",      name:"枪管",     stats:["dmgPct","projSpeed","accPct","range"] },
-  { id:"mag",         name:"弹匣",     stats:["magPct","reloadPct","ammoEff"] },
+  { id:"mag",         name:"弹匣",     stats:["magPct","reloadPct","critChance"] },
   { id:"optic",       name:"瞄具",     stats:["accPct","critChance","critDmg"] },
   { id:"grip",        name:"握把",     stats:["accPct","fireRatePct","recoil"] },
   { id:"stock",       name:"枪托",     stats:["fireRatePct","reloadPct","moveSpeed"] },
   { id:"muzzle",      name:"枪口",     stats:["projSpeed","critChance","recoil","range"] },
-  { id:"underbarrel", name:"下挂",     stats:["accPct","splashPct","splashDmg"] },
+  { id:"underbarrel", name:"下挂",     stats:["accPct","recoil","range"] },
   { id:"trigger",     name:"扳机",     stats:["fireRatePct","critChance","recoil"] },
-  { id:"body",        name:"机匣",     stats:["dmgPct","magPct","shieldOnHit"] },
+  { id:"body",        name:"机匣",     stats:["dmgPct","magPct","recoil"] },
 ];
 const GUN_SLOT_BY_ID = {};
 for(const s of GUN_SLOTS) GUN_SLOT_BY_ID[s.id]=s;
-
-const PART_PREFIX = {
-  white:"标准", green:"改良", blue:"精密", purple:"军用", orange:"传说",
-  pearl:"超凡", ancient:"远古", rainbow:"虹彩", mythic:"神话",
-  primordial:"原初", celestial:"寰宇", singularity:"奇点",
-};
 
 // 单条配件词缀数值
 function partStatValue(stat, ilvl, R){
@@ -140,8 +133,8 @@ function rollPart(slotId, ilvl, rarityId){
     used.add(st);
     mods.push({ stat:st, value:partStatValue(st, ilvl, R) });
   }
-  // 所有配件必带 1 前缀 + 1 后缀（词缀直接计入配件与武器属性）
-  // v0.12.5：配件不再携带「每次射击发数」类词条，发数只由枪身稀有词条决定
+  // 所有部件必带 1 前缀 + 1 后缀（参数直接计入部件与武器属性）
+  // 改装词条池已全部为现实工艺参数，不再需要按「弹种/额外弹丸」过滤
   const cleanPool = arr => arr.filter(a=>!a.elem && !a.elemOnly && !a.needSplash && a.minQ===undefined);
   const pre = RNG.pick(cleanPool(AFFIXES.prefix));
   const suf = RNG.pick(cleanPool(AFFIXES.suffix));
@@ -153,7 +146,7 @@ function rollPart(slotId, ilvl, rarityId){
   return {
     uid: "pt" + Math.floor(Math.random()*1e9).toString(36) + (ilvl%97),
     slot: slot.id,
-    name: pre.nm + slot.name + suf.nm,
+    name: pre.nm + suf.nm,
     shortName: slot.name,
     rarity: R.id,
     ilvl,
@@ -202,7 +195,7 @@ function partValue(p){
 class Weapon {
   constructor(spec){
     Object.assign(this, spec);
-    if(this.laser===undefined) this.laser=false;   // 激光枪（马里旺能量武器）：子弹走激光弹道
+    this.laser=false;   // 一律实体弹丸（旧存档的 laser 字段强制归一）
     if(!this.affixes) this.affixes=[];
     if(this.power===undefined) this.power=null;
     if(this.ilvl===undefined) this.ilvl=1;
@@ -231,11 +224,11 @@ class Weapon {
   get rarityDef(){ return RARITY_BY_ID[this.rarity] || RARITIES[0]; }
   get rarityColor(){ return this.rarityDef.color; }
   get rarityName(){ return this.rarityDef.name; }
-  get elemName(){ return ELEMENTS[this.element] ? ELEMENTS[this.element].name : "无"; }
-  get elemColor(){ return ELEMENTS[this.element] ? ELEMENTS[this.element].color : "#dfd8c8"; }
+  get elemName(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].name : AMMO_TYPES.none.name; }
+  get elemColor(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].color : "#cfcabb"; }
   get value(){ return weaponPrice(this); }
-  // 混乱装备标记（掉落自带，混乱越高数值越猛）
-  get mayhemTag(){ return (this.mayhem||0)>0 ? `混乱${this.mayhem}` : ""; }
+  // 改装等级标记：代表高膛压装药与更精密的配件公差
+  get mayhemTag(){ return (this.mayhem||0)>0 ? `改装${this.mayhem}级` : ""; }
 
   // 实际弹匣容量（叠加玩家弹匣加成）
   getMagSize(owner){ return Math.max(1, Math.round(this.magSizeBase * (owner&&owner.stats?owner.stats.magMul:1))); }
@@ -248,7 +241,7 @@ class Weapon {
     });
   }
 
-  // 核心属性行（背包/商店）
+  // 改装模块属性行（背包/商店）
   statLines(){
     const s=this.stats;
     const cc=Math.round((s.critChance!==undefined?s.critChance:0.15)*100);
@@ -257,7 +250,7 @@ class Weapon {
       `射速 ${s.fireRate.toFixed(1)}/s`,
       `弹匣 ${this.magSizeBase} · 精准 ${(s.accuracy*100|0)}%`,
       `换弹 ${s.reload.toFixed(2)}s`,
-      `暴击 ${cc}% · x${s.crit.toFixed(2)}`,
+      `要害命中 ${cc}% · x${s.crit.toFixed(2)}`,
     ];
   }
 
@@ -295,14 +288,9 @@ class Weapon {
     const effAcc = M.clamp(s.accuracy * acc, 0.3, 0.999);
     this.cd = 1/effFR;
 
-    // Tediore：换弹即扔枪
-    if(MANUFACTURERS[this.manufacturer].throwable && this.mag<=1){
-      this._throwGun(game,x,y,angle,owner); this.mag=0; this.startReload(owner); return true;
-    }
-
+    // 移除「换弹即扔枪」——现实枪械打空弹匣只会触发换弹
     const dm = owner&&owner.effDamageMul ? owner.effDamageMul() : 1;
-    const em = owner&&owner.effElemMul ? owner.effElemMul() : 1;
-    const dmgMul = dm * (this.element!=="none" ? em : 1);
+    const dmgMul = dm;
     const pellets = s.pellets||1;
     // 移动射击：位移越大扩散越夸张，且按枪种分档（冲锋枪保持原样，不吃新增惩罚）
     const mv = owner ? Math.min(1, Math.hypot(owner.moveX||0, owner.moveY||0)) : 0;
@@ -313,6 +301,7 @@ class Weapon {
       let spread = baseSpread * moveMul;
       if(mv>0.05 && !isSMG(this.type)) spread = Math.min(spread, Math.max(baseSpread*1.35, moveSpreadCap(this.type)));
       const a = angle + RNG.gauss()*spread;
+      // Projectile 构造器强制直线实体弹道，不再传 homing / laser / lifesteal / elemChance
       spawnProjectile(game, {
         x, y, angle:a,
         speed:s.speed,
@@ -320,33 +309,19 @@ class Weapon {
         element:this.element,
         radius: s.splash?6:4,
         splash:s.splash||0,
-        homing: s.homing||false,
         life,
         owner, weapon:this,
         shape: this.projShape,
-        laser: this.laser,
         pierce: s.pierce||0,
-        lifesteal: s.lifesteal||0,
-        elemChance: s.elemChance||0,
-        color: this.element!=="none" ? ELEMENTS[this.element].color : MANUFACTURERS[this.manufacturer].color,
+        color: (AMMO_TYPES[this.element]||AMMO_TYPES.none).color,
       });
     }
     this.mag--;
-    // 弹药效率词缀：有概率省下一发（不超过基准弹匣）
-    if(this.ammoEff>0 && this.mag < this.magSizeBase && RNG.chance(this.ammoEff)) this.mag++;
     SFX.shoot();
     if(owner && owner.applyRecoil) owner.applyRecoil(angle, 6);
     return true;
   }
 
-  _throwGun(game,x,y,angle,owner){
-    spawnProjectile(game, {
-      x, y, angle, speed:520, damage:this.stats.damage*3,
-      element:"explosive", radius:8, splash:140, homing:false, life:1.6,
-      owner, weapon:this, color:"#ffb020", isThrown:true,
-    });
-    SFX.boom();
-  }
 }
 
 /* ----------------------------- 生成 ----------------------------- */
@@ -361,15 +336,16 @@ function generateWeapon(level, opts={}){
   const base = WEAPON_TYPES[type];
   const manKeys = Object.keys(MANUFACTURERS);
   const man = opts.manufacturer || RNG.pick(manKeys);
-  const M0 = MANUFACTURERS[man];
+  const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;   // 旧存档的未知厂商不再导致启动崩溃
 
-  // 元素
+  // 适配弹种：现实弹药，不再有火焰 / 电击 / 腐蚀等属性
   let element = "none";
-  if(M0.forceExplosive) element = "explosive";
-  else if(M0.elemChance>0 && (M0.elemChance>=1 || RNG.chance(0.35 + ilvl*0.012))){
-    element = RNG.pick(["fire","shock","corrosive","cryo","explosive","radiation"]);
+  if(type==="launcher") element = "explosive";
+  else if(M0.forceExplosive) element = "explosive";
+  else if(RNG.chance(0.35 + ilvl*0.006)){
+    element = RNG.pick(["fire","shock","corrosive","cryo","radiation"]);
   }
-  if(opts.element && ELEMENTS[opts.element]) element = opts.element;   // 枪匠台附魔：强制指定元素
+  if(opts.element && AMMO_TYPES[opts.element]) element = opts.element;   // 枪匠台：指定弹种
 
   // 底材基础值
   let dmg      = base.baseDmg * (1 + ilvl/45) * M0.dmg;
@@ -383,25 +359,23 @@ function generateWeapon(level, opts={}){
   let pellets  = base.pellets;
   let splash   = base.splash || 0;
   let pierce   = 0;
-  let lifesteal= 0;
-  let elemChance = 0;
   const spread = base.spread;
 
   // 品质：低档词缀多、高档倍率猛
-  // 枪匠台：可传入固定词缀（升阶/附魔时保留原词缀，只重算数值）
+  // 枪匠台：可传入固定词缀（升阶/更换弹种时保留原词缀，只重算数值）
   const affixes = (opts.affixes && opts.affixes.length!==undefined)
     ? opts.affixes
     : rollAffixes(R, ilvl, { element, splash });
-  // 配件：可传入固定配件（枪匠台换装/升阶时保留），否则按品质生成
+  // 部件：可传入固定部件（枪匠台换装/升阶时保留），否则按品级生成
   const allParts = (opts.parts && opts.parts.length!==undefined)
     ? opts.parts
     : rollGunParts(type, ilvl, quality);
-  // v0.13.5：核心（配件 slot:"core"）单独解析 —— 取最高混乱核心等级为混乱等级，最高级元素核心定元素
+  // 改装模块部件（slot:"core"）单独解析 —— 取最高膛压组件等级为改装等级，弹种适配组件定弹种
   const _cores = allParts.filter(p=>p && p.core);
   const _plain = allParts.filter(p=>!(p && p.core));
   let _coreMayhem = Math.max(0, Math.round(opts.mayhem||0));
-  let _chaosFromCore = 0;   // v0.14.5：记录由混乱核心提供的等级（走更强的倍率底数）
-  let _coreElem = (opts.element && ELEMENTS[opts.element]) ? opts.element : "none";
+  let _chaosFromCore = 0;   // 记录由膛压组件提供的改装等级
+  let _coreElem = (opts.element && AMMO_TYPES[opts.element]) ? opts.element : "none";
   let _coreElemLv = -1;
   for(const c of _cores){
     if(c.core==="chaos"){
@@ -411,7 +385,7 @@ function generateWeapon(level, opts={}){
     }
     else if(c.core==="elem" && c.elem){ if((c.lv||0) > _coreElemLv){ _coreElemLv=c.lv||0; _coreElem=c.elem; } }
   }
-  if(_coreElem!=="none") element = _coreElem;          // 元素核心覆盖武器元素
+  if(_coreElem!=="none") element = _coreElem;          // 弹种适配组件决定枪械弹种
   const t = affixTotals(affixes.concat(partsAsAffixes(_plain), partsAsAffixes(_cores)));
 
   dmg      *= 1 + (t.dmgPct||0)/100;
@@ -423,37 +397,33 @@ function generateWeapon(level, opts={}){
   speed    *= 1 + (t.projSpeed||0)/100;
   if(splash>0) splash *= 1 + (t.splashPct||0)/100;
   pellets  += t.pellets||0;
-  /* v0.12.5 发数规则（重要）：
+  /* 发数规则（重要）：
    *   · 霰弹枪底材本身多发，照旧；
    *   · 其余枪「一次一发」——配件/随机词缀一律不再加发数，
-   *     只有枪身自带「双管的（稀有）」+1 或「蜂群的（远古）」+2 才突破。 */
+   *     只有枪身自带「双管的（稀有）」+1 或「蜂群的（试验型）」+2 才突破。 */
   if((base.pellets||1)<=1){
     let pb=0;
     for(const a of (affixes||[])) for(const m of (a.mods||[])) if(m.stat==="pellets") pb+=m.value;
     pellets = 1 + M.clamp(Math.round(pb), 0, 3);
   }
   pierce   += t.pierce||0;
-  lifesteal+= t.lifesteal||0;
   crit     += (t.critDmg||0)/100;
   critChance += (t.critChance||0)/100;
-  elemChance += (t.elemChance||0)/100;
-  // 扩展词缀：后坐力减免 / 移速 / 射程 / 溅射伤害 / 吸盾 / 弹药效率
+  // 扩展词缀：后坐力减免 / 移速 / 射程 / 溅射伤害（命中回血与省弹恒为 0）
   const recoil      = (t.recoil||0);
   const moveSpeed   = (t.moveSpeed||0);
   const rangePct    = (t.range||0);
   const splashDmg   = (t.splashDmg||0);
-  const shieldOnHit = (t.shieldOnHit||0);
-  const ammoEff     = (t.ammoEff||0);
 
   // 品质全局倍率（传奇以上是碾压级）
   dmg *= R.mult;
   if(R.mult>1) fireRate *= 1 + (R.mult-1)*0.10;
 
-  // 混乱装备：词缀数值按 1.12^m 指数放大（参考 Rakanishu 的混乱词条质变）
-  // v0.13.5：混乱等级由装入的「最高级混乱核心」决定（_coreMayhem 已在配件解析阶段算出）
+  // 改装等级：按工程余量线性小幅放大
+  // 改装等级由装入的「最高级膛压组件」决定（_coreMayhem 已在部件解析阶段算出）
   const mh = _coreMayhem;
   if(mh>0){
-    const gp = _chaosFromCore>0 ? MAYHEM.corePower : MAYHEM.gearPower;   // v0.14.5：核心更猛
+    const gp = _chaosFromCore>0 ? MAYHEM.corePower : MAYHEM.gearPower;   // 改装模块更猛
     const k = Math.pow(gp, mh);
     dmg *= k;
     fireRate *= 1 + (k-1)*0.06;
@@ -478,37 +448,40 @@ function generateWeapon(level, opts={}){
     mayhem: mh>0 ? mh : 0,
     power: R.power ? true : null,
     affixes,
-    laser: man==="Maliwan",            // 马里旺能量武器 = 激光枪（占总枪数约 1/9，属于「少部分」）
+    laser: false,                      // 实体弹丸
     projShape: projShapeFor(man, element, type),
     stats:{
       damage:dmg, fireRate, accuracy, mag:magSize, reload,
-      speed, pellets, splash, homing:!!M0.homing, crit, critChance,
+      speed, pellets, splash, crit, critChance,
       auto: base.auto, charge:!!base.charge, spread,
-      ammoType: base.ammoType, pierce, lifesteal, elemChance,
+      ammoType: base.ammoType, pierce,
+      homing: false,                   // 直线弹道
+      lifesteal: 0,                   // 无急救效率
+      elemChance: 0,                  // 无弹种增益
       recoil: M.clamp(recoil,0,80),
       moveMul: 1 + moveSpeed/100,
       rangeMul: 1 + rangePct/100,
       splashDmgMul: 1 + splashDmg/100,
-      shieldOnHit: M.clamp(shieldOnHit,0,80)/100,
-      ammoEff: M.clamp(ammoEff,0,80)/100,
+      shieldOnHit: 0,                 // 命中不再回复插板耐久
+      ammoEff: 0,                     // 无省弹
     },
     parts: allParts,
   });
 }
 
 /* ----------------------------- 命名 ----------------------------- */
+// 厂商显示中文兵工厂名，具名档用真实枪械型号，不再拼接奇幻词与弹种标签
 function weaponName(man, base, R, element, affixes){
-  const elemTag = element!=="none" ? "·"+ELEMENTS[element].name : "";
+  const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;
+  const ammoTag = element!=="none" && AMMO_TYPES[element] ? " · "+AMMO_TYPES[element].short : "";
   if(R.named){
-    const nm = RNG.pick(base.named || ["传说"]);
-    const TOP_PREFIX = { ancient:"远古·", rainbow:"彩虹·", mythic:"神话·", primordial:"原初·", celestial:"寰宇·", singularity:"奇点·" };
-    const pre = TOP_PREFIX[R.id] || "";
-    return `${pre}${man}${nm}${elemTag}`;
+    const nm = RNG.pick(base.named || ["制式"]);
+    return `${M0.name} ${nm}${ammoTag}`;
   }
-  if(R.id==="white") return `${man}${base.name}`;
+  if(R.id==="white") return `${M0.name}${base.name}${ammoTag}`;
   const pre = affixes.find(a=>a.kind==="prefix");
   const suf = affixes.find(a=>a.kind==="suffix");
-  return `${pre?pre.nm:""}${man}${base.name}${suf?suf.nm:""}`;
+  return `${M0.name}${base.name}${pre?" "+pre.nm:""}${suf?suf.nm:""}${ammoTag}`;
 }
 
 /* ----------------------------- 定价 / 词缀文案 ----------------------------- */
@@ -516,19 +489,19 @@ function weaponPrice(w){
   const R = RARITY_BY_ID[w.rarity] || RARITIES[0];
   let p = (60 + (w.ilvl||1)*22) * R.price;
   p += (w.affixes?w.affixes.length:0) * 140;
-  for(const pt of (w.parts||[])) p += pt.core ? (pt.value||0) : partValue(pt);   // 配件 / 核心计入估值
+  for(const pt of (w.parts||[])) p += pt.core ? (pt.value||0) : partValue(pt);   // 配件 / 改装模块计入估值
   if(w.power) p *= 1.35;
-  if((w.mayhem||0)>0) p *= 1 + w.mayhem*0.18;     // 混乱装备溢价
+  if((w.mayhem||0)>0) p *= 1 + w.mayhem*0.12;     // 改装等级溢价 0.12/级
   return Math.round(p/10)*10;
 }
 
 const AFFIX_LABEL = {
-  dmgPct:"伤害", fireRatePct:"射速", accPct:"精准", magPct:"弹匣",
-  reloadPct:"换弹速度", critDmg:"暴击伤害", critChance:"暴击几率",
-  elemPct:"元素伤害", elemChance:"元素触发", splashPct:"溅射范围",
-  projSpeed:"弹速", pierce:"穿透", pellets:"额外弹丸", lifesteal:"吸血",
-  recoil:"后坐力", moveSpeed:"移速", range:"射程", splashDmg:"溅射伤害",
-  shieldOnHit:"吸盾", ammoEff:"弹药效率",
+  dmgPct:"枪口动能", fireRatePct:"理论射速", accPct:"射击精度", magPct:"弹匣容量",
+  reloadPct:"换弹速度", critDmg:"要害伤害", critChance:"要害命中",
+  elemPct:"弹药效能", elemChance:"特殊弹触发", splashPct:"破片半径",
+  projSpeed:"弹头初速", pierce:"穿透等级", pellets:"弹丸数", lifesteal:"急救效率",
+  recoil:"后坐控制", moveSpeed:"机动性", range:"有效射程", splashDmg:"破片伤害",
+  shieldOnHit:"护甲维护", ammoEff:"供弹可靠性",
 };
 function affixText(m){
   const nm = AFFIX_LABEL[m.stat] || m.stat;
@@ -541,14 +514,9 @@ function affixText(m){
   return v>=0 ? `${nm} +${v}%` : `${nm} ${v}%`;
 }
 
-// 保底传奇（Boss 掉落 / 赌枪机）
-function generateLegendary(level, type){
-  return generateWeapon(level, { rarity:"orange", type });
-}
-
 /* ----------------------------- 战术模式转换器 ----------------------------- */
 /*
- * 把「无主之地」程序化武器（Weapon 实例）转成 塔科夫 / 吃鸡 模式所用的
+ * 把「旧刷宝体系」程序化武器（Weapon 实例）转成 塔科夫 / 吃鸡 模式所用的
  * 轻量枪械对象 {name,cat,dmg,mag,reserve,rpm,spread,range,auto,pellets,...}。
  * 两模式都用自家的射线命中（hit-scan），所以只取数值，不依赖 Weapon.fire。
  * cat 直接沿用 BL 的 type（pistol/smg/...），moveSpread 系统能识别。
@@ -596,7 +564,7 @@ function blGunConvert(w){
     value: w.value,
     color: w.element!=="none"
       ? (ELEMENTS[w.element]?ELEMENTS[w.element].color:"#fff")
-      : (MANUFACTURERS[w.manufacturer]?MANUFACTURERS[w.manufacturer].color:"#fff"),
+      : (MANUFACTURERS[w.manufacturer]?MANUFACTURERS[w.manufacturer].color:"#cfcabb"),
   };
 }
 function blGunGen(ilvl, opts){ return blGunConvert(generateWeapon(ilvl, opts)); }
@@ -608,14 +576,14 @@ function gunRarColor(r){
   return arr[r]||"#e9e4dc";
 }
 
-/* ----------------------------- 枪匠台：符文锻造 ----------------------------- */
+/* ----------------------------- 枪匠台：精密改装 -----------------------------
 /*
- * 对标 Rakanishu 的赫拉迪克方块：对一把已生成的无主之地枪械做「重铸 / 附魔 / 升阶」。
- * 做法是把枪的固定参数（类型/厂商/稀有度/等级/混乱/元素）喂回 generateWeapon，
- * 由同一条生成管线重算数值与词缀，保证伤害·射速·弹匣·价值全部自洽。
- *   op = "reroll"  重铸词缀（类型/厂商/元素/稀有度不变，词缀重掷）
- *   op = "element" 附魔元素（指定 newElement，词缀随之重洗）
- *   op = "mayhem"  升阶混乱（mayhem+1，数值按 1.12^m 放大）
+ * 原「精密改装 / 更换弹种」改为现实枪械工位操作。
+ * 做法是把枪的固定参数（类型/兵工厂/品级/等级/改装等级/弹种）喂回 generateWeapon，
+ * 由同一条生成管线重算数值与词条，保证动能·射速·弹匣·估值全部自洽。
+ *   op = "reroll"  重调部件（类型/兵工厂/弹种/品级不变，词条重掷）
+ *   op = "element" 更换弹种（指定 newElement，词条随之重算）
+ *   op = "mayhem"  提升改装等级（mayhem+1，数值按 1.05^m 工程余量放大）
  */
 function reforgeBlGun(gun, op, arg){
   const base = {
@@ -628,12 +596,12 @@ function reforgeBlGun(gun, op, arg){
     parts: (gun.parts||[]).slice(),
   };
   if(op==="element"){
-    base.element = ELEMENTS[arg] ? arg
-      : RNG.pick(["fire","shock","corrosive","cryo","explosive","radiation"]);
-    base.affixes = gun.affixes || [];      // 附魔：保留原词缀，只换元素并重算
+    base.element = AMMO_TYPES[arg] ? arg
+      : RNG.pick(["fire","shock","corrosive","cryo","radiation"]);
+    base.affixes = gun.affixes || [];      // 换弹种：保留原词条，只换弹种并重算
   } else if(op==="mayhem"){
     base.mayhem = (gun.mayhem||0)+1;
-    base.affixes = gun.affixes || [];      // 升阶：保留原词缀 → 数值严格增大
+    base.affixes = gun.affixes || [];      // 提升改装等级：保留原词条 → 数值严格增大
   } else if(op==="part"){
     // 重铸单个槽位配件：其余配件与主词缀全部保留
     const slotId = arg;
@@ -673,28 +641,15 @@ function gunSellPrice(gun){
 }
 
 /* =========================================================================
- * 枪械外观系统：子弹形状 + 枪模型变化
- * 一把枪的「形状指纹」由 厂商 × 元素 × 枪型 + 配件 共同决定，
- * 让每一把枪的子弹与手持模型都各不相同（程序化、零美术资源）。
+ * 枪械外观系统：弹头形状 + 枪模型变化
+ * 形状只由枪型 / 弹头类型 / 兵工厂决定，全部为实体弹丸轮廓。
  * ========================================================================= */
-
-// 子弹形状：元素优先，其次厂商风格
 function projShapeFor(man, elem, type){
-  if(elem==="fire")       return "flame";     // 火焰：燃烧箭头
-  if(elem==="shock")      return "bolt";      // 电击：折线
-  if(elem==="cryo")       return "crystal";   // 冰冻：晶簇
-  if(elem==="corrosive")  return "drop";      // 腐蚀：酸液滴
-  if(elem==="radiation")  return "orb";       // 辐射：光环球
-  if(elem==="explosive")  return "bomb";      // 爆炸：爆弹
-  if(MANUFACTURERS[man] && MANUFACTURERS[man].homing) return "chevron"; // Atlas：追踪箭簇
-  if(man==="Jakobs")    return "slug";       // 雅各布：重型弹头
-  if(man==="Tediore")    return "box";         // 泰迪尔：方块弹
-  if(man==="Vladof")     return "dart";        // 弗拉多夫：尖镖
-  if(man==="Torgue")     return "bomb";        // 托格：爆弹
-  if(man==="Hyperion")   return "dart";        // 亥伯龙：流线镖
-  if(man==="Maliwan")    return "orb";         // 马里旺：能量球
-  if(man==="Dahl")       return "round";       // 达尔：标准弹
-  return "round";
+  if(type==="launcher" || elem==="explosive") return "bomb";   // 榴弹战斗部
+  if(man==="Jakobs" || man==="Torgue") return "slug";         // 重弹头
+  if(man==="Vladof" || man==="Hyperion") return "dart";       // 尖头高速弹
+  if(man==="Tediore")    return "box";                        // 方形弹托
+  return "round";                                             // 标准弹头
 }
 
 // 枪模型规格：由枪型决定基础轮廓，配件叠加细节
@@ -711,7 +666,7 @@ function gunModelSpec(gun){
   const parts = gun.parts || [];
   const has = id => parts.some(p=>p.slot===id);
   const color = (gun.color)
-    || (gun.element && gun.element!=="none" && ELEMENTS[gun.element] ? ELEMENTS[gun.element].color : "#cfd2d8");
+    || (gun.element && gun.element!=="none" && AMMO_TYPES[gun.element] ? AMMO_TYPES[gun.element].color : "#cfd2d8");
   return {
     type,
     len:    base.len,
@@ -738,7 +693,7 @@ function drawGunCanvas(ctx, spec, scale, bodyC, accC){
   }
   // 机匣/主体
   ctx.fillStyle=bodyC; ctx.fillRect(-L*0.30, -5*scale, L*0.62, 10*scale); stroke(-L*0.30, -5*scale, L*0.62, 10*scale);
-  // 枪管（向前 +x，颜色由配件/元素决定）
+  // 枪管（向前 +x，颜色由配件/弹种决定）
   ctx.fillStyle=accC; ctx.fillRect(L*0.30, -2.6*scale, B*scale*0.62, 5.2*scale); stroke(L*0.30, -2.6*scale, B*scale*0.62, 5.2*scale);
   // 瞄具
   if(spec.optic){

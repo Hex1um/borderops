@@ -2,9 +2,9 @@
   "base": "http://127.0.0.1:3211/",
   "checks": [
     {
-      "name": "21 个脚本全部加载",
+      "name": "22 个脚本全部加载",
       "ok": true,
-      "detail": "21 个"
+      "detail": "22 个"
     },
     {
       "name": "window.game 就绪且处于标题页",
@@ -24,20 +24,20 @@
     {
       "name": "成功进入塔科夫战区",
       "ok": true,
-      "detail": "ops=34 计时=479.4671s"
+      "detail": "ops=34 计时=479.5337s"
     },
     {
       "name": "地图 / 撤离点 / 容器生成",
       "ok": true,
-      "detail": "撤离点 19 · 容器 356 · 墙 2941 · 地图 [13000, 9600]"
+      "detail": "撤离点 19 · 容器 356 · 墙 2949 · 地图 [13000, 9600]"
     },
     {
       "name": "T4+ 装甲型单位存在（黄色血条有意义）",
       "ok": true,
-      "detail": "类型分布 {\"flesh\": 24, \"armor\": 6, \"shield\": 3}"
+      "detail": "类型分布 {\"flesh\": 25, \"shield\": 3, \"armor\": 5}"
     },
     {
-      "name": "护盾型单位存在（蓝血条 / 电击 ×2.00 有目标）",
+      "name": "护盾型单位存在（独立蓝盾条有目标）",
       "ok": true,
       "detail": "带盾单位 3"
     },
@@ -54,17 +54,17 @@
     {
       "name": "主循环持续推进（elapsed 增长）",
       "ok": true,
-      "detail": "1.17 -> 4.18"
+      "detail": "1.05 -> 4.15"
     },
     {
       "name": "WASD 移动生效",
       "ok": true,
-      "detail": "位移 285,-150"
+      "detail": "位移 131,-91"
     },
     {
       "name": "鼠标按住能开火（弹匣消耗）",
       "ok": true,
-      "detail": "弹药 17 -> 4"
+      "detail": "弹药 23 -> 6"
     },
     {
       "name": "3 秒实机无 JS 异常",
@@ -72,59 +72,59 @@
       "detail": "0"
     },
     {
-      "name": "火焰：命中挂上灼烧",
+      "name": "曳光弹：命中挂上引燃",
       "ok": true,
-      "detail": "burnT=4.47 burnDps=3.85"
+      "detail": "burnT=4.43 burnDps=4.39"
     },
     {
-      "name": "火焰：停火后 DOT 继续掉血",
+      "name": "曳光弹：停火后燃烧继续掉血",
       "ok": true,
-      "detail": "HP 99614 -> 99610"
+      "detail": "HP 99559 -> 99555"
     },
     {
-      "name": "腐蚀：啃掉护甲耐久",
+      "name": "空尖弹：啃掉插板耐久",
       "ok": true,
       "detail": "armor 60 -> 0"
     },
     {
-      "name": "改2：护甲打穿后实机类型变回血肉",
+      "name": "改2：插板打穿后实机类型变回无防护",
       "ok": true,
       "detail": "type=flesh, armor=0"
     },
     {
-      "name": "腐蚀：挂上破甲 debuff",
+      "name": "空尖弹：挂上撕裂破防 debuff",
       "ok": true,
-      "detail": "corrodeT=2.97"
+      "detail": "corrodeT=2.95"
     },
     {
       "name": "实机出现「护甲击穿」提示",
       "ok": true,
-      "detail": "['-64', '-64', '-64']"
+      "detail": "['-142', '-142', '-142']"
     },
     {
-      "name": "冰冻：实机叠加冻结",
+      "name": "亚音速弹：实机叠加迟滞",
       "ok": true,
-      "detail": "freezeT=2.7"
+      "detail": "freezeT=2.77"
     },
     {
-      "name": "电击：实机挂上电磁干扰",
+      "name": "钢芯穿甲弹：实机挂上钝击失能",
       "ok": true,
-      "detail": "shockT=1.53"
+      "detail": "shockT=1.57"
     },
     {
-      "name": "辐射：附近目标吃到连锁伤害",
+      "name": "穿甲曳光弹：附近目标吃到跳弹伤害",
       "ok": true,
-      "detail": "nearHp=99770"
+      "detail": "nearHp=99606"
     },
     {
-      "name": "辐射：命中挂上辐射标记",
+      "name": "穿甲曳光弹：命中挂上跳弹标记",
       "ok": true,
-      "detail": "radT=0.6"
+      "detail": "radT=0.68"
     },
     {
-      "name": "爆炸：普通子弹产生范围溅射",
+      "name": "破片弹：普通子弹产生范围溅射",
       "ok": true,
-      "detail": "nearHp=99885"
+      "detail": "nearHp=99855"
     },
     {
       "name": "全程无未捕获异常",
@@ -139,18 +139,88 @@
     {
       "name": "游戏仍处于 playing",
       "ok": true,
-      "detail": "{\"state\": \"playing\", \"elapsed\": 11.240100000000018, \"hp\": 100, \"ops\": 34, \"aliveAI\": 21, \"floats\": 258, \"particles\": 795}"
+      "detail": "{\"state\": \"playing\", \"elapsed\": 11.70569999999998, \"hp\": 100, \"ops\": 34, \"aliveAI\": 25, \"floats\": 263, \"particles\": 618}"
+    },
+    {
+      "name": "护盾由 4 个配件组成",
+      "ok": true,
+      "detail": "配件 4 / 槽位 4"
+    },
+    {
+      "name": "护盾三数值合法（容量 / 充能 / 延迟）",
+      "ok": true,
+      "detail": "容量 718 · 66.4/s · 延迟 1.1s"
+    },
+    {
+      "name": "护盾带前后缀 + 独特加成",
+      "ok": true,
+      "detail": "词缀 2 · 加成 ['bulwark', 'plate']"
+    },
+    {
+      "name": "护盾卡片展示三数值",
+      "ok": true,
+      "detail": "卡片 5 行"
+    },
+    {
+      "name": "仓库 / 合成表 / 具名护盾齐备",
+      "ok": true,
+      "detail": "具名 8 件"
+    },
+    {
+      "name": "护盾名含前后缀且无奇幻词",
+      "ok": true,
+      "detail": "轻载型 T5 全向拦截阵列·出厂封存"
+    },
+    {
+      "name": "实机伤害先扣盾（HP 不掉）",
+      "ok": true,
+      "detail": "{\"hp\": 1000000, \"shield\": 688, \"timer\": 1.1, \"hpLost\": 0}"
+    },
+    {
+      "name": "受击后重置充能延迟",
+      "ok": true,
+      "detail": "timer=1.1"
+    },
+    {
+      "name": "延迟期间不回充 / 延迟后按 speed 回充",
+      "ok": true,
+      "detail": "延迟中 +0.00 · 延迟后 +30.00"
+    },
+    {
+      "name": "破盾归零并触发短无敌",
+      "ok": true,
+      "detail": "{\"shield\": 0, \"invuln\": 1.5, \"hpLost\": 994}"
+    },
+    {
+      "name": "无敌期间完全免伤",
+      "ok": true,
+      "detail": "扣血 0"
+    },
+    {
+      "name": "破盾后可重新起盾",
+      "ok": true,
+      "detail": "盾值 119.52"
+    },
+    {
+      "name": "护盾全流程无未捕获异常",
+      "ok": true,
+      "detail": "0"
+    },
+    {
+      "name": "护盾全流程无 console.error",
+      "ok": true,
+      "detail": "0"
     }
   ],
   "console_errors": [],
   "page_errors": [],
   "snapshots": {
     "title": {
-      "version": "0.14.11",
+      "version": "0.16.0",
       "onlyRaid": true,
       "mode": "campaign",
       "state": "title",
-      "scripts": 21,
+      "scripts": 22,
       "title": "边境行动 · BORDER OPS",
       "hero": true
     },
@@ -163,17 +233,17 @@
     "raid": {
       "state": "playing",
       "mode": "raid",
-      "elapsed": 0.5329000000000005,
-      "timer": 479.4671,
+      "elapsed": 0.4662999999999992,
+      "timer": 479.5337,
       "ops": 34,
       "types": {
-        "flesh": 24,
-        "armor": 6,
-        "shield": 3
+        "flesh": 25,
+        "shield": 3,
+        "armor": 5
       },
       "extracts": 19,
       "containers": 356,
-      "walls": 2941,
+      "walls": 2949,
       "map": [
         13000,
         9600
@@ -186,8 +256,8 @@
         "gun": null,
         "element": null,
         "ammo": null,
-        "x": 2460,
-        "y": 6885
+        "x": 7260,
+        "y": 8720
       },
       "shieldUsers": 3,
       "camSync": true,
@@ -200,19 +270,19 @@
     "play": {
       "before": {
         "hp": 100,
-        "x": 2460,
-        "y": 6885,
-        "ammo": 17,
-        "elapsed": 1.1655000000000002,
+        "x": 7260,
+        "y": 8720,
+        "ammo": 23,
+        "elapsed": 1.0489,
         "ops": 34,
         "aliveAI": 33
       },
       "after": {
         "hp": 100,
-        "x": 2744.9791999999993,
-        "y": 6735.032446157653,
-        "ammo": 4,
-        "elapsed": 4.179900000000001,
+        "x": 7391,
+        "y": 8629,
+        "ammo": 6,
+        "elapsed": 4.1463,
         "ops": 34,
         "aliveAI": 33,
         "tracers": 0,
@@ -226,57 +296,55 @@
         "rpm": 600,
         "range": 800,
         "element": "fire",
-        "name": "Tediore步枪"
+        "name": "卡拉什尼科夫步枪 · T"
       },
       "hit": {
-        "hp": 99613.69493237505,
+        "hp": 99559.29136150013,
         "armor": 60,
         "type": "armor",
-        "burnT": 4.47,
-        "burnDps": 3.85,
+        "burnT": 4.43,
+        "burnDps": 4.39,
         "corrodeT": 0,
         "shockT": 0,
         "freezeT": 0,
         "radT": 0,
         "nearHp": 100000,
         "ammo": 9993,
-        "angle": -0.01,
+        "angle": 0,
         "floats": [
-          "灼烧 2.0s",
-          "火焰 抗性 ×0.70",
-          "-64",
-          "-64",
-          "-64",
-          "-64",
-          "-64",
-          "火焰 抗性 ×0.70",
-          "-64"
+          "引燃 2.0s",
+          "T 曳光弹 抗性 ×0.80",
+          "-73",
+          "-73",
+          "-73",
+          "-73",
+          "-73",
+          "-73"
         ],
         "sawBreak": false
       },
       "afterDot": {
-        "hp": 99610.23733093758,
+        "hp": 99555.2672995003,
         "armor": 60,
         "type": "armor",
-        "burnT": 3.57,
-        "burnDps": 3.85,
+        "burnT": 3.52,
+        "burnDps": 4.39,
         "corrodeT": 0,
         "shockT": 0,
         "freezeT": 0,
         "radT": 0,
         "nearHp": 100000,
         "ammo": 9993,
-        "angle": -0.01,
+        "angle": 0,
         "floats": [
-          "灼烧 2.0s",
-          "火焰 抗性 ×0.70",
-          "-64",
-          "-64",
-          "-64",
-          "-64",
-          "-64",
-          "火焰 抗性 ×0.70",
-          "-64"
+          "引燃 2.0s",
+          "T 曳光弹 抗性 ×0.80",
+          "-73",
+          "-73",
+          "-73",
+          "-73",
+          "-73",
+          "-73"
         ],
         "sawBreak": false
       }
@@ -287,15 +355,15 @@
         "rpm": 600,
         "range": 800,
         "element": "corrosive",
-        "name": "Vladof步枪"
+        "name": "莫洛特工厂步枪 · HP"
       },
       "hit": {
-        "hp": 99318,
+        "hp": 99322,
         "armor": 0,
         "type": "flesh",
         "burnT": 0,
         "burnDps": 0,
-        "corrodeT": 2.97,
+        "corrodeT": 2.95,
         "shockT": 0,
         "freezeT": 0,
         "radT": 0,
@@ -303,18 +371,18 @@
         "ammo": 9991,
         "angle": 0,
         "floats": [
-          "腐蚀破甲 -60",
-          "腐蚀 克制 ×2.00",
-          "护甲击穿 · 转为血肉型",
-          "-183",
-          "-64",
-          "-115",
-          "-64",
-          "-64",
-          "腐蚀 抗性 ×0.70",
-          "-64",
-          "-64",
-          "-64"
+          "撕裂破甲 -13",
+          "HP 空尖弹 抗性 ×0.42",
+          "-38",
+          "-69",
+          "-38",
+          "-38",
+          "护甲击穿 · 转为无防护",
+          "-69",
+          "HP 空尖弹 克制 ×1.55",
+          "-142",
+          "-142",
+          "-142"
         ],
         "sawBreak": true
       }
@@ -325,28 +393,29 @@
         "rpm": 600,
         "range": 800,
         "element": "cryo",
-        "name": "鹰扬的Atlas步枪"
+        "name": "捷格加廖夫厂步枪 紧公差膛线·重弹头 · US"
       },
       "hit": {
-        "hp": 99545,
+        "hp": 99574,
         "armor": 60,
         "type": "armor",
         "burnT": 0,
         "burnDps": 0,
         "corrodeT": 0,
         "shockT": 0,
-        "freezeT": 2.7,
+        "freezeT": 2.77,
         "radT": 0,
         "nearHp": 100000,
-        "ammo": 9994,
+        "ammo": 9993,
         "angle": 0,
         "floats": [
-          "冰冻 抗性 ×0.75",
-          "-69",
-          "-69",
-          "-124",
-          "-69",
-          "-124"
+          "US 亚音速弹 抗性 ×0.78",
+          "-71",
+          "-71",
+          "-71",
+          "-71",
+          "-71",
+          "-71"
         ],
         "sawBreak": false
       }
@@ -357,29 +426,31 @@
         "rpm": 600,
         "range": 800,
         "element": "shock",
-        "name": "Tediore步枪"
+        "name": "伊热夫斯克步枪 双芯穿甲·弹道适配 · AP"
       },
       "hit": {
-        "hp": 99680,
+        "hp": 98990,
         "armor": 60,
         "type": "armor",
         "burnT": 0,
         "burnDps": 0,
         "corrodeT": 0,
-        "shockT": 1.53,
+        "shockT": 1.57,
         "freezeT": 0,
         "radT": 0,
         "nearHp": 100000,
-        "ammo": 9994,
+        "ammo": 9993,
         "angle": 0,
         "floats": [
           "电磁干扰",
-          "电击 抗性 ×0.70",
-          "-64",
-          "-64",
-          "-64",
-          "-64",
-          "-64"
+          "AP 钢芯穿甲弹 克制 ×1.45",
+          "-133",
+          "-239",
+          "-239",
+          "-133",
+          "-133",
+          "AP 钢芯穿甲弹 克制 ×1.45",
+          "-133"
         ],
         "sawBreak": false
       }
@@ -390,10 +461,10 @@
         "rpm": 600,
         "range": 800,
         "element": "radiation",
-        "name": "Dahl步枪之献"
+        "name": "西格绍尔步枪 · BT"
       },
       "hit": {
-        "hp": 99540,
+        "hp": 99072,
         "armor": 60,
         "type": "armor",
         "burnT": 0,
@@ -401,21 +472,21 @@
         "corrodeT": 0,
         "shockT": 0,
         "freezeT": 0,
-        "radT": 0.6,
-        "nearHp": 99770,
-        "ammo": 9994,
+        "radT": 0.68,
+        "nearHp": 99606,
+        "ammo": 9992,
         "angle": 0,
         "floats": [
-          "-92",
           "-46",
           "-46",
           "辐射连锁 ×2",
-          "-92",
+          "BT 穿甲曳光弹 克制 ×1.30",
+          "-119",
           "-46",
+          "-46",
+          "辐射连锁 ×2",
+          "-119",
           "-82",
-          "辐射连锁 ×2",
-          "-92",
-          "-46",
           "-82",
           "辐射连锁 ×2"
         ],
@@ -428,10 +499,10 @@
         "rpm": 600,
         "range": 800,
         "element": "explosive",
-        "name": "穿云的Jakobs步枪之稳"
+        "name": "西格绍尔步枪·硬芯弹头 · HE"
       },
       "hit": {
-        "hp": 99340,
+        "hp": 99251,
         "armor": 60,
         "type": "armor",
         "burnT": 0,
@@ -440,39 +511,81 @@
         "shockT": 0,
         "freezeT": 0,
         "radT": 0,
-        "nearHp": 99885,
-        "ammo": 9993,
+        "nearHp": 99855,
+        "ammo": 9992,
         "angle": 0,
         "floats": [
           "-17",
-          "-110",
+          "-87",
           "-17",
-          "-110",
+          "-157",
           "-17",
-          "-110",
-          "-17",
-          "-110",
-          "-17",
-          "爆炸 克制 ×1.20",
-          "-110",
-          "-30"
+          "-87",
+          "-30",
+          "-87",
+          "-30",
+          "HE 破片弹 抗性 ×0.95",
+          "-87",
+          "-17"
         ],
         "sawBreak": false
       }
     },
     "final": {
       "state": "playing",
-      "elapsed": 11.240100000000018,
+      "elapsed": 11.70569999999998,
       "hp": 100,
       "ops": 34,
-      "aliveAI": 21,
-      "floats": 258,
-      "particles": 795
+      "aliveAI": 25,
+      "floats": 263,
+      "particles": 618
+    },
+    "shield": {
+      "name": "轻载型 T5 全向拦截阵列·出厂封存",
+      "capacity": 718,
+      "rate": 66.4,
+      "delay": 1.1,
+      "invuln": 1.5,
+      "parts": 4,
+      "affixes": 2,
+      "perks": [
+        "bulwark",
+        "plate"
+      ],
+      "lines": [
+        "容量 718",
+        "充能 66.4/s",
+        "延迟 1.1s",
+        "破盾无敌 1.50s",
+        "加成：延时护罩 · 护甲保全"
+      ],
+      "cardHasStats": true,
+      "stashHasSlot": true,
+      "craftRecipe": true,
+      "uniques": 8,
+      "slots": 4
+    },
+    "shieldSeq": {
+      "afterHit": {
+        "hp": 1000000,
+        "shield": 688,
+        "timer": 1.1,
+        "hpLost": 0
+      },
+      "duringDelay": 0,
+      "afterDelay": 30,
+      "break": {
+        "shield": 0,
+        "invuln": 1.5,
+        "hpLost": 994
+      },
+      "invulnAbsorb": 0,
+      "restart": 119.52000000000001
     }
   },
   "notes": [],
   "summary": {
-    "passed": 28,
+    "passed": 42,
     "failed": 0
   }
 }

@@ -9,7 +9,7 @@ const Net = {
   online:false,
   code:"",
   peerId:"",
-  secret:"",              // v0.14.8：服务端下发的 peer 密钥，只存本地，不再暴露在 room 列表
+  secret:"",              // 服务端下发的 peer 密钥，只存本地，不再暴露在 room 列表
   isHost:false,
   name:"",
   seed:0,
@@ -149,7 +149,8 @@ const Net = {
           // v0.14.11：元素持续状态 / 护盾值同步，客户端只渲染不自行结算
           bu:+(o.burnT||0).toFixed(1), co:+(o.corrodeT||0).toFixed(1),
           zk:+(o.shockT||0).toFixed(1), rd:+(o.radT||0).toFixed(1),
-          sd:Math.round(o.shield||0),
+          sd:Math.round(o.shield||0), sm:Math.round(o.maxShield||0),
+          iv:+(o.shieldInvuln||0).toFixed(2),
           st:o.state||"" });
       }
       body.ai=arr;
@@ -177,7 +178,7 @@ const Net = {
     this.room=r.room;
     this.cursor=r.cursor||this.cursor;
 
-    // v0.14.8：每次以服务端返回的 host 为准；房主转移时接管 ghost AI。
+    // 每次以服务端返回的 host 为准；房主转移时接管 ghost AI。
     const wasHost=this.isHost;
     if(typeof r.host==="boolean") this.isHost=r.host;
     if(this.isHost && !wasHost) this._becomeHost();
@@ -297,7 +298,9 @@ const Net = {
           armor:b.ar||0, maxArmor:b.mar||0,           armorTier:b.t||0,
           freezeT:b.f||0,
           burnT:b.bu||0, corrodeT:b.co||0, shockT:b.zk||0, radT:b.rd||0,
-          shield:b.sd||0, maxShield:b.sd||0,
+          shield:b.sd||0, maxShield:b.sm||b.sd||0,
+          shieldInvuln:b.iv||0, shieldRate:0, shieldDelay:0,
+          shieldPerks:[], shieldAbsorbMul:1, shieldInvulnBase:0, shieldTimer:0,
           dr:0, helmetArmor:0, helmetDr:0,
           speed:0, r:b.b?16:13.5, color:b.b?"#ff5c5c":(b.c==="scav"?"#d08a4a":"#e06a4a"),
           gun:b.g?{ type:b.g, element:b.e||"none", parts:[] }:null,
@@ -314,7 +317,8 @@ const Net = {
       op.armorTier=b.t||0;
       op.freezeT=b.f||0;   // 以房主快照为准，避免非房主侧重复递减
       op.burnT=b.bu||0; op.corrodeT=b.co||0; op.shockT=b.zk||0; op.radT=b.rd||0;
-      op.shield=b.sd||0; op.maxShield=Math.max(op.maxShield||0,op.shield);
+      op.shield=b.sd||0; op.maxShield=Math.max(op.maxShield||0,b.sm||0,op.shield);
+      op.shieldInvuln=b.iv||0;
       op.name=b.n||op.name;
       op.state=b.st||op.state;
       op.gun=b.g?{ type:b.g, element:b.e||"none", parts:[] }:null;

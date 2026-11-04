@@ -8,7 +8,7 @@
  *   · 阵亡不掉钱，存活者保留枪械与护甲。
  * 战斗方案：俯视角实时交火 + 视线判定 + 命中判定 + 护甲穿透，
  * 与战役模式共用同一套输入（鼠标瞄准 / 单摇杆自动锁敌）。
- * 武器两种卡池：CS2 原版数值表 或 无主之地程序化枪械。
+ * 武器两种卡池：CS2 原版数值表 或 旧刷宝体系程序化枪械。
  * ========================================================================= */
 
 const DUST_TILE = 40;
@@ -86,20 +86,6 @@ const DUST_BLOCKS = [
   [25,5,2,2],    // CT 出生箱
   [36,44,2,1],   // 外部箱
 ];
-
-const DUST_CALL = {
-  tSpawn:   { x:17, y:48 },
-  mid:      { x:28, y:30 },
-  midDoors: { x:28, y:21 },
-  catwalk:  { x:31, y:16 },
-  aShort:   { x:33, y:13 },
-  aSite:    { x:44, y:8 },
-  longDoor: { x:42, y:44 },
-  longA:    { x:46, y:30 },
-  bTunnel:  { x:10, y:30 },
-  bSite:    { x:8,  y:9 },
-  ctSpawn:  { x:28, y:5 },
-};
 
 const DUST_SITE_RECT = {
   A: { x0:38, y0:4,  x1:50, y1:14 },
@@ -279,7 +265,7 @@ class Duelist {
     this.blind=0; this.deadT=0;
     this.alert=0;        // 受击后短暂「警觉」：可 omnidirectional 感知，模拟听到枪声/脚步
     this.kills=0; this.deaths=0;
-    // 无主之地模式：护盾池 + 圣物词条
+    // 旧刷宝体系模式：护甲池 + 随身装备词条
     this.maxShield=0; this.shield=0; this.shieldDelay=3; this.shieldRate=0; this.shieldTimer=0;
     this.shieldItem=null; this.relicItem=null; this.relicMods={};
     this.objective=null; this.holdPoint=null;
@@ -457,7 +443,7 @@ const Dust2 = {
         b._stuckN=0; b._stk=0; b._sx=undefined; b._sy=undefined;
         b.angle = b.side==="t" ? -Math.PI/2 : Math.PI/2;
         if(b.gun){ b.gun._mag=undefined; b.gun._res=undefined; }
-        // 上回合阵亡：枪、甲、钳、雷、护盾、圣物全部丢失（CS2 规则）
+        // 上回合阵亡：枪、甲、钳、雷、护甲、随身装备全部丢失（CS2 规则）
         if(b.deadLastRound){
           b.gun=null; b.armor=0; b.helmet=false; b.kit=false; b.nades=[];
           b.maxShield=0; b.shield=0; b.shieldItem=null; b.relicItem=null; b.relicMods={};
@@ -640,7 +626,7 @@ const Dust2 = {
     return out;
   },
 
-  /* 护盾充能：受击后等待延迟，再按速率回充（无主之地模式） */
+  /* 护甲充能：受击后等待延迟，再按速率回充（旧刷宝体系模式） */
   shieldTick(u, dt){
     if(u.maxShield<=0) return;
     if(u.shieldTimer>0){ u.shieldTimer-=dt; return; }
@@ -830,7 +816,7 @@ const Dust2 = {
           if(!this.map.isWalk(muzzle.x+ca*d, muzzle.y+sa*d)){ len=d; break; }
         }
       }
-      // 子弹颜色随元素属性（无主之地模式）：火焰橙红 / 电击青蓝 / 腐蚀荧光绿…
+      // 子弹颜色随弹种属性（旧刷宝体系模式）：火焰橙红 / 电击青蓝 / 腐蚀荧光绿…
       const tcol = (g.element && g.element!=="none" && ELEMENTS[g.element])
         ? ELEMENTS[g.element].color
         : (shooter.side==="t" ? "#ffcf5a" : "#9bd8ff");
@@ -852,12 +838,12 @@ const Dust2 = {
     if(!target.alive) return;
     let d=dmg;
     if(head) d *= target.helmet ? 1.55 : 2.35;
-    // 护盾池优先吸收（无主之地模式）
+    // 护甲池优先吸收（旧刷宝体系模式）
     if(target.maxShield>0 && target.shield>0 && !dot){
       const absorb=Math.min(target.shield, d);
       target.shield-=absorb; d-=absorb;
       target.shieldTimer=target.shieldDelay;
-      // 护盾特效：破裂冲击
+      // 护甲特效：破裂冲击
       if(target.shield<=0 && target.shieldItem && target.shieldItem.effect==="nova"){
         for(const f of this.foesOf(target.side)){
           if(!f.alive) continue;
@@ -872,7 +858,7 @@ const Dust2 = {
       target.armor=Math.max(0, target.armor - d*(1-ap)*0.62);
     }
     target.hp-=hpDmg;
-    // 圣物吸血
+    // 随身装备急救效率
     if(attacker && attacker!==target && attacker.relicMods && attacker.relicMods.lifesteal && !dot){
       attacker.hp=Math.min(attacker.maxHP, attacker.hp + hpDmg*attacker.relicMods.lifesteal/100);
     }
@@ -905,7 +891,7 @@ const Dust2 = {
     if(attacker && attacker!==victim){
       attacker.kills++;
       if(attacker===this.player) this._playerKillsThisRound++;   // 记录玩家本回合击杀，用于下回合商店品质
-      // 击杀奖励：CS2 按武器口径；无主之地模式固定 500，鼓励交火刷钱买圣物/护盾
+      // 击杀奖励：CS2 按武器口径；旧刷宝体系模式固定 500，鼓励交火刷钱买随身装备/护甲
       const reward = this.gunSet==="bl" ? 500 : (gun && gun.kill ? gun.kill : 300);
       attacker.money=Math.min(CS2.maxMoney, attacker.money+reward);
       this.killfeed.unshift({ killer:attacker.name, victim:victim.name, gun:gun?gun.name:"", t:5, head:false, money:reward });
@@ -1281,7 +1267,7 @@ const Dust2 = {
   },
 
   /* ----------------------------- 购买 ----------------------------- */
-  // 无主之地商店品质等级：回合越多越高；上回合玩家有击杀额外加成
+  // 旧刷宝体系商店品质等级：回合越多越高；上回合玩家有击杀额外加成
   blQualityLevel(){
     const round = this.round || 1;
     const roundBonus = (round-1) * 0.9;                                   // 每过一回合 +0.9
@@ -1316,7 +1302,7 @@ const Dust2 = {
     }
     // 按价格排序，便宜的在上面（和 CS2 一致）
     this.blShop=list.sort((a,c)=>a.price-c.price);
-    // 圣物 / 护盾货架：每回合刷新，护盾×2 + 圣物×2；品质随 ql 提升
+    // 随身装备 / 护甲货架：每回合刷新，护甲×2 + 随身装备×2；品质随 ql 提升
     const gear=[];
     for(let i=0;i<2;i++){
       const s=generateShield(Math.round(ql), { weights });
@@ -1365,7 +1351,7 @@ const Dust2 = {
   buy(id){
     const p=this.player;
     if(!this.canBuy()) return { ok:false, msg:"购买时间已结束" };
-    // 无主之地：护盾 / 圣物
+    // 旧刷宝体系：护甲 / 随身装备
     const blg=(this.blGear||[]).find(g=>g.id===id);
     if(blg){
       if(p.money<blg.price) return { ok:false, msg:"资金不足" };
@@ -1461,7 +1447,7 @@ const Dust2 = {
   },
 };
 
-/* 无主之地枪械 -> 沙二可用的枪械规格 */
+/* 旧刷宝体系枪械 -> 沙二可用的枪械规格 */
 const BL_CAT_MAP = { pistol:"pistol", smg:"smg", shotgun:"smg", rifle:"rifle", sniper:"rifle", launcher:"rifle" };
 const BL_DMG = { pistol:30, smg:26, shotgun:15, rifle:33, sniper:92, launcher:78 };
 const BL_PRICE = { pistol:500, smg:1350, shotgun:1150, rifle:2650, sniper:3100, launcher:2950 };

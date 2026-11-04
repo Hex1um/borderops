@@ -231,6 +231,8 @@ function sanitizeAI(o){
     bu:num(o.bu,0,5)||0, co:num(o.co,0,4)||0,   // v0.14.11：灼烧 / 破甲
     zk:num(o.zk,0,2)||0, rd:num(o.rd,0,1)||0,   // v0.14.11：电磁干扰 / 辐射标记
     sd:num(o.sd,0,100000)||0,                   // v0.14.11：护盾剩余
+    sm:num(o.sm,0,100000)||0,                   // v0.16.0：护盾容量上限
+    iv:num(o.iv,0,3)||0,                        // v0.16.0：破盾无敌剩余
     st:text(o.st,16),
   };
 }

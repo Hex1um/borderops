@@ -3,18 +3,18 @@
   --ink:#0d0a07;
   --panel:#241a12;
   --panel-2:#2f2117;
-  --accent:#ffd23f;      /* 无主之地黄 */
-  --accent-2:#ff7b00;
+  --accent:#c8a86a;      /* 军规黄铜 */
+  --accent-2:#b8874a;
   --hp:#e23b3b;
-  --shield:#3fa9f5;
-  --xp:#9bff5b;
+  --shield:#7b9ab5;
+  --xp:#a8b878;
   --text:#f4ead6;
   --muted:#b39a78;
   --white:#e9e4dc;
-  --green:#5bd66a;
-  --blue:#4aa3ff;
-  --purple:#b061ff;
-  --orange:#ff8a1e;
+  --green:#93ad7c;
+  --blue:#7b9ab5;
+  --purple:#9c8fb5;
+  --orange:#c68b4c;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;height:100%;background:var(--bg);overflow:hidden;
@@ -32,11 +32,11 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .hud-left{width:min(46%,360px);display:flex;flex-direction:column;gap:5px;}
 .bar{position:relative;height:18px;background:#000a;border:2px solid var(--ink);border-radius:3px;overflow:hidden;}
 .bar .bar-fill{position:absolute;inset:0;width:100%;transform-origin:left;transition:width .12s linear;}
-.bar.hp .bar-fill{background:linear-gradient(#ff6a6a,var(--hp));}
+.bar.hp .bar-fill{background:linear-gradient(#d96a6a,var(--hp));}
 .bar.shield{height:12px;}
-.bar.shield .bar-fill{background:linear-gradient(#8fd0ff,var(--shield));}
+.bar.shield .bar-fill{background:linear-gradient(#a8c4d4,var(--shield));}
 .bar.xp{height:8px;}
-.bar.xp .bar-fill{background:linear-gradient(#d3ff8a,var(--xp));}
+.bar.xp .bar-fill{background:linear-gradient(#c6d69a,var(--xp));}
 .bar-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:11px;font-weight:700;letter-spacing:.5px;}
 .xp-wrap{display:flex;align-items:center;gap:6px;}
@@ -50,14 +50,14 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
   text-overflow:ellipsis;line-height:1.3;}
 .zone-name{font-size:11px;color:var(--muted);letter-spacing:1px;white-space:nowrap;}
 .mh-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;
-  background:#ff5ce018;border:1px solid #ff5ce077;color:#ff5ce0;
+  background:#c9b87818;border:1px solid #c9b87877;color:#c9b878;
   font-size:10px;font-weight:900;letter-spacing:0;}
 
 /* ---------- 触摸层（单摇杆由 canvas 绘制，此处为按钮） ---------- */
 #touch-layer{position:absolute;inset:0;z-index:15;pointer-events:none;}
 .touch-btn{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;
   border:3px solid var(--ink);border-radius:50%;color:var(--ink);
-  background:linear-gradient(#ffe27a,var(--accent));
+  background:linear-gradient(#e0c88a,var(--accent));
   box-shadow:0 4px 10px #000a,inset 0 2px 0 #fff8;
   touch-action:none;transition:transform .06s; -webkit-user-select:none;user-select:none;}
 .touch-btn:active{transform:scale(.9);}
@@ -73,12 +73,12 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .touch-btn.auto{width:46px;height:46px;right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);
   font-size:11px;font-weight:900;letter-spacing:.5px;border-width:2px;
   background:linear-gradient(#5a4a35,#2f2318);color:#9c8a70;box-shadow:0 3px 8px #000a;}
-.touch-btn.auto.on{background:linear-gradient(#9be7ff,#3fa9f5);color:#062033;
-  box-shadow:0 4px 12px #3fa9f577,inset 0 2px 0 #fff8;}
+.touch-btn.auto.on{background:linear-gradient(#b9cede,#7b9ab5);color:#1a2730;
+  box-shadow:0 4px 12px #7b9ab577,inset 0 2px 0 #fff8;}
 
 .touch-btn.ability{width:70px;height:70px;right:92px;bottom:calc(env(safe-area-inset-bottom,0px) + 116px);
-  background:linear-gradient(#9be7ff,#3fa9f5);color:#062033;
-  box-shadow:0 6px 18px #3fa9f577,0 4px 10px #000a,inset 0 2px 0 #fff8;}
+  background:linear-gradient(#b9cede,#7b9ab5);color:#1a2730;
+  box-shadow:0 6px 18px #7b9ab577,0 4px 10px #000a,inset 0 2px 0 #fff8;}
 .touch-btn.switch{width:56px;height:56px;right:24px;bottom:calc(env(safe-area-inset-bottom,0px) + 122px);
   background:linear-gradient(#e6d8ff,#9b6bff);color:#1a0b2e;}
 .touch-btn.reload{width:58px;height:58px;right:118px;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);}
@@ -103,7 +103,7 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
   text-shadow:3px 3px 0 var(--ink),6px 6px 0 #0008;margin:0 0 4px;}
 .subtitle{color:var(--muted);letter-spacing:3px;text-transform:uppercase;font-size:13px;margin-bottom:18px;}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
-  background:linear-gradient(#ffe27a,var(--accent-2));color:var(--ink);font-weight:800;
+  background:linear-gradient(#e0c88a,var(--accent-2));color:var(--ink);font-weight:800;
   border:3px solid var(--ink);border-radius:6px;padding:12px 18px;font-size:16px;
   box-shadow:0 4px 0 #0007;transition:transform .06s, box-shadow .06s;}
 .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #0007;}
@@ -126,8 +126,6 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .skill-node h4{margin:0 0 4px;font-size:14px;color:var(--accent);}
 .skill-node .desc{font-size:12px;color:var(--muted);min-height:34px;}
 .skill-node .pts{position:absolute;top:6px;right:8px;font-weight:800;font-size:13px;color:var(--green);}
-.tree-col{margin-bottom:14px;}
-.tree-col h3{color:var(--accent-2);border-bottom:2px solid #000;padding-bottom:4px;font-size:15px;letter-spacing:1px;}
 
 /* 背包 */
 .inv-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:10px;}
@@ -135,47 +133,41 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .inv-item:hover{background:#0007;}
 .inv-item .iname{font-weight:800;font-size:14px;}
 .inv-item .istat{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;}
-.inv-item .ielem{font-size:11px;font-weight:700;}
 
 .loot-white{border-left-color:var(--white);} .c-white{color:var(--white);}
 .loot-green{border-left-color:var(--green);} .c-green{color:var(--green);}
 .loot-blue{border-left-color:var(--blue);} .c-blue{color:var(--blue);}
 .loot-purple{border-left-color:var(--purple);} .c-purple{color:var(--purple);}
 .loot-orange{border-left-color:var(--orange);} .c-orange{color:var(--orange);text-shadow:0 0 6px var(--orange);}
-.loot-pearl{border-left-color:#6fe8d0;} .c-pearl{color:#6fe8d0;text-shadow:0 0 6px #6fe8d0;}
-.loot-ancient{border-left-color:#ff4d6d;} .c-ancient{color:#ff4d6d;text-shadow:0 0 8px #ff4d6d;}
-.loot-rainbow{border-left-color:#ff5ce0;}
-.c-rainbow{background:linear-gradient(90deg,#ff5ce0,#ffd23f,#5bd66a,#4aa3ff,#b061ff);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 4px #ff5ce088);font-weight:900;}
+.loot-pearl{border-left-color:#79a9a2;} .c-pearl{color:#79a9a2;text-shadow:0 0 6px #79a9a255;}
+.loot-ancient{border-left-color:#b06a62;} .c-ancient{color:#b06a62;text-shadow:0 0 8px #b06a6255;}
+.loot-rainbow{border-left-color:#c2a76a;}
+.c-rainbow{color:#c2a76a;font-weight:800;}
 
-/* 顶级品质（神话 / 原初 / 寰宇 / 奇点） */
-.loot-mythic{border-left-color:#ff3d6e;} .c-mythic{color:#ff3d6e;text-shadow:0 0 9px #ff3d6e;font-weight:800;}
-.loot-primordial{border-left-color:#c77dff;} .c-primordial{color:#c77dff;text-shadow:0 0 9px #c77dff;font-weight:800;}
-.loot-celestial{border-left-color:#7df9ff;} .c-celestial{color:#7df9ff;text-shadow:0 0 9px #7df9ff;font-weight:800;}
-.loot-singularity{border-left-color:#ffd200;}
-.c-singularity{background:linear-gradient(90deg,#ffd200,#ff8a1e,#ff3d6e,#c77dff);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 6px #ffd20088);font-weight:900;}
-.c-mayhem{color:#ff8a1e;text-shadow:0 0 6px #ff8a1e;}
+/* 高规格品相（定制 / 竞赛级 / 收藏级 / 出厂封存）：与 config.js 的 RARITIES 配色一致 */
+.loot-mythic{border-left-color:#b2645c;} .c-mythic{color:#b2645c;text-shadow:0 0 6px #b2645c55;font-weight:800;}
+.loot-primordial{border-left-color:#9a86a8;} .c-primordial{color:#9a86a8;text-shadow:0 0 6px #9a86a855;font-weight:800;}
+.loot-celestial{border-left-color:#7fa8a0;} .c-celestial{color:#7fa8a0;text-shadow:0 0 6px #7fa8a055;font-weight:800;}
+.loot-singularity{border-left-color:#c9b878;}
+.c-singularity{color:#c9b878;text-shadow:0 0 6px #c9b87855;font-weight:900;}
 
 /* 词缀 chip */
 .affix-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
 .affix{font-size:10px;padding:1px 5px;border-radius:3px;background:#ffffff10;color:var(--muted);
   border:1px solid #ffffff1c;white-space:nowrap;}
-.affix.prefix{background:#5bd66a1a;color:#9be8a3;border-color:#5bd66a40;}
-.affix.suffix{background:#b061ff1a;color:#d3a8ff;border-color:#b061ff40;}
-.affix.power{background:#ff4d6d22;color:#ff8fa3;border-color:#ff4d6d55;font-weight:800;}
+.affix.prefix{background:#93ad7c1a;color:#b3c9a0;border-color:#93ad7c40;}
+.affix.suffix{background:#9c8fb51a;color:#c2b8d0;border-color:#9c8fb540;}
+.affix.power{background:#b08a5822;color:#d0b48a;border-color:#b08a5855;font-weight:800;}
 
-/* 混乱标记 */
-.c-mayhem{color:#ff5ce0;text-shadow:0 0 6px #ff5ce088;}
+/* 改装等级标记 */
+.c-mayhem{color:#b08a58;text-shadow:0 0 6px #b08a5855;}
 
-/* ---------- 混乱 / 转生 ---------- */
+/* ---------- 改装等级 / 训练功勋 ---------- */
 .meta-sec{margin:12px 0;padding:11px 13px;background:#00000055;border:2px solid var(--ink);border-radius:8px;}
 .meta-sec h4{margin:0 0 8px;font-size:14px;color:var(--accent);letter-spacing:.5px;}
 .meta-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
-.meta-big{font-weight:900;font-size:22px;color:#ff5ce0;letter-spacing:1px;
-  text-shadow:0 0 10px #ff5ce055;}
+.meta-big{font-weight:800;font-size:22px;color:#c9b878;letter-spacing:1px;
+  text-shadow:0 0 10px #c9b87833;}
 .meta-cap{font-size:12px;color:var(--muted);font-weight:700;}
 .meta-num{font-size:12px;color:var(--muted);line-height:1.65;}
 .meta-num b{color:var(--text);}
@@ -190,7 +182,7 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
   padding:9px 8px;color:var(--muted);font-weight:800;font-size:12px;text-align:left;transition:.08s;}
 .shop-tab b{display:block;font-size:12px;color:var(--text);margin-bottom:2px;line-height:1.25;}
 .shop-tab .tab-tag{font-size:10px;letter-spacing:1px;text-transform:uppercase;opacity:.75;}
-.shop-tab.on{border-color:var(--accent);background:#ffd23f18;color:var(--accent);}
+.shop-tab.on{border-color:var(--accent);background:#c8a86a18;color:var(--accent);}
 .shop-tab.on b{color:var(--accent);}
 .shop-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;
   padding:9px 12px;background:#0005;border:2px solid var(--ink);border-radius:7px;margin-bottom:12px;}
@@ -199,7 +191,7 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .shop-bar .shop-gold{order:2;margin-left:auto;}
 .shop-bar .btn{order:3;}
 .shop-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;}
-/* v0.14.1：局内摊位改为独立经营，去掉跨店标签页 */
+/* 局内摊位改为独立经营，去掉跨店标签页 */
 .shop-solo{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12px;color:#9fb0c2;
   background:rgba(0,0,0,0.22);border:1px solid rgba(120,150,180,0.2);border-radius:9px;
   padding:8px 12px;margin:0 0 12px;}
@@ -218,7 +210,7 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .si-price.cant{color:#ff6b6b;}
 .gamble-box{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px 10px;
   background:#0004;border:2px dashed #4a3a28;border-radius:10px;text-align:center;}
-.gamble-box .slot{font-size:44px;line-height:1;filter:drop-shadow(0 0 10px #ffd23f55);}
+.gamble-box .slot{font-size:44px;line-height:1;filter:drop-shadow(0 0 10px #c8a86a55);}
 .gamble-result{min-height:22px;font-size:14px;font-weight:800;}
 
 .toast{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);z-index:30;
@@ -248,10 +240,10 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 }
 
 /* =========================================================================
- * v0.4.0 新增：模式选择 / 装备库分区 / 沙二购买菜单
+ * 新增：模式选择 / 装备库分区 / 沙二购买菜单
  * ========================================================================= */
 /* =========================================================================
- * v0.13.9 标题页：塔科夫主模式 Hero + 其他模式折叠
+ * 标题页：塔科夫主模式 Hero + 其他模式折叠
  * ========================================================================= */
 .mode-hero{position:relative;margin:2px 0 14px;padding:20px 22px 20px;text-align:left;cursor:pointer;
   border:3px solid var(--ink);border-radius:12px;overflow:hidden;
@@ -279,11 +271,10 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .hero-chips span{font-size:11px;letter-spacing:.5px;color:#f0dca8;background:rgba(255,210,63,.09);
   border:1px solid rgba(255,210,63,.28);border-radius:999px;padding:3px 9px;white-space:nowrap;}
 .hero-cta{display:inline-flex;align-items:center;gap:9px;font-weight:900;font-size:15px;letter-spacing:1px;
-  color:#1a1206;background:linear-gradient(#ffe27a,var(--accent-2));padding:9px 18px;border-radius:6px;
+  color:#1a1206;background:linear-gradient(#e0c88a,var(--accent-2));padding:9px 18px;border-radius:6px;
   border:3px solid var(--ink);box-shadow:0 4px 0 #0007;}
 .hero-arrow{transition:transform .12s;}
 .mode-hero:hover .hero-arrow{transform:translateX(4px);}
-.mode-more-btn{margin:0 0 12px;}
 .title-actions{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 12px;}
 .title-actions .btn{box-shadow:0 3px 0 #0007;}
 .mm-short,.kick-short,.live-short{display:none;}
@@ -322,14 +313,14 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .mode-card[data-mode="dust2"] .mode-ico{color:#7fd0ff;}
 .mode-card[data-mode="dust2"] h3{color:#7fd0ff;}
 
-.cur-eri{color:#b061ff;font-weight:900;font-size:14px;text-shadow:0 0 8px #b061ff55;}
+.cur-eri{color:#9c8fb5;font-weight:800;font-size:14px;text-shadow:0 0 8px #9c8fb533;}
 .inv-sec{margin:14px 0 6px;}
 .inv-sec h4{margin:0 0 6px;font-size:14px;color:var(--accent);letter-spacing:.5px;
   border-bottom:2px solid #0006;padding-bottom:5px;}
 .inv-sec h4 .meta-cap{font-weight:700;letter-spacing:0;}
 .empty-hint{font-size:12px;color:var(--muted);padding:10px 12px;background:#0004;
   border:2px dashed #4a3a28;border-radius:6px;}
-.inv-item.sel{box-shadow:inset 0 0 0 2px #ffd23f55;}
+.inv-item.sel{box-shadow:inset 0 0 0 2px #c8a86a55;}
 
 /* 沙二设置 */
 .dust-opt{margin:14px 0;text-align:left;}
@@ -338,7 +329,7 @@ canvas#game{display:block;width:100%;height:100%;background:#0c0a07;touch-action
 .opt-card{background:#0006;border:3px solid var(--ink);border-radius:8px;padding:11px 13px;cursor:pointer;transition:.08s;}
 .opt-card b{display:block;font-size:15px;color:var(--text);margin-bottom:3px;}
 .opt-card span{font-size:12px;color:var(--muted);line-height:1.5;}
-.opt-card.on{border-color:var(--accent);background:#ffd23f14;}
+.opt-card.on{border-color:var(--accent);background:#c8a86a14;}
 .opt-card.on b{color:var(--accent);}
 .dust-score{display:flex;align-items:baseline;gap:14px;font-weight:900;font-size:44px;}
 .dust-score .sc-a{color:#5ea9ff;}
@@ -424,7 +415,7 @@ body.mode-br .touch-btn.ability{display:none !important;}
 .raid-balance{font-size:13px;color:#cbd6e2;background:rgba(0,0,0,0.25);border:1px solid rgba(120,150,180,0.2);
   border-radius:10px;padding:8px 14px;margin-bottom:14px;display:inline-block;}
 .raid-balance b{color:#8fe07a;}
-/* v0.14.1：出发条 —— 进场 / 联机放在配装上方，滚到哪都能直接开 */
+/* 出发条 —— 进场 / 联机放在配装上方，滚到哪都能直接开 */
 .raid-launch{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
   background:linear-gradient(100deg,rgba(79,214,255,0.10),rgba(126,224,138,0.06) 60%,transparent);
   border:1px solid rgba(120,180,220,0.28);border-radius:14px;padding:12px 16px;margin-bottom:14px;}
@@ -493,14 +484,14 @@ body.mode-br .touch-btn.ability{display:none !important;}
 }
 
 /* =========================================================================
- * 移动端触屏按钮重排（v0.9.1）
+ * 移动端触屏按钮重排
  *   解决竖屏上按钮互相压叠、并压住 canvas HUD 的问题：
  *   右列 fire / 医疗 / AUTO 纵向排列，中列 reload / switch，左上角新增物品栏
  * ========================================================================= */
 /* 塔科夫：星键（搜索/交互）与加号键（医疗包扎）彻底分开，各占一格 */
 body.mode-raid .touch-btn.ability{
-  background:linear-gradient(#9be7ff,#3fa9f5);color:#062033;
-  box-shadow:0 6px 18px #3fa9f577,0 4px 10px #000a,inset 0 2px 0 #fff8;}
+  background:linear-gradient(#b9cede,#7b9ab5);color:#1a2730;
+  box-shadow:0 6px 18px #7b9ab577,0 4px 10px #000a,inset 0 2px 0 #fff8;}
 body.mode-raid .touch-btn.med{
   display:flex !important;
   background:linear-gradient(#b6ffc8,#38b96a);color:#04240f;border-color:#04240f;
@@ -510,7 +501,6 @@ body.mode-raid .touch-btn.med:active{transform:scale(.88);}
 .touch-btn.inv{display:none !important;}
 body.mode-raid .touch-btn.inv,
 body.mode-br   .touch-btn.inv{display:flex !important;}
-body.mode-br   .touch-btn.med{display:flex !important;}
 body.mode-raid .touch-btn.buy,
 body.mode-raid .touch-btn.use,
 body.mode-br   .touch-btn.buy,
@@ -560,7 +550,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 }
 
 /* =========================================================================
- * v0.10.3 新增：拍卖行
+ * 新增：拍卖行
  * ========================================================================= */
 .auc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:10px;}
 .auc-card{border:2px solid var(--ink);border-left-width:6px;border-radius:7px;padding:9px 11px;
@@ -601,10 +591,10 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 }
 
 /* =========================================================================
- * v0.10.4 新增：命名传奇装备标签 / 删除存档确认
+ * 新增：命名传奇装备标签 / 删除存档确认
  * ========================================================================= */
-.uniq-perk{font-size:11px;line-height:1.45;color:#ffd23f;background:#ffd23f12;
-  border:1px solid #ffd23f33;border-radius:5px;padding:3px 7px;}
+.uniq-perk{font-size:11px;line-height:1.45;color:#c8a86a;background:#c8a86a12;
+  border:1px solid #c8a86a33;border-radius:5px;padding:3px 7px;}
 .wipe-box{margin:12px auto 0;max-width:560px;font-size:12px;line-height:1.6;color:#ff9a8a;
   background:#ff6b6b10;border:2px dashed #ff6b6b55;border-radius:8px;padding:10px 12px;text-align:center;}
 .wipe-box .row{justify-content:center;margin-top:8px;}
@@ -617,7 +607,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 .auc-card{min-width:0;}
 
 /* =========================================================================
- * v0.10.5：核心只从箱子 / 拍卖行获取 —— 大厅分类筛选
+ * 核心只从箱子 / 拍卖行获取 —— 大厅分类筛选
  * ========================================================================= */
 .auc-filter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}
 .auc-filter .btn{padding:5px 10px;font-size:12px;}
@@ -627,7 +617,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 }
 
 /* =========================================================================
- * v0.11.0：联机突袭大厅
+ * 联机突袭大厅
  * ========================================================================= */
 .online-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:6px;}
 .online-card{border:2px solid #0006;border-left:5px solid #7ee08a;border-radius:8px;padding:14px 16px;
@@ -654,7 +644,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 .online-peer.me{background:#7ee08a10;border-color:#7ee08a33;}
 .online-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
 .online-tag{font-size:10px;font-weight:800;border-radius:4px;padding:1px 6px;margin-left:auto;}
-.online-tag.host{color:#ffd23f;background:#ffd23f18;border:1px solid #ffd23f40;}
+.online-tag.host{color:#c8a86a;background:#c8a86a18;border:1px solid #c8a86a40;}
 .online-tag.me{color:#8fe0a0;background:#8fe0a018;border:1px solid #8fe0a040;}
 .online-carry{font-size:13px;color:var(--text);line-height:1.5;word-break:break-word;}
 .online-rules{font-size:12px;line-height:1.6;color:var(--muted);}
@@ -664,7 +654,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
   .online-grid{grid-template-columns:1fr;}
 }
 
-/* ---- v0.12 合成材料槽位 ---- */
+/* ---- 合成材料槽位 ---- */
 .mat-slot{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;
   padding:4px 9px;border-radius:6px;border:2px dashed #2a3a44;color:#5d6b78;
   background:#0b101608;letter-spacing:.5px;}
@@ -672,7 +662,7 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
 .mat-slot.on:hover{filter:brightness(1.25);}
 .shop-item.noicon{padding-left:12px;}
 
-/* ---- v0.12.1 投料进度 / 材料芯片 ---- */
+/* ---- 投料进度 / 材料芯片 ---- */
 .craft-fill{display:flex;align-items:center;gap:8px;margin:6px 0 2px;font-size:11px;color:#9aa4b2;}
 .craft-bar{flex:1 1 auto;height:5px;border-radius:3px;background:#0d141a;overflow:hidden;border:1px solid #1b2a33;}
 .craft-bar i{display:block;height:100%;transition:width .16s ease;}
@@ -683,17 +673,17 @@ body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 
   border:2px solid #22333d;border-left:none;background:#101820;color:#7fd0ff;cursor:pointer;}
 .chip-max:hover{background:#16222c;color:#cfeaff;}
 
-/* ---- v0.12.9 组装按钮「可点但缺料」状态 + 拍卖合并堆叠徽标 ---- */
+/* ---- 组装按钮「可点但缺料」状态 + 拍卖合并堆叠徽标 ---- */
 .btn-disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.3);}
 .btn-disabled:hover{filter:grayscale(.3);}
-/* ---- v0.13.8 所有原生 disabled 按钮统一显示为不可点（此前点上去毫无反馈） ---- */
+/* ---- 所有原生 disabled 按钮统一显示为不可点（此前点上去毫无反馈） ---- */
 button:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.35);}
 button:disabled:hover{filter:grayscale(.35);}
 .stk{display:inline-block;margin-left:6px;padding:0 7px;border-radius:9px;font-size:12px;font-weight:800;
   color:#0b0f14;background:#7fd0ff;vertical-align:middle;}
 .auc-val .stk{background:#22303a;color:#9fe3ff;}
 
-/* ---- v0.12.5 塔科夫模式介绍折叠 ---- */
+/* ---- 塔科夫模式介绍折叠 ---- */
 .tarkov-intro{margin:0 0 14px;border:1px solid #1d2a33;border-radius:10px;background:#0d141a;overflow:hidden;}
 .tarkov-intro>summary{cursor:pointer;list-style:none;padding:10px 14px;font-weight:700;color:#cdd7e2;
   background:linear-gradient(90deg,#16222c,#0f181f);user-select:none;display:flex;align-items:center;gap:8px;}
@@ -702,7 +692,7 @@ button:disabled:hover{filter:grayscale(.35);}
 .tarkov-intro[open]>summary::before{transform:rotate(90deg);}
 .tarkov-intro-body{padding:10px 14px 14px;line-height:1.7;font-size:13px;}
 
-/* ===== v0.14.4 局内物品栏（DOM 层，带丢弃按钮；不遮挡摇杆区域） ===== */
+/* ===== 局内物品栏（DOM 层，带丢弃按钮；不遮挡摇杆区域） ===== */
 #inv-layer{position:absolute;inset:0;z-index:25;pointer-events:none;}
 #inv-layer.hidden{display:none;}
 .inv-card{position:absolute;right:16px;top:62px;bottom:96px;width:min(470px,46vw);
@@ -733,14 +723,14 @@ button:disabled:hover{filter:grayscale(.35);}
   .inv-row{padding:7px 8px;}
 }
 
-/* v0.14.6 物品栏「拿在手上」 */
+/* 物品栏「拿在手上」 */
 .inv-take{flex:0 0 auto;border:1px solid rgba(120,200,255,0.42);background:rgba(90,170,255,0.12);
   color:#8fd0ff;font-size:11px;line-height:1;padding:6px 10px;border-radius:7px;cursor:pointer;
   font-family:inherit;transition:background .12s,border-color .12s;}
 .inv-take:hover{background:rgba(90,170,255,0.24);border-color:rgba(140,210,255,0.75);}
 .inv-take:active{transform:translateY(1px);}
 
-/* ===== v0.14.6 配装大厅「带入现金」 ===== */
+/* ===== 配装大厅「带入现金」 ===== */
 .raid-carry{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px;padding:9px 12px;
   background:rgba(10,18,26,0.62);border:1px solid rgba(120,150,180,0.22);border-radius:10px;}
 .rc-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}

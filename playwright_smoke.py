@@ -1,7 +1,8 @@
 """borderops 真实浏览器冒烟测试（系统 Edge，无需下载浏览器）。
 
 用法：先 `PORT=3211 node server.js`，再 `python playwright_smoke.py`。
-覆盖：标题页 -> 配装大厅 -> 进图 -> 真实鼠标开火/键盘移动 -> 五种元素状态 -> 护甲击穿回退 -> 控制台异常。
+覆盖：标题页 -> 配装大厅 -> 进图 -> 真实鼠标开火/键盘移动 -> 七种弹种终点效应 ->
+插板击穿回退 -> 护盾装备三数值/破盾无敌/回充 -> 控制台异常。
 产物：testshots/*.png 截图 + test-report.json 结构化报告。
 """
 import json
@@ -38,8 +39,10 @@ def shot(page, name):
 
 
 with sync_playwright() as pw:
+    # 本机环境带全局 HTTP_PROXY，直连 127.0.0.1 必须绕开代理，否则 net::ERR_CONNECTION_REFUSED
     browser = pw.chromium.launch(executable_path=EDGE, headless=True,
-                                 args=["--no-sandbox", "--disable-dev-shm-usage"])
+                                 args=["--no-sandbox", "--disable-dev-shm-usage",
+                                       "--no-proxy-server", "--proxy-bypass-list=<-loopback>"])
     ctx = browser.new_context(viewport={"width": 1360, "height": 820}, device_scale_factor=1)
     page = ctx.new_page()
     page.on("console", lambda m: report["console_errors"].append(m.text) if m.type == "error" else None)
@@ -55,7 +58,7 @@ with sync_playwright() as pw:
         hero: !!document.querySelector('[data-mode="raid"]')
     })""")
     report["snapshots"]["title"] = init
-    check("21 个脚本全部加载", init["scripts"] >= 21, "%d 个" % init["scripts"])
+    check("22 个脚本全部加载", init["scripts"] >= 22, "%d 个" % init["scripts"])
     check("window.game 就绪且处于标题页", init["state"] == "title", init["title"])
     check("标题页有塔科夫入口", init["hero"], "data-mode=raid")
     shot(page, "01-title")
@@ -106,7 +109,7 @@ with sync_playwright() as pw:
           (raid["extracts"], raid["containers"], raid["walls"], raid["map"]))
     check("T4+ 装甲型单位存在（黄色血条有意义）", (raid["types"].get("armor") or 0) > 0,
           "类型分布 " + json.dumps(raid["types"], ensure_ascii=False))
-    check("护盾型单位存在（蓝血条 / 电击 ×2.00 有目标）",
+    check("护盾型单位存在（独立蓝盾条有目标）",
           (raid["types"].get("shield") or 0) > 0 and raid["shieldUsers"] > 0,
           "带盾单位 %d" % raid["shieldUsers"])
     check("raid 相机已同步给 game.camera", raid["camSync"], "worldToScreen 可用")
@@ -225,45 +228,45 @@ with sync_playwright() as pw:
         page.mouse.up()
         return info, page.evaluate(probe)
 
-    # 火焰：灼烧 DOT 应在停火后继续掉血
+    # 曳光弹：引燃应在停火后继续掉血
     gi, s1 = fire_burst("fire", 600)
     hpA = s1["hp"]
     page.wait_for_timeout(900)
     s1b = page.evaluate(probe)
-    check("火焰：命中挂上灼烧", s1["burnT"] > 0 and s1["burnDps"] > 0,
+    check("曳光弹：命中挂上引燃", s1["burnT"] > 0 and s1["burnDps"] > 0,
           "burnT=%s burnDps=%s" % (s1["burnT"], s1["burnDps"]))
-    check("火焰：停火后 DOT 继续掉血", s1b["hp"] < hpA, "HP %.0f -> %.0f" % (hpA, s1b["hp"]))
+    check("曳光弹：停火后燃烧继续掉血", s1b["hp"] < hpA, "HP %.0f -> %.0f" % (hpA, s1b["hp"]))
     report["snapshots"]["fire"] = {"gun": gi["gun"], "hit": s1, "afterDot": s1b}
 
-    # 腐蚀：60 点护甲被啃穿，类型从 armor 回退 flesh
+    # 空尖弹：60 点插板耐久被啃穿，类型从 armor 回退 flesh
     gi, s2 = fire_burst("corrosive", 900)
-    check("腐蚀：啃掉护甲耐久", s2["armor"] < 60, "armor 60 -> %s" % s2["armor"])
-    check("改2：护甲打穿后实机类型变回血肉", s2["type"] == "flesh",
+    check("空尖弹：啃掉插板耐久", s2["armor"] < 60, "armor 60 -> %s" % s2["armor"])
+    check("改2：插板打穿后实机类型变回无防护", s2["type"] == "flesh",
           "type=%s, armor=%s" % (s2["type"], s2["armor"]))
-    check("腐蚀：挂上破甲 debuff", s2["corrodeT"] > 0, "corrodeT=%s" % s2["corrodeT"])
+    check("空尖弹：挂上撕裂破防 debuff", s2["corrodeT"] > 0, "corrodeT=%s" % s2["corrodeT"])
     check("实机出现「护甲击穿」提示", s2["sawBreak"], s2["floats"][-3:])
     report["snapshots"]["corrosive"] = {"gun": gi["gun"], "hit": s2}
 
-    # 冰冻：freezeT + 视觉粒子
+    # 亚音速弹：迟滞 + 冰晶视觉粒子
     gi, s3 = fire_burst("cryo", 600)
-    check("冰冻：实机叠加冻结", s3["freezeT"] > 0, "freezeT=%s" % s3["freezeT"])
+    check("亚音速弹：实机叠加迟滞", s3["freezeT"] > 0, "freezeT=%s" % s3["freezeT"])
     report["snapshots"]["cryo"] = {"gun": gi["gun"], "hit": s3}
 
-    # 电击：干扰状态
+    # 钢芯穿甲弹：钝击失能状态
     gi, s4 = fire_burst("shock", 600)
-    check("电击：实机挂上电磁干扰", s4["shockT"] > 0, "shockT=%s" % s4["shockT"])
+    check("钢芯穿甲弹：实机挂上钝击失能", s4["shockT"] > 0, "shockT=%s" % s4["shockT"])
     report["snapshots"]["shock"] = {"gun": gi["gun"], "hit": s4}
 
-    # 辐射：连锁到附近目标
+    # 穿甲曳光弹：跳弹连锁到附近目标
     gi, s5 = fire_burst("radiation", 700)
-    check("辐射：附近目标吃到连锁伤害", s5["nearHp"] is not None and s5["nearHp"] < 100000,
+    check("穿甲曳光弹：附近目标吃到跳弹伤害", s5["nearHp"] is not None and s5["nearHp"] < 100000,
           "nearHp=%s" % s5["nearHp"])
-    check("辐射：命中挂上辐射标记", s5["radT"] > 0, "radT=%s" % s5["radT"])
+    check("穿甲曳光弹：命中挂上跳弹标记", s5["radT"] > 0, "radT=%s" % s5["radT"])
     report["snapshots"]["radiation"] = {"gun": gi["gun"], "hit": s5}
 
-    # 爆炸：普通子弹也要有范围溅射（原来只有火箭筒有）
+    # 破片弹：普通子弹也要有范围溅射（原来只有火箭筒有）
     gi, s6 = fire_burst("explosive", 700)
-    check("爆炸：普通子弹产生范围溅射", s6["nearHp"] is not None and s6["nearHp"] < 100000,
+    check("破片弹：普通子弹产生范围溅射", s6["nearHp"] is not None and s6["nearHp"] < 100000,
           "nearHp=%s" % s6["nearHp"])
     report["snapshots"]["explosive"] = {"gun": gi["gun"], "hit": s6}
     shot(page, "05-elements")
@@ -286,6 +289,99 @@ with sync_playwright() as pw:
     check("全程无 console.error", len(report["console_errors"]) == 0,
           "; ".join(report["console_errors"][:3]) if report["console_errors"] else "0")
     check("游戏仍处于 playing", final["state"] == "playing", json.dumps(final, ensure_ascii=False))
+
+    print("\n=== F. 护盾装备实机：三数值 / 先扣盾 / 破盾无敌 / 延迟回充 ===", flush=True)
+    equip = page.evaluate("""() => {
+        const s = raidMakeShield(5, 4), p = Raid.player;
+        p.hp = 1e6; p.maxHP = 1e6; p.armor = 1e6; p.maxArmor = 1e6;
+        p.shieldGear = s; p.shieldPerks = (s.perks || []).slice();
+        p.maxShield = s.capacity; p.shield = s.capacity;
+        p.shieldRate = s.rate; p.shieldDelay = s.delay;
+        p.shieldInvulnBase = s.invuln;
+        p.shieldAbsorbMul = p.shieldPerks.includes('emitter') ? 1.08 : 1;
+        p.shieldTimer = 0; p.shieldInvuln = 0; p.bleed = 0;
+        return { name: s.name, capacity: s.capacity, rate: s.rate, delay: s.delay,
+                 invuln: s.invuln, parts: (s.parts || []).length,
+                 affixes: (s.affixes || []).length, perks: s.perks.slice(),
+                 lines: shieldLines(s), cardHasStats: /容量/.test(shieldCard(s, {sell:true})),
+                 stashHasSlot: Array.isArray(RaidStash.load().shields),
+                 craftRecipe: RAID_RECIPES.some(r => r.id === 'r_shield'),
+                 uniques: SHIELD_UNIQUES.length, slots: SHIELD_SLOTS.length };
+    }""")
+    report["snapshots"]["shield"] = equip
+    check("护盾由 4 个配件组成", equip["parts"] == 4 and equip["slots"] == 4,
+          "配件 %d / 槽位 %d" % (equip["parts"], equip["slots"]))
+    check("护盾三数值合法（容量 / 充能 / 延迟）",
+          equip["capacity"] > 0 and equip["rate"] > 0 and equip["delay"] >= 0.6,
+          "容量 %s · %s/s · 延迟 %ss" % (equip["capacity"], equip["rate"], equip["delay"]))
+    check("护盾带前后缀 + 独特加成", equip["affixes"] >= 2 and len(equip["perks"]) >= 1,
+          "词缀 %d · 加成 %s" % (equip["affixes"], equip["perks"]))
+    check("护盾卡片展示三数值", equip["cardHasStats"] and len(equip["lines"]) >= 5,
+          "卡片 %s 行" % len(equip["lines"]))
+    check("仓库 / 合成表 / 具名护盾齐备",
+          equip["stashHasSlot"] and equip["craftRecipe"] and equip["uniques"] >= 8,
+          "具名 %d 件" % equip["uniques"])
+    check("护盾名含前后缀且无奇幻词",
+          " " in equip["name"] and "·" in equip["name"] and
+          not any(w in equip["name"] for w in ["神", "魔", "龙", "灭", "湮", "虚空"]),
+          equip["name"])
+
+    seq = page.evaluate("""() => {
+        const p = Raid.player, out = {};
+        const atk = { isPlayer:false, remote:false, x:0, y:0, name:'Tester' };
+        const gun = { element:'none', armorPen:0, name:'test' };
+        const hit = (d) => Raid._damage(p, d, atk, gun, {});
+        // (a) 先扣盾
+        const hp0 = p.hp; hit(30);
+        out.afterHit = { hp:p.hp, shield:p.shield, timer:p.shieldTimer, hpLost:hp0-p.hp };
+        // (b) 延迟期间不回充 / 延迟结束后回充
+        const s1 = p.shield;
+        Raid._tickShield(p, p.shieldDelay * 0.5);
+        out.duringDelay = p.shield - s1;
+        const s2 = p.shield;
+        Raid._tickShield(p, p.shieldDelay + 0.2);
+        out.afterDelay = p.shield - s2;
+        // (c) 破盾 -> 无敌 -> 免伤
+        p.shield = 5; p.shieldTimer = 0;
+        const hp1 = p.hp; hit(999);
+        out.break = { shield:p.shield, invuln:p.shieldInvuln, hpLost:hp1-p.hp };
+        const hp2 = p.hp; hit(999);
+        out.invulnAbsorb = hp2 - p.hp;
+        // (d) 无敌结束后可从 0 重新起盾
+        Raid._tickShield(p, (p.shieldInvulnBase||0) + 0.1);
+        Raid._tickShield(p, p.shieldDelay + 0.2);
+        out.restart = p.shield;
+        return out;
+    }""")
+    report["snapshots"]["shieldSeq"] = seq
+    check("实机伤害先扣盾（HP 不掉）",
+          seq["afterHit"]["hpLost"] == 0 and abs(seq["afterHit"]["shield"] - (equip["capacity"] - 30)) < 2,
+          json.dumps(seq["afterHit"], ensure_ascii=False))
+    check("受击后重置充能延迟", abs(seq["afterHit"]["timer"] - equip["delay"]) < 0.01,
+          "timer=%s" % seq["afterHit"]["timer"])
+    check("延迟期间不回充 / 延迟后按 speed 回充",
+          abs(seq["duringDelay"]) < 0.01 and seq["afterDelay"] > 0,
+          "延迟中 %+.2f · 延迟后 %+.2f" % (seq["duringDelay"], seq["afterDelay"]))
+    check("破盾归零并触发短无敌",
+          seq["break"]["shield"] == 0 and seq["break"]["invuln"] > 0,
+          json.dumps(seq["break"], ensure_ascii=False))
+    check("无敌期间完全免伤", seq["invulnAbsorb"] == 0, "扣血 %s" % seq["invulnAbsorb"])
+    check("破盾后可重新起盾", seq["restart"] > 0, "盾值 %.2f" % seq["restart"])
+    # 拉满护盾值，截一张 HUD 特写以肉眼确认「蓝条在血条上方、血条仍是红色」
+    page.evaluate("() => { Raid.player.shield = Raid.player.maxShield; Raid.player.shieldInvuln = 0; }")
+    page.wait_for_timeout(300)
+    shot(page, "06-shield")
+    try:
+        page.screenshot(path=os.path.join(SHOTS, "07-shield-hud.png"),
+                        clip={"x": 0, "y": 660, "width": 360, "height": 160})
+    except Exception as e:
+        report["notes"].append("HUD clip failed: %s" % e)
+
+    print("\n=== G. 护盾介入后仍无异常 ===", flush=True)
+    check("护盾全流程无未捕获异常", len(report["page_errors"]) == 0,
+          "; ".join(report["page_errors"][:3]) if report["page_errors"] else "0")
+    check("护盾全流程无 console.error", len(report["console_errors"]) == 0,
+          "; ".join(report["console_errors"][:3]) if report["console_errors"] else "0")
 
     browser.close()
 

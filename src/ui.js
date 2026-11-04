@@ -22,7 +22,7 @@ const UI = {
     const hud=document.getElementById('hud'); if(hud) hud.classList.add('hidden');
     const tl=document.getElementById('touch-layer'); if(tl) tl.classList.add('hidden');
   },
-  /* v0.14.0：滚动位置快照 —— 记录 overlay 内**所有**可滚动容器（面板本身、
+  /* 滚动位置快照 —— 记录 overlay 内**所有**可滚动容器（面板本身、
    * 武器/护甲/仓库/商店列表……），重绘后按「选择器 + 同类序号」原位恢复。
    * 之前只存了 panel 的 scrollTop，选枪时列表自己弹回顶部，正是漏了 .raid-list。 */
   _snapScroll(){
@@ -124,7 +124,7 @@ const UI = {
 
         ${armed?`<div class="wipe-box">
           确认删除本机全部存档？<br>
-          ${onlyRaid?'':'战役进度 · '}塔科夫仓库（枪械/护甲/材料/核心）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
+          ${onlyRaid?'':'战役进度 · '}塔科夫仓库（枪械/护甲/材料/改装模块）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
           <div class="row">
             <button class="btn small danger" id="btn-wipe-yes">确认删除</button>
             <button class="btn small ghost" id="btn-wipe-no">取消</button>
@@ -137,7 +137,7 @@ const UI = {
               <div class="mode-ico">▮</div>
               <h3>战役模式</h3>
               <div class="mode-tag">CAMPAIGN</div>
-              <p>十片区域推进，击败秘藏守卫解锁<b style="color:#ff5ce0">混乱</b>与<b style="color:var(--accent)">转生</b>。</p>
+              <p>十片区域推进，击败军械库守卫解锁<b style="color:#ff5ce0">改装</b>与<b style="color:var(--accent)">重新部署</b>。</p>
             </div>
             <div class="mode-card" data-mode="endless" role="button" tabindex="0">
               <div class="mode-ico">∞</div>
@@ -149,7 +149,7 @@ const UI = {
               <div class="mode-ico">✦</div>
               <h3>沙二模式</h3>
               <div class="mode-tag">DUST II · 5V5</div>
-              <p>CS2 竞技规则：爆破、经济、五列购买菜单。可选原版枪械或无主之地枪械。</p>
+              <p>CS2 竞技规则：爆破、经济、五列购买菜单。可选原版枪械或旧刷宝体系枪械。</p>
             </div>
             <div class="mode-card" data-mode="br" role="button" tabindex="0">
               <div class="mode-ico">◈</div>
@@ -216,7 +216,7 @@ const UI = {
   },
 
   pickMode(mode){
-    // v0.14.9：默认只开放塔科夫模式；其他模式代码保留，但入口隐藏且禁止绕过。
+    // 默认只开放塔科夫模式；其他模式代码保留，但入口隐藏且禁止绕过。
     if(CFG.onlyRaid !== false && mode!=="raid") mode="raid";
     this._mode=mode;
     if(mode==="dust2") this.dustSetup();
@@ -242,7 +242,7 @@ const UI = {
         <div class="grid-class">${cards}</div>
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
           <button class="btn ghost small" id="btn-back">返回</button>
-          <button class="btn" id="btn-start" disabled style="opacity:.5;">${mode==="endless"?"进入试炼场":"进入潘多拉"}</button>
+          <button class="btn" id="btn-start" disabled style="opacity:.5;">${mode==="endless"?"进入试炼场":"进入海关流域"}</button>
         </div>
       </div>`);
     let sel=null;
@@ -279,7 +279,7 @@ const UI = {
               <span>AK-47 / M4A4 / AWP …… 真实伤害、护甲穿透与射速</span>
             </div>
             <div class="opt-card" data-gun="bl">
-              <b>无主之地枪械</b>
+              <b>旧刷宝体系枪械</b>
               <span>程序化生成的词缀枪，品质越高越离谱</span>
             </div>
           </div>
@@ -378,7 +378,7 @@ const UI = {
       const eri=itemSellEridium({rarity:w.rarity});
       return `<div class="inv-item loot-${w.rarity} ${i===p.wi?'sel':''}" data-i="${i}">
         <div class="iname c-${w.rarity}">${w.name}</div>
-        <div class="si-meta">${w.rarityName} · Lv.${w.ilvl} · ${MANUFACTURERS[w.manufacturer].name} · ${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">混乱${w.mayhem}</b>`:''}</div>
+        <div class="si-meta">${w.rarityName} · Lv.${w.ilvl} · ${MANUFACTURERS[w.manufacturer].name} · ${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
         <div class="istat">${w.statLines().join(' · ')}</div>
         ${this._affixHtml(w)}
         <div class="si-buy">
@@ -392,7 +392,7 @@ const UI = {
       const eff=shieldEffectText(s);
       return `<div class="inv-item loot-${s.rarity} ${i===p.shieldIdx?'sel':''}" data-shield="${i}">
         <div class="iname c-${s.rarity}">${s.name}${i===p.shieldIdx?' · 装备中':''}</div>
-        <div class="si-meta">${(RARITY_BY_ID[s.rarity]||RARITIES[0]).name} · Lv.${s.ilvl} · 护盾</div>
+        <div class="si-meta">${(RARITY_BY_ID[s.rarity]||RARITIES[0]).name} · Lv.${s.ilvl} · 护甲</div>
         <div class="istat">${shieldLines(s).join(' · ')}</div>
         ${eff?`<div class="affix-row"><span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span></div>`:''}
         <div class="si-buy">
@@ -400,18 +400,18 @@ const UI = {
           <span class="si-price">${i===p.shieldIdx?'已装备':'点击装备'}</span>
         </div>
       </div>`;
-    }).join('') : `<div class="empty-hint">没有护盾 · 护盾只能靠掉落或在黑市用镒矿购买</div>`;
+    }).join('') : `<div class="empty-hint">没有护甲 · 护甲只能靠掉落或在黑市用配给券购买</div>`;
 
     const relicItems=p.relics.length ? p.relics.map((r,i)=>`
       <div class="inv-item loot-${r.rarity} ${i===p.relicIdx?'sel':''}" data-relic="${i}">
         <div class="iname c-${r.rarity}">${r.name}${i===p.relicIdx?' · 装备中':''}</div>
-        <div class="si-meta">${(RARITY_BY_ID[r.rarity]||RARITIES[0]).name} · Lv.${r.ilvl} · 圣物</div>
+        <div class="si-meta">${(RARITY_BY_ID[r.rarity]||RARITIES[0]).name} · Lv.${r.ilvl} · 随身装备</div>
         <div class="istat">${relicLines(r).join(' · ')}</div>
         <div class="si-buy">
           <button class="btn small ghost" data-rsell="${i}">卖出 ◈${itemSellGold(r)}${itemSellEridium(r)?` ◆${itemSellEridium(r)}`:''}</button>
           <span class="si-price">${i===p.relicIdx?'已装备':'点击装备'}</span>
         </div>
-      </div>`).join('') : `<div class="empty-hint">没有圣物 · 圣物提供纯被动词条，一个槽位</div>`;
+      </div>`).join('') : `<div class="empty-hint">没有随身装备 · 随身装备提供纯被动词条，一个槽位</div>`;
 
     const sh=p.shieldItem;
     const ammo=Object.keys(p.ammo).map(k=>`${k}: ${p.ammo[k]}`).join(' · ');
@@ -419,9 +419,9 @@ const UI = {
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <h2 class="title-big" style="font-size:30px;margin:0;">装备库</h2>
-          <div class="shop-gold">◈ ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>　<span style="font-size:12px;color:var(--muted);">魔法寻找 +${p.mf}</span></div>
+          <div class="shop-gold">◈ ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>　<span style="font-size:12px;color:var(--muted);">搜集效率 +${p.mf}</span></div>
         </div>
-        <div class="subtitle">护盾：${sh?`${sh.name}（延迟 ${sh.delay.toFixed(1)}s · ${sh.rate.toFixed(1)}/s）`:"无"}</div>
+        <div class="subtitle">护甲：${sh?`${sh.name}（延迟 ${sh.delay.toFixed(1)}s · ${sh.rate.toFixed(1)}/s）`:"无"}</div>
 
         <div class="inv-sec">
           <h4>武器 <span class="meta-cap">${p.weapons.length}/24</span></h4>
@@ -429,12 +429,12 @@ const UI = {
         </div>
 
         <div class="inv-sec">
-          <h4>护盾 <span class="meta-cap">${p.shields.length}/12 · 受击后需等充能延迟才会恢复</span></h4>
+          <h4>护甲 <span class="meta-cap">${p.shields.length}/12 · 受击后需等充能延迟才会恢复</span></h4>
           <div class="inv-list">${shieldItems}</div>
         </div>
 
         <div class="inv-sec">
-          <h4>圣物 <span class="meta-cap">${p.relics.length}/12</span></h4>
+          <h4>随身装备 <span class="meta-cap">${p.relics.length}/12</span></h4>
           <div class="inv-list">${relicItems}</div>
         </div>
 
@@ -468,7 +468,7 @@ const UI = {
         if(p.weapons.length<=1) return;
         const r=p.sellWeapon(i);
         SFX.pickup();
-        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 镒矿`:""}`);
+        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 配给券`:""}`);
         rerender();
       };
     });
@@ -477,7 +477,7 @@ const UI = {
         e.stopPropagation();
         const r=p.sellShield(parseInt(b.dataset.ssell));
         SFX.pickup();
-        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 镒矿`:""}`);
+        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 配给券`:""}`);
         rerender();
       };
     });
@@ -486,7 +486,7 @@ const UI = {
         e.stopPropagation();
         const r=p.sellRelic(parseInt(b.dataset.rsell));
         SFX.pickup();
-        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 镒矿`:""}`);
+        this.game.toast(`卖出 +${r.gold} 金${r.eri?` +${r.eri} 配给券`:""}`);
         rerender();
       };
     });
@@ -511,7 +511,7 @@ const UI = {
     for(const key of ["marcus","black","gamble"]){
       const d=SHOPS[key];
       tabs += `<button class="shop-tab ${key===id?'on':''}" data-shop="${key}">
-        <b>${d.icon} ${d.name}</b><span class="tab-tag">${d.currency==="eridium"?"镒矿结算":d.tag}</span></button>`;
+        <b>${d.icon} ${d.name}</b><span class="tab-tag">${d.currency==="eridium"?"配给券结算":d.tag}</span></button>`;
     }
 
     let body="";
@@ -544,7 +544,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">军火市场</h2>
           <div class="shop-gold">◈ ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span></div>
         </div>
-        <div class="subtitle">MARKET · 金币买军火，镒矿才能进黑市</div>
+        <div class="subtitle">MARKET · 金币买军火，配给券才能进黑市</div>
         <div class="shop-tabs">${tabs}</div>
         ${body}
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
@@ -600,16 +600,16 @@ const UI = {
     const isGear = w.kind==="shield" || w.kind==="relic";
     let meta, stats, affix;
     if(w.kind==="shield"){
-      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name} · Lv.${w.ilvl} · 护盾装备`;
+      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name} · Lv.${w.ilvl} · 护甲装备`;
       stats=shieldLines(w).slice(0,3).join(' · ');
       const eff=shieldEffectText(w);
       affix = eff?`<span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span>`:'<span class="affix">无特效</span>';
     } else if(w.kind==="relic"){
-      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name} · Lv.${w.ilvl} · 圣物`;
+      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name} · Lv.${w.ilvl} · 随身装备`;
       stats=relicLines(w).join(' · ');
       affix='<span class="affix suffix">纯被动加成</span>';
     } else {
-      meta=`${w.rarityName} · Lv.${w.ilvl} · ${MANUFACTURERS[w.manufacturer].name} · ${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">混乱${w.mayhem}</b>`:''}`;
+      meta=`${w.rarityName} · Lv.${w.ilvl} · ${MANUFACTURERS[w.manufacturer].name} · ${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
       stats=`${w.stats.damage.toFixed(1)} 伤害 · ${w.stats.fireRate.toFixed(1)}/s · ${w.magSizeBase} 弹匣 · ${(w.stats.accuracy*100|0)}% 精准`;
       affix=w.affixLines().map(a=>`<span class="affix ${a.kind}">${a.nm} ${a.txt}</span>`).join('')||'<span class="affix">无词缀</span>';
     }
@@ -625,7 +625,7 @@ const UI = {
     </div>`;
   },
 
-  /* ---------------- 混乱 / 转生 ---------------- */
+  /* ---------------- 改装 / 重新部署 ---------------- */
   meta(from){
     this._metaFrom = from || "pause";
     const g=this.game, p=g.player;
@@ -636,7 +636,7 @@ const UI = {
     const mhBlock = unlocked ? `
       <div class="meta-row" style="justify-content:center;gap:20px;">
         <button class="btn small" data-mh="-1" ${p.mayhem<=0?'disabled style="opacity:.35"':''}>−</button>
-        <div class="meta-big">混乱 ${p.mayhem}<span class="meta-cap"> / 上限 ${cap}</span></div>
+        <div class="meta-big">改装 ${p.mayhem}<span class="meta-cap"> / 上限 ${cap}</span></div>
         <button class="btn small" data-mh="1" ${p.mayhem>=cap?'disabled style="opacity:.35"':''}>＋</button>
       </div>
       <div class="meta-num">
@@ -644,17 +644,17 @@ const UI = {
         经验 <b>+${Math.round((p.mayhemXpMul()-1)*100)}%</b> · 金币与掉落 <b>+${Math.round((p.mayhemLootMul()-1)*100)}%</b>
       </div>
       <div class="meta-num">
-        掉落物品等级 <b>+${p.mayhem}</b>，每件装备再按 <b>w(m)=m≥n?1:2^(n-1-m)</b> 抽取混乱等级 m，
+        掉落物品等级 <b>+${p.mayhem}</b>，每件装备再按 <b>w(m)=m≥n?1:2^(n-1-m)</b> 抽取改装等级 m，
         数值倍率最高 <b>×${Math.pow(MAYHEM.gearPower,p.mayhem).toFixed(2)}</b>。
       </div>`
-      : `<div class="meta-num">击败秘藏守卫后解锁混乱等级：怪物更强，掉落物品等级更高、词缀更猛。</div>`;
+      : `<div class="meta-num">击败军械库守卫后解锁改装等级：怪物更强，掉落物品等级更高、词缀更猛。</div>`;
 
     const permRows = PERM_UPGRADES.map(u=>{
       const lv=p.perm[u.id]||0, cost=p.permCost(u.id);
       return `<div class="perm-row">
         <div>
           <b>${u.name}</b> <span class="meta-cap">Lv.${lv}</span>
-          <div class="meta-num">当前 +${lv*u.per}${u.unit} · 下一级 <span style="color:var(--accent)">${cost} 灵魂</span></div>
+          <div class="meta-num">当前 +${lv*u.per}${u.unit} · 下一级 <span style="color:var(--accent)">${cost} 功勋</span></div>
         </div>
         <button class="btn small" data-perm="${u.id}" ${p.souls<cost?'disabled style="opacity:.35"':''}>+1</button>
       </div>`;
@@ -665,38 +665,38 @@ const UI = {
     this._set(`
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <h2 class="title-big" style="font-size:30px;margin:0;">混乱与转生</h2>
-          <div class="shop-gold">灵魂 ${p.souls.toLocaleString()}　<span style="font-size:12px;color:var(--muted);">转生 ${p.rebirths} 次</span></div>
+          <h2 class="title-big" style="font-size:30px;margin:0;">改装与重新部署</h2>
+          <div class="shop-gold">功勋 ${p.souls.toLocaleString()}　<span style="font-size:12px;color:var(--muted);">重新部署 ${p.rebirths} 次</span></div>
         </div>
         <div class="subtitle">MAYHEM &amp; REBIRTH · 用强度换收益，用等级换永久</div>
 
         <div class="meta-sec">
-          <h4>混乱等级（Mayhem）</h4>
+          <h4>改装等级（改装）</h4>
           ${mhBlock}
           <div class="meta-row" style="margin-top:8px;">
-            <div class="meta-num">上限 ${cap} = 基础 ${MAYHEM.capBase} + 转生 ${p.rebirths} + 购买 ${p.mayhemCapBonus*MAYHEM.capBuyStep}</div>
+            <div class="meta-num">上限 ${cap} = 基础 ${MAYHEM.capBase} + 重新部署 ${p.rebirths} + 购买 ${p.mayhemCapBonus*MAYHEM.capBuyStep}</div>
             <button class="btn small ghost" id="btn-cap" ${!unlocked||p.souls<capCost?'disabled style="opacity:.35"':''}>
-              上限 +${MAYHEM.capBuyStep}（${capCost} 灵魂）</button>
+              上限 +${MAYHEM.capBuyStep}（${capCost} 功勋）</button>
           </div>
         </div>
 
         <div class="meta-sec">
-          <h4>转生（Rebirth）</h4>
+          <h4>重新部署（Rebirth）</h4>
           <div class="meta-row">
             <div>
-              <div class="meta-num">等级 <b>Lv.${p.level}</b> · 装备评分 <b>${p.gearScore().toLocaleString()}</b> · 混乱 <b>${p.mayhem}</b></div>
-              <div class="meta-num">本次转生可得 <b style="color:var(--accent);font-size:15px;">${gain} 灵魂</b></div>
+              <div class="meta-num">等级 <b>Lv.${p.level}</b> · 装备评分 <b>${p.gearScore().toLocaleString()}</b> · 改装 <b>${p.mayhem}</b></div>
+              <div class="meta-num">本次重新部署可得 <b style="color:var(--accent);font-size:15px;">${gain} 功勋</b></div>
               <div class="meta-num" style="margin-top:4px;">
-                重置：等级 / 技能 / 武器库与护盾圣物 / 金币。
-                保留：灵魂 / 镒矿 / 永久升级 / 混乱解锁与上限 / 转生次数。
+                重置：等级 / 技能 / 武器库与护甲随身装备 / 金币。
+                保留：功勋 / 配给券 / 永久升级 / 改装解锁与上限 / 重新部署次数。
               </div>
             </div>
-            <button class="btn small" id="btn-rebirth" ${p.canRebirth()?'':'disabled style="opacity:.35"'}>转生</button>
+            <button class="btn small" id="btn-rebirth" ${p.canRebirth()?'':'disabled style="opacity:.35"'}>重新部署</button>
           </div>
         </div>
 
         <div class="meta-sec">
-          <h4>永久升级 · 跨转生保留</h4>
+          <h4>永久升级 · 跨重新部署保留</h4>
           <div class="perm-list">${permRows}</div>
         </div>
 
@@ -728,7 +728,7 @@ const UI = {
     };
     document.getElementById('btn-rebirth').onclick=()=>{
       if(!p.canRebirth()) return;
-      if(!window.confirm(`确定转生？\n\n将重置等级、技能、武器库与金币。\n可获得 ${p.soulsGain()} 灵魂。`)) return;
+      if(!window.confirm(`确定重新部署？\n\n将重置等级、技能、武器库与金币。\n可获得 ${p.soulsGain()} 功勋。`)) return;
       SFX.levelup();
       const r=this.game.doRebirth();
       if(r.ok){ this.game.toast(r.msg); }
@@ -750,11 +750,11 @@ const UI = {
         <div class="row" style="justify-content:center;margin-bottom:12px;">
           <span class="shop-gold">◈ ${p.gold.toLocaleString()}</span>
           <span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>
-          <span style="color:var(--muted);font-size:13px;">Lv.${p.level} · 魔法寻找 +${p.mf}${p.mayhem>0?` · 混乱${p.mayhem}`:''}${p.souls>0?` · 灵魂 ${p.souls}`:''}</span>
+          <span style="color:var(--muted);font-size:13px;">Lv.${p.level} · 搜集效率 +${p.mf}${p.mayhem>0?` · 改装${p.mayhem}`:''}${p.souls>0?` · 功勋 ${p.souls}`:''}</span>
         </div>
         <div class="row" style="flex-direction:column;gap:10px;align-items:stretch;">
           <button class="btn" id="btn-resume">继续</button>
-          <button class="btn ghost" id="btn-meta">混乱与转生${p.mayhem>0?` · 混乱${p.mayhem}`:''}</button>
+          <button class="btn ghost" id="btn-meta">改装与重新部署${p.mayhem>0?` · 改装${p.mayhem}`:''}</button>
           <button class="btn ghost" id="btn-shop">军火市场</button>
           <button class="btn ghost" id="btn-skill">技能树 (K)</button>
           <button class="btn ghost" id="btn-inv">装备库 (Tab)</button>
@@ -918,8 +918,8 @@ const UI = {
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:34px;">区域肃清！</h2>
         <div class="subtitle">${zone.name} 已清除</div>
-        <p style="color:var(--muted);">等级 Lv.${p.level} · 技能点 ${p.skillPoints} · 金币 <b style="color:var(--accent)">◈${p.gold.toLocaleString()}</b> · 镒矿 <b style="color:#b061ff">◆${p.eridium}</b></p>
-        <p style="color:var(--muted);font-size:13px;">${last?'前方就是秘藏神殿':'下一片区域等级更高，先去军火市场补一补？'}</p>
+        <p style="color:var(--muted);">等级 Lv.${p.level} · 技能点 ${p.skillPoints} · 金币 <b style="color:var(--accent)">◈${p.gold.toLocaleString()}</b> · 配给券 <b style="color:#b061ff">◆${p.eridium}</b></p>
+        <p style="color:var(--muted);font-size:13px;">${last?'前方就是军械库':'下一片区域等级更高，先去军火市场补一补？'}</p>
         <div class="row" style="justify-content:center;">
           <button class="btn ghost" id="btn-shop-zone">军火市场</button>
           <button class="btn" id="btn-next">${last?'查看结局':'前往下一片区域'}</button>
@@ -941,7 +941,7 @@ const UI = {
         ${endless
           ? `<p style="color:var(--muted);">${CLASSES[p.classId].name} · 撑到第 <b style="color:var(--accent);font-size:22px;">${wave}</b> 波 · Lv.${p.level}</p>`
           : `<p style="color:var(--muted);">${CLASSES[p.classId].name} · 到达 Lv.${p.level} · ${this.game.zoneIndex+1}/${ZONES.length} 区域</p>`}
-        <p style="color:var(--muted);font-size:13px;">灵魂、镒矿、永久升级与混乱上限已保留</p>
+        <p style="color:var(--muted);font-size:13px;">功勋、配给券、永久升级与改装上限已保留</p>
         <div class="row" style="justify-content:center;">
           <button class="btn" id="btn-retry">再来一次</button>
           <button class="btn ghost" id="btn-title">返回标题</button>
@@ -963,24 +963,24 @@ const UI = {
     const next = canUp ? p.mayhem+1 : p.mayhem;
     this._set(`
       <div class="panel" style="text-align:center;">
-        <h2 class="title-big" style="font-size:40px;color:var(--orange);">秘藏已开启</h2>
-        <div class="subtitle">VICTORY · 混乱等级已解锁</div>
-        <p style="color:var(--muted);">${CLASSES[p.classId].name} · Lv.${p.level} · 击杀秘藏守卫</p>
+        <h2 class="title-big" style="font-size:40px;color:var(--orange);">军械库已开启</h2>
+        <div class="subtitle">VICTORY · 改装等级已解锁</div>
+        <p style="color:var(--muted);">${CLASSES[p.classId].name} · Lv.${p.level} · 击杀军械库守卫</p>
         <div class="meta-sec" style="text-align:left;">
           <h4>接下来的路</h4>
           <div class="meta-num">
-            混乱 <b>${p.mayhem}</b> / 上限 <b>${cap}</b>：混乱越高，怪物生命与掉落物品等级同步暴涨，
-            掉落的装备还会自带「混乱等级」词缀加成。
+            改装 <b>${p.mayhem}</b> / 上限 <b>${cap}</b>：改装越高，怪物生命与掉落物品等级同步暴涨，
+            掉落的装备还会自带「改装等级」词缀加成。
           </div>
           <div class="meta-num">
-            上限提升途径：每次<b>转生</b> +1，或用<b>灵魂</b>购买（每次 +5）。
+            上限提升途径：每次<b>重新部署</b> +1，或用<b>功勋</b>购买（每次 +5）。
           </div>
           ${canUp ? '' : `<div class="meta-num" style="color:#ff5ce0;margin-top:4px;">
-            <b>混乱上限已满。</b>去「混乱与转生」里转生，或用灵魂购买上限，才能继续往上爬。</div>`}
+            <b>改装上限已满。</b>去「改装与重新部署」里重新部署，或用功勋购买上限，才能继续往上爬。</div>`}
         </div>
         <div class="row" style="justify-content:center;flex-wrap:wrap;">
-          <button class="btn" id="btn-cycle">${canUp?`进入混乱 ${next} 轮回`:`重打混乱 ${p.mayhem}`}</button>
-          <button class="btn ghost" id="btn-meta-v">混乱与转生</button>
+          <button class="btn" id="btn-cycle">${canUp?`进入改装 ${next} 轮回`:`重打改装 ${p.mayhem}`}</button>
+          <button class="btn ghost" id="btn-meta-v">改装与重新部署</button>
           <button class="btn ghost" id="btn-title">返回标题</button>
         </div>
       </div>`);

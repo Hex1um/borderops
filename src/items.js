@@ -1,18 +1,17 @@
 /* =========================================================================
- * items.js — 护盾 / 圣物（可掉落、可购买的装备）
- *
- * 护盾是唯一能提供「可恢复血量」的装备，但恢复被三重参数约束：
- *   capacity 容量 / delay 受击后充能延迟 / rate 每秒充能量
- * 高品质护盾靠「延迟更短、充能更快、附带特效」体现价值，
- * 而不是单纯堆容量——否则就退化成「随时补满」。
- * 圣物是纯被动词条装备，一个槽位，词条数值随 ilvl 与品质缩放。
+ * items.js — 防弹插板 / 随身装备（可掉落、可购买的装备）
+ * 全部改为现实军械名词，插板特效概率置 0（不再产生冲击波 / 反伤 / 虹吸）。
+ * 插板容量 / 受击后整备延迟 / 每秒整备量三重约束防护恢复。
+ * 随身装备是纯被动参数，一个槽位，数值随 ilvl 与品级缩放。
  * ========================================================================= */
 
 const RARITY_ORDER = ["white","green","blue","purple","orange","pearl","ancient","rainbow","mythic","primordial","celestial","singularity"];
 const RARITY_INDEX = {};
 RARITY_ORDER.forEach((r,i)=>RARITY_INDEX[r]=i);
+// 高规格品相的名称前缀（插板与随身装备共用一份）
+const TOP_PREFIX = { mythic:"定制·", primordial:"竞赛·", celestial:"收藏·", singularity:"封存·" };
 
-/* ----------------------------- 护盾 ----------------------------- */
+/* ----------------------------- 防弹插板 ----------------------------- */
 function generateShield(ilvl, opts={}){
   ilvl = Math.max(1, Math.round(opts.ilvl!==undefined?opts.ilvl:ilvl));
   const q = opts.rarity || rollQuality(ilvl, { mf:opts.mf, weights:opts.weights, luck:opts.luck });
@@ -24,24 +23,16 @@ function generateShield(ilvl, opts={}){
   const rechDur  = S.rech * RNG.fr(0.9,1.1);
   const rate     = Math.round(capacity/rechDur*10)/10;
 
-  // 特效：品质越高越可能出现，且数值更强
-  let effect=null, effectVal=0;
-  if(RNG.chance(S.effect)){
-    const id = RNG.pick(Object.keys(SHIELD_EFFECTS));
-    effect = id;
-    const t = (RARITY_INDEX[q]||0)/(RARITY_ORDER.length-1);   // 0..1
-    if(id==="nova")       effectVal = Math.round(capacity*(0.55+t*0.75));
-    else if(id==="amp")   effectVal = Math.round((10+t*22)*10)/10;
-    else if(id==="thorns")effectVal = Math.round((12+t*22)*10)/10;
-    else if(id==="reboot")effectVal = Math.round((55+t*25)*10)/10;
-    else if(id==="vamp")  effectVal = Math.round(capacity*(0.20+t*0.30));
-  }
+  // SHIELD_RARITY[*].effect 全为 0，不再生成新插板特效。
+  // 保留一次 RNG 消耗，使 RNG.setSeed 确定性重播的随机数序列与旧版一致；
+  // 旧存档插板的 effect / effectVal 仍由 shieldLines() 与结算路径读取。
+  RNG.chance(S.effect);
+  const effect=null, effectVal=0;
 
   const base = RNG.pick(SHIELD_NAMES[q] || SHIELD_NAMES.white);
   const idx = RARITY_INDEX[q]||0;
-  const SH_TOP = { mythic:"神话·", primordial:"原初·", celestial:"寰宇·", singularity:"奇点·" };
-  const adj  = ["强化","过载","相位","静滞","谐振","锋锐","灼热","湮灭","星界","太初"];
-  const nm   = (SH_TOP[q] ? SH_TOP[q] : (idx>=3 ? RNG.pick(adj) : "")) + base;
+  const adj  = ["加固","加厚","轻量","模块化","军规","陶瓷","复合","层压","缓冲","精工"];
+  const nm   = (TOP_PREFIX[q] ? TOP_PREFIX[q] : (idx>=3 ? RNG.pick(adj) : "")) + base;
 
   return {
     kind:"shield", name:nm, rarity:q, ilvl,
@@ -52,18 +43,18 @@ function generateShield(ilvl, opts={}){
 
 function shieldLines(s){
   const out = [
-    `容量 ${s.capacity}`,
-    `充能延迟 ${s.delay.toFixed(1)}s`,
-    `充能 ${s.rate.toFixed(1)}/s`,
+    `防护值 ${s.capacity}`,
+    `整备延迟 ${s.delay.toFixed(1)}s`,
+    `整备 ${s.rate.toFixed(1)}/s`,
   ];
   if(s.effect && SHIELD_EFFECTS[s.effect]){
     const e = SHIELD_EFFECTS[s.effect];
     let v = "";
-    if(s.effect==="nova") v = ` ${s.effectVal} 伤害`;
-    else if(s.effect==="amp") v = ` +${s.effectVal}% 伤害`;
-    else if(s.effect==="thorns") v = ` 反弹 ${s.effectVal}%`;
+    if(s.effect==="nova") v = ` 缓冲 ${s.effectVal}`;
+    else if(s.effect==="amp") v = ` +${s.effectVal}% 稳定`;
+    else if(s.effect==="thorns") v = ` 减伤 ${s.effectVal}%`;
     else if(s.effect==="reboot") v = ` 延迟×${(1-s.effectVal/100).toFixed(2)}`;
-    else if(s.effect==="vamp") v = ` +${s.effectVal} 生命`;
+    else if(s.effect==="vamp") v = ` 缓冲 ${s.effectVal}`;
     out.push(`${e.name}${v}`);
   }
   return out;
@@ -73,15 +64,15 @@ function shieldEffectText(s){
   if(!s.effect) return null;
   const e = SHIELD_EFFECTS[s.effect]; if(!e) return null;
   let v="";
-  if(s.effect==="nova") v=`（${s.effectVal} 伤害）`;
-  else if(s.effect==="amp") v=`（+${s.effectVal}% 伤害）`;
-  else if(s.effect==="thorns") v=`（反弹 ${s.effectVal}%）`;
-  else if(s.effect==="reboot") v=`（延迟 ×${(1-s.effectVal/100).toFixed(2)}）`;
-  else if(s.effect==="vamp") v=`（+${s.effectVal} 生命）`;
+  if(s.effect==="nova") v=`（缓冲 ${s.effectVal}）`;
+  else if(s.effect==="amp") v=`（+${s.effectVal}% 稳定）`;
+  else if(s.effect==="thorns") v=`（减伤 ${s.effectVal}%）`;
+  else if(s.effect==="reboot") v=`（整备 ×${(1-s.effectVal/100).toFixed(2)}）`;
+  else if(s.effect==="vamp") v=`（缓冲 ${s.effectVal}）`;
   return { name:e.name, desc:e.desc, extra:v, color:e.color };
 }
 
-/* ----------------------------- 圣物 ----------------------------- */
+/* ----------------------------- 随身装备 ----------------------------- */
 function generateRelic(ilvl, opts={}){
   ilvl = Math.max(1, Math.round(opts.ilvl!==undefined?opts.ilvl:ilvl));
   const q = opts.rarity || rollQuality(ilvl, { mf:opts.mf, weights:opts.weights, luck:opts.luck });
@@ -99,19 +90,18 @@ function generateRelic(ilvl, opts={}){
   }
   const base = RNG.pick(RELIC_NAMES[q] || RELIC_NAMES.white);
   const idx = RARITY_INDEX[q]||0;
-  const TOP_PREFIX = { mythic:"神话·", primordial:"原初·", celestial:"寰宇·", singularity:"奇点·" };
-  const nm = (TOP_PREFIX[q] ? TOP_PREFIX[q] : (idx>=4 ? "秘藏·" : "")) + base;
+  const nm = (TOP_PREFIX[q] ? TOP_PREFIX[q] : (idx>=4 ? "档案·" : "")) + base;
 
   return { kind:"relic", name:nm, rarity:q, ilvl, mods, mayhem:Math.max(0, Math.round(opts.mayhem||0)) };
 }
 
 function relicLines(r){
   return r.mods.map(m=>{
-    if(m.stat==="shieldDelay") return `充能延迟 -${m.value}s`;
-    if(m.stat==="lifesteal")   return `吸血 ${m.value}%`;
-    if(m.stat==="mfFlat")      return `魔法寻找 +${m.value}`;
-    if(m.stat==="critChance")  return `暴击几率 +${m.value}%`;
-    if(m.stat==="critDmg")     return `暴击伤害 +${m.value}%`;
+    if(m.stat==="shieldDelay") return `整备时间 -${m.value}s`;
+    if(m.stat==="lifesteal")   return `急救效率 +${m.value}%`;
+    if(m.stat==="mfFlat")      return `搜集效率 +${m.value}`;
+    if(m.stat==="critChance")  return `要害命中 +${m.value}%`;
+    if(m.stat==="critDmg")     return `要害伤害 +${m.value}%`;
     return `${m.label} +${m.value}%`;
   });
 }
@@ -138,7 +128,7 @@ function itemSellEridium(it){
   return map[it.rarity] || 0;
 }
 
-/* 掉落类型抽取：武器 / 护盾 / 圣物 */
+/* 掉落类型抽取：武器 / 护甲 / 随身装备 */
 function rollItemKind(){
   const r = RNG.f();
   if(r < ITEM_DROP.weapon) return "weapon";
