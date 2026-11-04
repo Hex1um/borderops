@@ -486,5 +486,43 @@ check('弹种代号已塔科夫化', Object.values(ELEMENTS).every(e => /^(PS|T|
 check('枪型池无旧型号残留', /"P226"|"USP \.45"|"P-07"|"UMP \.45"|"SPAS-12"|"M24"|"FN SCAR-L"/.test(cfgSrc) ? 1 : 0, 0, 0.001);
 check('旧弹种名已清除', /FMJ 全被甲弹|T 曳光弹|AP 钢芯穿甲弹/.test(cfgSrc) ? 1 : 0, 0, 0.001);
 
+console.log('\n=== 18. Scav 低阶武器限制 ===');
+const SCAV_TYPES = G('SCAV_GUN_TYPES');
+const SCAV_MAX = G('SCAV_GUN_ILVL_MAX');
+const scavGun = G('raidScavGun');
+const RAR = G('RARITIES');
+let badType = 0, badIlvl = 0, badRarity = 0, badName = 0, badAmmo = 0;
+for (let i = 0; i < 200; i++) {
+  const g = scavGun(1 + (i % 40));
+  if (!SCAV_TYPES.includes(g.type)) badType++;
+  if ((g.ilvl || 0) > SCAV_MAX) badIlvl++;
+  const ri = RAR.findIndex(r => r.id === g.rarity);
+  if (ri > 2) badRarity++;
+  if (!/^(PM|PB|MP-443 Grach|GSh-18|TT|MP-133|TOZ-106|M870|MP-153|KS-23M|PP-91 Kedr|PP-9 Klin|PP-19-01 Vityaz|MP5)( · (PS|T|RIP))?$/.test(g.name)) badName++;
+  const sh = g.element === 'none' ? 'PS' : (ELEMENTS[g.element] || {}).short;
+  if (!/^(PS|T|RIP)$/.test(sh)) badAmmo++;
+}
+check('Scav 枪型只在手枪/霰弹/冲锋枪池', badType, 0, 0.001);
+check('Scav 枪械等级封顶 8', badIlvl, 0, 0.001);
+check('Scav 品质封顶蓝品', badRarity, 0, 0.001);
+check('Scav 型号全部为塔科夫低阶实装名', badName, 0, 0.001);
+check('Scav 弹药只出 PS/T/RIP', badAmmo, 0, 0.001);
+let lootBad = 0;
+for (let i = 0; i < 80; i++) {
+  const g = Raid._rollGunLoot('scav', 1);
+  const ri = RAR.findIndex(r => r.id === g.rarity);
+  if (!SCAV_TYPES.includes(g.type) || (g.ilvl || 0) > SCAV_MAX || ri > 2) lootBad++;
+}
+check('Scav 战利品枪也封顶低阶', lootBad, 0, 0.001);
+const mkScav = () => ({ cls:'scav', gun:{ type:'pistol', value:10, dmg:10, mag:8, reserve:24 }, inv:{ weapons:[], armors:[], helmets:[], parts:[], meds:[] }, armorTier:1, dr:0.1, maxArmor:40, armor:40, helmetTier:0, helmetDr:0, maxHelmetArmor:0, helmetArmor:0 });
+const s1 = mkScav();
+Raid._botTakeItem(s1, { kind:'weapon', type:'rifle', ilvl:30, rarity:'orange', value:99999, dmg:999, mag:30, reserve:90 });
+Raid._botTakeItem(s1, { kind:'armor', tier:8, dr:0.5, maxArmor:999, value:99999 });
+check('Scav 拒绝拾取高阶枪', s1.gun.type === 'pistol' ? 1 : 0, 1, 0.001);
+check('Scav 拒绝拾取 4 级以上护甲', s1.armorTier, 1, 0.001);
+const s2 = mkScav();
+Raid._botTakeItem(s2, { kind:'weapon', type:'shotgun', ilvl:6, rarity:'green', value:100, dmg:20, mag:6, reserve:30 });
+check('Scav 可以换用低阶枪', s2.gun.type === 'shotgun' ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

@@ -567,7 +567,15 @@ function blGunConvert(w){
       : (MANUFACTURERS[w.manufacturer]?MANUFACTURERS[w.manufacturer].color:"#cfcabb"),
   };
 }
-function blGunGen(ilvl, opts){ return blGunConvert(generateWeapon(ilvl, opts)); }
+function blGunGen(ilvl, opts){
+  const w=blGunConvert(generateWeapon(ilvl, opts));
+  // Scav 等低阶配装可强制指定塔科夫实装型号，避免生成「兵工厂+枪型+词缀」的泛称。
+  if(opts && opts.model){
+    const ammo=(w.element && w.element!=="none" && AMMO_TYPES[w.element]) ? " · "+AMMO_TYPES[w.element].short : "";
+    w.name=String(opts.model)+ammo;
+  }
+  return w;
+}
 
 // 稀有度 → 颜色（兼容字符串 / 数字两种表示，供战利品与商店着色）
 function gunRarColor(r){

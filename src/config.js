@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.16.1",
+  version: "0.17.0",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -405,8 +405,25 @@ const WEAPON_TYPES = {
   sniper:  { name:"狙击枪", baseDmg:55, fireRate:1.1, accuracy:0.99, mag:5,  reload:2.0, speed:1100,pellets:1, ammoType:"sniper",  spread:0.01, auto:false, charge:true,
              named:["SVD-S","SV-98","VSS Vintorez","M700","DVL-10","ORSIS T-5000"] },
   launcher:{ name:"榴弹发射器", baseDmg:70, fireRate:0.9, accuracy:0.88, mag:4,  reload:2.6, speed:300, pellets:1, ammoType:"launcher",spread:0.04, auto:false, splash:120,
-             named:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","FN40GL","M32A1 MSGL"] },
+             named:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","GP-25"] },
 };
+
+/* ----------------------------- Scav 低阶武器池 -----------------------------
+ * 塔科夫 Scav 是拾荒者，不是 PMC：只配发廉价、老旧、短射程的枪械。
+ * 这里单独建池，避免他们从战利品 / 玩家装备强度里拿到高穿透弹和高阶枪。
+ * 全部型号均为塔科夫实装名称；Scav 不会使用步枪 / 狙击枪 / 榴弹发射器。
+ */
+const SCAV_GUN_TYPES = ["pistol","shotgun","smg"];
+const SCAV_GUN_MODELS = {
+  pistol:  ["PM","PB","MP-443 Grach","GSh-18","TT"],
+  shotgun: ["MP-133","TOZ-106","M870","MP-153","KS-23M"],
+  smg:     ["PP-91 Kedr","PP-9 Klin","PP-19-01 Vityaz","MP5"],
+};
+// Scav 弹药：PS / T / RIP 一类低穿深弹，绝不出现 BP / BT / SP-6。
+const SCAV_AMMO = ["none","none","none","fire","corrosive"];
+const SCAV_GUN_ILVL_MAX = 8;   // 枪械等级硬上限：再肥的 Scav 也只能拿低阶枪
+const SCAV_ARMOR_TIER_MAX = 3; // 护甲等级上限（塔科夫 Scav 极少出 4 级甲）
+const SCAV_HELMET_TIER_MAX = 2;
 
 /* ----------------------------- 干员 ----------------------------- */
 // 移除「侦察兵 / 标记法师 / 掩护火力 / 突入 / 压制」等超能力设定，改为现实干员分工

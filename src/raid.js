@@ -382,9 +382,22 @@ const RAID_AI_SENSE = {
 };
 function raidAISense(b){
   if(!b) return RAID_AI_SENSE.scav;
-  if(b.bounty) return RAID_AI_SENSE.boss;                    // 悬赏目标 = Boss
-  if(b.cls==="pmc" || b.smart) return RAID_AI_SENSE.pmc;   // PMC 与精英 Scav 同级
+  if(b.bounty) return RAID_AI_SENSE.boss;                    // Boss = 悬赏目标
+  if(b.cls==="pmc") return RAID_AI_SENSE.pmc;                // Raider / 精英 Scav 由 smart 单独判定
+  if(b.smart) return RAID_AI_SENSE.pmc;
   return RAID_AI_SENSE.scav;
+}
+
+/* Scav 制式武器：塔科夫拾荒者只会拿低阶手枪 / 霰弹枪 / 冲锋枪。
+ * 硬封顶等级与品质，并强制低穿深弹种，避免高装备玩家把全场 Scav 一起养肥。 */
+function raidScavGun(level, opts){
+  opts=opts||{};
+  const type=opts.type || RNG.pick(SCAV_GUN_TYPES);
+  const pool=SCAV_GUN_MODELS[type] || SCAV_GUN_MODELS.pistol;
+  const ilvl=M.clamp(Math.round(level||1), 1, SCAV_GUN_ILVL_MAX);
+  const rarity=opts.rarity || RNG.pick(["white","white","green","green","blue"]);
+  const element=opts.element || RNG.pick(SCAV_AMMO);
+  return blGunGen(ilvl, { type, rarity, element, model:RNG.pick(pool) });
 }
 
 const RAID_UNIQUES = [
@@ -1534,11 +1547,12 @@ const Raid = {
           helmetArmor=helmetTier?RAID_HELMETS[helmetTier].maxArmor:0;
           helmetDr=helmetTier?RAID_HELMETS[helmetTier].dr:0;
         } else {
-          // Scav：默认 45% 空手进场，先翻箱子找枪；携带越强，越可能带枪带甲
+          // Scav：塔科夫拾荒者只拿低阶武器。玩家携带再强也不会抬高他们的枪械等级，
+          // 只会让他们更常带枪（0.72 → 0.90），不会变成高穿深 PMC。
           const gid=RNG.pick(["pistol","shotgun","smg","pistol"]);
-          gun=RNG.chance(0.78+Math.min(0.2,gs*0.12)) ? blGunGen(RNG.ri(4,9)+gIlvl,{type:gid}) : null;
+          gun=RNG.chance(0.72+Math.min(0.18,gs*0.10)) ? raidScavGun(RNG.ri(2,7),{type:gid}) : null;
           hp=RNG.ri(70,95); speed=RNG.fr(115,140);
-          armorTier=RNG.chance(0.20+gs*0.10)?Math.min(6,RNG.ri(1,2)+gArmor):0;
+          armorTier=RNG.chance(0.20+gs*0.08)?Math.min(SCAV_ARMOR_TIER_MAX,RNG.ri(1,2)):0;
           armor=armorTier?RAID_ARMORS[armorTier].maxArmor:0;
           dr=armorTier?RAID_ARMORS[armorTier].dr:0;
           helmetTier=0; helmetArmor=0; helmetDr=0;
@@ -1546,11 +1560,18 @@ const Raid = {
         }
         // 携带装备强 → 更多 AI 带装备进场（不再一半人空手巡逻）
         if(!smart && !RNG.chance(0.45+gs*0.18)) lootLimit=0;
-        // 满配入场（gearStrength 高）时，强制全员带枪带甲，避免一身神装却全是裸装杂兵
+        // 满配入场（gearStrength 高）时，强制全员带枪带甲，避免一身神装却全是裸装杂兵；
+        // Scav 仍然只拿低阶枪、低阶甲，不参与 PMC 的装备膨胀。
         if(gs>0.72){
-          if(!gun){ const gid=RNG.pick(["pistol","smg","shotgun"]); gun=blGunGen(RNG.ri(6,10)+gIlvl,{type:gid}); }
-          if(armorTier<2){ armorTier=2; armor=RAID_ARMORS[armorTier].maxArmor; dr=RAID_ARMORS[armorTier].dr; }
-          if(helmetTier<1){ helmetTier=1; helmetArmor=RAID_HELMETS[helmetTier].maxArmor; helmetDr=RAID_HELMETS[helmetTier].dr; }
+          if(!gun){
+            const gid=RNG.pick(["pistol","smg","shotgun"]);
+            gun=isPMC ? blGunGen(RNG.ri(6,10)+gIlvl,{type:gid}) : raidScavGun(RNG.ri(3,7),{type:gid});
+          }
+          if(armorTier<2){
+            armorTier=isPMC ? 2 : Math.min(SCAV_ARMOR_TIER_MAX,2);
+            armor=RAID_ARMORS[armorTier].maxArmor; dr=RAID_ARMORS[armorTier].dr;
+          }
+          if(isPMC && helmetTier<1){ helmetTier=1; helmetArmor=RAID_HELMETS[helmetTier].maxArmor; helmetDr=RAID_HELMETS[helmetTier].dr; }
         }
         /* v0.14.11：约 1/5 的 PMC 固定编为「护盾兵」——轻甲 + 能量护盾（蓝色血条）。
          * 保证电击 ×2.00 每局都有够多的明确目标，同时把 T4+ 重甲留给黄色装甲条，
@@ -1576,7 +1597,8 @@ const Raid = {
       }
 
       // 悬赏目标（Boss）：2 名精锐，掉落保底好枪 + 带词条配件，HUD/小地图高亮
-      const bountyNames=["★ 悬赏·突入手","★ 悬赏·狙击手","★ 悬赏·重装甲兵"];
+      // 塔科夫 Boss 名称：Reshala / Killa / Shturman。
+      const bountyNames=["Reshala","Killa","Shturman"];
       const bountyRooms=["factory","village","dock","temple","depot"];
       const bountyOrder=bountyRooms.map(id=>RAID_ROOMS.find(r=>r.id===id)).filter(Boolean)
         .sort((a,b)=>M.dist(b.x+b.w/2,b.y+b.h/2,px,py)-M.dist(a.x+a.w/2,a.y+a.h/2,px,py));
@@ -1636,6 +1658,12 @@ const Raid = {
       o.lootCount=0; o.lootTarget=null; o.lootT=0; o._lootProg=null; o._lootDetour=null;
       o.aiT=RNG.f()*1.2; o._badT=0; o._badC=null; o._badPtT=0; o._badPt=null;
       o.armorTier=o.armorTier||0; o.helmetTier=o.helmetTier||0;
+      // Scav 接管模拟时同样受低阶装备上限约束，不会因为房主迁移变成重甲兵。
+      if(o.cls==="scav"){
+        o.armorTier=Math.min(o.armorTier,SCAV_ARMOR_TIER_MAX);
+        o.helmetTier=Math.min(o.helmetTier,SCAV_HELMET_TIER_MAX);
+        o.maxShield=0; o.shield=0;
+      }
       o.maxHelmetArmor=o.maxHelmetArmor||o.helmetArmor||0;
       o.helmetArmor=Math.min(o.helmetArmor||0, o.maxHelmetArmor);
       o.maxArmor=o.maxArmor||0; o.armor=Math.min(o.armor||0, o.maxArmor);
@@ -1653,7 +1681,9 @@ const Raid = {
       o.tx=o.x; o.ty=o.y; o.ta=o.angle||0;
       if(o.gun && (!o.gun.mag || !o.gun.dmg)){
         const t=o.gun.type||"pistol";
-        const g=blGunGen(RNG.ri(8,14), { type:t, element:o.gun.element||"none" });
+        const g=o.cls==="scav"
+          ? raidScavGun(RNG.ri(2,7), { type:SCAV_GUN_TYPES.includes(t)?t:"pistol" })
+          : blGunGen(RNG.ri(8,14), { type:t, element:o.gun.element||"none" });
         g.ammoMag=g.mag; g.ammoRes=g.reserve;
         o.gun=g;
       } else if(o.gun){
@@ -2892,17 +2922,17 @@ const Raid = {
     if(r < 0.917) return this._rollGunLoot(cls, luck);             // 1.2% 整枪
     if(r < 0.932){                                                 // 1.5% 护甲
       let tier=raidRollArmorTier(cls==="scav"?0:luck);
-      if(cls==="scav") tier=Math.min(tier,5);
+      if(cls==="scav") tier=Math.min(tier,SCAV_ARMOR_TIER_MAX);
       return raidMakeArmor(tier);
     }
     if(r < 0.942){                                                 // 1.0% 头盔
       let tier=raidRollArmorTier(cls==="scav"?0:(luck*0.85));
-      if(cls==="scav") tier=Math.min(tier,5);
+      if(cls==="scav") tier=Math.min(tier,SCAV_HELMET_TIER_MAX);
       return raidMakeHelmet(tier);
     }
     if(r < 0.952){                                                 // 1.0% 护盾
       let tier=raidRollArmorTier(cls==="scav"?0:luck);
-      if(cls==="scav") tier=Math.min(tier,5);
+      if(cls==="scav") tier=Math.min(tier,SCAV_ARMOR_TIER_MAX);
       return raidMakeShield(tier, this._rollRarity(cls==="scav"?0:luck));
     }
     return raidRollCore(luck);                                     // 5.8% 改装模块（唯一稳定来源）
@@ -2923,12 +2953,23 @@ const Raid = {
   // floorTier：品质保底（上锁保险箱按 lockLv 抬高下限，等级越高必出越好的枪）
   _rollGunLoot(cls, luck, floorTier){
     luck=luck||0;
+    // Scav 的枪永远封顶在低阶池：不掉具名枪、不出高品级、不用步枪/狙击枪。
+    if(cls==="scav"){
+      const rarity=Math.min(2, this._rollRarity(0));
+      const cfgId=RAID_TIER_TO_RARITY[rarity]||"white";
+      let w=raidScavGun(3 + rarity*2 + RNG.ri(0,2), {
+        type:RNG.pick(SCAV_GUN_TYPES), rarity:cfgId,
+      });
+      ensureGunAffixes(w);
+      w.uid=this._uid(); w.kind="weapon";
+      w.qTier=rarity; w.qName=RAID_TIERS[rarity].name; w.qColor=RAID_TIERS[rarity].color;
+      return w;
+    }
     let rarity=this._rollRarity(luck);
     if(floorTier) rarity=Math.max(rarity, floorTier);
-    if(cls==="scav") rarity=Math.max(0, rarity-1);
     const id=RNG.pick(RAID_GUN_TYPES);
     const hi = rarity>=4 ? (rarity-3)*3 : 0;        // 高稀有度枪额外抬升等级 → 更强
-    const ilvl=rarity*3 + hi + (cls==="scav"?6:9) + RNG.ri(0,3);
+    const ilvl=rarity*3 + hi + 9 + RNG.ri(0,3);
     const cfgId=RAID_TIER_TO_RARITY[rarity]||"white";
     let w=blGunGen(ilvl,{type:id, rarity:cfgId});
     ensureGunAffixes(w);   // 任何品质都要有前后缀
@@ -3739,7 +3780,8 @@ const Raid = {
     if(c.kind==="weapon"){
       // 空手的 AI 翻武器箱更容易翻到枪（否则永远在找枪的路上）
       const pGun = b.gun ? 0.25 : 0.72;
-      if(RNG.chance(pGun)) got=this._rollGunLoot("pmc", luck);
+      // Scav 翻到的仍是低阶枪，不会因为摸到武器箱就掏出高品级步枪。
+      if(RNG.chance(pGun)) got=this._rollGunLoot(b.cls==="scav"?"scav":"pmc", b.cls==="scav"?0:luck);
       else got=this._rollMaterial(luck);
     } else if(c.kind==="armor"){
       if(RNG.chance(0.22)) got=RNG.chance(0.6)?raidMakeArmor(raidRollArmorTier(luck)):raidMakeHelmet(raidRollArmorTier(luck*0.85));
@@ -3765,6 +3807,16 @@ const Raid = {
 
   _botTakeItem(b, it){
     if(!it) return;
+    // Scav 的装备上限：即使翻到高阶箱，也不会换掉手里的低阶枪 / 甲。
+    if(b.cls==="scav"){
+      if(it.kind==="weapon"){
+        const ri=RARITIES.findIndex(r=>r.id===it.rarity);
+        if(!SCAV_GUN_TYPES.includes(it.type) || (it.ilvl||0)>SCAV_GUN_ILVL_MAX || ri>2) return;
+      }
+      if(it.kind==="armor" && (it.tier||0)>SCAV_ARMOR_TIER_MAX) return;
+      if(it.kind==="helmet" && (it.tier||0)>SCAV_HELMET_TIER_MAX) return;
+      if(it.kind==="shield") return;
+    }
     if(it.kind==="weapon"){
       if(!b.gun){
         b.gun=Object.assign({}, it); b.gun.ammoMag=b.gun.mag; b.gun.ammoRes=b.gun.reserve;
