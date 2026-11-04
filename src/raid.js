@@ -276,54 +276,55 @@ const RAID_INDOOR = [
 ];
 
 /* ----------------------------- 枪械 / 护甲 ----------------------------- */
-// 塔科夫模式已全面改用「无主之地」程序化枪械（blGunGen / blGunConvert），
+// 塔科夫模式已全面改用「旧刷宝体系」程序化枪械（blGunGen / blGunConvert），
 // 此处只保留 AI / 掉落 / 超市铺货所用的枪型池
 const RAID_GUN_TYPES = ["pistol","smg","shotgun","rifle","sniper"];
 
-// 1~9 级护甲：与 9 阶品质一一对应（T9 对应「彩虹」档）
-// v0.10.1 重做曲线——T5 起防御力指数级抬升，价格同步暴涨
+// 1~9 级护甲：现实防护等级（软质内衬 → 陶瓷/钢制插板 → 全防护重型）
+// v0.15.0：移除超现实护甲命名与自动回复设定，改用现实防护等级
 const RAID_ARMORS = {
-  1: { name:"T1 帆布背心",   dr:0.10, maxArmor:25,   value:180     },
-  2: { name:"T2 战术背心",   dr:0.17, maxArmor:45,   value:420     },
-  3: { name:"T3 防弹背心",   dr:0.26, maxArmor:78,   value:980     },
-  4: { name:"T4 陶瓷插板甲", dr:0.36, maxArmor:130,  value:2600    },
-  5: { name:"T5 复合装甲",   dr:0.48, maxArmor:210,  value:7200    },
-  6: { name:"T6 重型板甲",   dr:0.60, maxArmor:330,  value:19000   },
-  7: { name:"T7 外骨骼甲",   dr:0.71, maxArmor:500,  value:48000   },
-  8: { name:"T8 实验型装甲", dr:0.80, maxArmor:720,  value:128000  },
-  9: { name:"T9 奇点装甲",   dr:0.86, maxArmor:960,  value:340000  },
+  1: { name:"T1 软质防护背心", dr:0.10, maxArmor:25,   value:180     },
+  2: { name:"T2 轻型战术背心", dr:0.17, maxArmor:45,   value:420     },
+  3: { name:"T3 II 级防弹衣",  dr:0.26, maxArmor:78,   value:980     },
+  4: { name:"T4 III 级插板背心",dr:0.36, maxArmor:130, value:2600    },
+  5: { name:"T5 IV 级复合防弹衣",dr:0.48,maxArmor:210, value:7200    },
+  6: { name:"T6 重型插板背心", dr:0.60, maxArmor:330,  value:19000   },
+  7: { name:"T7 全防护突击甲", dr:0.71, maxArmor:500,  value:48000   },
+  8: { name:"T8 多层复合装甲", dr:0.80, maxArmor:720,  value:128000  },
+  9: { name:"T9 VI 级重型防弹衣",dr:0.86,maxArmor:960, value:340000  },
 };
 // 1~9 级头盔：减爆头伤害，独立耐久池
 const RAID_HELMETS = {
-  1: { name:"T1 帆布软帽",   dr:0.08, maxArmor:10,  value:130   },
-  2: { name:"T2 钢盔",       dr:0.15, maxArmor:20,  value:320   },
-  3: { name:"T3 战术头盔",   dr:0.23, maxArmor:36,  value:760   },
-  4: { name:"T4 防弹头盔",   dr:0.32, maxArmor:58,  value:1900  },
-  5: { name:"T5 复合头盔",   dr:0.43, maxArmor:92,  value:5200  },
-  6: { name:"T6 重型头盔",   dr:0.54, maxArmor:145, value:13000 },
-  7: { name:"T7 外骨骼头盔", dr:0.65, maxArmor:220, value:33000 },
-  8: { name:"T8 实验头盔",   dr:0.74, maxArmor:320, value:88000 },
-  9: { name:"T9 奇点头盔",   dr:0.81, maxArmor:430, value:240000 },
+  1: { name:"T1 软质头套",     dr:0.08, maxArmor:10,  value:130   },
+  2: { name:"T2 钢制头盔",     dr:0.15, maxArmor:20,  value:320   },
+  3: { name:"T3 战术头盔",     dr:0.23, maxArmor:36,  value:760   },
+  4: { name:"T4 III 级防弹盔", dr:0.32, maxArmor:58,  value:1900  },
+  5: { name:"T5 复合防弹头盔", dr:0.43, maxArmor:92,  value:5200  },
+  6: { name:"T6 重型防弹头盔", dr:0.54, maxArmor:145, value:13000 },
+  7: { name:"T7 高切防弹头盔", dr:0.65, maxArmor:220, value:33000 },
+  8: { name:"T8 全罩式头盔",   dr:0.74, maxArmor:320, value:88000 },
+  9: { name:"T9 面罩一体头盔", dr:0.81, maxArmor:430, value:240000 },
 };
 const RAID_ARMOR_TIERS = [1,2,3,4,5,6,7,8,9];
 // 局内物品栏容量上限（超出则无法继续拾取，提示「物品栏已满」）
 const RAID_INV_CAP = { weapons:6, armors:4, helmets:4, parts:16, materials:24, meds:6, receivers:4, keys:8 };
 
-/* ----------------------------- 9 阶统一品质（v0.10.2） -----------------------------
- * 塔科夫全战利品共用同一套品质刻度（共 9 阶，严格由低到高）：
- *   0 普通 · 1 罕见(绿) · 2 魔法(蓝) · 3 稀有(黄) · 4 史诗(紫)
- *   5 传说(橙) · 6 远古(青) · 7 神话(红) · 8 彩虹
- * 护甲等级 T1~T9、枪械品质、配件品质、原材料品质全部共用此刻度。 */
+/* ----------------------------- 9 阶统一品级（v0.10.2 / v0.15.0 拟真化） -----------------------------
+ * 塔科夫全战利品共用同一套品级刻度（共 9 阶，严格由低到高）：
+ *   民用 · 翻新 · 制式 · 军规 · 精工 · 特种 · 试验 · 原型 · 竞赛
+ * v0.15.0：改为军工品相刻度和低饱和军规配色；
+ *   regen（护甲自动回复）全部归零 —— 现实护甲耐久只能维修，不会待维修。
+ * 护甲等级 T1~T9、枪械品级、部件品级、原材料品级全部共用此刻度。 */
 const RAID_TIERS = [
-  { id:"common",  name:"普通", color:"#e9e4dc", dr:0,     arm:0,    val:0,    regen:0,    affix:0 },
-  { id:"uncommon",name:"罕见", color:"#5bd66a", dr:0.020, arm:0.15, val:0.40, regen:0,    affix:1 },
-  { id:"magic",   name:"魔法", color:"#4aa3ff", dr:0.040, arm:0.30, val:0.80, regen:0,    affix:2 },
-  { id:"rare",    name:"稀有", color:"#ffd54a", dr:0.062, arm:0.50, val:1.35, regen:0,    affix:3 },
-  { id:"epic",    name:"史诗", color:"#b061ff", dr:0.090, arm:0.75, val:2.20, regen:0.40, affix:4 },
-  { id:"legend",  name:"传说", color:"#ff8a1e", dr:0.122, arm:1.10, val:3.50, regen:0.80, affix:5 },
-  { id:"ancient", name:"远古", color:"#4fe0d0", dr:0.155, arm:1.60, val:5.20, regen:1.40, affix:6 },
-  { id:"myth",    name:"神话", color:"#ff3b3b", dr:0.190, arm:2.20, val:7.60, regen:2.10, affix:7 },
-  { id:"rainbow", name:"彩虹", color:"#ff5ce0", dr:0.225, arm:2.90, val:11.0, regen:3.00, affix:8 },
+  { id:"common",  name:"民用", color:"#cfc9bb", dr:0,     arm:0,    val:0,    regen:0, affix:0 },
+  { id:"uncommon",name:"翻新", color:"#93ad7c", dr:0.020, arm:0.15, val:0.40, regen:0, affix:1 },
+  { id:"magic",   name:"制式", color:"#7b9ab5", dr:0.040, arm:0.30, val:0.80, regen:0, affix:2 },
+  { id:"rare",    name:"军规", color:"#c1a85a", dr:0.062, arm:0.50, val:1.35, regen:0, affix:3 },
+  { id:"epic",    name:"精工", color:"#9c8fb5", dr:0.090, arm:0.75, val:2.20, regen:0, affix:4 },
+  { id:"legend",  name:"特种", color:"#c68b4c", dr:0.122, arm:1.10, val:3.50, regen:0, affix:5 },
+  { id:"ancient", name:"试验", color:"#79a9a2", dr:0.155, arm:1.60, val:5.20, regen:0, affix:6 },
+  { id:"myth",    name:"原型", color:"#b06a62", dr:0.190, arm:2.20, val:7.60, regen:0, affix:7 },
+  { id:"rainbow", name:"竞赛", color:"#c9b878", dr:0.225, arm:2.90, val:11.0, regen:0, affix:8 },
 ];
 // 护甲稀有度数组（与 RAID_TIERS 一一对应，保留旧字段名以兼容 UI）
 const RAID_RARITY_NAME  = RAID_TIERS.map(t=>t.name);
@@ -341,76 +342,76 @@ function raidTierLegend(){
 // 枪械生成：把塔科夫品质档位映射到全局 RARITIES 的 id（仅取数值/词缀，显示色由 qColor 覆盖）
 const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","ancient","mythic","rainbow"];
 
-/* ----------------------------- 命名传说装备（v0.10.4） -----------------------------
- * 传说 / 远古 / 神话 / 彩虹 四档除了随机词缀枪甲之外，还会掉落「有名字」的传奇装备：
- * 词缀全部手工配置，同档数值远高于随机生成，名字固定（如「黎明审判」）。
- * 掉落档位随携带估值解锁：裸装最多摸到传说，满配才可能刷出彩虹。 */
+/* ----------------------------- 具名装备（v0.10.4 / v0.15.0 拟真化） -----------------------------
+ * 高档位除了随机改装枪甲之外，还会掉落现实型号 + 出厂改装方案的「具名装备」：
+ * 词条全部手工配置，同档数值远高于随机生成，名字固定（如「AK-74N 战术型」）。
+ * v0.15.0：移除制式/定制命名与急救效率、额外弹丸、特殊弹触发、溅射等超现实词条。 */
 const RAID_UNIQUES = [
-  // —— 枪械 ——
-  { id:"u_dawn", name:"黎明审判", kind:"weapon", type:"rifle", tier:5, elem:"fire", ilvl:30,
-    perk:"焚天弹幕 · 火焰伤害 +45%，射速 +14%",
-    affixes:[ { kind:"prefix", nm:"焚天的", mods:[{stat:"dmgPct",value:30},{stat:"elemPct",value:45}] },
-              { kind:"suffix", nm:"长夜尽头", mods:[{stat:"fireRatePct",value:14},{stat:"magPct",value:30}] } ] },
-  { id:"u_humming", name:"蜂鸟", kind:"weapon", type:"pistol", tier:5, elem:"none", ilvl:28,
-    perk:"疾风连射 · 射速 +48%，换弹 +30%",
-    affixes:[ { kind:"prefix", nm:"疾风的", mods:[{stat:"fireRatePct",value:48}] },
-              { kind:"suffix", nm:"蜂刺", mods:[{stat:"magPct",value:35},{stat:"reloadPct",value:30}] } ] },
-  { id:"u_butcher", name:"屠夫的电锯", kind:"weapon", type:"shotgun", tier:5, elem:"none", ilvl:30,
-    perk:"血肉收割 · 额外 3 弹丸，命中吸血 6%",
-    affixes:[ { kind:"prefix", nm:"嗜血的", mods:[{stat:"pellets",value:3}] },
-              { kind:"suffix", nm:"血肉", mods:[{stat:"dmgPct",value:26},{stat:"lifesteal",value:6}] } ] },
-  { id:"u_plague", name:"黑死病", kind:"weapon", type:"smg", tier:6, elem:"corrosive", ilvl:36,
-    perk:"疫病扩散 · 腐蚀伤害 +55%，元素触发 +25%",
-    affixes:[ { kind:"prefix", nm:"疫病的", mods:[{stat:"elemPct",value:55},{stat:"elemChance",value:25}] },
-              { kind:"suffix", nm:"万人坑", mods:[{stat:"fireRatePct",value:16},{stat:"magPct",value:40}] } ] },
-  { id:"u_fox", name:"沙漠之狐", kind:"weapon", type:"rifle", tier:6, elem:"none", ilvl:36,
-    perk:"鹰眼 · 精准 +40%，射程 +30",
-    affixes:[ { kind:"prefix", nm:"鹰眼的", mods:[{stat:"accPct",value:40},{stat:"range",value:30}] },
-              { kind:"suffix", nm:"沙暴", mods:[{stat:"dmgPct",value:22},{stat:"projSpeed",value:35}] } ] },
-  { id:"u_guillotine", name:"断头台", kind:"weapon", type:"sniper", tier:7, elem:"shock", ilvl:42,
-    perk:"裁决 · 暴击几率 +20%，暴击伤害 +80%",
-    affixes:[ { kind:"prefix", nm:"裁决的", mods:[{stat:"dmgPct",value:55},{stat:"critChance",value:20}] },
-              { kind:"suffix", nm:"终局", mods:[{stat:"critDmg",value:80}] } ] },
-  { id:"u_thousand", name:"千面", kind:"weapon", type:"rifle", tier:7, elem:"radiation", ilvl:42,
-    perk:"万象轮回 · 元素伤害 +60%，弹匣 +50%",
-    affixes:[ { kind:"prefix", nm:"万象的", mods:[{stat:"elemPct",value:60},{stat:"magPct",value:50}] },
-              { kind:"suffix", nm:"轮回", mods:[{stat:"fireRatePct",value:12},{stat:"reloadPct",value:25}] } ] },
-  { id:"u_thor", name:"雷神之锤", kind:"weapon", type:"sniper", tier:8, elem:"shock", ilvl:48,
-    perk:"九霄落雷 · 伤害 +70%，暴击伤害 +100%",
-    affixes:[ { kind:"prefix", nm:"雷霆的", mods:[{stat:"dmgPct",value:70},{stat:"critChance",value:15}] },
-              { kind:"suffix", nm:"九霄", mods:[{stat:"critDmg",value:100},{stat:"projSpeed",value:40}] } ] },
-  { id:"u_tsunami", name:"海啸", kind:"weapon", type:"shotgun", tier:8, elem:"cryo", ilvl:48,
-    perk:"深渊怒涛 · 额外 4 弹丸，溅射伤害 +70%",
-    affixes:[ { kind:"prefix", nm:"深渊的", mods:[{stat:"pellets",value:4},{stat:"splashDmg",value:70},{stat:"splashPct",value:50}] },
-              { kind:"suffix", nm:"怒涛", mods:[{stat:"dmgPct",value:35}] } ] },
-  // —— 护甲 / 头盔 ——
-  { id:"u_ritual", name:"最后的仪式", kind:"armor", tier:5,
-    perk:"献祭 · 减伤 +7%，护甲值 +80%",
-    affixes:[ { kind:"prefix", nm:"献祭的", mods:[{stat:"dr",value:0.07}] },
-              { kind:"suffix", nm:"·不朽", mods:[{stat:"armor",value:80}] } ] },
-  { id:"u_valkyr", name:"女武神", kind:"armor", tier:6,
-    perk:"英灵殿 · 减伤 +8%，护甲值 +100%",
-    affixes:[ { kind:"prefix", nm:"神盾的", mods:[{stat:"dr",value:0.08}] },
-              { kind:"suffix", nm:"·英灵殿", mods:[{stat:"armor",value:100}] } ] },
-  { id:"u_obsidian", name:"黑曜石", kind:"armor", tier:7,
-    perk:"黑曜结晶 · 减伤 +9%，护甲值 +120%",
-    affixes:[ { kind:"prefix", nm:"不碎的", mods:[{stat:"dr",value:0.09}] },
-              { kind:"suffix", nm:"·黑曜", mods:[{stat:"armor",value:120}] } ] },
-  { id:"u_singular", name:"奇点圣骸", kind:"armor", tier:8,
-    perk:"奇点重构 · 减伤 +10%，护甲值 +140%",
-    affixes:[ { kind:"prefix", nm:"奇点的", mods:[{stat:"dr",value:0.10}] },
-              { kind:"suffix", nm:"·圣骸", mods:[{stat:"armor",value:140}] } ] },
-  { id:"u_watch", name:"守望者", kind:"helmet", tier:6,
-    perk:"长夜哨戒 · 爆头减伤 +8%，耐久 +100%",
-    affixes:[ { kind:"prefix", nm:"哨戒的", mods:[{stat:"dr",value:0.08}] },
-              { kind:"suffix", nm:"·长夜", mods:[{stat:"armor",value:100}] } ] },
-  { id:"u_ironveil", name:"铁幕", kind:"helmet", tier:8,
-    perk:"铁幕密封 · 爆头减伤 +10%，耐久 +130%",
-    affixes:[ { kind:"prefix", nm:"密封的", mods:[{stat:"dr",value:0.10}] },
-              { kind:"suffix", nm:"·铁幕", mods:[{stat:"armor",value:130}] } ] },
+  // —— 枪械：现实型号 + 出厂改装方案 ——
+  { id:"u_dawn", name:"AK-74N 战术型", kind:"weapon", type:"rifle", tier:5, elem:"fire", ilvl:30,
+    perk:"军规冷锻枪管 · 枪口动能 +30%，理论射速 +14%",
+    affixes:[ { kind:"prefix", nm:"冷锻枪管", mods:[{stat:"dmgPct",value:30},{stat:"projSpeed",value:20}] },
+              { kind:"suffix", nm:"·军用批次", mods:[{stat:"fireRatePct",value:14},{stat:"magPct",value:30}] } ] },
+  { id:"u_humming", name:"PP-19-01 短突型", kind:"weapon", type:"pistol", tier:5, elem:"none", ilvl:28,
+    perk:"轻量枪机 · 理论射速 +48%，换弹速度 +30%",
+    affixes:[ { kind:"prefix", nm:"轻量枪机", mods:[{stat:"fireRatePct",value:48}] },
+              { kind:"suffix", nm:"·快拔套", mods:[{stat:"magPct",value:35},{stat:"reloadPct",value:30}] } ] },
+  { id:"u_butcher", name:"Saiga-12 破门型", kind:"weapon", type:"shotgun", tier:5, elem:"none", ilvl:30,
+    perk:"短管鹿弹配置 · 枪口动能 +46%，弹头初速 +18%",
+    affixes:[ { kind:"prefix", nm:"加重枪管", mods:[{stat:"dmgPct",value:46}] },
+              { kind:"suffix", nm:"·高初速", mods:[{stat:"projSpeed",value:18},{stat:"recoil",value:20}] } ] },
+  { id:"u_plague", name:"MP5SD 消音型", kind:"weapon", type:"smg", tier:6, elem:"cryo", ilvl:36,
+    perk:"一体消音器 + 亚音速弹 · 射击精度 +35%，有效射程 +20%",
+    affixes:[ { kind:"prefix", nm:"精磨枪管", mods:[{stat:"accPct",value:35},{stat:"range",value:20}] },
+              { kind:"suffix", nm:"·亚音速", mods:[{stat:"fireRatePct",value:16},{stat:"magPct",value:40}] } ] },
+  { id:"u_fox", name:"HK416 侦察型", kind:"weapon", type:"rifle", tier:6, elem:"none", ilvl:36,
+    perk:"浮置枪管 + 光学座 · 射击精度 +40%，有效射程 +30%",
+    affixes:[ { kind:"prefix", nm:"浮置枪管", mods:[{stat:"accPct",value:40},{stat:"range",value:30}] },
+              { kind:"suffix", nm:"·归零", mods:[{stat:"dmgPct",value:22},{stat:"projSpeed",value:35}] } ] },
+  { id:"u_guillotine", name:"SV-98 精确型", kind:"weapon", type:"sniper", tier:7, elem:"shock", ilvl:42,
+    perk:"比赛级枪管 + 钢芯弹 · 要害命中 +20%，要害伤害 +80%",
+    affixes:[ { kind:"prefix", nm:"比赛级膛线", mods:[{stat:"dmgPct",value:55},{stat:"critChance",value:20}] },
+              { kind:"suffix", nm:"·精修", mods:[{stat:"critDmg",value:80}] } ] },
+  { id:"u_thousand", name:"RPK-16 轻机枪型", kind:"weapon", type:"rifle", tier:7, elem:"radiation", ilvl:42,
+    perk:"重枪管 + 弹鼓 · 枪口动能 +35%，弹匣容量 +50%",
+    affixes:[ { kind:"prefix", nm:"重枪管", mods:[{stat:"dmgPct",value:35},{stat:"magPct",value:50}] },
+              { kind:"suffix", nm:"·大容量", mods:[{stat:"fireRatePct",value:12},{stat:"reloadPct",value:25}] } ] },
+  { id:"u_thor", name:"ORSIS T-5000 远程型", kind:"weapon", type:"sniper", tier:8, elem:"shock", ilvl:48,
+    perk:"加长枪管 + 高膛压装药 · 枪口动能 +70%，要害伤害 +100%",
+    affixes:[ { kind:"prefix", nm:"高膛压装药", mods:[{stat:"dmgPct",value:70},{stat:"critChance",value:15}] },
+              { kind:"suffix", nm:"·精选批次", mods:[{stat:"critDmg",value:100},{stat:"projSpeed",value:40}] } ] },
+  { id:"u_tsunami", name:"KS-23 重型霰弹型", kind:"weapon", type:"shotgun", tier:8, elem:"none", ilvl:48,
+    perk:"23mm 重弹头 · 枪口动能 +65%，后坐控制 +30%",
+    affixes:[ { kind:"prefix", nm:"加重枪管", mods:[{stat:"dmgPct",value:65},{stat:"recoil",value:30}] },
+              { kind:"suffix", nm:"·低后坐", mods:[{stat:"dmgPct",value:35}] } ] },
+  // —— 护甲 / 头盔：现实装备型号 ——
+  { id:"u_ritual", name:"6B23-1 附加插板", kind:"armor", tier:5,
+    perk:"加装侧插板 · 减伤 +7%，耐久 +80%",
+    affixes:[ { kind:"prefix", nm:"加固的", mods:[{stat:"dr",value:0.07}] },
+              { kind:"suffix", nm:"·复合层压", mods:[{stat:"armor",value:80}] } ] },
+  { id:"u_valkyr", name:"Fort Redut-M", kind:"armor", tier:6,
+    perk:"全套插板 · 减伤 +8%，耐久 +100%",
+    affixes:[ { kind:"prefix", nm:"陶瓷的", mods:[{stat:"dr",value:0.08}] },
+              { kind:"suffix", nm:"·军用规格", mods:[{stat:"armor",value:100}] } ] },
+  { id:"u_obsidian", name:"Zhuk-6a", kind:"armor", tier:7,
+    perk:"多层陶瓷面板 · 减伤 +9%，耐久 +120%",
+    affixes:[ { kind:"prefix", nm:"复合的", mods:[{stat:"dr",value:0.09}] },
+              { kind:"suffix", nm:"·防弹插板", mods:[{stat:"armor",value:120}] } ] },
+  { id:"u_singular", name:"6B43 6A 重型防弹衣", kind:"armor", tier:8,
+    perk:"全防护配置 · 减伤 +10%，耐久 +140%",
+    affixes:[ { kind:"prefix", nm:"重装的", mods:[{stat:"dr",value:0.10}] },
+              { kind:"suffix", nm:"·重装规格", mods:[{stat:"armor",value:140}] } ] },
+  { id:"u_watch", name:"Altyn 全罩头盔", kind:"helmet", tier:6,
+    perk:"带面罩 · 爆头减伤 +8%，耐久 +100%",
+    affixes:[ { kind:"prefix", nm:"密封的", mods:[{stat:"dr",value:0.08}] },
+              { kind:"suffix", nm:"·钢制面罩", mods:[{stat:"armor",value:100}] } ] },
+  { id:"u_ironveil", name:"Vulkan-5 面罩头盔", kind:"helmet", tier:8,
+    perk:"钛合金面罩 · 爆头减伤 +10%，耐久 +130%",
+    affixes:[ { kind:"prefix", nm:"加固的", mods:[{stat:"dr",value:0.10}] },
+              { kind:"suffix", nm:"·钛合金", mods:[{stat:"armor",value:130}] } ] },
 ];
 
-// 运气 → 可出的最高档（0 裸装只能出传说，1 满配可达彩虹）
+// 运气 → 可出的最高档（0 裸装最多到特种，1 满配可达竞赛）
 function raidUniqueMaxTier(luck){
   return M.clamp(5 + Math.round(M.clamp(luck||0, 0, 1)*3), 5, 8);
 }
@@ -479,14 +480,14 @@ const RAID_LUCK_MULT = [0, 0.07, 0.14, 0.24, 0.38, 0.58, 0.85, 1.15, 1.50];  // 
  *   RAID_GEAR_BASE：AI 装备强度下限（≈常规配装），裸手才是 0 */
 const RAID_LUCK_FLOOR = 0.06;
 const RAID_GEAR_BASE  = 0.32;
-// 枪械 / 配件的 9 阶品质基础权重（普通→彩虹）——仅做参考表，实际出货走下面的「硬预算」
+// 枪械 / 部件的 9 阶品级基础权重（民用→竞赛）——仅做参考表，实际出货走下面的「硬预算」
 const RAID_QUALITY_W = [34, 25, 17, 11, 6.2, 3.2, 1.30, 0.45, 0.12];
 
 /* ---------------- v0.12.5 硬性稀有度预算（v0.14.4 收紧） ----------------
  * 目标（用户明确要求）：每 100 件战利品里
- *   · 稀有及以上（T3 稀有 / T4 史诗）≈ 3.2 件（原 5 件）
- *   · 传说及以上（T5 传说 ~ T8 彩虹）≈ 0.55 件（原 1 件）
- * 做法：先掷「是否进稀有段 / 传说段」，再在段内按权重挑档。
+ *   · 稀有及以上（T3 稀有 / T4 军规）≈ 3.2 件（原 5 件）
+ *   · 特种及以上（T5 特种 ~ T8 原型）≈ 0.55 件（原 1 件）
+ * 做法：先掷「是否进稀有段 / 特种段」，再在段内按权重挑档。
  * 携带估值的「运气」只做两件小事：段内更偏顶端（T4 而非 T3、T8 而非 T5），
  * 以及总量最多 +30%（3.2%→4.2%）、+40%（0.55%→0.8%），不会把整局刷成紫橙。 */
 const RAID_BUDGET = { lv0:0.032, lvCap:0.042, lg0:0.0055, lgCap:0.008,
@@ -496,7 +497,7 @@ function raidBudgetTier(luck){
   const pL=Math.min(RAID_BUDGET.lgCap, RAID_BUDGET.lg0*(1+k*0.40));
   const pR=Math.min(RAID_BUDGET.lvCap, RAID_BUDGET.lv0*(1+k*0.30));
   const r=RNG.f();
-  if(r<pL){   // 传说段 T5~T8：运气越好越偏 T7 / T8（v0.14.4：底档更集中）
+  if(r<pL){   // 特种段 T5~T8：运气越好越偏 T7 / T8（v0.14.4：底档更集中）
     return 5 + RNG.weighted([{weight:0.82-0.30*k},{weight:0.15},{weight:0.025+0.20*k},{weight:0.005+0.10*k}]);
   }
   if(r<pR){   // 稀有段 T3 / T4
@@ -522,31 +523,32 @@ function raidRollArmorTier(luck){
 /* ----------------------------- 原材料（18 种，每阶 2 种） ----------------------------- */
 /* v0.10.6 经济收紧：低阶材料估值大幅下调；v0.12.5 进一步大幅压低低价值材料
  * （T0/T1/T2 再砍约 40~55%），高价值材料依旧稀有但捡一局卖不出好价钱。 */
+// v0.15.0：全部改为现实中能在仓库 / 军械所找到的物资，保留 id 以兼容旧存档与合成配方
 const RAID_MATERIALS = [
   { id:"scrap",    name:"废金属",     tier:0, value:7,    tag:"金属" },
   { id:"cloth",    name:"破布",       tier:0, value:5,    tag:"织物" },
   { id:"steel",    name:"特种钢",     tier:1, value:20,   tag:"金属" },
   { id:"copper",   name:"铜线",       tier:1, value:16,   tag:"电子" },
-  { id:"alloy",    name:"钛合金",     tier:2, value:70,   tag:"金属" },
+  { id:"alloy",    name:"钛合金板",   tier:2, value:70,   tag:"金属" },
   { id:"rubber",   name:"合成橡胶",   tier:2, value:60,   tag:"化工" },
-  { id:"circuit",  name:"军用电路",   tier:3, value:400,  tag:"电子" },
+  { id:"circuit",  name:"军用电路板", tier:3, value:400,  tag:"电子" },
   { id:"polymer",  name:"聚合物",     tier:3, value:340,  tag:"化工" },
-  { id:"fiber",    name:"纳米纤维",   tier:4, value:1050, tag:"化工" },
-  { id:"magnet",   name:"稀土磁体",   tier:4, value:1180, tag:"电子" },
-  { id:"eridium",  name:"镒矿",       tier:5, value:2600, tag:"晶体" },
-  { id:"coil",     name:"超导线圈",   tier:5, value:3000, tag:"电子" },
-  { id:"stariron", name:"星铁",       tier:6, value:6500, tag:"金属" },
-  { id:"antibat",  name:"反物质电池", tier:6, value:7300, tag:"能源" },
-  { id:"void",     name:"虚空结晶",   tier:7, value:16000,tag:"晶体" },
-  { id:"mythshard",name:"神话残片",   tier:7, value:18000,tag:"晶体" },
-  { id:"singul",   name:"奇点核心",   tier:8, value:46000,tag:"能源" },
-  { id:"prism",    name:"彩虹棱镜",   tier:8, value:53000,tag:"晶体" },
+  { id:"fiber",    name:"芳纶纤维",   tier:4, value:1050, tag:"织物" },
+  { id:"magnet",   name:"伺服电机",   tier:4, value:1180, tag:"电子" },
+  { id:"eridium",  name:"发射药",     tier:5, value:2600, tag:"化工" },
+  { id:"coil",     name:"火控线缆",   tier:5, value:3000, tag:"电子" },
+  { id:"stariron", name:"航空铝坯",   tier:6, value:6500, tag:"金属" },
+  { id:"antibat",  name:"锂电组",     tier:6, value:7300, tag:"电子" },
+  { id:"void",     name:"复合陶瓷板", tier:7, value:16000,tag:"金属" },
+  { id:"mythshard",name:"精密轴承",   tier:7, value:18000,tag:"金属" },
+  { id:"singul",   name:"光学测距模块",tier:8, value:46000,tag:"光学" },
+  { id:"prism",    name:"镀膜镜片组", tier:8, value:53000,tag:"光学" },
 ];
 const RAID_MAT_BY_ID = {};
 for(const m of RAID_MATERIALS) RAID_MAT_BY_ID[m.id]=m;
 
 /* v0.12.5 悬赏保底战利品：击杀悬赏目标「至少 3 件稀有及以上」
- *   ① 一件 T4~T6 原材料　② 一件稀有 / 传说配件　③ 一件稀有以上护甲 / 头盔 / 整枪 */
+ *   ① 一件 T4~T6 原材料　② 一件稀有 / 特种配件　③ 一件稀有以上护甲 / 头盔 / 整枪 */
 function raidBountyLoot(){
   const out=[];
   // ① 原材料
@@ -557,7 +559,7 @@ function raidBountyLoot(){
     value:Math.round(base.value*(1+RAID_RARITY_VAL[mt])/10)*10,
     color:RAID_RARITY_COLOR[mt], qName:RAID_TIERS[mt].name,
     uid:"bq"+Math.floor(Math.random()*1e9).toString(36) });
-  // ② 配件：稀有起，25% 直接给传说档
+  // ② 配件：稀有起，25% 直接给特种档
   const pt=rollPart(RNG.pick(GUN_SLOTS).id, 18, RNG.chance(0.25)?"orange":"purple");
   pt.kind="part"; pt.uid="bq"+Math.floor(Math.random()*1e9).toString(36);
   out.push(pt);
@@ -592,7 +594,7 @@ const RAID_KEYS = [
   { lv:2, name:"铜制钥匙",   color:"#d08a4a", uses:5, value:12000,  shop:7800,  token:0  },
   { lv:3, name:"钢制钥匙",   color:"#9fb4c8", uses:4, value:34000,  shop:0,     token:5  },
   { lv:4, name:"钛合金钥匙", color:"#7fd0ff", uses:3, value:86000,  shop:0,     token:14 },
-  { lv:5, name:"黑曜钥匙",   color:"#c07bff", uses:2, value:210000, shop:0,     token:34 },
+  { lv:5, name:"V 级电子钥匙",color:"#b8946a", uses:2, value:210000, shop:0,    token:34 },
 ];
 /* v0.14.7：黑市代币 → 卢布 的「估值汇率」（按黑市 III~V 级钥匙定价反推：
  *   34000/5 = 6800 · 86000/14 ≈ 6143 · 210000/34 ≈ 6176 → 取 6200）
@@ -659,16 +661,15 @@ function raidRollMed(luck){
   return raidMakeMed((pool.length?RNG.pick(pool):RAID_MEDS[0]).id);
 }
 
-/* ----------------------------- 核心（强化配件，槽位 slot:"core"） -----------------------------
- * v0.13.5：核心不再是独立库存（旧 stash.cores），而是「配件」的一种 ——
- *   kind:"part"、slot:"core"，与枪配件共用仓库 / 拍卖（核心不可合成、不可融合升阶）。
- * 三类核心：
- *   · 元素核心(core:"elem")  → 把枪械附魔为该元素，并加元素伤害%/触发%（等级越高越猛）
- *   · 混乱核心(core:"chaos") → 装入后「最高等级混乱核心」决定枪械的混乱等级（1.12^m 指数放大）
- *   · 强化核心(core:"boost") → 7 种属性增益（狂暴/致命/弹幕/精准/湮灭/嗜血/全能），I~V 级缩放
- * v0.14.5：核心不再可通过材料合成 / 两两升阶，只能从保险箱、精英干员掉落，或在商店（枪械店/黑市）购买。
- * 武器数值由 generateWeapon 解析 parts 中的核心：取 max(混乱核心lv) 为混乱等级、最高级元素核心定元素，
- * 其余核心词缀并入总词缀池参与计算。核心槽数量由枪械品质（稀有度档位）决定，1~8 个。 */
+/* ----------------------------- 改装模块（slot:"core"） -----------------------------
+ * v0.15.0：原「弹种适配组件 / 膛压组件 / 改装模块」全部改为现实可解释的改装模块，
+ *   内部 core 字段值（elem / chaos / boost）保留，兼容旧存档与联机快照。
+ * 三类模块：
+ *   · 弹种适配组件(core:"elem")  → 更换枪械适配弹种，附加弹药效能词条
+ *   · 膛压组件(core:"chaos")     → 「最高等级膛压组件」决定改装等级（1.06^m 工程余量）
+ *   · 改装模块(core:"boost")     → 7 类工艺增益（导气 / 扳机 / 供弹 / 枪管 / 枪口 / 人体工学 / 综合）
+ * 模块不可合成、不可融合升阶，只能从保险箱、精英干员掉落，或在商店购买。
+ * 模块槽数量由枪械品级决定，1~8 个。 */
 const RAID_CORE_MAX = 5;
 const RAID_ROMAN = ["","I","II","III","IV","V"];
 const RAID_ELEM_CORE_ELEMS = ["fire","shock","corrosive","cryo","explosive","radiation"];
@@ -677,23 +678,24 @@ function raidCoreValue(coreType, lv){
   const base = coreType==="chaos" ? 3900 : coreType==="boost" ? 3000 : 3300;   // v0.14.5：增益提升后估值同步上调
   return Math.round(base * Math.pow(2.35,(lv||1)-1)/10)*10;
 }
-// 强化核心定义：每种给出名称/颜色/属性词缀/每级基础值
-/* v0.14.5：核心改为「不可合成、只能掉落或购买」，作为补偿，增益整体上调约 60~70%，
+// 改装模块定义：每种给出名称/颜色/属性词缀/每级基础值
+/* v0.14.5：改装模块改为「不可合成、只能掉落或购买」，作为补偿，增益整体上调约 60~70%，
  * 并且每级成长斜率从 +50% 提到 +95%（V 级≈I 级的 4.8 倍）。 */
+// v0.15.0：7 类现实改装模块（急救效率 / 吸盾 / 溅射 / 弹种类全部替换为工艺参数）
 const BOOST_CORE_TYPES = {
-  berserk:   { name:"狂暴核心", color:"#ff6b4a", stats:["dmgPct","fireRatePct"],        base:[26,23] },
-  lethal:    { name:"致命核心", color:"#ff4d6d", stats:["critChance","critDmg"],        base:[17,40] },
-  barrage:   { name:"弹幕核心", color:"#4dd0ff", stats:["magPct","reloadPct"],          base:[33,26] },
-  precision: { name:"精准核心", color:"#9b8bff", stats:["accPct","range"],              base:[28,23] },
-  annihil:   { name:"湮灭核心", color:"#b06bff", stats:["elemPct","splashPct","splashDmg"], base:[27,23,20] },
-  vampire:   { name:"嗜血核心", color:"#ff5c8a", stats:["lifesteal","shieldOnHit"],     base:[16,20] },
-  omni:      { name:"全能核心", color:"#ffd23f", stats:["dmgPct","accPct","critChance"],base:[15,15,12] },
+  berserk:   { name:"导气增压模块", color:"#b07a4a", stats:["dmgPct","fireRatePct"],        base:[26,23] },
+  lethal:    { name:"精磨扳机组",   color:"#a86262", stats:["critChance","critDmg"],        base:[17,40] },
+  barrage:   { name:"扩容供弹组件", color:"#5e8fa8", stats:["magPct","reloadPct"],          base:[33,26] },
+  precision: { name:"比赛级枪管",   color:"#7d7ba0", stats:["accPct","range"],              base:[28,23] },
+  annihil:   { name:"枪口制退组件", color:"#89729c", stats:["dmgPct","recoil","projSpeed"], base:[27,23,20] },
+  vampire:   { name:"人体工学套件", color:"#9c6b74", stats:["moveSpeed","reloadPct"],       base:[16,20] },
+  omni:      { name:"综合改装套件", color:"#b09a4c", stats:["dmgPct","accPct","critChance"],base:[15,15,12] },
 };
 const BOOST_CORE_IDS = Object.keys(BOOST_CORE_TYPES);
 function raidCoreModValue(stat, lv){ return Math.round((BASE_FOR_STAT(stat))*(1+(lv-1)*0.95)*10)/10; }   // v0.14.5：每级 +95%
 function BASE_FOR_STAT(stat){
   for(const k in BOOST_CORE_TYPES){ const i=BOOST_CORE_TYPES[k].stats.indexOf(stat); if(i>=0) return BOOST_CORE_TYPES[k].base[i]; }
-  if(stat==="elemPct") return 30; if(stat==="elemChance") return 13;   // v0.14.5：元素核心大幅强化
+  if(stat==="elemPct") return 30; if(stat==="elemChance") return 13;   // 弹种适配组件
   return 14;
 }
 function raidCoreMods(coreType, sub, lv){
@@ -702,32 +704,32 @@ function raidCoreMods(coreType, sub, lv){
     const E=ELEMENTS[sub]||ELEMENTS.fire;
     return [
       { stat:"elemPct",    value: raidCoreModValue("elemPct", lv) },
-      { stat:"elemChance", value: raidCoreModValue("elemChance", lv) },
+      { stat:"elemChance", value: 0 },   // v0.15.0：不再有弹种增益
     ];
   }
-  if(coreType==="chaos") return [];   // 混乱核心：效果由「混乱等级」承载，无词缀
+  if(coreType==="chaos") return [];   // 膛压组件：效果由「改装等级」承载，无词条
   const def=BOOST_CORE_TYPES[sub];
   if(def) return def.stats.map((s,i)=>({ stat:s, value: Math.round(def.base[i]*(1+(lv-1)*0.95)*10)/10 }));   // v0.14.5：每级 +95%
   return [];
 }
 function raidCoreName(c){
-  if(!c) return "核心";
-  if(c.core==="chaos") return `混乱核心 [${RAID_ROMAN[c.lv]||c.lv}]`;
-  if(c.core==="elem"){ const E=ELEMENTS[c.elem]||ELEMENTS.fire; return `元素核心·${E.name} [${RAID_ROMAN[c.lv]||c.lv}]`; }
-  if(c.core==="boost"){ const d=BOOST_CORE_TYPES[c.boost]; return `${d?d.name:"强化核心"} [${RAID_ROMAN[c.lv]||c.lv}]`; }
-  return "核心";
+  if(!c) return "改装模块";
+  if(c.core==="chaos") return `膛压组件 [${RAID_ROMAN[c.lv]||c.lv}]`;
+  if(c.core==="elem"){ const E=AMMO_TYPES[c.elem]||AMMO_TYPES.fire; return `弹种适配组件·${E.short} [${RAID_ROMAN[c.lv]||c.lv}]`; }
+  if(c.core==="boost"){ const d=BOOST_CORE_TYPES[c.boost]; return `${d?d.name:"改装模块"} [${RAID_ROMAN[c.lv]||c.lv}]`; }
+  return "改装模块";
 }
 function raidCoreColor(c){
-  if(!c) return "#8fd0ff";
-  if(c.core==="chaos") return "#ff5ce0";
-  if(c.core==="elem"){ const E=ELEMENTS[c.elem]||ELEMENTS.fire; return E.color; }
-  if(c.core==="boost"){ const d=BOOST_CORE_TYPES[c.boost]; return d?d.color:"#ffd23f"; }
-  return "#8fd0ff";
+  if(!c) return "#8fb0c8";
+  if(c.core==="chaos") return "#b08a58";
+  if(c.core==="elem"){ const E=AMMO_TYPES[c.elem]||AMMO_TYPES.fire; return E.color; }
+  if(c.core==="boost"){ const d=BOOST_CORE_TYPES[c.boost]; return d?d.color:"#b09a4c"; }
+  return "#8fb0c8";
 }
 function _mkCore(o){
   const lv=M.clamp(Math.round(o.lv||1),1,RAID_CORE_MAX);
   const rar=RAID_CORE_RARITY[lv-1]||"blue";
-  // 子类型：元素核心用 elem、强化核心用 boost、混乱核心无
+  // 子类型：弹种适配组件用 elem、改装模块用 boost、膛压组件无
   const sub = o.core==="boost" ? (o.boost||o.sub) : (o.core==="elem" ? (o.elem||o.sub) : o.sub);
   return Object.assign({
     uid:"co"+Math.floor(Math.random()*1e9).toString(36),
@@ -740,39 +742,38 @@ function _mkCore(o){
   }, o);
 }
 function raidMakeElemCore(elem, lv){
-  const E=ELEMENTS[elem]||ELEMENTS.fire;
+  const E=AMMO_TYPES[elem]||AMMO_TYPES.fire;
   return _mkCore({ core:"elem", elem:E.id, lv,
-    name:`元素核心·${E.name} [${RAID_ROMAN[lv]}]`, color:E.color });
+    name:`弹种适配组件·${E.short} [${RAID_ROMAN[lv]}]`, color:E.color });
 }
 function raidMakeChaosCore(lv){
   return _mkCore({ core:"chaos", lv,
-    name:`混乱核心 [${RAID_ROMAN[lv]}]`, color:"#ff5ce0" });
+    name:`膛压组件 [${RAID_ROMAN[lv]}]`, color:"#b08a58" });
 }
 function raidMakeBoostCore(type, lv){
   const d=BOOST_CORE_TYPES[type]||BOOST_CORE_TYPES.berserk;
   return _mkCore({ core:"boost", boost:type, lv,
     name:`${d.name} [${RAID_ROMAN[lv]}]`, color:d.color });
 }
-// 核心槽数量：由枪械稀有度档位决定（白板 1 个 → 每升一档 +1，最高 8 个）
+// 改装槽数量：由枪械稀有度档位决定（白板 1 个 → 每升一档 +1，最高 8 个）
 function raidCoreSlotCount(rarityId){
   const idx = Math.max(0, RARITIES.findIndex(r=>r.id===(rarityId||"white")));
   return M.clamp(idx+1, 1, 8);
 }
-// 重排枪械上的核心槽位序号为 core0..coreN（保证每个核心槽位唯一、无空洞）
+// 重排枪械上的改装槽位序号为 core0..coreN（保证每个改装槽位唯一、无空洞）
 function raidReindexCores(gun){
   let i=0;
   for(const p of (gun.parts||[])){ if(p && p.core){ p.slot="core"+i; i++; } }
 }
-/* v0.13.2：混乱核心掉落分布单独走一套权重 —— 每高一级权重减半（i+1 = i / 2）。
- * 配合「升到 N 级必须用混乱核心 [N]」，高混乱等级需要极其罕见的对应核心。
- * 同时把混乱核在「核心掉落」里的占比从 45% 压到 25%。 */
+/* v0.13.2：膛压组件掉落分布单独走一套权重 —— 每高一级权重减半（i+1 = i / 2）。
+ * 高改装等级需要极其罕见的对应组件，膛压组件在模块掉落里占 25%。 */
 const RAID_CHAOS_LV_W = [40, 20, 10, 5, 2.5];
 const RAID_CHAOS_CORE_SHARE = 0.25;
 function raidRollCore(luck){
-  // 7 成概率产出强化核心（让「强化核心」成为箱子里最常见的核心），3 成走原核心逻辑
+  // 7 成概率产出改装模块（箱子里最常见的模块），3 成走弹种 / 膛压组件
   if(RNG.chance(0.30)){
     if(RNG.chance(RAID_CHAOS_CORE_SHARE)){
-      // 固定减半分布：不受携带估值影响（luck 只作用于元素核心）
+      // 固定减半分布：不受携带估值影响（luck 只作用于弹种适配组件）
       const lv = M.clamp(1 + raidLuckPick(RAID_CHAOS_LV_W, 0, []), 1, RAID_CORE_MAX);
       return raidMakeChaosCore(lv);
     }
@@ -805,7 +806,7 @@ function raidMakeReceiver(r, tier){
 
 /* ----------------------------- 合成表（自选原材料 → 产物） -----------------------------
  * v0.12：配方不再写死材料，改成「槽位 + 自选材料」。
- * 产物品质 = 所选材料平均等级（T0 材料 → 普通，T8 材料 → 彩虹），
+ * 产物品质 = 所选材料平均等级（T0 材料 → 普通，T8 材料 → 原型），
  * 材料越混搭浮动越大，同阶材料越多产物越稳定、越贴近材料本身等级。 */
 function raidAvgMatTier(mats){
   if(!mats||!mats.length) return 0;
@@ -838,7 +839,7 @@ function raidCraftFee(mats, slots){
 
 // slots: 需要几个原材料；make(mats, qTier) 产出成品
 const RAID_RECIPES = [
-  // 注意：元素核心 / 混乱核心 不在合成表内（v0.10.5）——只能从突袭箱子里搜出，或在拍卖行竞拍
+  // 注意：弹种适配组件 / 膛压组件 不在合成表内（v0.10.5）——只能从突袭箱子里搜出，或在拍卖行竞拍
   { id:"r_medkit", name:"医疗品", kind:"med", tag:"医疗", slots:2,
     desc:"按材料等级产出 绷带 / 止血针 / 急救包 / 强心针 / 手术包",
     make:(mats,q)=>{
@@ -881,11 +882,11 @@ function ensureGunAffixes(w){
     if(!add.length) break;
     w.affixes.push(add[0]);
   }
-  // 兜底：极端词缀池下（元素专属 / 溅射专属）也强行补齐，保证前后缀齐全
+  // 兜底：即使词条池被抽空也补齐前后缀，保证所有枪都有可解释的改装描述
   if(!w.affixes.some(a=>a.kind==="prefix"))
-    w.affixes.unshift({ kind:"prefix", nm:"精工的", mods:[{ stat:"dmgPct", value:6 }] });
+    w.affixes.unshift({ kind:"prefix", nm:"精磨枪管", mods:[{ stat:"dmgPct", value:6 }] });
   if(!w.affixes.some(a=>a.kind==="suffix"))
-    w.affixes.push({ kind:"suffix", nm:"之稳", mods:[{ stat:"accPct", value:5 }] });
+    w.affixes.push({ kind:"suffix", nm:"·校准", mods:[{ stat:"accPct", value:5 }] });
   return w;
 }
 
@@ -914,7 +915,7 @@ function raidWeaponCard(w, opts){
   const head=(opts.prefix||"")+w.name;
   return `<div class="shop-item" style="border-left-color:${col}${opts.margin?';margin:12px 0':''}">
     <div class="si-name" style="color:${col}">${head}</div>
-    <div class="si-meta">${tname} · ${parts.length} 个配件${w.uniqPerk?' · <b style="color:#ffd23f">传奇装备</b>':''}${w.pellets>1&&w.type!=="shotgun"?` · <b style="color:#ffd54a">${w.pellets} 发/次</b>`:''}</div>
+    <div class="si-meta">${tname} · ${parts.length} 个配件${w.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}${w.pellets>1&&w.type!=="shotgun"?` · <b style="color:#ffd54a">${w.pellets} 发/次</b>`:''}</div>
     ${w.uniqPerk?`<div class="uniq-perk">✦ ${w.uniqPerk}</div>`:''}
     <div class="si-stats">伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 估值 ₽${priceTextShort(w.value)}
       ${parts.length?`<br><span class="part-row">${parts.slice(0,4).map(partChip).join("")}</span>`:''}</div>
@@ -928,13 +929,13 @@ function raidWeaponCard(w, opts){
 /* 护甲 / 头盔词缀：每件都必带 1 前缀 + 1 后缀（强度随品质提升） */
 const RAID_ARMOR_PREFIX = [
   { nm:"加固的", dr:0.012 }, { nm:"复合的", dr:0.016 }, { nm:"轻量的", dr:0.008 },
-  { nm:"陶瓷的", dr:0.014 }, { nm:"纳米涂层的", dr:0.020 }, { nm:"超导的", dr:0.018 },
-  { nm:"重装的", dr:0.024 }, { nm:"实验型的", dr:0.022 },
+  { nm:"陶瓷的", dr:0.014 }, { nm:"凯夫拉内衬", dr:0.020 }, { nm:"钢制的", dr:0.018 },
+  { nm:"重装的", dr:0.024 }, { nm:"多层插板的", dr:0.022 },
 ];
 const RAID_ARMOR_SUFFIX = [
-  { nm:"·耐冲击", armor:10 }, { nm:"·吸能", armor:14 }, { nm:"·自修复", armor:8 },
+  { nm:"·耐冲击", armor:10 }, { nm:"·缓冲层", armor:14 }, { nm:"·可维修", armor:8 },
   { nm:"·复合层压", armor:18 }, { nm:"·轻量化", armor:6 }, { nm:"·军用规格", armor:16 },
-  { nm:"·奇点编织", armor:24 }, { nm:"·棱镜镀层", armor:20 },
+  { nm:"·陶瓷面板", armor:24 }, { nm:"·钛合金扣具", armor:20 },
 ];
 function raidRollArmorAffixes(rar){
   const k = 1 + (rar||0)*0.55;
@@ -993,15 +994,16 @@ function raidMakeHelmet(tier, rarity){
 function priceText(v){
   return String(Math.max(0, Math.round(v||0))).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
-// 大额价格的紧凑写法（传奇装备动辄上千万，卡片里放不下千分位）
+// 大额价格的紧凑写法（具名装备动辄上千万，卡片里放不下千分位）
 function priceTextShort(v){
   v=Math.max(0, Math.round(v||0));
   if(v>=1e8) return (v/1e8).toFixed(2).replace(/\.?0+$/,"")+"亿";
   if(v>=1e4) return (v/1e4).toFixed(v>=1e6?0:1).replace(/\.0$/,"")+"万";
   return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
-// 护甲/头盔等级 → 颜色（T1 灰 → T8 金）
-const ARMOR_TIER_COLOR = ["#9aa4b2","#9aa4b2","#7fd68a","#5bd75b","#4aa3ff","#b061ff","#ff8a1e","#ffd200","#ff5c5c"];
+// 护甲/头盔等级 → 颜色（T1 灰 → T9 黄铜）
+// v0.15.0：补上索引 9（原表缺 T9，护甲卡片会渲染出 color:undefined），并统一为低饱和军规色
+const ARMOR_TIER_COLOR = ["#9aa4b2","#9aa4b2","#9db39a","#93ad7c","#7b9ab5","#9c8fb5","#c68b4c","#b06a62","#c2a76a","#c9b878"];
 
 // v0.14.8：所有新物品统一用尽量唯一的 uid；商店反复购买不再产生重复 uid。
 function raidUniqueUid(prefix){
@@ -1087,7 +1089,7 @@ const RaidStash = {
           if(!d.cores) d.cores=[];
           if(!d.receivers) d.receivers=[];
           if(!d.meds) d.meds={hemo:0,medkit:0,stim:0,surgery:0};
-          // v0.13.5：旧独立核心库存 stash.cores → 并入配件池（slot:"core"）
+          // v0.13.5：旧独立改装模块库存 stash.cores → 并入配件池（slot:"core"）
           if(d.cores && d.cores.length){
             for(const c of d.cores){
               const lv=c.lv||1;
@@ -1130,7 +1132,7 @@ class RaidOperator {
     this.helmetArmor=o.helmetArmor||0; this.maxHelmetArmor=this.helmetArmor;
     this.helmetDr=o.helmetDr||0; this.helmetTier=o.helmetTier||0;
     this.armorTier=o.armorTier||0;
-    this.armorRegen=o.armorRegen||0;   // ★4+ 护甲的纳米自愈（每秒回复护甲值）
+    this.armorRegen=o.armorRegen||0;   // v0.15.0：护甲耐久不再自动回复，仅保留字段兼容旧存档
     this.gun=o.gun||null; this.secondary=o.secondary||null;
     // 每把枪独立记录弹药（修复：换枪瞬间满弹的漏洞）
     if(this.gun){ this.gun.ammoMag=this.gun.mag; this.gun.ammoRes=this.gun.reserve; }
@@ -1488,7 +1490,7 @@ const Raid = {
       }
 
       // 悬赏目标（Boss）：2 名精锐，掉落保底好枪 + 带词条配件，HUD/小地图高亮
-      const bountyNames=["★ 悬赏·屠夫","★ 悬赏·幽灵","★ 悬赏·铁幕"];
+      const bountyNames=["★ 悬赏·突入手","★ 悬赏·狙击手","★ 悬赏·重装甲兵"];
       const bountyRooms=["factory","village","dock","temple","depot"];
       const bountyOrder=bountyRooms.map(id=>RAID_ROOMS.find(r=>r.id===id)).filter(Boolean)
         .sort((a,b)=>M.dist(b.x+b.w/2,b.y+b.h/2,px,py)-M.dist(a.x+a.w/2,a.y+a.h/2,px,py));
@@ -2610,7 +2612,7 @@ const Raid = {
         g.shopPrice=Math.round((g.value||1000)*1.15/10)*10;
         out.guns.push(g);
       }
-      // v0.14.5：核心不可合成 —— 枪械店常备一枚低阶强化核心（卢布可买）
+      // v0.14.5：改装模块不可合成 —— 枪械店常备一枚低阶改装模块（卢布可买）
       {
         const c=raidMakeBoostCore(RNG.pick(BOOST_CORE_IDS), 2+RNG.ri(0,1));
         c.shopPrice=Math.round(raidCoreValue("boost", c.lv)*2.6/10)*10;
@@ -2638,7 +2640,7 @@ const Raid = {
         g.tokenPrice=tokenPrice[t]||60;
         out.guns.push(g);
       }
-      // v0.14.5：核心不可合成，黑市是唯一能稳定买到高阶核心的地方
+      // v0.14.5：改装模块不可合成，黑市是唯一能稳定买到高阶改装模块的地方
       {
         const c1=raidMakeBoostCore(RNG.pick(BOOST_CORE_IDS), 4+RNG.ri(0,1));
         c1.tokenPrice=c1.lv>=5?18:10;
@@ -2759,7 +2761,7 @@ const Raid = {
         kind:"weapon", searched:false, drop:null });
     }
     // V 级军火箱：期望 0.2 口/局，随机落在中大型房间（含大坝控制室、监狱等），
-    //   箱内是打穿整局的目标 —— 保底 T5 装备、4 件战利品、更高整枪/核心权重。
+    //   箱内是打穿整局的目标 —— 保底 T5 装备、4 件战利品、更高整枪/改装模块权重。
     if(RNG.chance(0.20)){
       const cand=rooms.filter(r=>r.w*r.h>=260*200);
       const rm=cand.length?RNG.pick(cand):RNG.pick(rooms);
@@ -2777,7 +2779,7 @@ const Raid = {
   _uid(){ return "g"+(this.uidN++)+"-"+Math.floor(Math.random()*9999); },
 
   _rollRarity(luck){
-    // 9 阶品质：走硬预算——稀有及以上总量锁在 5% 左右，传说及以上约 1%
+    // 9 阶品质：走硬预算——稀有及以上总量锁在 5% 左右，特种及以上约 1%
     return raidBudgetTier(luck);
   },
 
@@ -2785,8 +2787,8 @@ const Raid = {
   // 无论带什么装备，任意品质都可能出现——携带估值只改变权重，不封顶。
   _rollGear(cls, luck){
     luck=luck||0;
-    // 命名传说装备：独立骰点（裸装约 0.08%，满配约 0.3%）—— 传说总量仍受 1% 预算约束
-    if(RNG.chance(0.0005 + luck*0.0014)) return raidRollUnique(luck);   // v0.14.4：命名传说更稀有
+    // 命名具名装备：独立骰点（裸装约 0.08%，满配约 0.3%）—— 特种总量仍受 1% 预算约束
+    if(RNG.chance(0.0005 + luck*0.0014)) return raidRollUnique(luck);   // v0.14.4：命名特种更稀有
     const r=RNG.f();
     if(r < 0.78) return this._rollMaterial(cls==="scav"?0:luck);   // 78% 原材料
     if(r < 0.905) return this._rollPartGear(cls, luck);            // 12.5% 配件
@@ -2801,7 +2803,7 @@ const Raid = {
       if(cls==="scav") tier=Math.min(tier,5);
       return raidMakeHelmet(tier);
     }
-    return raidRollCore(luck);                                     // 5.8% 核心（唯一稳定来源）
+    return raidRollCore(luck);                                     // 5.8% 改装模块（唯一稳定来源）
   },
 
   // 散装配件：品质随运气浮动（越高档词缀越好）；floorTier 为品质保底（V 级军火箱用）
@@ -2830,7 +2832,7 @@ const Raid = {
     ensureGunAffixes(w);   // 任何品质都要有前后缀
     w.uid=this._uid(); w.kind="weapon";
     w.qTier=rarity; w.qName=RAID_TIERS[rarity].name; w.qColor=RAID_TIERS[rarity].color;
-    // 传说及以上有几率直接出「有名字」的传奇枪
+    // 特种及以上有几率直接出「有名字」的传奇枪
     if(rarity>=5 && RNG.chance(0.10 + luck*0.08)){
       const uq=raidRollUnique(luck, u=>u.kind==="weapon");
       if(uq){ uq.uid=this._uid(); return uq; }
@@ -2872,7 +2874,7 @@ const Raid = {
     // 装备品质保底（T0~T5）：V 级军火箱直接 T5 起步，基本只出橙品以上
     const floorT=[0,0,1,2,3,5][L];
     const r=RNG.f();
-    // V 级：整枪 / 核心权重显著上调，材料让路（开一次就够本）
+    // V 级：整枪 / 改装模块权重显著上调，材料让路（开一次就够本）
     if(L>=5){
       if(r<0.46) return this._rollGunLoot("pmc", luck+0.10, floorT);
       if(r<0.60) return raidMakeArmor(M.clamp(raidRollArmorTier(luck+0.08), 1+floorT, 9));
@@ -2908,7 +2910,7 @@ const Raid = {
     if(this.hitFlash>0) this.hitFlash-=dt;
     if(this.stimT>0) this.stimT=Math.max(0,this.stimT-dt);
 
-    // 稀有护甲的纳米自愈（★4+）
+    // v0.15.0：护甲耐久不再自动回复，以下分支仅为兼容旧存档字段而保留
     for(const o of this.ops){
       if(o.alive && o.armorRegen>0 && o.armor<o.maxArmor)
         o.armor=Math.min(o.maxArmor, o.armor+o.armorRegen*dt);
@@ -3744,7 +3746,7 @@ const Raid = {
     const pellets = sh.gun.pellets || 1;
     /* v0.12.5 非霰弹枪的「双发的 / 蜂群的」是稀有词条，不是「8 颗霰弹」：
      * 总伤害只提升 30%，平均分摊到每颗弹丸（2 发 0.65×、3 发 0.433×），
-     * 换来的收益是更多命中判定 / 元素触发机会，而不是直接 1.8 倍 DPS。 */
+     * 换来的收益是更多命中判定 / 特殊弹触发机会，而不是直接 1.8 倍 DPS。 */
     const pelletMul = pellets<=1 ? 1
       : ((sh.gun.type==="shotgun"||sh.gun.cat==="shotgun") ? 0.9 : (1.30/pellets));
     const mv = sh._mv||0;
@@ -4028,8 +4030,14 @@ const Raid = {
     let pile=this.grounds.find(c=>!c.searched
       && (c.drops||[]).length<8 && M.dist(c.x,c.y,bx,by)<70);
     if(pile){ pile.drops.push(item); return pile; }
-    if(this.grounds.filter(c=>!c.searched).length>=60
-       && this.grounds.length){ this.grounds[0].drops.push(item); return this.grounds[0]; }
+    // v0.15.0：堆数达上限时只并入「仍未搜刮且未满」的堆，绝不写进已搜刮堆
+    // （原实现固定取 grounds[0]，若该堆 searched=true 则物品永久丢失）
+    const open=this.grounds.filter(c=>!c.searched && (c.drops||[]).length<8);
+    if(open.length>=60){
+      let best=open[0];
+      for(const c of open) if((c.drops||[]).length<(best.drops||[]).length) best=c;
+      best.drops.push(item); return best;
+    }
     const a=RNG.fr(0,6.2832), r=RNG.fr(36,54);
     pile={ x:M.clamp(bx+Math.cos(a)*r, 40, RAID_MAP_W-40),
            y:M.clamp(by+Math.sin(a)*r, 40, RAID_MAP_H-40),
@@ -4079,7 +4087,7 @@ const Raid = {
       if(this.inv.meds.length < RAID_INV_CAP.meds){ this.inv.meds.push({id:item.id, name:item.name, n:1, tier:item.tier, color:item.color}); this._float(px,py,"+"+item.name,item.color||"#ff9a9a"); SFX.pickup(); return true; }
       return spill("医疗栏");
     }
-    // 核心：现已并入配件，作为 slot:"core" 的配件进配件栏（由下方 part 分支统一处理）
+    // 改装模块：现已并入配件，作为 slot:"core" 的配件进配件栏（由下方 part 分支统一处理）
     if(item.kind==="receiver"){
       const arr=this.inv.receivers;
       if(arr.length<RAID_INV_CAP.receivers){ arr.push(item); this._float(px,py,"+"+item.name,item.color||"#8fd0ff"); SFX.pickup(); return true; }
@@ -4087,6 +4095,8 @@ const Raid = {
     }
     // 武器：空手或没副手 → 直接上手并放入物品栏（这是裸装跑刀能翻身的关键）
     if(item.kind==="weapon" && (!this.player.gun || !this.player.secondary)){
+      // v0.15.0：自动上手也要走容量检查，避免极端情况下 inv.weapons 超过 6 把
+      if(this.inv.weapons.length>=RAID_INV_CAP.weapons) return spill("武器栏");
       const g=raidGunFromItem(item);
       g.ammoMag=g.mag; g.ammoRes=g.reserve;        // 捡到的枪：满弹上手
       const slot = !this.player.gun ? "主手" : "副手";
@@ -4232,7 +4242,10 @@ const Raid = {
     UI.raidResult({
       success:false, reason, lost:{
         weapons:this.carried.weapons, armor:this.carried.armor, helmet:this.carried.helmet,
-        lootW:this.inv.weapons, lootA:this.inv.armors, lootH:this.inv.helmets||[],
+        // v0.15.0：开局把 carried.weapons 也压进了 inv.weapons，这里按 uid 去重，避免结算列表重复
+        lootW:this.inv.weapons.filter(w=>!(this.carried.weapons||[]).some(c=>c.uid===w.uid)),
+        lootA:this.inv.armors.filter(a=>a!==this.carried.armor),
+        lootH:(this.inv.helmets||[]).filter(h=>h!==this.carried.helmet),
         lootP:this.inv.parts||[], lootM:this.inv.materials||[],
       }, kills:this.player.kills, time:480-this.timer,
       insured:this.insured, insuredPaid:this.insuredVal, recovered,
@@ -4476,7 +4489,7 @@ const Raid = {
     for(let i=0;i<R.inv.parts.length;i++){
       const pt=R.inv.parts[i]; any=true;
       const col=(RARITY_BY_ID[pt.rarity]||{}).color||pt.color||"#dfe7f0";
-      line(pt.name, col, `${pt.core?"核心 · ":""}${pt.slot||""} · 估值 ${money(pt.value||partValue(pt))}`, `parts:${i}`);
+      line(pt.name, col, `${pt.core?"改装模块 · ":""}${pt.slot||""} · 估值 ${money(pt.value||partValue(pt))}`, `parts:${i}`);
     }
     for(let i=0;i<R.inv.materials.length;i++){
       const m=R.inv.materials[i]; any=true;
@@ -5323,7 +5336,7 @@ const RenderRaid = {
       ctx.globalAlpha=1;
     }
 
-    // 弹药：普通枪=飞行色块；激光枪=弹道光束
+    // 弹头渲染：实体弹丸 + 曳光尾迹
     for(const tr of R.tracers){
       const al=M.clamp(tr.life/(tr.maxLife||0.08),0,1);
       if(tr.laser){
@@ -5371,7 +5384,7 @@ const RenderRaid = {
     const r=o.r;
     // 阴影
     ctx.beginPath(); ctx.ellipse(o.x,o.y+r*0.5,r*0.95,r*0.5,0,0,6.2832); ctx.fillStyle="rgba(0,0,0,0.32)"; ctx.fill();
-    // 枪（随枪型长度 / 元素颜色变化，瞄具配件额外描金点）
+    // 枪（随枪型长度 / 弹种颜色变化，瞄具配件额外描金点）
     const GUN_LEN={pistol:r+10,smg:r+14,shotgun:r+18,rifle:r+20,sniper:r+30,launcher:r+16};
     const g=o.gun; const gLen=(g&&GUN_LEN[g.type])||(r+14);
     const gCol=(g&&g.element!=="none"&&ELEMENTS[g.element])?ELEMENTS[g.element].color:"#2a2f35";
@@ -5732,7 +5745,7 @@ const RenderRaid = {
     // 护甲 / 头盔
     const ar=p.armorTier?RAID_ARMORS[p.armorTier]:null;
     line("护甲", ar?ar.name:"（未穿戴）", ar?(ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0"):"#8b95a5",
-      ar?`T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorRegen?(' · 自愈 '+p.armorRegen+'/s'):''}`:"无防护");
+      ar?`T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorRegen?(' · 待维修 '+p.armorRegen+'/s'):''}`:"无防护");
     const hm=p.helmetTier?RAID_HELMETS[p.helmetTier]:null;
     line("头盔", hm?hm.name:"（未佩戴）", hm?(ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0"):"#8b95a5",
       hm?`T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 爆头减伤 ${Math.round(p.helmetDr*100)}%`:"爆头无减免");
@@ -5762,9 +5775,9 @@ const RenderRaid = {
       ctx.fillText(`· ${m.name} · ₽${priceText(m.value)}`, x+86, ly); ly+=13;
       if(ly>y+h-20) break;
     }
-    // 核心 / 底材（核心现已并入配件栏，单独列出便于查看）
+    // 改装模块 / 底材（改装模块现已并入配件栏，单独列出便于查看）
     const _cores=R.inv.parts.filter(p=>p.core);
-    cap("核心",     _cores.length, RAID_INV_CAP.parts, "#8fd0ff");
+    cap("改装模块",     _cores.length, RAID_INV_CAP.parts, "#8fd0ff");
     cap("底材",     R.inv.receivers.length, RAID_INV_CAP.receivers, "#8fd0ff");
     // 钥匙串（v0.13.8）：按等级显示剩余开锁次数
     const _keys=R.inv.keys||[];
@@ -5914,7 +5927,7 @@ UI.raidSetup=function(){
     const col=RAID_RARITY_COLOR[rar];
     return `<div class="raid-item ${on?'sel':''}" data-a="${a.uid}">
       <div class="ri-name" style="color:${col}">${a.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
-      <div class="ri-meta">T${a.tier} · ${RAID_RARITY_NAME[rar]} · 减伤 ${Math.round(a.dr*100)}% · 护甲值 ${a.maxArmor}${a.armorRegen?(' · 自愈 '+a.armorRegen+'/s'):''}</div>
+      <div class="ri-meta">T${a.tier} · ${RAID_RARITY_NAME[rar]} · 减伤 ${Math.round(a.dr*100)}% · 护甲值 ${a.maxArmor}${a.armorRegen?(' · 待维修 '+a.armorRegen+'/s'):''}</div>
       <div class="ri-meta" style="color:#9fd0ff">词条：${(a.affixes||[]).map(x=>x.nm).join(" · ")||"—"}</div>
       <div class="ri-val">估值 ₽${priceTextShort(a.value)}${on?' · 已穿戴':''}</div>
     </div>`;
@@ -5926,7 +5939,7 @@ UI.raidSetup=function(){
     const col=RAID_RARITY_COLOR[rar];
     return `<div class="raid-item ${on?'sel':''}" data-h="${h.uid}">
       <div class="ri-name" style="color:${col}">${h.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
-      <div class="ri-meta">T${h.tier} · ${RAID_RARITY_NAME[rar]} · 爆头减伤 ${Math.round(h.dr*100)}% · 耐久 ${h.maxArmor}${h.armorRegen?(' · 自愈 '+h.armorRegen+'/s'):''}</div>
+      <div class="ri-meta">T${h.tier} · ${RAID_RARITY_NAME[rar]} · 爆头减伤 ${Math.round(h.dr*100)}% · 耐久 ${h.maxArmor}${h.armorRegen?(' · 待维修 '+h.armorRegen+'/s'):''}</div>
       <div class="ri-meta" style="color:#9fd0ff">词条：${(h.affixes||[]).map(x=>x.nm).join(" · ")||"—"}</div>
       <div class="ri-val">估值 ₽${priceTextShort(h.value)}${on?' · 已戴上':''}</div>
     </div>`;
@@ -5976,15 +5989,15 @@ UI.raidSetup=function(){
           <b style="color:#ff7a3c">开局 3 分钟后</b>全图开始缓慢刷入<b>带装备的增援</b>：有的<b style="color:#e0b84a">组队推进</b>，有的会<b style="color:#ff7a3c">封锁撤离点</b>（封锁者存活时无法读条撤离）。<br>
           <b style="color:#ff8a5a">AI 更像真人</b>：视野 <b>1000px</b>、枪声能传 <b>1200px</b>，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（精英 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#c07bff">本局第一次击杀</b>必得 <b>1 枚 ◆ 黑市代币</b>（撤离才落袋）—— 想攒代币就得真开打，绕开所有人只会两手空空。<br>
           <b style="color:#8fe07a">只有成功撤离</b>，携带装备与战利品才写回仓库；阵亡或超时全部丢失。<br>
-          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与代币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">62%</b> 收你的货，远高于仓库直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#c07bff">◆ 黑市代币</b>，出售高稀有度成品枪与高级核心。<br>
-          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 核心越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 橙装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。<b style="color:#ff9a3a">钥匙无法合成</b>，只有两条路：<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V 代币；精英干员身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
-          <b style="color:#8fd0ff">核心不再能合成</b>：元素 / 混乱 / 强化核心既不能用材料造，也不能两两升阶，只能从<b>保险箱与精英干员</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · 代币）</b>购买。作为补偿，核心增益大幅提高：每级成长 <b>+95%</b>（V 级≈I 级 4.8 倍），混乱核心按 <b>×${MAYHEM.corePower}^等级</b> 放大主伤害。<br>
+          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与代币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">62%</b> 收你的货，远高于仓库直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#c07bff">◆ 黑市代币</b>，出售高稀有度成品枪与高级改装模块。<br>
+          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 橙装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。<b style="color:#ff9a3a">钥匙无法合成</b>，只有两条路：<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V 代币；精英干员身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
+          <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与精英干员</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · 代币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
           <b style="color:#8fe07a">可互动设施</b>：<b>监狱 / 小镇 / 大坝</b>里有医疗站（回 45 血并止血）、弹药柜（补满备弹）、警报器（拉响把 AI 引过去，撤离前调虎离山）与<b style="color:#8fd0ff">泄洪闸</b>——闸门一开，水库放空，水底露出 <b style="color:#ffd23f">IV 级 + III 级保险箱</b>各一口，代价是巨响会招来一票人。<br>
           <b style="color:#62c8ff">河流与桥</b>：河道可<b>缓慢涉水</b>通过（速度只剩 45%），泡在水里超过 4.5 秒开始<b style="color:#ff9a8a">失温扣血</b>且越拖越疼——桥面（8 座，含 3 座带双黄线的大桥）完全免减速，赶路还是走桥。<b style="color:#ffd76a">背包满时</b>捡到的多余物资不会消失，会<b>掉在脚下变成发光的小包裹</b>，腾出空间后按 E 还能捡回来；<b style="color:#ff8a5a">Tab 物品栏</b>里每件战利品都有 <b>✕ 丢弃</b> 按钮，丢掉的同样落在脚下，随时能回头捡。<br>
           <b style="color:#e0b84a">撤离费按带入装备估价浮动</b>：裸装跑刀约 ₽300，带 ₽30 万的满配才需要一两千 —— 贵重装备多、护送成本高。<br>
           <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◆ 黑市代币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。</div>
       </details>
-      <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · 黑市代币 <b style="color:#c07bff">◆ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 配件 ${(stash.parts||[]).length} · 核心 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
+      <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · 黑市代币 <b style="color:#c07bff">◆ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 配件 ${(stash.parts||[]).length} · 改装模块 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
 
       <div class="raid-launch">
         <div class="rl-text">
@@ -6234,7 +6247,7 @@ UI.raidShop=function(opts){
   // 护甲仍按估值着色
   const rarOf=v=> v>=700?2 : v>=400?1 : 0;
 
-  // 军火超市：每次进入刷新一批无主之地枪械（按枪型铺货）
+  // 军火超市：每次进入刷新一批旧刷宝体系枪械（按枪型铺货）
   if(!UI._raidShopGuns){
     const W=g=>{ const w=blGunGen(12,{type:g, weights:{white:4,green:8,blue:6,purple:2.4,orange:0.7,pearl:0.22,ancient:0.08,rainbow:0.02}}); ensureGunAffixes(w); w.uid=raidUniqueUid("shop-"+g+"-"); w.kind="weapon"; return w; };
     UI._raidShopGuns = RAID_GUN_TYPES.map(W);
@@ -6260,10 +6273,10 @@ UI.raidShop=function(opts){
   const aCards=RAID_ARMOR_TIERS.map(t=>{
     const a=RAID_ARMORS[t], price=a.value, can=stash.creds>=price, col=ARMOR_TIER_COLOR[t];
     const maxRar = Math.min(8, Math.max(0, t-1));
-    const grade = t>=8?'奇点甲' : (t>=6?'重装甲' : (t>=3?'标准甲':'轻甲'));
+    const grade = t>=8?'重型防弹衣' : (t>=6?'插板背心' : (t>=3?'防弹背心':'软质背心'));
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${a.name}</div>
-      <div class="si-meta">T${t} ${grade} · ${t>=8?'奇点级':(t>=6?'军用级':'制式')} · 掉落可至 <b style="color:${RAID_RARITY_COLOR[maxRar]}">${RAID_RARITY_NAME[maxRar]}</b></div>
+      <div class="si-meta">T${t} ${grade} · ${t>=8?'最高防护级':(t>=6?'高防护级':'制式')} · 掉落可至 <b style="color:${RAID_RARITY_COLOR[maxRar]}">${RAID_RARITY_NAME[maxRar]}</b></div>
       <div class="si-stats">减伤 ${Math.round(a.dr*100)}% · 护甲值 ${a.maxArmor}${t>=6?'<br><b style="color:#ff8a5a">重装：可硬吃整梭步枪弹</b>':''}</div>
       <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(price)}</span>
         <button class="btn" data-buy="armor:${t}" ${can?'':'disabled'}>购买</button></div>
@@ -6274,10 +6287,10 @@ UI.raidShop=function(opts){
   const hCards=RAID_ARMOR_TIERS.map(t=>{
     const h=RAID_HELMETS[t], price=h.value, can=stash.creds>=price, col=ARMOR_TIER_COLOR[t];
     const maxRar = Math.min(8, Math.max(0, t-1));
-    const grade = t>=8?'奇点盔' : (t>=6?'重装盔' : (t>=3?'标准盔':'轻盔'));
+    const grade = t>=8?'全罩头盔' : (t>=6?'防弹头盔' : (t>=3?'战术头盔':'软质头套'));
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${h.name}</div>
-      <div class="si-meta">T${t} ${grade} · ${t>=8?'奇点级':(t>=6?'军用级':'制式')} · 掉落可至 <b style="color:${RAID_RARITY_COLOR[maxRar]}">${RAID_RARITY_NAME[maxRar]}</b></div>
+      <div class="si-meta">T${t} ${grade} · ${t>=8?'最高防护级':(t>=6?'高防护级':'制式')} · 掉落可至 <b style="color:${RAID_RARITY_COLOR[maxRar]}">${RAID_RARITY_NAME[maxRar]}</b></div>
       <div class="si-stats">爆头减伤 ${Math.round(h.dr*100)}% · 耐久 ${h.maxArmor}</div>
       <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(price)}</span>
         <button class="btn" data-buy="helmet:${t}" ${can?'':'disabled'}>购买</button></div>
@@ -6332,7 +6345,7 @@ UI.raidShop=function(opts){
       <h2 class="title-big" style="font-size:32px;">军火超市</h2>
       <div class="subtitle">ARMS SUPERMARKET · 用卢布采购装备入库，带入下一局突袭</div>
       <div class="shop-bar">
-        <div class="shop-desc">这里只卖<b style="color:#ffd23f">成品</b>：枪械 / 护甲 / 头盔 / 配件 / 医疗品，价格随品质阶梯暴涨；<b style="color:#ff9a3a">原材料、底材、核心一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">核心完全不能合成</b>，只能从保险箱 / 精英干员掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
+        <div class="shop-desc">这里只卖<b style="color:#ffd23f">成品</b>：枪械 / 护甲 / 头盔 / 配件 / 医疗品，价格随品质阶梯暴涨；<b style="color:#ff9a3a">原材料、底材、改装模块一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">改装模块完全不能合成</b>，只能从保险箱 / 精英干员掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
         护甲等级 T1~T9 与品质一一对应；每件装备、每个配件都自带 <b style="color:#8fe07a">1 前缀 + 1 后缀</b> 词条，买之前先看词条。仅撤离成功才会真正带走。<br>
         <span style="color:var(--muted)">品质阶梯（低 → 高）：</span>${raidTierLegend()}</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
@@ -6412,8 +6425,8 @@ UI.raidShop=function(opts){
 };
 
 /* =========================================================================
- * 枪匠台 · 符文锻造（Rakanishu 赫拉迪克方块式改造）
- *   对塔科夫仓库里的无主之地枪械做「重铸词缀 / 附魔元素 / 升阶混乱」，
+ * 枪匠台 · 精密改装（Rakanishu 赫拉迪克方块式改造）
+ *   对塔科夫仓库里的旧刷宝体系枪械做「重铸词缀 / 更换弹种 / 升阶改装」，
  *   用仓库卢布支付；改造后数值由生成管线重算，直接覆盖仓库中的那把枪。
  * ========================================================================= */
 const FORGE_RARITY_MULT = { white:1, green:1.4, blue:2, purple:3.2, orange:5, pearl:7,
@@ -6428,7 +6441,7 @@ function forgeCost(op, gun){
 }
 
 /* ----------------------------- 融合台 ----------------------------- */
-// 两件及以上同栏位物品熔成一件：品质、词条、混乱等级有概率跃升
+// 两件及以上同栏位物品熔成一件：品质、词条、改装等级有概率跃升
 function fuseCost(items){
   const v=items.reduce((sum,it)=>sum+(it.value||partValue(it)||0),0);
   // v0.12.8：融合造价大幅下调（原 55% + 300，现 25% + 120），让融合成为可负担的品质跃升手段
@@ -6438,7 +6451,7 @@ function fuseRaidItems(items){
   if(!items || items.length<2) return null;
   const main=items[0], n=items.length;
 
-  // v0.14.5：核心不可融合升阶（只能掉落 / 购买），直接拒绝
+  // v0.14.5：改装模块不可融合升阶（只能掉落 / 购买），直接拒绝
   if(main.slot==="core" || main.core) return null;
   const rarIdx = o=>Math.max(0, RARITIES.findIndex(r=>r.id===(o.rarity||"white")));
   const mkUid = pre=>pre+Date.now().toString(36)+Math.floor(Math.random()*999).toString(36);
@@ -6585,7 +6598,7 @@ UI.raidWorkshop=function(opts){
   const stash=RaidStash.load();
   stash.receivers=stash.receivers||[];
   stash.materials=stash.materials||[]; stash.parts=stash.parts||[];
-  const cores = stash.parts.filter(p=>p.core);   // 核心已并入配件池，按 core 字段筛选
+  const cores = stash.parts.filter(p=>p.core);   // 改装模块已并入配件池，按 core 字段筛选
   if(!UI._wsRecv || !stash.receivers.some(r=>r.uid===UI._wsRecv)) UI._wsRecv = stash.receivers[0]?stash.receivers[0].uid:null;
   // v0.12：配件不再限制 4 件 —— 每个槽位各装一件，最多装满 GUN_SLOTS 全部槽位
   UI._wsParts = (UI._wsParts||[]).filter(uid=>stash.parts.some(p=>p.uid===uid));
@@ -6609,7 +6622,7 @@ UI.raidWorkshop=function(opts){
     UI._wsMats=keep;
   }
 
-  /* --- 核心一览（v0.14.5：核心不再可合成 / 升阶，只能掉落或购买） --- */
+  /* --- 模块一览（v0.14.5：改装模块不再可合成 / 升阶，只能掉落或购买） --- */
   const groups=raidCoreGroups(cores);
   const coreRows = groups.length ? groups.map(g=>{
     const name=raidCoreName(g.sample||g);
@@ -6617,14 +6630,14 @@ UI.raidWorkshop=function(opts){
     const sub=Array.isArray((g.sample||{}).mods) ? g.sample.mods : [];
     const modTxt=sub.map(m=>`${AFFIX_LABEL[m.stat]||m.stat} +${m.value}`).join(" · ");
     const body = g.core==="chaos"
-      ? `混乱等级 ${RAID_ROMAN[g.lv]} · 装入后伤害 ×${Math.pow(MAYHEM.corePower,g.lv).toFixed(2)}`
+      ? `改装等级 ${RAID_ROMAN[g.lv]} · 装入后伤害 ×${Math.pow(MAYHEM.corePower,g.lv).toFixed(2)}`
       : (modTxt || "属性增益");
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${name} ×${g.n}</div>
       <div class="si-meta">${body}</div>
       <div class="si-stats" style="opacity:.6;font-size:11px">估值 ₽${priceTextShort(raidCoreValue(g.core,g.lv))} · 仅掉落 / 购买</div>
     </div>`;
-  }).join('') : `<div class="empty-hint">还没有核心 · 只能从<b>保险箱 / 精英干员</b>身上掉落，或在<b>枪械商店 / 黑市</b>购买</div>`;
+  }).join('') : `<div class="empty-hint">还没有改装模块 · 只能从<b>保险箱 / 精英干员</b>身上掉落，或在<b>枪械商店 / 黑市</b>购买</div>`;
   stash.keys=stash.keys||[];
 
   /* --- 合成表：自选材料，产物品质随材料等级走 --- */
@@ -6748,19 +6761,19 @@ UI.raidWorkshop=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">枪匠台 · 工坊</h2>
-      <div class="subtitle">WORKSHOP · 核心一览 / 材料合成 / 用底材与配件组装枪械</div>
+      <div class="subtitle">WORKSHOP · 模块一览 / 材料合成 / 用机匣与部件组装枪械</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
-        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出传说以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">核心与钥匙都不再能合成</b>：核心只能从保险箱 / 精英干员掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>元素核心</b>把武器附魔为对应元素并加元素伤害，<b>混乱核心</b>决定<b style="color:#ff2ce0">混乱等级</b>、<b>强化核心</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
+        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / 精英干员掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-ws-back">${opts.from==='title'?'返回主菜单':'前往配装大厅'}</button>
       </div>
 
-      <h3 style="font-size:18px;margin:14px 0 8px;">① 核心一览 <span style="color:var(--muted);font-size:12px;font-weight:400;">不可合成 · 只能掉落或购买</span></h3>
+      <h3 style="font-size:18px;margin:14px 0 8px;">① 模块一览 <span style="color:var(--muted);font-size:12px;font-weight:400;">不可合成 · 只能掉落或购买</span></h3>
       <div class="shop-list">${coreRows}</div>
-      <div class="hint" style="margin:2px 0 6px;color:var(--muted)">核心既不能用材料合成，也不能两两升阶：I~V 级只能从<b>保险箱与精英干员</b>身上掉落，或在<b>枪械商店（低阶）</b>、<b>黑市（高阶）</b>购买。作为补偿，单枚核心的属性增益比过去强得多（每级 +95%）。</div>
+      <div class="hint" style="margin:2px 0 6px;color:var(--muted)">改装模块既不能用材料合成，也不能两两升阶：I~V 级只能从<b>保险箱与精英干员</b>身上掉落，或在<b>枪械商店（低阶）</b>、<b>黑市（高阶）</b>购买。作为补偿，单枚改装模块的属性增益比过去强得多（每级 +95%）。</div>
 
-      <h3 style="font-size:18px;margin:18px 0 8px;">② 合成表 <span style="color:var(--muted);font-size:12px;font-weight:400;">自选材料 · 只产出机匣 / 配件，不出核心</span></h3>
+      <h3 style="font-size:18px;margin:18px 0 8px;">② 合成表 <span style="color:var(--muted);font-size:12px;font-weight:400;">自选材料 · 只产出机匣 / 配件，不出改装模块</span></h3>
       <div class="shop-list">${recipeRows}</div>
       ${craftBar}
 
@@ -6992,7 +7005,7 @@ UI.raidFieldShop=function(key){
       : `<div class="empty-hint">货架已空 · 本局不再补货</div>`;
     if(kind==="black"){
       const parts=sh.stock.parts||[];
-      body += parts.length ? `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 高级核心（代币兑换）</div>` +
+      body += parts.length ? `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 高级改装模块（代币兑换）</div>` +
         parts.map((c,i)=>{
           const can=tokens>=(c.tokenPrice||10);
           return `<div class="si">
@@ -7007,15 +7020,15 @@ UI.raidFieldShop=function(key){
       if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级钥匙（代币兑换 · 开同级及以下保险箱）</div>` +
         bkeys.map((k,i)=>keyCard(k,"token",i)).join("");
     } else if(kind==="gun"){
-      // v0.14.5：核心不可合成 —— 枪械店常备低阶核心，卢布直接买
+      // v0.14.5：改装模块不可合成 —— 枪械店常备低阶改装模块，卢布直接买
       const parts=sh.stock.parts||[];
-      if(parts.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 核心（卢布购买 · 不可合成）</div>` +
+      if(parts.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 改装模块（卢布购买 · 不可合成）</div>` +
         parts.map((c,i)=>{
           const can=money>=(c.shopPrice||0);
           const mods=(c.mods||[]).map(m=>`${AFFIX_LABEL[m.stat]||m.stat} +${m.value}`).join(" · ");
           return `<div class="si">
             <div class="si-name" style="color:${c.color||"#ffd23f"}">${c.name||raidCoreName(c)}</div>
-            <div class="si-stats">等级 ${RAID_ROMAN[c.lv]||c.lv} · ${mods||(c.core==="chaos"?`混乱等级 ${RAID_ROMAN[c.lv]||c.lv}`:"属性增益")}</div>
+            <div class="si-stats">等级 ${RAID_ROMAN[c.lv]||c.lv} · ${mods||(c.core==="chaos"?`改装等级 ${RAID_ROMAN[c.lv]||c.lv}`:"属性增益")}</div>
             <div class="si-buy"><span class="si-price ${can?"":"cant"}">₽ ${priceTextShort(c.shopPrice||0)}</span>
               <button class="btn ghost" data-fbuy="cashpart:${sid}:${i}" ${can?"":"disabled"}>购买</button></div>
           </div>`;
@@ -7035,7 +7048,7 @@ UI.raidFieldShop=function(key){
       const can=money>=(pt.shopPrice||0);
       const col=(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color;
       return `<div class="si">
-        <div class="si-name" style="color:${col}">${pt.name||(pt.core?"核心":pt.slot_name||"配件")}</div>
+        <div class="si-name" style="color:${col}">${pt.name||(pt.core?"改装模块":pt.slot_name||"配件")}</div>
         <div class="si-stats">配件 · ${(pt.affixes||[]).map(a=>a.nm).join(" · ")||"—"}</div>
         <div class="si-buy"><span class="si-price ${can?"":"cant"}">₽ ${priceTextShort(pt.shopPrice||0)}</span>
           <button class="btn ghost" data-fbuy="cashpart:${sid}:${i}" ${can?"":"disabled"}>购买</button></div>
@@ -7067,7 +7080,7 @@ UI.raidFieldShop=function(key){
     }
     for(const a of (R.inv.armors||[])) rows.push({ key:"a", uid:a.uid, name:a.name, col:ARMOR_TIER_COLOR[a.tier]||"#dfe7f0", note:"护甲", val:(a.value||0)*rate });
     for(const h of (R.inv.helmets||[])) rows.push({ key:"h", uid:h.uid, name:h.name, col:ARMOR_TIER_COLOR[h.tier]||"#dfe7f0", note:"头盔", val:(h.value||0)*rate });
-    for(const pt of (R.inv.parts||[])) rows.push({ key:"p", uid:pt.uid, name:pt.name||(pt.core?"核心":pt.slot_name||"配件"), col:(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color, note:pt.core?"核心":"配件", val:(pt.slot==="core"?pt.value:partValue(pt))*rate });
+    for(const pt of (R.inv.parts||[])) rows.push({ key:"p", uid:pt.uid, name:pt.name||(pt.core?"改装模块":pt.slot_name||"配件"), col:(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color, note:pt.core?"改装模块":"配件", val:(pt.slot==="core"?pt.value:partValue(pt))*rate });
     for(const m of (R.inv.materials||[])) rows.push({ key:"m", uid:m.uid, name:m.name, col:m.color||"#dfe7f0", note:"原材料", val:(m.value||0)*rate });
     body = rows.length ? rows.map((r,i)=>`
       <div class="si">
@@ -7097,14 +7110,14 @@ UI.raidFieldShop=function(key){
         <div class="shop-desc">${kind==="rec"
           ? `回收超市按装备估值的 <b style="color:#62c8ff">${Math.round(RAID_FIELD_SELL_RATE*100)}%</b> 收购（仓库直售只有 ${Math.round(RAID_VENDOR_RATE*100)}%）。带进图卖能多赚，但要先活着走到这里。`
           : kind==="black"
-            ? `黑市只认 <b style="color:#c07bff">◆ 黑市代币</b>：<b>本局首杀必得 1 枚</b>，之后靠上锁箱与精英 AI 掉落，撤离时再按带出价值结算。这里出售 <b style="color:#ffd23f">高稀有度成品枪</b>、高级核心与 <b style="color:#c07bff">III~V 级保险箱钥匙</b>，卢布买不到。`
+            ? `黑市只认 <b style="color:#c07bff">◆ 黑市代币</b>：<b>本局首杀必得 1 枚</b>，之后靠上锁箱与精英 AI 掉落，撤离时再按带出价值结算。这里出售 <b style="color:#ffd23f">高稀有度成品枪</b>、高级改装模块与 <b style="color:#c07bff">III~V 级保险箱钥匙</b>，卢布买不到。`
             : `用<b style="color:#ffd23f">局内卢布</b>交易 —— 卢布要先在局内搜刮到，撤离后才真正落袋。死了，钱和货一起没。`}</div>
         ${wallet}
         <button class="btn ghost" data-fclose="1">离开（继续突袭）</button>
       </div>
       <div class="shop-solo">
         <span class="solo-badge" style="border-color:${sh.color}66;color:${sh.color}">独立摊位</span>
-        <span>${sh.name}${kind==="gun"?"只卖成品枪":kind==="mat"?"只卖原材料 / 配件 / 医疗 / I~II 级钥匙":kind==="rec"?"只收货，不卖货":"只收 ◆ 黑市代币，换高级枪 / 核心 / III~V 级钥匙"} · 货架与其他摊位各算各的，不互通。</span>
+        <span>${sh.name}${kind==="gun"?"只卖成品枪":kind==="mat"?"只卖原材料 / 配件 / 医疗 / I~II 级钥匙":kind==="rec"?"只收货，不卖货":"只收 ◆ 黑市代币，换高级枪 / 改装模块 / III~V 级钥匙"} · 货架与其他摊位各算各的，不互通。</span>
       </div>
       <div class="shop-list">${body}</div>
       <div class="hint" style="margin-top:12px;">关闭面板后游戏继续 —— 谈生意时背后随时可能来人。</div>
@@ -7159,7 +7172,7 @@ UI.raidFieldShop=function(key){
       if(R.tokens<(c.tokenPrice||10)) return;
       R.tokens-=c.tokenPrice;
       R.inv.parts.push(c); shop.stock.parts.splice(idx,1);
-      R._float(R.player.x, R.player.y-40, "兑换 "+(c.name||"核心"), c.color||"#c07bff");
+      R._float(R.player.x, R.player.y-40, "兑换 "+(c.name||"改装模块"), c.color||"#c07bff");
       SFX.ui(); UI.raidFieldShop(sid);
     } else if(pay==="key"){
       const ky=(shop.stock.keys||[])[idx]; if(!ky) return;
@@ -7194,7 +7207,7 @@ UI.raidFieldShop=function(key){
 };
 
 function forgeTabsHTML(){  return `<div class="shop-tabs" style="margin-bottom:14px;">
-    <button class="shop-tab ${UI._forgeTab!=='fusion'&&UI._forgeTab!=='workshop'?'on':''}" data-ftab="forge"><b>符文锻造</b><span class="tab-tag">FORGE</span></button>
+    <button class="shop-tab ${UI._forgeTab!=='fusion'&&UI._forgeTab!=='workshop'?'on':''}" data-ftab="forge"><b>精密改装</b><span class="tab-tag">GUNSMITH</span></button>
     <button class="shop-tab ${UI._forgeTab==='fusion'?'on':''}" data-ftab="fusion"><b>融合台</b><span class="tab-tag">FUSION</span></button>
     <button class="shop-tab ${UI._forgeTab==='workshop'?'on':''}" data-ftab="workshop"><b>工坊</b><span class="tab-tag">CRAFT</span></button>
   </div>`;
@@ -7212,11 +7225,11 @@ UI.raidForge=function(opts){
     const on = w.uid===UI._forgeSel;
     const col=raidGunColor(w);
     const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:w.cat;
-    const elem=w.element&&w.element!=="none"?(ELEMENTS[w.element]?ELEMENTS[w.element].name:"元素"):"物理";
+    const elem=w.element&&w.element!=="none"?(AMMO_TYPES[w.element]?AMMO_TYPES[w.element].name:"特种弹"):"FMJ 全被甲弹";
     return `<div class="shop-item ${on?'sel':''}" data-pick="${w.uid}" style="border-left-color:${col};cursor:pointer;${on?('box-shadow:inset 0 0 0 2px '+col+';'):''}">
       <div class="si-thumb">${gunSvg(w,46)}</div>
       <div class="si-name" style="color:${col}">${w.name}</div>
-      <div class="si-meta">${tname} · ${elem}${w.mayhem>0?' · <b class="c-mayhem">混乱'+w.mayhem+'</b>':''}</div>
+      <div class="si-meta">${tname} · ${elem}${w.mayhem>0?' · <b class="c-mayhem">改装'+w.mayhem+'级</b>':''}</div>
       <div class="si-stats">伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 射程 ${w.range}<br>配件 ${(w.parts||[]).length} 个 · 估值 ₽${priceTextShort(w.value)}</div>
     </div>`;
   }).join('') || `<div class="empty-hint">仓库暂无枪械 · 先去军火超市采购，或突袭搜刮并成功撤离</div>`;
@@ -7227,20 +7240,20 @@ UI.raidForge=function(opts){
     const canR=stash.creds>=cR;
     opPanel = `
       <div class="forge-ops" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
-        <div class="shop-item" style="border-left-color:#8fd0ff">
-          <div class="si-name" style="color:#8fd0ff">重铸词缀</div>
-          <div class="si-meta">保留类型 / 厂商 / 元素 / 稀有度，重掷全部词缀（只要卢布）</div>
+        <div class="shop-item" style="border-left-color:#8fb0c8">
+          <div class="si-name" style="color:#8fb0c8">重调改装词条</div>
+          <div class="si-meta">保留枪型 / 兵工厂 / 适配弹种 / 品级，重掷全部改装词条（只要卢布）</div>
           <div class="si-buy"><span class="si-price ${canR?'':'cant'}">₽ ${cR}</span>
-            <button class="btn" data-op="reroll" ${canR?'':'disabled'}>重铸</button></div>
+            <button class="btn" data-op="reroll" ${canR?'':'disabled'}>重调</button></div>
         </div>
         <div class="shop-item" style="border-left-color:#9aa4b2">
-          <div class="si-name" style="color:#9aa4b2">附魔 / 升阶已并入「核心装配」</div>
-          <div class="si-meta">把<b>元素核心</b>装进核心槽即可附魔该元素、加元素伤害；把<b>混乱核心</b>装进核心槽，<b style="color:#ff2ce0">最高等级混乱核心决定枪械混乱等级</b>；<b>强化核心</b>提供属性增益。均在下方核心槽操作。</div>
+          <div class="si-name" style="color:#9aa4b2">更换弹种 / 提升改装等级已并入「模块装配」</div>
+          <div class="si-meta">把<b>弹种适配组件</b>装进改装槽即可更换适配弹药；把<b>膛压组件</b>装进改装槽，<b style="color:#b08a58">最高等级膛压组件决定枪械改装等级</b>；<b>改装模块</b>提供工艺参数增益。均在下方改装槽操作。</div>
         </div>
       </div>`;
   }
 
-  // —— 配件装配（普通配件槽）+ 核心装配（核心槽，数量随品质 1~8） ——
+  // —— 部件装配（普通部件槽）+ 模块装配（改装槽，数量随品级 1~8） ——
   let partPanel = "";
   if(sel){
     const allParts = sel.parts||[];
@@ -7265,35 +7278,35 @@ UI.raidForge=function(opts){
       const c=cores[i];
       if(c){
         coreRows.push(`<div class="forge-slot core">
-          <div class="fs-name">核心槽 ${i+1}</div>
-          <div class="fs-part" style="color:${c.color||'#8fd0ff'}">${c.name}<em>${partText(c)}</em></div>
+          <div class="fs-name">改装槽 ${i+1}</div>
+          <div class="fs-part" style="color:${c.color||'#8fb0c8'}">${c.name}<em>${partText(c)}</em></div>
           <div class="fs-btns"><button class="btn ghost" data-rmcore="${c.uid}">卸下</button></div>
         </div>`);
       } else {
         coreRows.push(`<div class="forge-slot core empty">
-          <div class="fs-name">核心槽 ${i+1}</div>
-          <div class="fs-part" style="color:#6b7280">（空）<em>装核心以附魔 / 升混乱 / 增益</em></div>
+          <div class="fs-name">改装槽 ${i+1}</div>
+          <div class="fs-part" style="color:#6b7280">（空）<em>装入改装模块以换弹种 / 提改装等级 / 加参数</em></div>
         </div>`);
       }
     }
     const instUids=new Set(cores.map(c=>c.uid));
     const avail=(stash.parts||[]).filter(p=>p.core && !instUids.has(p.uid));
     const poolHtml = avail.length
-      ? `<div class="core-pool">可用核心（点一下装入首个空槽）：${avail.map(a=>`<button class="btn ghost core-chip" data-addcore="${a.uid}" style="border-color:${a.color};color:${a.color}">${a.name}</button>`).join('')}</div>`
-      : `<div class="hint" style="margin-top:6px;color:var(--muted)">仓库暂无可用核心 · 只能从保险箱 / 精英干员掉落，或在局内枪械商店、黑市购买</div>`;
+      ? `<div class="core-pool">可用改装模块（点一下装入首个空槽）：${avail.map(a=>`<button class="btn ghost core-chip" data-addcore="${a.uid}" style="border-color:${a.color};color:${a.color}">${a.name}</button>`).join('')}</div>`
+      : `<div class="hint" style="margin-top:6px;color:var(--muted)">仓库暂无可用改装模块 · 只能从保险箱 / 精英干员掉落，或在局内枪械商店、黑市购买</div>`;
     partPanel = `
       <h3 style="font-size:18px;margin:18px 0 8px;">配件装配 <span style="color:var(--muted);font-size:12px;font-weight:400;">共 ${normalParts.length} / ${GUN_SLOTS.length} 槽位 · 配件只能用仓库实物换装</span></h3>
       <div class="forge-partbox">${rows}</div>
-      <h3 style="font-size:18px;margin:18px 0 8px;">核心装配 <span style="color:var(--muted);font-size:12px;font-weight:400;">${cores.length} / ${coreCap} 槽 · 由品质决定（${RAID_RARITY_NAME[rIdx]||"普通"}）· 混乱核心最高等级 = 枪械混乱等级</span></h3>
+      <h3 style="font-size:18px;margin:18px 0 8px;">模块装配 <span style="color:var(--muted);font-size:12px;font-weight:400;">${cores.length} / ${coreCap} 槽 · 由品级决定（${RAID_RARITY_NAME[rIdx]||"民用"}）· 最高级膛压组件 = 枪械改装等级</span></h3>
       <div class="forge-partbox">${coreRows.join('')}</div>
-      ${cores.length<coreCap ? poolHtml : `<div class="hint" style="margin-top:6px;color:var(--muted)">核心槽已满（${coreCap} 个）· 卸下后可装入更多</div>`}`;
+      ${cores.length<coreCap ? poolHtml : `<div class="hint" style="margin-top:6px;color:var(--muted)">改装槽已满（${coreCap} 个）· 卸下后可装入更多</div>`}`;
   }
 
   const backLabel = opts.from==='title' ? '返回主菜单' : '前往配装大厅';
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:32px;">枪匠台 · 符文锻造</h2>
-      <div class="subtitle">RUNESMITH · 用卢布重铸词缀 · 核心（元素/混乱/强化）装进核心槽即可附魔 / 升混乱 / 强化（配件只能换装）</div>
+      <h2 class="title-big" style="font-size:32px;">枪匠台 · 精密改装</h2>
+      <div class="subtitle">GUNSMITH · 用卢布重调改装词条 · 模块（弹种 / 膛压 / 工艺）装进改装槽即可换弹 / 提等级 / 加参数（部件只能实物换装）</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
         <div class="shop-desc">改造对象是塔科夫仓库中的枪械；改造后伤害、射速、弹匣、估值全部重算。改造不可撤销，谨慎升阶。<b style="color:#ff9a3a">配件槽位不支持重铸</b>——好配件只能从箱子里搜，或自己投料合成。</div>
@@ -7326,14 +7339,14 @@ UI.raidForge=function(opts){
   UI.overlay.querySelectorAll('[data-op]').forEach(el=>{
     el.onclick=()=>{ applyOp(el.dataset.op); };
   });
-  // 装核心：点仓库核心 → 装入首个空核心槽（数量受品质限制）
+  // 装改装模块：点仓库改装模块 → 装入首个空改装槽（数量受品质限制）
   UI.overlay.querySelectorAll('[data-addcore]').forEach(el=>{
     el.onclick=()=>{
       const uid=el.dataset.addcore;
       const idx=stash.weapons.findIndex(w=>w.uid===UI._forgeSel); if(idx<0) return;
       const gun=stash.weapons[idx];
       const instN=(gun.parts||[]).filter(p=>p.core).length;
-      if(instN>=raidCoreSlotCount(gun.rarity)){ UI.toast && UI.toast("核心槽已满"); return; }
+      if(instN>=raidCoreSlotCount(gun.rarity)){ UI.toast && UI.toast("改装槽已满"); return; }
       const ci=stash.parts.findIndex(p=>p.uid===uid); if(ci<0) return;
       const core=stash.parts.splice(ci,1)[0];
       const g=installPartOnGun(gun, Object.assign({},core,{slot:"core"+instN}));
@@ -7342,7 +7355,7 @@ UI.raidForge=function(opts){
       RaidStash.save(stash); SFX.ui(); UI.raidForge(opts);
     };
   });
-  // 卸下核心：退回仓库并重新计算武器数值（混乱等级 / 元素 / 增益）
+  // 卸下改装模块：退回仓库并重新计算武器数值（改装等级 / 弹种 / 增益）
   UI.overlay.querySelectorAll('[data-rmcore]').forEach(el=>{
     el.onclick=()=>{
       const uid=el.dataset.rmcore;
@@ -7361,7 +7374,7 @@ UI.raidForge=function(opts){
       RaidStash.save(stash); SFX.ui(); UI.raidForge(opts);
     };
   });
-  // 普通配件换装（核心不会被选入普通槽）
+  // 普通配件换装（改装模块不会被选入普通槽）
   UI.overlay.querySelectorAll('[data-install]').forEach(el=>{
     el.onclick=()=>{
       const slot=el.dataset.install;
@@ -7399,7 +7412,7 @@ UI.raidFusion=function(opts){
   for(const w of stash.weapons) push(w,'weapon');
   for(const a of stash.armors) push(a,'armor');
   for(const h of stash.helmets) push(h,'helmet');
-  // v0.14.5：核心不可融合升阶 —— 不进入融合台选材列表
+  // v0.14.5：改装模块不可融合升阶 —— 不进入融合台选材列表
   for(const p of stash.parts) if(!(p.slot==="core"||p.core)) push(p,'part');
   UI._fuseSel=UI._fuseSel.filter(uid=>entries.some(e=>e.it.uid===uid));
 
@@ -7426,7 +7439,7 @@ UI.raidFusion=function(opts){
     const isMain=on && UI._fuseSel[0]===it.uid;
     const nAff=(it.affixes||[]).length;
     const stat=it.kind==="weapon"||it.dmg!==undefined
-      ? `伤害 ${it.dmg} · 配件 ${(it.parts||[]).length} · 词条 ${nAff}${it.mayhem>0?(' · 混乱'+it.mayhem):''}`
+      ? `伤害 ${it.dmg} · 配件 ${(it.parts||[]).length} · 词条 ${nAff}${it.mayhem>0?(' · 改装'+it.mayhem):''}`
       : it.kind==="armor" ? `减伤 ${Math.round((it.dr||0)*100)}% · 耐久 ${it.maxArmor}`
       : it.kind==="helmet" ? `爆头减伤 ${Math.round((it.dr||0)*100)}% · 耐久 ${it.maxArmor}`
       : (it.slot==="core"||it.core) ? `${RAID_ROMAN[it.lv]} 阶 · 两件同阶同类型可升阶`
@@ -7448,7 +7461,7 @@ UI.raidFusion=function(opts){
       const boost=1+(n>=3?1:0)+(n>=4?1:0);
       const tr=RARITIES[Math.min(RARITIES.length-1,mr+boost)];
       preview=`<div class="hint" style="color:#8fd0ff;">
-        产物：<b>${tr.name}</b> ${kindName(main)} · 词条约 <b>${Math.min(10,3+n-1)}</b> 条 · 混乱 <b>${Math.max(0,...items.map(x=>x.mayhem||0))}~+1</b> · 配件品质各升 1 档</div>`;
+        产物：<b>${tr.name}</b> ${kindName(main)} · 词条约 <b>${Math.min(10,3+n-1)}</b> 条 · 改装 <b>${Math.max(0,...items.map(x=>x.mayhem||0))}~+1</b> · 配件品质各升 1 档</div>`;
     } else if(main && (main.kind==="armor"||main.kind==="helmet")){
       const mt=Math.max(...items.map(x=>x.tier||1));
       const mr=Math.max(...items.map(x=>x.rarity|0));
@@ -7458,11 +7471,11 @@ UI.raidFusion=function(opts){
     } else if(main && (main.slot==="core"||main.core)){
       const same=items.filter(i=>(i.slot==="core"||i.core)&&i.core===main.core&&i.lv===main.lv&&(i.elem||"")===(main.elem||"")&&(i.boost||"")===(main.boost||""));
       const ok=same.length>=2 && main.lv<RAID_CORE_MAX;
-      let upName = main.core==="chaos" ? "混乱核心"
-        : main.core==="elem" ? ("元素核心·"+(ELEMENTS[main.elem]?ELEMENTS[main.elem].name:""))
-        : ("强化核心·"+(BOOST_CORE_TYPES[main.boost]?BOOST_CORE_TYPES[main.boost].name:""));
+      let upName = main.core==="chaos" ? "膛压组件"
+        : main.core==="elem" ? ("弹种适配组件·"+(ELEMENTS[main.elem]?ELEMENTS[main.elem].name:""))
+        : ("改装模块·"+(BOOST_CORE_TYPES[main.boost]?BOOST_CORE_TYPES[main.boost].name:""));
       preview=`<div class="hint" style="color:${ok?'#8fe07a':'#ff8a5a'}">
-        产物：<b>${ok?upName+" ["+RAID_ROMAN[main.lv+1]+"]":"无法升阶（需 2 个同阶同型核心，且未满 V 级）"}</b></div>`;
+        产物：<b>${ok?upName+" ["+RAID_ROMAN[main.lv+1]+"]":"无法升阶（需 2 个同阶同型改装模块，且未满 V 级）"}</b></div>`;
     } else {
       preview=`<div class="hint" style="color:#8fd0ff;">
         产物：<b>高品质配件</b> · 品质提升 1~2 档 · 词条按新品质重掷</div>`;
@@ -7486,7 +7499,7 @@ UI.raidFusion=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">枪匠台 · 融合台</h2>
-      <div class="subtitle">FUSION · 两件以上装备熔炼合一，品质 / 词条 / 混乱等级有概率跃升</div>
+      <div class="subtitle">FUSION · 两件以上装备拆件重组，品级 / 改装词条 / 改装等级有概率跃升</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
         <div class="shop-desc">选择 2~4 件材料（枪 / 配件 / 护甲 / 头盔可混搭）。第一件为「主物品」，决定产物类型；材料越多，跃升越大。融合会消耗全部材料。</div>
@@ -7530,7 +7543,7 @@ UI.raidFusion=function(opts){
     if(out.kind==="weapon") stash.weapons.push(out);
     else if(out.kind==="armor") stash.armors.push(out);
     else if(out.kind==="helmet") stash.helmets.push(out);
-    else stash.parts.push(out);   // 核心 / 配件统一进配件池
+    else stash.parts.push(out);   // 改装模块 / 配件统一进配件池
     stash.creds-=cost;
     RaidStash.save(stash);
     UI._fuseSel=[]; UI._fuseResult=out;
@@ -7573,7 +7586,7 @@ UI.raidStash=function(opts){
     const rar=a.rarity|0, col=RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[a.tier];
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${a.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
-      <div class="si-meta">T${a.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 躯干${a.armorRegen?(' · 自愈 '+a.armorRegen+'/s'):''}${a.uniqPerk?' · <b style="color:#ffd23f">传奇装备</b>':''}</div>
+      <div class="si-meta">T${a.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 躯干${a.armorRegen?(' · 待维修 '+a.armorRegen+'/s'):''}${a.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}</div>
       ${a.uniqPerk?`<div class="uniq-perk">✦ ${a.uniqPerk}</div>`:''}
       <div class="si-stats">减伤 ${Math.round((a.dr||0)*100)}% · 护甲值 ${a.maxArmor} · 估值 ₽${priceTextShort(a.value)}</div>
       <div class="si-buy"><span class="si-price">₽ ${priceTextShort((a.value||0)*RAID_VENDOR_RATE)}</span>
@@ -7585,7 +7598,7 @@ UI.raidStash=function(opts){
     const rar=h.rarity|0, col=RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[h.tier];
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${h.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
-      <div class="si-meta">T${h.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 头部${h.uniqPerk?' · <b style="color:#ffd23f">传奇装备</b>':''}</div>
+      <div class="si-meta">T${h.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 头部${h.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}</div>
       ${h.uniqPerk?`<div class="uniq-perk">✦ ${h.uniqPerk}</div>`:''}
       <div class="si-stats">爆头减伤 ${Math.round((h.dr||0)*100)}% · 耐久 ${h.maxArmor} · 估值 ₽${priceTextShort(h.value)}</div>
       <div class="si-buy"><span class="si-price">₽ ${priceTextShort((h.value||0)*RAID_VENDOR_RATE)}</span>

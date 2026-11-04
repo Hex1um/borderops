@@ -36,7 +36,7 @@ const BR_FORESTS = [
 ];
 
 /* ----------------------------- 枪械 / 护甲 / 医疗 ----------------------------- */
-// 吃鸡模式已全面改用「无主之地」程序化枪械（blGunGen / blGunConvert），
+// 吃鸡模式已全面改用「旧刷宝体系」程序化枪械（blGunGen / blGunConvert），
 // 此处只保留 AI / 地面掉落所用的枪型池（含火箭筒作为空投级武器）
 const BR_GUN_TYPES = ["pistol","smg","shotgun","rifle","sniper","launcher"];
 // v0.9.9：高级甲曲线大幅抬升，T7/T8 为「空投级」重装
@@ -252,7 +252,7 @@ const BR = {
 
   _rollLoot(x,y){
     const roll=RNG.f();
-    if(roll<0.50){           // 武器（无主之地程序化枪械）
+    if(roll<0.50){           // 武器（旧刷宝体系程序化枪械）
       const id=RNG.pick(BR_GUN_TYPES);
       const w=blGunGen(RNG.ri(5,13),{type:id});
       w.uid=this._uid(); w.kind="weapon"; w.x=x; w.y=y;
@@ -890,7 +890,7 @@ const RenderBR = {
       ctx.globalAlpha=1;
     }
 
-    // 弹药：普通枪=飞行色块；激光枪=弹道光束
+    // 弹头渲染：实体弹丸 + 曳光尾迹
     for(const tr of R.tracers){
       const al=M.clamp(tr.life/(tr.maxLife||0.08),0,1);
       if(tr.laser){
@@ -965,7 +965,7 @@ const RenderBR = {
   unit(ctx, o, game){
     const r=o.r;
     ctx.beginPath(); ctx.ellipse(o.x,o.y+r*0.5,r*0.95,r*0.5,0,0,6.2832); ctx.fillStyle="rgba(0,0,0,0.32)"; ctx.fill();
-    // 枪（随枪型长度 / 元素颜色变化）
+    // 枪（随枪型长度 / 弹种颜色变化）
     const GUN_LEN={pistol:r+10,smg:r+14,shotgun:r+18,rifle:r+20,sniper:r+30,launcher:r+16};
     const g=o.gun; const gLen=(g&&GUN_LEN[g.type])||(r+14);
     const gCol=(g&&g.element!=="none"&&ELEMENTS[g.element])?ELEMENTS[g.element].color:"#2a2f35";

@@ -57,7 +57,7 @@ class Game {
     p.faction="player";
     if(saveData){
       if(saveData.metaOnly){
-        // 死亡后只恢复跨局进度：灵魂 / 永久升级 / 混乱解锁
+        // 死亡后只恢复跨局进度：功勋 / 永久升级 / 改装解锁
         p.souls=saveData.souls||0; p.rebirths=saveData.rebirths||0;
         p.perm=Object.assign({hp:0,dmg:0,mf:0,gf:0,soul:0,drop:0}, saveData.perm||{});
         p.mayhemUnlocked=!!saveData.mayhemUnlocked;
@@ -258,7 +258,7 @@ class Game {
   onZoneComplete(zone){
     Save.save(this);
     if(zone.def.boss){
-      // 通关：解锁混乱等级，进入可无限轮回的「混乱周目」
+      // 通关：解锁改装等级，进入可无限轮回的「改装周目」
       this.player.mayhemUnlocked=true;
       this.state="victory"; UI.victory(); Save.save(this); return;
     }
@@ -266,7 +266,7 @@ class Game {
     this.state="zoneclear"; UI.zoneClear(zone,false);
   }
 
-  /* 进入下一轮混乱周目：区域回到起点，怪物变强、掉落变好 */
+  /* 进入下一轮改装周目：区域回到起点，怪物变强、掉落变好 */
   startCycle(){
     const p=this.player;
     p.mayhemUnlocked=true;
@@ -277,11 +277,11 @@ class Game {
     p.hp=p.stats.maxHP; p.shield=p.stats.maxShield;
     for(const k in AMMO_MAX) p.ammo[k]=AMMO_MAX[k];
     this.state="playing"; UI.hide(); this._showHUD();
-    this.toast(`混乱 ${p.mayhem} · 怪物生命 ×${p.mayhemHpMul().toFixed(1)} · 掉落 ilvl +${p.mayhem}`);
+    this.toast(`改装 ${p.mayhem} · 怪物生命 ×${p.mayhemHpMul().toFixed(1)} · 掉落 ilvl +${p.mayhem}`);
     Save.save(this);
   }
 
-  /* 转生：重置进度，回到第一区，保留灵魂与永久升级 */
+  /* 重新部署：重置进度，回到第一区，保留功勋与永久升级 */
   doRebirth(){
     const p=this.player;
     const r=p.rebirth();
@@ -497,7 +497,7 @@ class Game {
       amT.innerHTML=`${w.mag} <span class="reserve">/ ${reserve}</span>`;
       wn.textContent=w.name; wn.style.color=w.rarityColor;
     }
-    zn.innerHTML=(this.world?this.world.name:'') + (p.mayhem>0?`<span class="mh-badge">混乱 ${p.mayhem}</span>`:'');
+    zn.innerHTML=(this.world?this.world.name:'') + (p.mayhem>0?`<span class="mh-badge">改装 ${p.mayhem}</span>`:'');
     const gd=document.getElementById('gold-text');
     if(gd) gd.textContent=p.gold.toLocaleString();
 

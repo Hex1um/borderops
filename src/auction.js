@@ -1,7 +1,7 @@
 /* =========================================================================
  * auction.js — 拍卖行（Tarkov Auction House）
  *   · 大厅：别的 PMC / Scav 挂出来的货，可「出价」竞拍，也可「一口价」直接买走
- *   · 出售：把仓库里的装备 / 配件 / 材料 / 核心挂上去，等买家上门（比商人回收更赚）
+ *   · 出售：把仓库里的装备 / 配件 / 材料 / 改装模块挂上去，等买家上门（比商人回收更赚）
  *   · 我的：自己的挂单（可撤单）+ 成交记录
  *   全部用仓库卢布结算，数据独立存在 localStorage: raid_auction_v1
  * ========================================================================= */
@@ -23,7 +23,7 @@ const AUCTION_KIND_MAP = {
 };
 const AUCTION_KIND_NAME = {
   weapon:"枪械", armor:"护甲", helmet:"头盔",
-  part:"配件", material:"原材料", core:"核心",
+  part:"配件", material:"原材料", core:"改装模块",
 };
 
 function auctionUid(p){
@@ -57,7 +57,7 @@ function auctionItemInfo(kind, it){
     const aff=(it.affixes||[]).map(a=>a.nm).join(" · ");
     return {
       name:it.name, color:col, value:it.value||0,
-      meta:`T${it.tier} ${isH?"头盔":"护甲"} · ${RAID_RARITY_NAME[rar]} · ${isH?"爆头减伤":"减伤"} ${Math.round((it.dr||0)*100)}%${it.armorRegen?(" · 自愈 "+it.armorRegen+"/s"):""}${it.uniqPerk?" · 传奇":""}`,
+      meta:`T${it.tier} ${isH?"头盔":"护甲"} · ${RAID_RARITY_NAME[rar]} · ${isH?"爆头减伤":"减伤"} ${Math.round((it.dr||0)*100)}%${it.armorRegen?(" · 待维修 "+it.armorRegen+"/s"):""}${it.uniqPerk?" · 传奇":""}`,
       stats:(it.uniqPerk?`✦ ${it.uniqPerk}`:`${isH?"耐久":"护甲值"} ${it.maxArmor}${aff?(" · 词条："+aff):""}`),
       perk:it.uniqPerk||"",
     };
@@ -66,9 +66,9 @@ function auctionItemInfo(kind, it){
     if(it.slot==="core" || it.core){
       const cname=raidCoreName(it);
       let meta, stats;
-      if(it.core==="chaos"){ meta=`核心 · 混乱 · [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械核心槽，决定混乱等级（1.12^m 指数放大）"; }
-      else if(it.core==="elem"){ const E=ELEMENTS[it.elem]||ELEMENTS.fire; meta=`核心 · 元素 · ${E.name} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械核心槽，把武器附魔为该元素并加元素伤害"; }
-      else { const d=BOOST_CORE_TYPES[it.boost]; meta=`核心 · 强化 · ${d?d.name:"强化"} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械核心槽，提供属性增益"; }
+      if(it.core==="chaos"){ meta=`改装模块 · 改装 · [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，决定改装等级（1.12^m 指数放大）"; }
+      else if(it.core==="elem"){ const E=ELEMENTS[it.elem]||ELEMENTS.fire; meta=`弹种适配组件 · ${E.name} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，更换适配弹药并提升弹药效能"; }
+      else { const d=BOOST_CORE_TYPES[it.boost]; meta=`改装模块 · 强化 · ${d?d.name:"强化"} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，提供属性增益"; }
       return { name:cname, color:it.color||"#8fd0ff", value:it.value||0, meta, stats };
     }
     const col=(RARITY_BY_ID[it.rarity]||{color:"#cfd8e2"}).color;
@@ -160,7 +160,7 @@ function auctionRollItem(forceKind){
   return auctionRollCoreItem();
 }
 
-/* 核心货：元素核心 / 混乱核心 / 强化核心（突袭之外唯一的获取渠道，因此单列一个生成器） */
+/* 改装模块货：弹种适配组件 / 膛压组件 / 改装模块（突袭之外唯一的获取渠道，因此单列一个生成器） */
 function auctionRollCoreItem(){
   const lv=M.clamp(1+RNG.weighted([{weight:34},{weight:28},{weight:20},{weight:11},{weight:7}]),1,RAID_CORE_MAX);
   let c;
@@ -237,7 +237,7 @@ const Auction = {
     return arr.length;
   },
 
-  /* 核心保底：大厅里常驻至少 1 件核心（元素 / 混乱核心是突袭之外唯一获取渠道） */
+  /* 改装模块保底：大厅里常驻至少 1 件改装模块（弹种 / 膛压组件是突袭之外唯一获取渠道） */
   ensureCore(d, now){
     d=d||this.load(); now=now||Date.now();
     if(d.listings.some(L=>L.item && L.item.slot==="core" && !L.yourBid)) return false;
@@ -499,7 +499,7 @@ UI.raidAuction=function(opts){
   const sellTabs=["weapon","armor","helmet","part","material","core"];
   const sellList=(()=>{
     const tab=UI._aucSellTab;
-    // 核心现已并入配件池：出售时按 kind="part" 走，但只列出 slot:"core" 的配件
+    // 改装模块现已并入配件池：出售时按 kind="part" 走，但只列出 slot:"core" 的配件
     const kind = tab==="core" ? "part" : tab;
     const arr = tab==="core" ? stash.parts.filter(p=>p.core) : (stash[AUCTION_KIND_MAP[tab]]||[]);
     if(!arr.length) return `<div class="empty-hint">仓库里没有${AUCTION_KIND_NAME[tab]}可卖 · 先去突袭搜刮</div>`;
@@ -533,7 +533,7 @@ UI.raidAuction=function(opts){
     }).join('');
   })();
 
-  const FILTERS=[{id:"all",name:"全部"},{id:"core",name:"核心"},{id:"gear",name:"装备"},{id:"mat",name:"配件 / 材料"}];
+  const FILTERS=[{id:"all",name:"全部"},{id:"core",name:"改装模块"},{id:"gear",name:"装备"},{id:"mat",name:"配件 / 材料"}];
   const filterBar=`<div class="auc-filter">
     ${FILTERS.map(f=>{
       const n=f.id==="all" ? d.listings.length : d.listings.filter(L=>aucMatch2(L,f.id)).length;
@@ -599,7 +599,7 @@ UI.raidAuction=function(opts){
       <div class="subtitle">AUCTION HOUSE · 自由买卖 · 卢布结算 · 5% 成交佣金</div>
       <div class="shop-bar">
         <div class="shop-desc">在这里与其他 PMC / Scav 交易：<b style="color:#ffd23f">竞拍</b>可以低于估值捡漏（但可能被抬价），<b style="color:#ffd23f">一口价</b>直接拿下；自己的战利品挂上去，成交价比商人回收（六折）高得多——挂单<b style="color:#8fe07a"> 4 分钟</b>，到期未售出自动退回仓库，上架费不退。<br>
-        <b style="color:#ff9a3a">元素核心 / 混乱核心</b>在这里是除突袭箱子外<b>唯一</b>的获取渠道，货架保底常驻至少 1 件；也用「核心」分类快速筛出来。</div>
+        <b style="color:#ff9a3a">弹种适配组件 / 膛压组件</b>在这里是除突袭箱子外<b>唯一</b>的获取渠道，货架保底常驻至少 1 件；也用「改装模块」分类快速筛出来。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-auc-refresh">刷新行情</button>
         <button class="btn ghost" id="btn-auc-back">前往配装大厅</button>

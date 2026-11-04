@@ -8,15 +8,15 @@ const ZONE_PALETTES = {
   desert:  { g0:"#5a4630", g1:"#473525", g2:"#32261a", grid:"rgba(255,210,63,0.045)", accent:"#e0a85a", decor:["#4a3826","#3a2c1c","#e0a85a"] },
   ruins:   { g0:"#4a4a52", g1:"#3a3a44", g2:"#26262e", grid:"rgba(180,200,255,0.05)", accent:"#9fb0d0", decor:["#3a3a44","#2a2a32","#9fb0d0"] },
   camp:    { g0:"#5e4636", g1:"#4a3526", g2:"#33241a", grid:"rgba(255,180,80,0.05)",  accent:"#d98a4a", decor:["#4a3424","#3a2818","#d98a4a"] },
-  ice:     { g0:"#3a5066", g1:"#2e4256", g2:"#1e2e3e", grid:"rgba(170,230,255,0.06)", accent:"#7df9ff", decor:["#5a7e96","#3a6076","#7df9ff"] },
-  swamp:   { g0:"#3a4a32", g1:"#2e3c28", g2:"#1f2a1a", grid:"rgba(150,220,120,0.05)", accent:"#7bff3a", decor:["#33402a","#26331f","#7bff3a"] },
+  ice:     { g0:"#3a5066", g1:"#2e4256", g2:"#1e2e3e", grid:"rgba(170,200,220,0.05)", accent:"#9fb8c8", decor:["#5a7e96","#3a6076","#9fb8c8"] },
+  swamp:   { g0:"#3a4a32", g1:"#2e3c28", g2:"#1f2a1a", grid:"rgba(150,180,120,0.04)", accent:"#8fae72", decor:["#33402a","#26331f","#8fae72"] },
   volcano: { g0:"#5a2e26", g1:"#481f1a", g2:"#301310", grid:"rgba(255,120,60,0.06)",  accent:"#ff6b3d", decor:["#5a2a20","#3a1812","#ff7a3d"] },
   tech:    { g0:"#33414a", g1:"#28333a", g2:"#1a232a", grid:"rgba(120,220,255,0.05)", accent:"#4ad6ff", decor:["#2e3b44","#1d2730","#4ad6ff"] },
-  void:    { g0:"#3e2e52", g1:"#2e2240", g2:"#1e1630", grid:"rgba(200,140,255,0.06)", accent:"#c77dff", decor:["#3a2c4e","#241a36","#c77dff"] },
-  hive:    { g0:"#4a2e3e", g1:"#3a2230", g2:"#281820", grid:"rgba(255,120,180,0.05)",accent:"#ff6bd0", decor:["#46283a","#2e1a28","#ff6bd0"] },
+  void:    { g0:"#323a42", g1:"#262d34", g2:"#181e24", grid:"rgba(160,180,200,0.05)", accent:"#8fa0b0", decor:["#2e3740","#1e252c","#8fa0b0"] },
+  hive:    { g0:"#423a32", g1:"#332d27", g2:"#231e1a", grid:"rgba(200,170,130,0.04)", accent:"#b09470", decor:["#3e362e","#2a241e","#b09470"] },
   sanctum: { g0:"#4a3e22", g1:"#3a3018", g2:"#26200f", grid:"rgba(255,210,63,0.07)",  accent:"#ffd23f", decor:["#4a3a20","#342a14","#ffd23f"] },
 };
-// 各主题装饰类型权重：0岩石 1弹坑 2枯枝 3水晶 4立柱 5水潭 6熔岩裂纹
+// 各主题装饰类型权重：0碎石 1弹坑 2枯枝 3碎冰/玻璃 4立柱 5积水 6炉渣裂纹
 const THEME_DECOR = {
   desert:[0,1,2], ruins:[0,4,4], camp:[0,1,2], ice:[3,3,0], swamp:[5,5,2],
   volcano:[6,6,0], tech:[4,4,1], void:[3,3,4], hive:[0,2,2], sanctum:[4,4,3],
@@ -225,7 +225,7 @@ const Render = {
     const C=CLASSES[p.classId], r=p.radius;
     this.shadow(ctx,p.x,p.y,r,0.52);
 
-    // 护盾环：满盾实线；充能中画进度弧；破碎后闪烁提示延迟
+    // 护甲环：满盾实线；充能中画进度弧；破碎后闪烁提示延迟
     if(p.stats.maxShield>0){
       const rr=(r+8)*(1+Math.sin(M.now()*4)*0.03);
       if(p.shield>0){
@@ -288,7 +288,7 @@ const Render = {
     const col = e.flash>0 ? "#ffffff" : e.color;
     const phasing = !!e.phasing;
     ctx.save();
-    if(phasing) ctx.globalAlpha=0.42;          // 相位半透明
+    if(phasing) ctx.globalAlpha=0.42;          // 标记半透明
     this.shadow(ctx,x,y,r,e.type==="boss"?0.55:0.48);
 
     if(e.phaselocked>0){
@@ -411,8 +411,8 @@ const Render = {
   },
 
   projectile(ctx,p){
-    if(p.laser) return this._laserBeam(ctx, p);
-    // 曳光：弹头后方渐隐光带（用真实飞行轨迹做尾迹，规避追踪弹拐弯）
+    if(p.laser) return this._laserBeam(ctx, p);   // 兼容旧快照：按曳光弹尾迹绘制
+    // 曳光：弹头后方渐隐光带（用真实飞行轨迹做尾迹）
     const tail = p.trail.length>1 ? p.trail[0]
                : {x:p.x-Math.cos(p.angle)*42, y:p.y-Math.sin(p.angle)*42};
     this.tracerStreak(ctx, p.x, p.y, tail.x, tail.y, p.color, Math.max(2.2, p.radius*0.8));
@@ -439,7 +439,7 @@ const Render = {
     ctx.restore();
   },
 
-  // 花哨弹型绘制：在原点、+x 朝前的坐标系里画一个弹头（厂商/元素/枪型决定）
+  // 弹头轮廓：在原点、+x 朝前的坐标系里画一个实体弹丸（兵工厂 / 弹种 / 枪型决定）
   bulletShape(ctx, shape, r, color){
     color = brightenBulletColor(color);
     ctx.save();
@@ -453,34 +453,21 @@ const Render = {
         ctx.rect(-r*1.4,-r*0.55,r*2.8,r*1.1); break;
       case "box":
         ctx.rect(-r,-r,r*2,r*2); break;
-      case "bolt":
-        ctx.moveTo(r*1.6,0); ctx.lineTo(-r*0.8,r); ctx.lineTo(-r*0.2,0); ctx.lineTo(-r*0.8,-r); ctx.closePath(); break;
-      case "chevron":
-        ctx.moveTo(r*1.8,0); ctx.lineTo(-r,r*0.9); ctx.lineTo(-r*0.3,0); ctx.lineTo(-r,-r*0.9); ctx.closePath(); break;
-      case "flame":
-        ctx.moveTo(r*1.8,0); ctx.quadraticCurveTo(-r,r*0.9,-r*1.4,0); ctx.quadraticCurveTo(-r,-r*0.9,r*1.8,0); break;
-      case "crystal":
-        ctx.moveTo(r*1.6,0); ctx.lineTo(0,r*1.2); ctx.lineTo(-r*1.2,0); ctx.lineTo(0,-r*1.2); ctx.closePath(); break;
-      case "drop":
-        ctx.moveTo(r*1.4,0); ctx.quadraticCurveTo(-r,r*1.2,-r*1.3,0); ctx.quadraticCurveTo(-r,-r*1.2,r*1.4,0); break;
-      case "orb":
-        ctx.arc(0,0,r,0,6.2832); break;
       case "bomb":
         ctx.arc(0,0,r,0,6.2832); break;
-      default:
+      default:                // v0.15.0：旧存档中的特殊弹型统一回落为实体弹头
         ctx.arc(0,0,r,0,6.2832);
     }
     ctx.fill();
     ctx.shadowBlur=0;
     // 深色描边增强轮廓
     ctx.lineWidth=1.1; ctx.strokeStyle="rgba(13,10,7,0.8)"; ctx.stroke();
-    // 球/爆弹的高光
-    if(shape==="orb"){ ctx.beginPath(); ctx.arc(-r*0.3,-r*0.3,r*0.4,0,6.2832); ctx.fillStyle="rgba(255,255,255,0.6)"; ctx.fill(); }
-    else if(shape==="bomb"){ ctx.beginPath(); ctx.arc(r*0.8,-r*0.6,r*0.4,0,6.2832); ctx.fillStyle="#ffd23f"; ctx.fill(); }
+    // 榴弹战斗部的引信高光
+    if(shape==="bomb"){ ctx.beginPath(); ctx.arc(r*0.8,-r*0.6,r*0.4,0,6.2832); ctx.fillStyle="#c8a86a"; ctx.fill(); }
     ctx.restore();
   },
 
-  // 激光枪：沿弹道的高亮光束（外发光 + 白色芯线）
+  // 曳光弹：沿弹道的高亮尾迹（外发光 + 白色芯线），仅用于兼容旧快照
   _laserBeam(ctx, p){
     const len = Math.max(20, p.radius*5);
     ctx.save();
@@ -972,7 +959,7 @@ const RenderDust = {
   },
 
   tracers(ctx, D){
-    // 普通枪=飞行色块；激光枪=弹道光束
+    // 实体弹丸 = 飞行色块；曳光尾迹 = 弹道光带
     for(const t of D.tracers){
       const a=M.clamp(t.t/(t.t0||0.07),0,1);
       if(t.laser){
@@ -1096,7 +1083,7 @@ const RenderDust = {
     ctx.fillRect(bx+10,by+12,barW*M.clamp(p.hp/100,0,1),10);
     ctx.font='900 13px "Trebuchet MS",sans-serif'; ctx.fillStyle="#e8dcc4"; ctx.textAlign="left";
     ctx.fillText(Math.ceil(p.hp), bx+barW+16, by+22);
-    // Shield（无主之地模式护盾池）+ Armor
+    // Shield（旧刷宝体系模式护甲池）+ Armor
     if(p.maxShield>0){
       ctx.fillStyle="#0e2536"; ctx.fillRect(bx+10,by+30,barW,6);
       ctx.fillStyle="#4ad6ff"; ctx.fillRect(bx+10,by+30,barW*M.clamp(p.shield/p.maxShield,0,1),6);

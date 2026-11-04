@@ -1,26 +1,28 @@
 /* =========================================================================
- * combat.js — 抛射物 / 命中结算 / 元素 DoT 与克制
+ * combat.js — 抛射物 / 命中结算 / 弹种终点效应
+ * v0.15.0：移除弹种增益、持续伤害、减速、连锁引爆、急救效率与吸盾；
+ *   伤害差异只来自 AMMO_TYPES 的穿透等级与软目标/护甲终点效应系数。
  * ========================================================================= */
 
 class Projectile {
   constructor(game, o){
     this.x=o.x; this.y=o.y; this.angle=o.angle;
     this.speed=o.speed; this.damage=o.damage;
-    this.element=o.element||"none";
+    this.element=o.element||"none";   // 兼容旧字段名，实际是弹种 id
     this.radius=o.radius||4;
-    this.splash=o.splash||0;
-    this.homing=o.homing||false;
+    this.splash=o.splash||0;          // 仅榴弹战斗部有破片半径
+    this.homing=false;                // v0.15.0：直线弹道，字段保留兼容快照
     this.life=o.life||1.4;
     this.owner=o.owner||null;
     this.faction=o.owner&&o.owner.faction ? o.owner.faction : (o.faction||"enemy");
     this.color=o.color||"#fff";
     this.isThrown=o.isThrown||false;
     this.weapon=o.weapon||null;
-    this.pierce=o.pierce||0;          // 剩余穿透次数
-    this.lifesteal=o.lifesteal||0;    // 武器词缀吸血
-    this.elemChance=o.elemChance||0;  // 元素爆发几率
-    this.shape=o.shape||"round";      // 子弹形状（厂商/元素/枪型决定）
-    this.laser=o.laser||false;        // 激光枪：子弹渲染为光束而非色块
+    this.pierce=o.pierce||0;          // 剩余穿透次数（钢芯弹 / 大口径）
+    this.lifesteal=0;                 // v0.15.0：无急救效率
+    this.elemChance=0;                // v0.15.0：无弹种增益
+    this.shape=o.shape||"round";      // 弹头形状（枪型 / 弹种 / 兵工厂决定）
+    this.laser=false;                 // v0.15.0：无能量光束
     this.hits=[];                     // 已命中目标（穿透用）
     this.dead=false;
     this.trail=[];
@@ -28,14 +30,7 @@ class Projectile {
 
   update(dt, game){
     this.prevX=this.x; this.prevY=this.y;   // 供扫掠碰撞使用
-    // 追踪弹：朝最近敌对目标微调
-    if(this.homing){
-      const tgt=this._nearestTarget(game);
-      if(tgt){
-        const desired=M.angle(this.x,this.y,tgt.x,tgt.y);
-        this.angle=M.lerpAngle(this.angle,desired,Math.min(1,dt*4));
-      }
-    }
+    // v0.15.0：弹道为发射瞬间的直线（受散布影响），不做飞行中修正
     this.x+=Math.cos(this.angle)*this.speed*dt;
     this.y+=Math.sin(this.angle)*this.speed*dt;
     this.life-=dt;
@@ -78,17 +73,16 @@ function updateProjectiles(dt, game){
     if(p.faction==="player"){
       for(const e of game.enemies){
         if(!e.alive) continue;
-        if(e.phasing) continue;            // 相位中的幽灵兽不可被命中
+        if(e.phasing) continue;
         if(p.hits.indexOf(e)>=0) continue;
         if(segCircleHit(x1,y1,p.x,p.y,e.x,e.y,e.radius+p.radius)){
           hitEnemy(e,p,game);
           if(p.splash>0) splashDamage(game,p,e,null);
-          // 穿透弹继续飞行，命中列表避免重复结算
+          // 钢芯弹继续飞行，命中列表避免重复结算
           if(p.pierce>0){ p.pierce--; p.hits.push(e); continue; }
           p.dead=true; break;
         }
       }
-      // 友方炮塔不算障碍
     } else {
       const pl=game.player;
       if(pl&&pl.alive && segCircleHit(x1,y1,p.x,p.y,pl.x,pl.y,pl.radius+p.radius)){
@@ -97,58 +91,34 @@ function updateProjectiles(dt, game){
         p.dead=true;
       }
     }
-    // 友军实体（炮塔）也会被敌方溅射？略
     if(p.dead){ list.splice(i,1); }
   }
 }
 
-// 直接命中敌人
+// 直接命中敌人：只结算「要害命中 × 终点效应」，无状态异常与自我恢复
 function hitEnemy(e, p, game){
   const w = p.weapon;
   const cc = w ? (w.stats.critChance!==undefined?w.stats.critChance:0.15) : 0.15;
   const critMul = w ? (w.stats.crit||1.5) : 1.5;
   let dmg=p.damage;
-  let isCrit=false, isBurst=false;
+  let isCrit=false;
   if(RNG.chance(M.clamp(cc + (p.owner&&p.owner.effCritAdd?p.owner.effCritAdd():0), 0, 0.9))){
     const extra = 1 + ((p.owner&&p.owner.stats&&p.owner.stats.critDmgAdd)||0)/100;
     dmg*=critMul*extra; isCrit=true;
   }
-  // 元素爆发（词缀「元素触发」）
-  if(p.element!=="none" && p.elemChance>0 && RNG.chance(M.clamp(p.elemChance,0,0.75))){ dmg*=1.5; isBurst=true; }
+  // 弹种对软目标 / 护甲的终点效应由 takeDamage 内部按 AMMO_TYPES.mult 结算
   e.takeDamage(dmg, p.element, e.armorType, game, p.owner);
-  game.spawnHitFx(p.x,p.y, p.element!=="none"?ELEMENTS[p.element].color:"#fff", isCrit||isBurst);
-  if(isCrit && game.addFloatText) game.addFloatText(p.x, p.y-14, "暴击", "#ffd23f");
-  // 吸血（词缀 + 技能）
-  if(p.owner && p.owner.alive){
-    let ls = p.lifesteal||0;
-    if(p.owner.effLifesteal) ls += p.owner.effLifesteal();
-    if(ls>0) p.owner.heal(dmg*ls);
-    // 吸盾（命中回盾词缀）：把一部分伤害转为护盾
-    const soh = p.weapon && p.weapon.stats ? (p.weapon.stats.shieldOnHit||0) : 0;
-    if(soh>0) p.owner.healShield(dmg*soh);
-  }
-  // 辐射连锁
-  if(p.element==="radiation"){
-    for(const o of game.enemies){ if(o===e||!o.alive)continue; if(M.dist(p.x,p.y,o.x,o.y)<120){ o.takeDamage(dmg*0.5,"radiation",o.armorType,game,null); } }
-  }
-  // 冰冻减速
-  if(p.element==="cryo"){ e.applyStatus({type:"slow",t:2,amt:0.4}); }
-  // 燃烧/腐蚀 DoT
-  if(p.element==="fire"||p.element==="corrosive"||p.element==="radiation"){
-    const dps=p.damage*0.10*(p.owner&&p.owner.stats?p.owner.stats.statusMul:1);
-    e.applyStatus({type:p.element,t:3,dps});
-  }
+  const ammo = AMMO_TYPES[p.element] || AMMO_TYPES.none;
+  game.spawnHitFx(p.x,p.y, ammo.color, isCrit);
+  if(isCrit && game.addFloatText) game.addFloatText(p.x, p.y-14, "要害", "#d8c48a");
 }
 
-// 溅射伤害
+// 破片伤害（仅榴弹战斗部）
 function splashDamage(game, p, hitEnemyObj, hitPlayer){
   const r=p.splash;
   const mult = (p.weapon && p.weapon.stats) ? (p.weapon.stats.splashDmgMul||1) : 1;
   if(hitEnemyObj){
     for(const o of game.enemies){ if(o===hitEnemyObj||!o.alive)continue; const d=M.dist(p.x,p.y,o.x,o.y); if(d<r){ o.takeDamage(p.damage*0.6*mult,p.element,o.armorType,game,p.owner); } }
-  }
-  if(hitPlayer){
-    for(const e of game.enemies){ /* 玩家溅射仅影响自身已处理 */ }
   }
   game.spawnExplosion(p.x,p.y,r,p.color);
   SFX.boom(); game.shake(p.isThrown?5:3);

@@ -1,9 +1,9 @@
 /* =========================================================================
- * shop.js — 商店：马库斯军火 / 黑市 / 赌枪机
+ * shop.js — 商店：军械补给站 / 黑市 / 封存枪箱
  *
  * 与掉落解耦的两套品质权重：掉落偏惊喜，商店偏可买。
- * 库存懒生成（首次进店才 roll），刷新付费，赌枪机走完整体质随机。
- * 黑市只收「镒矿」——一种只能从精英/首领/分解高品质装备获得的货币，
+ * 库存懒生成（首次进店才 roll），刷新付费，封存枪箱走完整体质随机。
+ * 黑市只收「配给券」——一种只能从精英/首领/分解高品质装备获得的货币，
  * 与金币完全隔离，否则黑市就退化成「钱多就毕业」。
  * ========================================================================= */
 
@@ -14,7 +14,7 @@ const Shop = {
 
   currencyOf(id){ return (SHOPS[id] && SHOPS[id].currency) || "gold"; },
   curIcon(id){ return this.currencyOf(id)==="eridium" ? "◆" : "◈"; },
-  curName(id){ return this.currencyOf(id)==="eridium" ? "镒矿" : "金币"; },
+  curName(id){ return this.currencyOf(id)==="eridium" ? "配给券" : "金币"; },
   balance(id, game){
     return this.currencyOf(id)==="eridium" ? game.player.eridium : game.player.gold;
   },
@@ -28,7 +28,7 @@ const Shop = {
     const def = SHOPS[id];
     const items=[];
     for(let i=0;i<def.slots;i++) items.push(this._roll(def, game));
-    // 黑市额外出售护盾与圣物——它们是装备体系里最稀缺的两格
+    // 黑市额外出售护甲与随身装备——它们是装备体系里最稀缺的两格
     if(id==="black"){
       items.push(this._rollGear(def, game, "shield"));
       items.push(this._rollGear(def, game, "relic"));
@@ -42,7 +42,7 @@ const Shop = {
     const base = Math.max(game.world ? game.world.level : 1, pl.level);
     const ilvl = base + (def.ilvlBonus||0);
     const q = rollQuality(ilvl, { mf: pl.mf, weights: def.weights });
-    // 商店与掉落共用同一套混乱分布：仅稀有及以上带混乱标记
+    // 商店与掉落共用同一套改装分布：仅稀有及以上带改装标记
     const m = ["blue","purple","orange","pearl","ancient","rainbow"].includes(q)
       ? rollGearMayhem(pl.mayhem||0) : 0;
     const w = generateWeapon(ilvl+m, { rarity:q, mayhem:m });
@@ -63,7 +63,7 @@ const Shop = {
     return { item:it, price, sold:false };
   },
 
-  // 金币价 -> 镒矿价的兑换曲线（约 240 金 = 1 镒矿，另加基础税）
+  // 金币价 -> 配给券价的兑换曲线（约 240 金 = 1 配给券，另加基础税）
   _toEridium(goldPrice){ return Math.max(3, Math.round(goldPrice/240 + 2)); },
 
   refreshCost(id, game){
@@ -77,7 +77,7 @@ const Shop = {
     const pl = game.player;
     const useEri = this.currencyOf(id)==="eridium";
     const cur = useEri ? pl.eridium : pl.gold;
-    if(cur < cost) return { ok:false, msg:(useEri?"镒矿":"金币")+"不足（需要 "+cost+"）" };
+    if(cur < cost) return { ok:false, msg:(useEri?"配给券":"金币")+"不足（需要 "+cost+"）" };
     if(useEri) pl.eridium-=cost; else pl.gold-=cost;
     this._fill(id, game);
     return { ok:true, msg:"货架已刷新" };
@@ -91,10 +91,10 @@ const Shop = {
     const cur = this.currencyOf(id);
     const item = it.item;
     if(item.kind==="weapon" && pl.weapons.length>=24) return { ok:false, msg:"武器库已满（24）" };
-    if(item.kind==="shield" && pl.shields.length>=12) return { ok:false, msg:"护盾仓已满（12）" };
-    if(item.kind==="relic"  && pl.relics.length>=12)  return { ok:false, msg:"圣物匣已满（12）" };
+    if(item.kind==="shield" && pl.shields.length>=12) return { ok:false, msg:"护甲仓已满（12）" };
+    if(item.kind==="relic"  && pl.relics.length>=12)  return { ok:false, msg:"随身装备匣已满（12）" };
     const bal = cur==="eridium" ? pl.eridium : pl.gold;
-    if(bal < it.price) return { ok:false, msg:(cur==="eridium"?"镒矿":"金币")+"不足" };
+    if(bal < it.price) return { ok:false, msg:(cur==="eridium"?"配给券":"金币")+"不足" };
     pl.buyItem(item, it.price, cur);
     it.sold = true;
     return { ok:true, msg:"购入 "+item.name };
