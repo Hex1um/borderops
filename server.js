@@ -37,7 +37,7 @@ const MIME = {
 const SECURITY_HEADERS = {
   'X-Content-Type-Options':'nosniff',
   'Referrer-Policy':'no-referrer',
-  'X-Frame-Options':'SAMEORIGIN',
+  // 不设置 X-Frame-Options / frame-ancestors：官方部署可能被 WorkBuddy 平台以 iframe 嵌入。
   'Permissions-Policy':'geolocation=(), microphone=(), camera=()',
   'Content-Security-Policy':[
     "default-src 'self'",
@@ -50,7 +50,6 @@ const SECURITY_HEADERS = {
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
-    "frame-ancestors 'self'",
   ].join('; '),
 };
 
