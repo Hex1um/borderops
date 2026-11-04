@@ -29,7 +29,7 @@
 - **乘法律防护**：护甲与头盔减伤按 `1-(1-p)(1-q)` 叠加，头盔对躯干命中同样生效；
   爆炸 / splash 子弹带范围溅射，打穿的护甲报废且不再自愈
 - **大地图互动**：8 座桥、河流涉水失温、医疗站/弹药柜/警报器/泄洪闸
-- **2~4 人联机**：房主权威模拟 + HTTP 轮询快照（需后端，见下）
+- **2~4 人联机**：房主权威模拟；有 `server.js` 时走 HTTP 轮询，GitHub Pages / 纯静态托管自动切 WebRTC P2P（PeerJS），无需后端
 - 移动端触控（摇杆 + 按钮）、窄屏断点适配
 
 ## 运行
@@ -42,7 +42,7 @@ npm run check      # 校验版本号三处同步 + 脚本缓存串（无需安�
 PORT=3211 node server.js
 python playwright_smoke.py      # 断言 + testshots/*.png + test-report.json
 python probe_mechanics.py      # 只读机制体检 → mechanics-probe.json
-# 或仅静态托管（联机不可用）：
+# 或仅静态托管（自动切 WebRTC P2P 联机，无需 Node 后端）：
 python -m http.server 8132
 ```
 
@@ -50,9 +50,9 @@ python -m http.server 8132
 
 ## 技术约束（给后续维护者）
 
-1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架 / npm 运行时依赖（`server.js` 与 `check_version.js` 仅用 Node 原生模块）。
+1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载）。
 2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载：
-   `config → util → weapons → items → skills → player → enemies → combat → world → endless → dust2 → shop → input → render → ui → raid → net → auction → br → save → main`
+   `config → util → weapons → items → skills → player → enemies → combat → world → endless → dust2 → shop → input → render → ui → raid → net → net-p2p → auction → br → save → main`
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
 4. **兼容旧存档**：v0.15.0 保留了全部内部键名（`element` / `mayhem` / `elemPct` / `core` 等）与 localStorage 存档结构，仅改变语义与显示；`ELEMENTS` 是 `AMMO_TYPES` 的兼容别名。新代码请优先使用 `AMMO_TYPES`。
 5. 改动沿用现有风格：紧凑单行、中文注释带 `vX.Y.Z` 前缀。
@@ -67,16 +67,23 @@ python -m http.server 8132
 | `src/raid.js` | 主战场（~7.9k 行）：地图/房间/商店/AI/战利品/钥匙/结算/配装大厅 |
 | `src/weapons.js` | 枪械生成、改装词条、品级、部件与模块乘区 |
 | `src/combat.js` | 实体弹道、命中结算、弹种终点效应 |
-| `src/net.js` | 联机客户端（HTTP 轮询） |
+| `src/net.js` | 联机客户端（HTTP 轮询）+ 状态 / AI 快照生成 |
+| `src/net-p2p.js` | GitHub Pages / 纯静态托管联机（WebRTC P2P，PeerJS） |
+| `vendor/peerjs.min.js` | PeerJS 浏览器运行时（MIT，按需动态加载） |
 | `server.js` | 联机房服务器 + 静态托管（Node 原生 http，无依赖） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，95 项断言） |
+| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，201 项断言） |
 | `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（28 项断言）与只读机制体检 |
 | `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告 |
 
 ## GitHub Pages 部署说明
 
-本仓库已启用 GitHub Pages（静态托管）。**塔科夫模式的单机玩法在 Pages 上完整可用**；但 2~4 人联机依赖 `server.js` 的 `/api/*` 房间接口，Pages 无法运行 Node 后端，联机入口会提示「连不上服务器」——联机请使用上方官方部署地址，或自行部署 `node server.js`。
+本仓库已启用 GitHub Pages（静态托管）。**单机与 2~4 人联机都可在 Pages 上直接玩**：
+
+- 进入「联机突袭」后，客户端会先探测同源 `/api/ping`。Pages 没有 Node 后端，会自动切到 **WebRTC P2P 直连**（PeerJS 公共信令 + STUN），房主仍然是权威模拟端。
+- 房间码仍是 4 位；房主创建后把房间码发给队友即可。
+- **限制**：P2P 只做尽力而为的 NAT 穿透，双方都在严格 NAT / 对称 NAT 后可能连不上；房主离开房间即结束（不做房主迁移）。需要稳定联机时，仍建议部署 `node server.js` 或使用官方部署地址。
+- `vendor/peerjs.min.js` 必须随静态站点一起上传；首次创建 / 加入房间时才会按需加载，单机模式不会请求它。
 
 存档保存在浏览器 `localStorage`，与部署域名绑定：Pages 域名与官方域名的存档互不相通。

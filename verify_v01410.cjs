@@ -47,7 +47,7 @@ vm.createContext(sandbox);
 
 // 顺序必须与 index.html 一致（main.js 会 new Game() 故跳过）
 const files = ['config', 'util', 'weapons', 'items', 'shields', 'skills', 'player', 'enemies', 'combat',
-  'world', 'endless', 'dust2', 'shop', 'input', 'render', 'ui', 'raid', 'net', 'auction', 'br', 'save'];
+  'world', 'endless', 'dust2', 'shop', 'input', 'render', 'ui', 'raid', 'net', 'net-p2p', 'auction', 'br', 'save'];
 let loaded = 0;
 for (const f of files) {
   try {
@@ -534,6 +534,17 @@ check('Boss 使用塔科夫名称', /Reshala/.test(raidSrc) && /Killa/.test(raid
 check('选角文案为「选择你的 PMC」', /选择你的 PMC/.test(uiSrc) ? 1 : 0, 1, 0.001);
 check('精英 AI 改称 Raider', /Raider/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('货币文案为 GP 币 / 美元', /GP 币/.test(raidSrc) && !/黑市代币|配给券/.test(allNameSrc) ? 1 : 0, 1, 0.001);
+
+console.log('\n=== 20. GitHub Pages P2P 联机 ===');
+const p2pSrc = fs.readFileSync(path.join(SRC, 'net-p2p.js'), 'utf8');
+check('net-p2p.js 已加载', typeof G('NetP2P') === 'object' ? 1 : 0, 1, 0.001);
+check('默认仍为 HTTP 联机', G('Net.transport') === 'http' ? 1 : 0, 1, 0.001);
+check('P2P 会探测 /api/ping', /serverAvailable/.test(p2pSrc) && /\/api\/ping/.test(p2pSrc) ? 1 : 0, 1, 0.001);
+check('P2P 使用 PeerJS 房间前缀', /borderops-v1-/.test(p2pSrc) ? 1 : 0, 1, 0.001);
+check('P2P 房主权威 AI 快照', /Net\._aiPayload|_aiPayload/.test(p2pSrc) ? 1 : 0, 1, 0.001);
+check('P2P 事件环去重游标', /_eventsSince/.test(p2pSrc) && /cursor/.test(p2pSrc) ? 1 : 0, 1, 0.001);
+check('PeerJS 已本地内置', fs.existsSync(path.join(ROOT, 'vendor', 'peerjs.min.js')) && fs.statSync(path.join(ROOT, 'vendor', 'peerjs.min.js')).size > 50000 ? 1 : 0, 1, 0.001);
+check('index.html 已引入 net-p2p', /src\/net-p2p\.js\?v=/.test(html) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

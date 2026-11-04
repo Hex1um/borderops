@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.18.0 — 2026-11-05
+
+### GitHub Pages 联机：WebRTC P2P
+
+GitHub Pages 只能托管静态文件，无法运行 `server.js` 的 `/api/*`。此前 Pages 上的联机入口会直接提示「连不上服务器」。本版把联机传输层拆成可切换的两条路径：
+
+- **自动探测**：创建 / 加入房间前先探测同源 `/api/ping`。有后端继续使用原 HTTP 轮询；GitHub Pages（`*.github.io`）、`file://` 或探测失败时自动切到 P2P。
+- **房主权威不变**：房主仍在本地模拟 AI，通过 PeerJS DataConnection 每 150ms 广播 `room + ai + events` 快照；客户端把自身状态与事件发回房主，由房主校验 / 结算后转发。
+- **复用现有协议**：`Net._statePayload()` / `Net._aiPayload()` 从 HTTP 轮询里抽出，HTTP 与 P2P 共用同一套字段；`Net._applyPeers` / `_applyAI` / `_handle` / 事件环全部复用，存档与快照结构未变。
+- **PeerJS 本地内置**：`vendor/peerjs.min.js`（MIT）按需动态加载，单机模式不请求；不依赖 CDN。
+- **房间码**：仍是 4 位；PeerJS 侧房间 ID 为 `borderops-v1-<房间码>`，创建时自动处理 ID 冲突。
+- **安全边界**：客户端事件只允许 `hitai / hitpeer / dmg / loot / shot / corpse / extract / dead / chat`；`shot / corpse / dmg` 仍由房主权威校验，客户端不能直接改别人的血量或伪造尸体。
+- **UI**：联机大厅会根据实际传输方式显示「WebRTC P2P 直连」或「房主权威 AI」，P2P 模式明确提示 NAT / 房主离开限制。
+
+### 验证
+
+- 新增本地静态托管双浏览器实测：房主创建 → 客户端加入 → 双方同 seed 进图 → 33 个 AI / 33 个 ghost → 玩家坐标同步误差 < 0.01px → 客户端命中 AI 扣血 → 开箱事件同步 → 离开后传输层复位 HTTP。
+- 官方 `server.js` HTTP 联机回归同样通过（2 个独立浏览器上下文、同 seed、ghost / remote op 正常）。
+- `verify_v01410.cjs` 新增第 20 组 P2P 断言，结果 **201 passed / 0 failed**；`check_version.js` 通过（24 处 `?v=` / 23 个脚本）。
+- 版本三处同步 `0.18.0`。
+
 ## v0.17.1 — 2026-11-05
 
 ### 去三角洲痕迹 · 统一塔科夫术语

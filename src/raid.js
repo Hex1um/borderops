@@ -8403,6 +8403,7 @@ UI._onlineEnter=function(){
 UI.raidOnline=function(){
   const inRoom = !!(Net.code && Net.peerId);
   const busy = UI._onlineBusy;
+  const p2p = Net.transport==="p2p" || (typeof NetP2P!=="undefined" && !!NetP2P.mode);
   const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const msg = UI._onlineMsg ? `<div class="hint" style="color:#ffb347">${esc(UI._onlineMsg)}</div>` : "";
 
@@ -8465,13 +8466,15 @@ UI.raidOnline=function(){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">联机突袭</h2>
-      <div class="subtitle">CO-OP RAID · 2~4 人 · 房主权威 AI · 战利品各自带出</div>
+      <div class="subtitle">CO-OP RAID · 2~4 人 · ${p2p?"WebRTC P2P 直连":"房主权威 AI"} · 战利品各自带出</div>
       <div class="shop-bar">
         <div class="shop-desc">和队友进入<b style="color:#7ee08a">同一张地图</b>：地图、箱子、撤离点、增援都一致；<b style="color:#ffd23f">AI 由房主统一模拟</b>，其他人实时同步。箱子<b>先到先得</b>，队友之间<b style="color:#8fe07a">没有友伤</b>，撤离与结算<b>各自独立</b>——你带出的东西只进你自己的仓库。</div>
         <button class="btn ghost" id="online-back">返回配装大厅</button>
       </div>
       ${body}
-      <div class="hint" style="margin-top:14px;">联机只影响突袭内：大厅、仓库、拍卖行仍然是<b>各自独立</b>的。掉线后 60 秒内可用同一房间重新加入（需要原 peer 身份）。</div>
+      <div class="hint" style="margin-top:14px;">联机只影响突袭内：大厅、仓库、拍卖行仍然是<b>各自独立</b>的。${p2p
+        ? "当前为 <b style='color:#7ee08a'>GitHub Pages 直连模式</b>：PeerJS 公共信令 + WebRTC，房主离开即结束；双方都在严格 NAT 后可能连不上，可换用官方 server.js 部署。"
+        : "掉线后 60 秒内可用同一房间重新加入（需要原 peer 身份）。"}</div>
     </div>`, !!UI._onlineKeep);
   if(!UI._onlineKeep){
     UI._onlineKeep=true;

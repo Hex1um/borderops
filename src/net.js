@@ -7,6 +7,7 @@
  * ========================================================================= */
 const Net = {
   online:false,
+  transport:"http",        // "http" = server.js 轮询；"p2p" = GitHub Pages WebRTC 直连
   code:"",
   peerId:"",
   secret:"",              // 服务端下发的 peer 密钥，只存本地，不再暴露在 room 列表
@@ -109,15 +110,11 @@ const Net = {
   },
 
   /* ----------------------------- 同步 ----------------------------- */
-  async sync(force){
-    if(!this.online || !this.raid) return;
-    if(this.inflight) return;
-    const t=performance.now();
-    if(!force && t-this.lastSync < this.syncMs) return;
-    this.lastSync=t; this.inflight=true;
-
-    const R=this.raid, p=R.player;
-    const state={
+  // 玩家状态快照（HTTP 轮询与 P2P 直连共用）
+  _statePayload(){
+    const R=this.raid, p=R && R.player;
+    if(!p) return null;
+    return {
       name:this.name,
       x:Math.round(p.x), y:Math.round(p.y),
       a:+(p.angle||0).toFixed(2),
@@ -129,32 +126,48 @@ const Net = {
       at:Math.round(p.armorTier||0),   // v0.14.10：护甲类型同步
       ext:!!R._extractedFlag,
     };
+  },
+  // 房主 AI 快照（每 150ms 全量，压缩字段名）
+  _aiPayload(){
+    const R=this.raid;
+    if(!this.isHost || !R || !R.ops) return null;
+    const arr=[];
+    for(const o of R.ops){
+      if(o.isPlayer || o.remote) continue;
+      arr.push({ i:o.id, n:o.name, x:Math.round(o.x), y:Math.round(o.y),
+        a:+(o.angle||0).toFixed(2), hp:Math.round(o.hp), mhp:Math.round(o.maxHP||100),
+        al:o.alive?1:0, c:o.cls, s:o.smart?1:0, b:o.bounty?1:0,
+        g:o.gun?o.gun.type:"", e:o.gun?(o.gun.element||"none"):"none",
+        ar:Math.round(o.armor||0), mar:Math.round(o.maxArmor||0),
+        t:Math.round(o.armorTier||0),   // v0.14.10：AI 护甲类型同步
+        f:+(o.freezeT||0).toFixed(1),  // v0.14.10：冰冻状态同步（非房主只渲染，不自行递减）
+        // v0.14.11：元素持续状态 / 护盾值同步，客户端只渲染不自行结算
+        bu:+(o.burnT||0).toFixed(1), co:+(o.corrodeT||0).toFixed(1),
+        zk:+(o.shockT||0).toFixed(1), rd:+(o.radT||0).toFixed(1),
+        sd:Math.round(o.shield||0), sm:Math.round(o.maxShield||0),
+        iv:+(o.shieldInvuln||0).toFixed(2),
+        st:o.state||"" });
+    }
+    return arr;
+  },
+  async sync(force){
+    // GitHub Pages 等静态托管：server.js 不存在，切到 WebRTC P2P 直连。
+    if(this.transport==="p2p" && typeof NetP2P!=="undefined") return NetP2P.sync(force);
+    if(!this.online || !this.raid) return;
+    if(this.inflight) return;
+    const t=performance.now();
+    if(!force && t-this.lastSync < this.syncMs) return;
+    this.lastSync=t; this.inflight=true;
+
+    const R=this.raid;
+    const state=this._statePayload();
     const pending=this._outbox||[];
     const body={ code:this.code, peerId:this.peerId, secret:this.secret, name:this.name, state,
       cursor:this.cursor, events:pending };
     this._outbox=[];
 
-    // 房主：附带 AI 快照（每 150ms 全量，压缩字段名）
-    if(this.isHost && R.ops){
-      const arr=[];
-      for(const o of R.ops){
-        if(o.isPlayer || o.remote) continue;
-        arr.push({ i:o.id, n:o.name, x:Math.round(o.x), y:Math.round(o.y),
-          a:+(o.angle||0).toFixed(2), hp:Math.round(o.hp), mhp:Math.round(o.maxHP||100),
-          al:o.alive?1:0, c:o.cls, s:o.smart?1:0, b:o.bounty?1:0,
-          g:o.gun?o.gun.type:"", e:o.gun?(o.gun.element||"none"):"none",
-          ar:Math.round(o.armor||0), mar:Math.round(o.maxArmor||0),
-          t:Math.round(o.armorTier||0),   // v0.14.10：AI 护甲类型同步
-          f:+(o.freezeT||0).toFixed(1),  // v0.14.10：冰冻状态同步（非房主只渲染，不自行递减）
-          // v0.14.11：元素持续状态 / 护盾值同步，客户端只渲染不自行结算
-          bu:+(o.burnT||0).toFixed(1), co:+(o.corrodeT||0).toFixed(1),
-          zk:+(o.shockT||0).toFixed(1), rd:+(o.radT||0).toFixed(1),
-          sd:Math.round(o.shield||0), sm:Math.round(o.maxShield||0),
-          iv:+(o.shieldInvuln||0).toFixed(2),
-          st:o.state||"" });
-      }
-      body.ai=arr;
-    }
+    const ai=this._aiPayload();
+    if(ai) body.ai=ai;
 
     let r=null;
     try{ r=await this._post("/api/sync", body); }

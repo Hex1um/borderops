@@ -45,7 +45,8 @@ const SECURITY_HEADERS = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "media-src 'self' data:",
-    "connect-src 'self'",
+    // GitHub Pages / 纯静态托管时联机会切到 WebRTC P2P；server.js 同源部署仍走 /api/*。
+    "connect-src 'self' wss://0.peerjs.com https://0.peerjs.com",
     "font-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
@@ -396,7 +397,7 @@ function readBody(req, limit=MAX_BODY){
 
 /* ----------------------------- 静态资源 ----------------------------- */
 // 只允许运行游戏真正需要的文件；server.js / *.py / package.json / 点文件一律 404。
-const STATIC_ALLOW = /^\/(?:index\.html|styles\.css|favicon\.svg|src\/[A-Za-z0-9_.-]+\.js)$/;
+const STATIC_ALLOW = /^\/(?:index\.html|styles\.css|favicon\.svg|src\/[A-Za-z0-9_.-]+\.js|vendor\/[A-Za-z0-9_.-]+\.js)$/;
 
 function serveStatic(req, res, rawUrl){
   if(req.method!=='GET' && req.method!=='HEAD'){
