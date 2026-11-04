@@ -424,7 +424,7 @@ function generateWeapon(level, opts={}){
   crit     += (t.critDmg||0)/100;
   critChance += (t.critChance||0)/100;
   elemChance += (t.elemChance||0)/100;
-  // 扩展词缀：后坐力减免 / 移速 / 射程 / 溅射伤害 / 吸盾 / 弹药效率
+  // 扩展词缀：后坐力减免 / 移速 / 射程 / 溅射伤害；命中回血与省弹在 v0.15.0 起恒为 0
   const recoil      = (t.recoil||0);
   const moveSpeed   = (t.moveSpeed||0);
   const rangePct    = (t.range||0);
@@ -479,7 +479,7 @@ function generateWeapon(level, opts={}){
       moveMul: 1 + moveSpeed/100,
       rangeMul: 1 + rangePct/100,
       splashDmgMul: 1 + splashDmg/100,
-      shieldOnHit: 0,                 // v0.15.0：无吸盾
+      shieldOnHit: 0,                 // v0.15.0：命中不再回复插板耐久
       ammoEff: 0,                     // v0.15.0：无省弹
     },
     parts: allParts,

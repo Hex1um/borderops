@@ -679,9 +679,8 @@ function raidCoreValue(coreType, lv){
   return Math.round(base * Math.pow(2.35,(lv||1)-1)/10)*10;
 }
 // 改装模块定义：每种给出名称/颜色/属性词缀/每级基础值
-/* v0.14.5：改装模块改为「不可合成、只能掉落或购买」，作为补偿，增益整体上调约 60~70%，
- * 并且每级成长斜率从 +50% 提到 +95%（V 级≈I 级的 4.8 倍）。 */
-// v0.15.0：7 类现实改装模块（急救效率 / 吸盾 / 溅射 / 弹种类全部替换为工艺参数）
+/* v0.15.1：7 类现实改装模块，全部为可解释的工艺参数；内部 id 保留以兼容旧存档。
+ * 模块只能掉落或购买，不可合成；估值随等级按 2.35 倍递增。 */
 const BOOST_CORE_TYPES = {
   berserk:   { name:"导气增压模块", color:"#b07a4a", stats:["dmgPct","fireRatePct"],        base:[26,23] },
   lethal:    { name:"精磨扳机组",   color:"#a86262", stats:["critChance","critDmg"],        base:[17,40] },
