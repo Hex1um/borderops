@@ -23,6 +23,8 @@
 **验证**：`npm run check` 全绿（30 处 `?v=` / 29 个脚本 / 懒加载清单）、`npm run verify` **549 passed / 0 failed**（31–35 为新增组，其中组 35 的 18 条断言专门锁定 v0.21.9 的合作者修复不回归）、全量 `node --check` 通过、拆分等价性比对零差异、headless Chromium 实机冒烟 `ok:true`（版本 0.22.0、7 分片加载、旧模式 0 请求、存档码往返、进 raid + 3D、0 页面错误）、FPS 基准实跑通过。
 **合并说明**：本版发布时与合作者并行推送的 v0.21.9（15 处 bug 修复）做了完整合并。其中涉及原 `raid.js` 的 8 组改动（具名装权重方向 / 自动穿盾写入 carried / AI 索敌基线 / 尸体掉落去重 / 撤离费组合扣款 / 撤离标记 / 材料按 id 售卖 / 联机入场补配装）已按语义逐一映射到 7 个 `raid-*.js` 分片；其余改动由 git 自动合并。v0.21.9 的完整说明保留在下方条目，其修复全部随 v0.22.0 一起上线。
 
+**发布备注（CI 权限）**：`.github/workflows/ci.yml` 已写好并通过本地校验，但本次推送所用 GitHub OAuth 凭据缺少 `workflow` scope，GitHub 拒绝「创建/更新 workflow 文件」。为不阻塞 v0.22.0 上线，该文件暂留在本地工作区、未纳入推送提交，其余改动全部已上线。启用 CI 只需一次带 `workflow` 权限的提交：`git add .github/workflows/ci.yml && git commit -m "ci: 启用 GitHub Actions" && git push origin main`（换成带 `workflow` scope 的 PAT），或在 GitHub 网页用 `Add file → Create new file` 以相同路径粘贴内容提交。
+
 ## v0.21.9 — 2026-11-05
 
 ### 集中修复 15 处确认 bug（崩溃 / 卡死 / 刷钱 / 数值反向 / 联机丢单）

@@ -382,7 +382,7 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **零构建**：原生 HTML / CSS / JS 经典脚本，无 ES modules、无打包器。
 - **脚本顺序敏感**：`sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.22.0 共 29 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
 - **巨型文件拆分**：`src/raid.js`（9750 行）已拆为 7 个 `raid-*.js`（最大 1621 行）；verify 的 `RAID_PARTS` 会把分片拼回全文再做源码正则断言，新增分片记得同步 `index.html` / `check_version.js` / `README.md`。
-- **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。
+- **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。**v0.22.0 发布备注**：当时所用 OAuth 凭据缺 `workflow` scope，该文件尚未推送到远端（本地文件已就绪），需按 CHANGELOG 的「发布备注（CI 权限）」启用一次后才会在云端真正运行。
 - **合并护栏**：v0.22.0 已并入合作者 v0.21.9 的 15 处 bug 修复（原 `raid.js` 的 8 组改动映射到 7 个 `raid-*.js` 分片）。verify 组 35 的 18 条断言会逐项锁定这些修复（撤离费组合扣款 / 终局事件保底 / 权重方向 / 价格单调 / 插板函数改名 / 限速 XFF 等），后续重构若误覆盖会直接红灯。
 - **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
 - **FPS 基线**：`npm run bench:fps` 本机实测参考区间 2D 46.9~53.1 fps、3D 29.7~35.3 fps（headless Chromium，120 帧；合并 v0.21.9 后复跑为 2D 53.1 / p95 22ms，3D 35.3 / p95 32.5ms）。改渲染热路径前后各跑一次对比。
