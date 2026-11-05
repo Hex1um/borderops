@@ -960,31 +960,43 @@ check('已经带弹就不投放', starter.fed.n, 0, 0.001);
 check('HUD 无弹时标红告警', /const dry=magN<=0 && backN<=0/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('回收超市可以卖弹药', /key==="am"/.test(raidSrc) && /弹药 · "\+d\.spec/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
-/* v0.21.0：支援物资（按现金判定）/ 护盾即穿 / 弹药回收价 / 弹级单调 */
+/* v0.21.2：初始装备包（明码 ₽512，勾选并付款才投放）/ 护盾即穿 / 弹药回收价 / 弹级单调 */
 const support = JSON.parse(G(`JSON.stringify((()=>{
   const R=Raid;
-  const mk=(cash)=>{ R.grounds=[]; R.cashIn=cash; R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+  const mk=(cash,paid)=>{ R.grounds=[]; R.cashIn=cash; R.supportPaid=paid; R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
     R.carried={weapons:[]}; R.floats=[];
     R.player={ isPlayer:true, maxShield:0, gun:null, secondary:null }; };
   R._spawnSafePoint=()=>({x:5,y:5});
   R._feed=()=>{};
-  mk(199); R._dropSupportCache(0,0); const low=R.grounds.length;
-  mk(200); R._dropSupportCache(0,0);
+  mk(2000, 0); R._dropSupportCache(0,0); const unpaid=R.grounds.length;   // 没付钱
+  mk(2000, 512); R._dropSupportCache(0,0);
   const d=(R.grounds[0]&&R.grounds[0].drops)||[];
   const kinds={}; for(const it of d) kinds[it.kind]=(kinds[it.kind]||0)+1;
   const ammoLv=d.filter(it=>it.kind==="ammo").map(it=>it.lv);
   const gunRar=d.filter(it=>it.kind==="weapon").map(it=>it.rarity);
   const tier={ armor:(d.find(it=>it.kind==="armor")||{}).tier, helmet:(d.find(it=>it.kind==="helmet")||{}).tier };
-  return { low, n:R.grounds.length, kinds, ammoLv, gunRar, tier };
+  return { unpaid, n:R.grounds.length, kinds, ammoLv, gunRar, tier, price:RAID_SUPPORT_CASH };
 })())`));
-check('现金不足 200 不投放支援物资', support.low, 0, 0.001);
-check('现金够 200 就投放', support.n, 1, 0.001);
-check('支援物资含 2 把枪', support.kinds.weapon, 2, 0.001);
-check('支援枪是最低品级', support.gunRar.every(r=>r==="white") ? 1 : 0, 1, 0.001);
-check('支援弹药是 T2', support.ammoLv.length > 0 && support.ammoLv.every(l=>l===2) ? 1 : 0, 1, 0.001);
-check('支援含护盾 / 护甲 / 头盔', (support.kinds.shield===1 && support.kinds.armor===1 && support.kinds.helmet===1) ? 1 : 0, 1, 0.001);
-check('支援装备都是 T1', support.tier.armor === 1 && support.tier.helmet === 1 ? 1 : 0, 1, 0.001);
-check('支援含医疗物资', (support.kinds.med||0) >= 2 ? 1 : 0, 1, 0.001);
+check('装备包价格 ₽512', support.price, 512, 0.001);
+check('没付款不投放初始装备包', support.unpaid, 0, 0.001);
+check('付款后投放初始装备包', support.n, 1, 0.001);
+check('装备包含 2 把枪', support.kinds.weapon, 2, 0.001);
+check('装备包里的枪是最低品级', support.gunRar.every(r=>r==="white") ? 1 : 0, 1, 0.001);
+check('装备包弹药是 T2', support.ammoLv.length > 0 && support.ammoLv.every(l=>l===2) ? 1 : 0, 1, 0.001);
+check('装备包含护盾 / 护甲 / 头盔', (support.kinds.shield===1 && support.kinds.armor===1 && support.kinds.helmet===1) ? 1 : 0, 1, 0.001);
+check('装备包护甲头盔都是 T1', support.tier.armor === 1 && support.tier.helmet === 1 ? 1 : 0, 1, 0.001);
+check('装备包含医疗物资', (support.kinds.med||0) >= 2 ? 1 : 0, 1, 0.001);
+
+/* v0.21.2：进场扣款 / 蓝点移除 / 竖枪 / 开火动画 */
+check('进场从带入现金扣 ₽512', /this\.creds -= RAID_SUPPORT_CASH/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('配装大厅有装备包勾选框', /id="rc-support"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('血条右侧不再有类型小方块', /o\.x\+w\/2\+3/.test(raidSrc) ? 1 : 0, 0, 0.001);
+check('开火写入 muzzleT / kick', /sh\.muzzleT = 0\.075/.test(raidSrc) && /sh\.kick = Math\.min/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('muzzleT / kick 每帧衰减', /o\.muzzleT=Math\.max\(0,\(o\.muzzleT\|\|0\)-dt\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('3D 枪口火焰改由 muzzleT 驱动', /if\(\(p\.muzzleT\|\|0\) > 0\)/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 持枪改为竖握（长度方向压缩）', /const sxa=-0\.74\*sc, syb=0\.94\*sc/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 手臂在屏幕空间重画', /_fpArms\(ctx, w, h, fh, rh, gunAng/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('2D 手持模型有开火火光', /globalCompositeOperation="lighter"/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* 护盾：捡到即穿戴；已有护盾则进背包 */
 const shieldWear = JSON.parse(G(`JSON.stringify((()=>{

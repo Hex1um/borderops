@@ -350,7 +350,7 @@ const RAID_INV_CAP = { weapons:6, armors:4, helmets:4, shields:3, parts:16, mate
  * 枪上只记「装填的是哪一种」（loaded）与弹匣内发数（ammoMag），不再有凭空的 ammoRes。 */
 const RAID_AMMO_CAP = 720;      // 局内可携带的总发数（跨口径合计）
 const RAID_AMMO_STACK = 30;     // 一条货 / 一次拾取 = 30 发
-const RAID_SUPPORT_CASH = 200;  // 带走这么多「卢布现金」进场 → 出生点投放支援物资（按现金，不看配装估值）
+const RAID_SUPPORT_CASH = 512;  // 「初始装备包」售价（v0.21.2）：进场时从带入现金里支付，出生点投放一套起步装备
 const RAID_AMMO_STARTER = {     // 新档 / 旧档迁移时发的起步弹药（全是民用级）
   ammo_light_1: 120, ammo_mid_1: 150, ammo_heavy_1: 60, ammo_grenade_1: 12,
 };
@@ -1483,6 +1483,13 @@ const Raid = {
       if(cashIn2>0){ this.stash.creds-=cashIn2; this.creds=cashIn2; }
       if(tokIn2>0){ this.stash.tokens=Math.max(0,(this.stash.tokens||0)-tokIn2); this.tokens=tokIn2; }
       this.cashIn=cashIn2; this.tokensIn=tokIn2;
+    }
+    /* v0.21.2：初始装备包 = 明码标价的商品，不再是「带够现金白送」。
+     * 只从**带入局内的卢布现金**里扣（不动仓库余额），钱不够就當作没勾选。 */
+    this.supportPaid=0;
+    if(opts.support && (this.creds||0) >= RAID_SUPPORT_CASH){
+      this.creds -= RAID_SUPPORT_CASH;
+      this.supportPaid = RAID_SUPPORT_CASH;
     }
     // 携带的装备已从仓库取出并保存，防刷新复制；记录是否真的落盘，供启动失败回滚判断。
     this._stashPersisted = RaidStash.save(this.stash);
@@ -3186,6 +3193,8 @@ const Raid = {
       // v0.14.11：元素持续状态统一结算；玩家被引燃致死时 _fail 已收尾，直接退出本帧
       if(this._tickElementStatus(o,dt)) return;
       o.fireCd=Math.max(0,o.fireCd-dt);
+      o.muzzleT=Math.max(0,(o.muzzleT||0)-dt);
+      o.kick=Math.max(0,(o.kick||0)-dt*11);
       if(o.reloadT>0){
         o.reloadT-=dt;
         if(o.reloadT<=0) this._finishReload(o);
@@ -3662,13 +3671,13 @@ const Raid = {
     this._starterCache=true;
   },
 
-  /* 带够现金的「支援物资」（v0.21.0）：
-   * 判定的是**带进局的卢布现金**（opts.cash），不是配装估值 —— 愿意把钱带进图，
-   * 就等于把身家押在这一局上，系统给一套最基础的货兜底：
+  /* 支付 ₽512 购买的「初始装备包」（v0.21.2）：
+   * 旧版是「带够 ₽200 现金进场就白送」，等于带钱反而更强 —— 现在改成明码标价：
+   * 配装大厅勾选「初始装备包」，进场时从**带入的卢布现金**里扣 ₽512，出生点投放
    * 2 把白枪 + 每条一把 T2 制式弹 + T1 护盾 / 护甲 / 头盔 + 绷带与止血针各一。
    * 和起始补给一样，要走到旁边按 E 搜（0.3 秒）才进包。 */
   _dropSupportCache(x, y){
-    if((this.cashIn||0) < RAID_SUPPORT_CASH) return;
+    if(!this.supportPaid) return;
     if(!this.grounds) this.grounds=[];
     const spot=this._spawnSafePoint(x-92, y+64, 18);
     const drops=[];
@@ -3695,7 +3704,7 @@ const Raid = {
     this.grounds.push({ x:spot.x, y:spot.y, tier:0, ground:true, searched:false,
       drops, cash:0, support:true });
     this._supportDropped=true;
-    this._feed("支援", "携带 ₽"+this.cashIn+" 进场 · 出生点已投放支援物资", "", false, "info");
+    this._feed("装备包", "已支付 ₽"+this.supportPaid+" · 出生点已投放初始装备包", "", false, "info");
   },
 
   /* 进场装填：按配装大厅的选择把子弹搬进本局，给手上的枪上膛 */
@@ -4288,6 +4297,11 @@ const Raid = {
     if(sh.gun.ammoMag<=0){ this._startReload(sh); return; }
     sh.gun.ammoMag--;
     sh.fireCd = 60/Math.max(40, sh.gun.rpm);
+    /* v0.21.2：开火动画状态 —— 2D 手持模型与 3D 视图模型共用
+     *   muzzleT：枪口火光剩余时间（很短，打一枪闪一下）
+     *   kick   ：后坐冲量（0→约 2，按 dt*11 衰减），驱动枪身后退 + 上跳 + 抖动 */
+    sh.muzzleT = 0.075;
+    sh.kick = Math.min(2.2, (sh.kick||0) + 1);
     // v0.14.11：电磁干扰期间射速被强制压到最低 SHOCK_FIRE_CD 间隔（电击的持续效果）
     if(sh.shockT>0) sh.fireCd=Math.max(sh.fireCd, SHOCK_FIRE_CD);
     // 枪声传得远：附近待机的 AI 会摸过来（全局节流，避免每发子弹都算一遍）
@@ -6340,6 +6354,8 @@ const RenderRaid = {
     ctx.translate(o.x + ca*r*0.40 - sa*r*0.90, o.y + sa*r*0.40 + ca*r*0.90);
     ctx.rotate(ang);
     ctx.scale(k, k);
+    // v0.21.2：开火后坐 —— 整枪沿朝向后退一点点，视觉上才「打得动」
+    if((o.kick||0)>0) ctx.translate(-Math.min(2.6,(o.kick||0)*1.9), 0);
     const dark = "#1d2228", mid = "#333a42", edge = "#0a0d10";
     const g = o.gun;
     if(!g){
@@ -6402,6 +6418,31 @@ const RenderRaid = {
       ctx.fillRect(S.body*0.34, -S.bh/2-2.1, 5.5, 2.1);
       ctx.fillStyle = "#ffd23f";
       ctx.fillRect(S.body*0.34+0.8, -S.bh/2-1.7, 1.1, 1.1);
+    }
+    // v0.21.2：开火瞬间的枪口火光（和 3D 视图模型同一个 muzzleT 驱动）
+    if((o.muzzleT||0)>0){
+      const mx=S.body+S.bar+1;
+      const flick=0.7+0.3*Math.random();
+      // 辉光：叠加混合，俯视角下才看得见（不来这一下就只有 2px 的小黄点）
+      ctx.save();
+      ctx.globalCompositeOperation="lighter";
+      const gr=6.5+S.mw*0.7;
+      const gl=ctx.createRadialGradient(mx+2, 0, 0, mx+2, 0, gr);
+      gl.addColorStop(0, "rgba(255,238,190,"+(0.85*flick).toFixed(2)+")");
+      gl.addColorStop(0.45, "rgba(255,186,86,"+(0.42*flick).toFixed(2)+")");
+      gl.addColorStop(1, "rgba(255,150,60,0)");
+      ctx.fillStyle=gl;
+      ctx.beginPath(); ctx.arc(mx+2, 0, gr, 0, 6.2832); ctx.fill();
+      ctx.restore();
+      // 星芒
+      const sp=4.2+S.mw*1.1;
+      ctx.fillStyle="rgba(255,214,120,0.95)";
+      ctx.beginPath();
+      ctx.moveTo(mx, -1.1); ctx.lineTo(mx+sp, -3.2);
+      ctx.lineTo(mx+sp*0.68, 0); ctx.lineTo(mx+sp, 3.2);
+      ctx.lineTo(mx, 1.1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle="rgba(255,248,214,1)";
+      ctx.beginPath(); ctx.arc(mx+1.4, 0, 1.5, 0, 6.2832); ctx.fill();
     }
     ctx.restore();
   },
@@ -6529,12 +6570,11 @@ const RenderRaid = {
     }
     const w=40;
     ctx.fillStyle="rgba(0,0,0,0.55)"; ctx.fillRect(o.x-w/2-1,o.y-r-6,w+2,5);
-    // 血肉型保留阵营色；装甲 / 护盾型覆盖为类型色（黄 / 蓝），旁边补一个类型色方块
-    // v0.16.0：血条恒为生命色（玩家 / AI 都是红系），只有「装甲型」保留黄色类型色；
-    // 蓝色只用于上方那条独立护盾条，避免把血条本身染成「蓝血条」。
+    // 血肉型保留阵营色；装甲型覆盖为黄色类型色
+    // v0.21.2：去掉血条右侧那个「类型色小方块」—— 护盾兵会多出一个突兀的蓝点，
+    // 而类型信息名字后缀（·装甲 / ·护盾）和上方护盾条已经说清楚了。
     const hpCol=(at==="armor")?atCol:(o.remote?"#7ee08a":"#d8564a");
     ctx.fillStyle=hpCol; ctx.fillRect(o.x-w/2,o.y-r-5.5,w*M.clamp(o.hp/o.maxHP,0,1),4);
-    if(at!=="flesh"){ ctx.fillStyle=atCol; ctx.fillRect(o.x+w/2+3, o.y-r-5.5, 4, 4); }
     if(o.maxArmor>0){
       ctx.fillStyle="rgba(120,180,255,0.85)"; ctx.fillRect(o.x-w/2,o.y-r-10.5,w*M.clamp(o.armor/o.maxArmor,0,1),3);
     }
@@ -7082,6 +7122,7 @@ UI.raidSetup=function(){
   const auc = (typeof Auction!=="undefined") ? Auction.counts() : { listings:0, mine:0 };
   if(!UI._raidSel) UI._raidSel={ w:[], a:null, h:null, s:null };
   if(UI._raidIns===undefined) UI._raidIns=false;
+  if(UI._raidSupport===undefined) UI._raidSupport=true;   // 初始装备包默认勾选（钱够才生效）
   const sel=UI._raidSel;
   if(sel.h===undefined) sel.h=null;
   if(sel.s===undefined) sel.s=null;
@@ -7219,6 +7260,9 @@ UI.raidSetup=function(){
   const maxTok=Math.max(0, Math.floor(stash.tokens||0));
   const cashIn=Math.max(0, Math.min(UI._raidCash||0, maxCash));
   const tokIn=Math.max(0, Math.min(UI._raidTok||0, maxTok));
+  // 初始装备包（v0.21.2）：明码 ₽512，用带入的卢布现金买，钱不够就买不了
+  const canSup=cashIn>=RAID_SUPPORT_CASH;
+  const supOn=UI._raidSupport!==false && canSup;
   // 滑动条步长：卢布按 1%（至少 1），GP 币按 1 枚
   const credStep=Math.max(1, Math.round(maxCash/100));
   const tokWorth=raidTokenWorth(tokIn);
@@ -7285,8 +7329,19 @@ UI.raidSetup=function(){
               style="width:190px;vertical-align:middle;" ${maxTok>0?"":"disabled"}>
           </span>
         </div>
+        <div class="rc-row">
+          <span class="rc-label">初始装备包</span>
+          <span class="rc-val" style="color:${canSup?'#8fd0ff':'#6f7f8b'}">₽ ${RAID_SUPPORT_CASH}${canSup?'':' <span style="font-size:11px;color:#8b95a5">· 带入卢布不足</span>'}</span>
+          <span class="rc-btns">
+            <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:${canSup?'#cfe8f5':'#7c8894'};cursor:${canSup?'pointer':'default'};">
+              <input id="rc-support" type="checkbox" ${supOn?'checked':''} ${canSup?'':'disabled'}> 出生点投放
+            </label>
+          </span>
+        </div>
         <div class="rc-hint">带进图的现金可以在局内商店 / 黑市直接花（黑市只收 GP 币）；<b style="color:#ff8a5a">阵亡即丢失</b>，撤离成功则连本局所得一起带回仓库。<br>
-          卢布与 GP 币<b style="color:#8fd0ff">都计入配装总价值</b>（1 枚 ◆ GP 币按 <b>₽${priceText(RAID_TOKEN_RATE)}</b> 折算，仅用于估值显示，不可兑换）；撤离费与保费只按<b>装备</b>估值计算。</div>
+          卢布与 GP 币<b style="color:#8fd0ff">都计入配装总价值</b>（1 枚 ◆ GP 币按 <b>₽${priceText(RAID_TOKEN_RATE)}</b> 折算，仅用于估值显示，不可兑换）；撤离费与保费只按<b>装备</b>估值计算。<br>
+          <b style="color:#8fd0ff">初始装备包</b>：勾选后进场即从带入的卢布现金里扣 <b>₽${RAID_SUPPORT_CASH}</b>，出生点投放
+          <b>2 把白装枪 + 对应口径 T2 制式弹 + T1 护盾 / 护甲 / 头盔 + 绷带与止血针</b>（走过去按 E 搜；钱不够买不了）。</div>
       </div>
 
       <div class="raid-cols" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));">
@@ -7452,6 +7507,8 @@ UI.raidSetup=function(){
     };
     rcT.onchange=()=>{ UI._raidTok=clamp(rcT.value); SFX.ui(); UI.raidSetup(); };
   }
+  const rcS=document.getElementById("rc-support");
+  if(rcS && !rcS.disabled) rcS.onchange=()=>{ UI._raidSupport=!!rcS.checked; SFX.ui(); UI.raidSetup(); };
   UI.overlay.querySelectorAll('[data-carry]').forEach(el=>{
     el.onclick=(e)=>{
       e.stopPropagation();
@@ -7471,7 +7528,7 @@ UI.raidSetup=function(){
       if(a && a.n>0) ammoPick[cal]={ id:a.id, n:a.n };
     }
     const opts={ weapons:[...sel.w], armor:sel.a, helmet:sel.h, shield:sel.s, insure:UI._raidIns&&gearVal>0, keys:pickedKeys,
-                 cash:cashIn, tokens:tokIn, ammo:ammoPick };
+                 cash:cashIn, tokens:tokIn, ammo:ammoPick, support:supOn };
     UI._raidSel={w:[],a:null,h:null,s:null}; UI._raidIns=false;
     game.startRaid(opts);
   };

@@ -1204,23 +1204,76 @@ const FPView = {
     const t = R.elapsed||0;
     const bobX = Math.cos(t*4.6) * Math.min(5, mv*0.012);
     const bobY = Math.sin(t*6.4) * Math.min(6, mv*0.016);
-    const recoil = p.fireCd > 0 ? Math.min(20, p.fireCd*58) : 0;
+    const kick = Math.max(0, Math.min(2.2, p.kick||0));          // 开火后坐冲量
     const reload = p.reloadT > 0 ? Math.min(1, p.reloadT/1.1) : 0;
 
     ctx.save();
-    /* 基准锚在屏幕右下角（y=0 即画布底边，模型一律用负 y 向上画），
-     * 走路晃动 + 后坐上跳 + 换弹下沉，换弹时枪口压低。 */
-    ctx.translate(w*0.745 + bobX, h - 4 + bobY - recoil + reload*52);
-    ctx.rotate(0.132 - reload*0.40);   // 枪口微微上扬，换弹时压低
-    ctx.scale(sc, sc);
-    if(p.gun) this._gunModel(ctx, p, p.gun);
-    else this._meleeModel(ctx, p);
+    if(p.gun){
+      /* v0.21.2：枪「竖着拿」。
+       * 侧视图模型沿 -X 展开、贴在 y0 这条轴线上；这里三件事一起做：
+       *   1) scale(-a, b) 把前进方向翻成 +X，顺手把枪管长度压缩（a 小 = 透视缩短），
+       *      不压的话画出来的枪管和屏幕一样长 —— 那正是「横着躺」的观感来源；
+       *   2) rotate(-PI/2 附近) 让 +X 指向画面上方（枪口对着准星），枪托压在右下角；
+       *   3) translate(0, -y0) 把模型自带的轴线偏移归零，锚点才落在握把上。
+       * 后坐：整枪向下 + 向前推一点并轻微抬头，换弹：下沉 + 枪口压低。 */
+      const rot=-1.74 + kick*0.06 + reload*0.30;
+      const ax=w*0.625 + bobX - kick*3, ay=h - 34 + bobY + kick*26 + reload*74;
+      const sxa=-0.74*sc, syb=0.94*sc;
+      // 模型 → 屏幕：手臂要在「屏幕坐标」里画（不能跟着枪一起竖起来，否则前臂会横着飞出去）
+      const cs=Math.cos(rot), sn=Math.sin(rot);
+      const proj=(mx,my)=>({ x: ax + (mx*sxa)*cs - ((my+238)*syb)*sn,
+                             y: ay + (mx*sxa)*sn + ((my+238)*syb)*cs });
+      const g=p.gun, type=g.type||"rifle";
+      const len = type==="pistol"?210:type==="smg"?300:type==="shotgun"?360:type==="sniper"?470:410;
+      const hgEnd = -len + len*0.30 + len*0.24;
+      const fh=proj(hgEnd-24, -238+18), rh=proj(hgEnd+72, -238+84);
+      const gunAng=rot+Math.PI;      // 枪身在屏幕上的倾角（手臂/手套按它摆）
+      this._fpArms(ctx, w, h, fh, rh, gunAng, false);   // 前臂（画在枪身后面）
+      ctx.save();
+      ctx.translate(ax, ay); ctx.rotate(rot); ctx.scale(sxa, syb); ctx.translate(0, 238);
+      this._gunModel(ctx, p, g, true);                  // 枪身（true = 不要模型自带的胳膊）
+      ctx.restore();
+      this._fpArms(ctx, w, h, fh, rh, gunAng, true);    // 手套（压在枪身上）
+    } else {
+      /* 空手：匕首特写（原本就是枪口朝左上方的构图，单独一套锚点） */
+      ctx.translate(w*0.745 + bobX, h - 4 + bobY + reload*52);
+      ctx.rotate(0.132 - reload*0.40);
+      ctx.scale(sc, sc);
+      this._meleeModel(ctx, p);
+    }
     ctx.restore();
+  },
+
+  /* 第一人称的两条胳膊：主手从右下角伸向握把，支撑手从左下角斜插到护木。
+   * 全部在屏幕坐标里画 —— 枪身竖起来之后，模型自带的「向下伸」前臂会变成横飞，
+   * 所以 _gunModel 里那两条胳膊被关掉了，改由这里重画。 */
+  _fpArms(ctx, w, h, fh, rh, gunAng, glovesOnly){
+    const seg=(a,b,w1,w2,col)=>{
+      const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+      ctx.strokeStyle=col; ctx.lineCap="round"; ctx.lineJoin="round";
+      ctx.lineWidth=w1; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(mx,my); ctx.stroke();
+      ctx.lineWidth=w2; ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(b.x,b.y); ctx.stroke();
+    };
+    if(!glovesOnly){
+      // 支撑手前臂：从左下角斜插上来
+      seg({x:fh.x-w*0.22, y:h+130}, {x:fh.x, y:fh.y}, 96, 44, "#2b3733");
+      // 主手前臂：从右下角上来
+      seg({x:rh.x+w*0.20, y:h+150}, {x:rh.x, y:rh.y}, 112, 48, "#33403a");
+      // 袖口高光
+      ctx.fillStyle="rgba(255,255,255,0.045)";
+      ctx.beginPath();
+      ctx.moveTo(rh.x+w*0.05, rh.y+40); ctx.lineTo(rh.x+w*0.14, rh.y+30);
+      ctx.lineTo(rh.x+w*0.20, h+150); ctx.lineTo(rh.x+w*0.09, h+150);
+      ctx.closePath(); ctx.fill();
+    } else {
+      this._glove(ctx, fh.x, fh.y, 0.95, gunAng);
+      this._glove(ctx, rh.x, rh.y, 1.05, gunAng);
+    }
   },
 
   /* 有枪：按枪型给出不同轮廓（手枪 / 冲锋枪 / 霰弹枪 / 步枪 / 狙击 / 榴弹），
    * 并读取配件（瞄具 / 弹匣 / 枪口 / 枪托）改变外观，颜色取该枪的品质色。 */
-  _gunModel(ctx, p, g){
+  _gunModel(ctx, p, g, skipHands){
     const col = (typeof raidGunColor === "function") ? raidGunColor(g) : "#8d938a";
     const dark = "#2b3332", metal = "#3d4744";
     const type = g.type || "rifle";
@@ -1323,30 +1376,38 @@ const FPView = {
       ctx.fillRect(barrelEnd+10, y0-38, 6, 6);
     }
 
-    // 前手（护木）与后手（握把）+ 前臂
-    this._glove(ctx, hgEnd-24, y0+18, 1.0, -0.18);
-    ctx.fillStyle = "#33403a";
-    ctx.beginPath();
-    ctx.moveTo(hgEnd-40, y0+40);
-    ctx.lineTo(hgEnd+10, y0+40);
-    ctx.lineTo(hgEnd+64, y0+210);
-    ctx.lineTo(hgEnd-10, y0+230);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
-    ctx.fillRect(hgEnd-30, y0+60, 26, 90);
+    /* 前手（护木）与后手（握把）+ 前臂。
+     * v0.21.2：竖枪构图下这部分由 _fpArms 在屏幕坐标里重画（skipHands=true），
+     * 因为模型自带的「向下伸」前臂会被旋成横着飞出去的两条腿。 */
+    if(!skipHands){
+      this._glove(ctx, hgEnd-24, y0+18, 1.0, -0.18);
+      ctx.fillStyle = "#33403a";
+      ctx.beginPath();
+      ctx.moveTo(hgEnd-40, y0+40);
+      ctx.lineTo(hgEnd+10, y0+40);
+      ctx.lineTo(hgEnd+64, y0+210);
+      ctx.lineTo(hgEnd-10, y0+230);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      ctx.fillRect(hgEnd-30, y0+60, 26, 90);
 
-    this._glove(ctx, hgEnd+72, y0+84, 1.05, 0.12);
-    ctx.fillStyle = "#2c3833";
-    ctx.beginPath();
-    ctx.moveTo(hgEnd+52, y0+120);
-    ctx.lineTo(hgEnd+120, y0+104);
-    ctx.lineTo(hgEnd+250, y0+250);
-    ctx.lineTo(hgEnd+120, y0+280);
-    ctx.closePath(); ctx.fill();
+      this._glove(ctx, hgEnd+72, y0+84, 1.05, 0.12);
+      ctx.fillStyle = "#2c3833";
+      ctx.beginPath();
+      ctx.moveTo(hgEnd+52, y0+120);
+      ctx.lineTo(hgEnd+120, y0+104);
+      ctx.lineTo(hgEnd+250, y0+250);
+      ctx.lineTo(hgEnd+120, y0+280);
+      ctx.closePath(); ctx.fill();
+    }
 
-    // 枪口火焰
-    if(p.fireCd > 0.04){
+    // 枪口火焰（v0.21.2：改由 muzzleT 驱动 —— 原来挂 fireCd>0.04 上，
+    // 慢枪（狙击 / 霰弹）的冷却长达 1 秒，火光会一路亮到下一发）
+    if((p.muzzleT||0) > 0){
       const fx = muzzle-24, fy = y0;
+      const flick = 0.75 + 0.25*Math.random();
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (p.muzzleT||0)/0.05) * flick;
       ctx.fillStyle = "rgba(255,196,90,0.95)";
       ctx.beginPath();
       ctx.moveTo(fx, fy);
@@ -1356,8 +1417,9 @@ const FPView = {
       ctx.lineTo(fx-30, fy+12);
       ctx.lineTo(fx-44, fy+30);
       ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "rgba(255,240,190,0.75)";
+      ctx.fillStyle = "rgba(255,240,190,0.85)";
       ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx-26, fy-10); ctx.lineTo(fx-24, fy+10); ctx.closePath(); ctx.fill();
+      ctx.restore();
     }
   },
 
