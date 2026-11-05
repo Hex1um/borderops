@@ -21,6 +21,7 @@ const path = require('path');
 const os   = require('os');
 const zlib = require('zlib');
 const crypto = require('crypto');
+const Sanitize = require('./src/sanitize.js');   // v0.22.0：与 P2P 客户端 / verify 共用的净化内核
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -186,14 +187,11 @@ setInterval(()=>{
 
 /* ----------------------------- 数据裁剪 ----------------------------- */
 function text(v, max){
-  return String(v==null?'':v)
-    .replace(/[\u0000-\u001f\u007f]/g,' ')
-    .slice(0, max);
+  // v0.22.0：委托同构净化内核，除控制字符外额外剥离 HTML 危险字符
+  return Sanitize.text(v, max==null ? 160 : max);
 }
 function num(v, min, max){
-  const n=Number(v);
-  if(!Number.isFinite(n)) return null;
-  return Math.max(min, Math.min(max, n));
+  return Sanitize.num(v, min, max);
 }
 
 function sanitizeState(s){
@@ -291,7 +289,8 @@ function sanitizeEvent(room, peer, ev){
       if(!isHost) return null;
       const x=num(d.x,0,20000), y=num(d.y,0,20000);
       if(x===null || y===null) return null;
-      data={ x, y, n:text(d.n,24), d:Array.isArray(d.d)?d.d.slice(0,6):[] };
+      // v0.22.0：掉落数组逐项按 schema 裁剪（kind 白名单 / 数值封顶 / 剥 HTML / 防原型污染）
+      data={ x, y, n:text(d.n,24), d:Sanitize.corpseDrops(d.d) };
       break;
     }
     case 'extract': data={ by:peer.name, z:text(d.z,40) }; break;
@@ -624,10 +623,16 @@ server.on('clientError', (err, socket)=>{
   try{ socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); }catch(e){}
 });
 
-server.listen(PORT, HOST, ()=>{
-  console.log(`[border-ops] serving ${ROOT} on http://${HOST}:${PORT}`);
-  console.log(`[border-ops] host=${os.hostname()} node=${process.version}`);
-});
+/* v0.22.0：被 require 做单测时不启动监听（纯函数可测） */
+if(require.main === module){
+  server.listen(PORT, HOST, ()=>{
+    console.log(`[border-ops] serving ${ROOT} on http://${HOST}:${PORT}`);
+    console.log(`[border-ops] host=${os.hostname()} node=${process.version}`);
+  });
 
-process.on('uncaughtException', e=>console.error('[uncaught]', e && e.stack || e));
-process.on('unhandledRejection', e=>console.error('[reject]', e && e.stack || e));
+  process.on('uncaughtException', e=>console.error('[uncaught]', e && e.stack || e));
+  process.on('unhandledRejection', e=>console.error('[reject]', e && e.stack || e));
+}
+
+// 暴露纯函数供 verify_v01410.cjs 做 sanitizeEvent 回归断言
+module.exports = { text, num, sanitizeState, sanitizeAI, sanitizeEvent, CLIENT_EVENT_TYPES };

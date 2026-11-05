@@ -45,10 +45,19 @@ sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
-// 顺序必须与 index.html 一致（main.js 会 new Game() 故跳过）
-const files = ['config', 'util', 'weapons', 'items', 'shields', 'skills', 'player', 'enemies', 'combat',
-  'world', 'endless', 'dust2', 'shop', 'input', 'render', 'ui', 'viewmode', 'fpview',
-  'raid', 'net', 'net-p2p', 'auction', 'br', 'save'];
+/* v0.22.0：raid.js 按自然边界物理拆分为多个 raid-*.js（每个 ≤2000 行）。
+ * verify 用「聚合清单」加载：拆分后自动改用分片，未拆分时回退单文件 raid.js。
+ * 懒加载模块（world/endless/dust2/br 等）在生产 HTML 里延迟注入，但 vm 逻辑回归
+ * 仍全量加载，保证断言覆盖不因懒加载而缩水。 */
+const RAID_PARTS = ['raid-data','raid-core','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
+const hasParts = RAID_PARTS.every(n => fs.existsSync(path.join(SRC, n + '.js')));
+const raidModules = hasParts ? RAID_PARTS : ['raid'];
+const LAZY_PARTS = ['world', 'endless', 'dust2', 'br'];   // 生产环境按需加载，vm 里始终加载
+
+// 顺序与 index.html 的常驻脚本一致（main.js 会 new Game() 故跳过）
+const files = ['sanitize', 'config', 'util', 'weapons', 'items', 'shields', 'skills', 'player', 'enemies', 'combat',
+  ...LAZY_PARTS.slice(0, 3), 'shop', 'input', 'render', 'ui', 'viewmode', 'fpview',
+  ...raidModules, 'net', 'net-p2p', 'auction', LAZY_PARTS[3], 'save'];
 let loaded = 0;
 for (const f of files) {
   try {
@@ -264,7 +273,8 @@ check('连锁不再二次触发', Raid.tracers.length, 1, 0.001);
 check('跳弹标记 radT 生效', ra.radT, 0.7, 0.001);
 
 console.log('\n=== 11. 静态一致性 ===');
-const raidSrc = fs.readFileSync(path.join(SRC, 'raid.js'), 'utf8');
+// v0.22.0 兼容层：拆分后把所有 raid-*.js 聚合，源码正则断言照常生效
+const raidSrc = raidModules.map(n => fs.readFileSync(path.join(SRC, n + '.js'), 'utf8')).join('\n');
 const netSrc = fs.readFileSync(path.join(SRC, 'net.js'), 'utf8');
 const srvSrc = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 check('raid.js 消费 E.dot', /E\.dot/.test(raidSrc) ? 1 : 0, 1, 0.001);
@@ -541,7 +551,7 @@ check('Scav 可以换用低阶枪', s2.gun.type === 'shotgun' ? 1 : 0, 1, 0.001)
 
 console.log('\n=== 19. 去三角洲痕迹 / 塔科夫术语 ===');
 const uiSrc = fs.readFileSync(path.join(SRC, 'ui.js'), 'utf8');
-const nameFiles = ['config', 'raid', 'ui', 'shop', 'player', 'world', 'endless', 'save', 'skills', 'items', 'shields', 'br'];
+const nameFiles = ['config', ...raidModules, 'ui', 'shop', 'player', 'world', 'endless', 'save', 'skills', 'items', 'shields', 'br'];
 const allNameSrc = nameFiles.map(f => fs.readFileSync(path.join(SRC, f + '.js'), 'utf8')).join('\n') + cfgSrc;
 const deltaHits = ['干员', '悬赏', '黑市代币', '配给券', '三角洲', '曼德尔', '烽火地带', '哈夫克'].filter(w => allNameSrc.includes(w));
 check('源码中无三角洲术语', deltaHits.length, 0, 0.001);
@@ -1425,6 +1435,157 @@ check('赌博机权重含 孤品', G('(SHOPS.gamble.weights.singularity||0)>0')?
 // rollQuality 默认表（无权重参数）绝不出最高三档
 check('rollQuality 默认不出特供', G('(function(){ for(let i=0;i<500;i++){ if(rollQuality(60,{})==="primordial") return false; } return true; })()')?1:0, 1, 0.001);
 check('rollQuality 默认不出孤品', G('(function(){ for(let i=0;i<500;i++){ if(rollQuality(60,{})==="singularity") return false; } return true; })()')?1:0, 1, 0.001);
+
+console.log('\n=== 31. 联机净化内核：corpse schema + text 剥 HTML + sanitizeEvent 单测（v0.22.0）===');
+/* ==================== v0.22.0 组 31：联机净化内核（评价 4 / 5） ====================
+ * server.js 已有 require.main 保护，verify 可直接 require 纯函数做单测；
+ * src/sanitize.js 为 UMD，Node 侧 require 与浏览器 globalThis.Sanitize 共用同一份规则。 */
+const San = require('./src/sanitize.js');
+const Srv = require('./server.js');
+check('text() 剥离 HTML 危险字符', (Srv.text('<img src=x onerror=alert(1)>&"q"',80).indexOf('<')<0 && Srv.text('a&b',80).indexOf('&')<0)?1:0, 1, 0.001);
+check('text() 限长', Srv.text('abcdefghij',4)==='abcd'?1:0, 1, 0.001);
+check('num() 非有限值返回 null', Srv.num('abc',0,10)===null?1:0, 1, 0.001);
+check('num() 裁剪到区间', (Srv.num(999,0,100)===100 && Srv.num(-5,0,100)===0)?1:0, 1, 0.001);
+
+const EvilDrops = [
+  {kind:'weapon', damage:99999, name:'<b>x</b>'},
+  {kind:'__fake__', damage:1},
+  {kind:'ammo', n:1e12},
+  {kind:'weapon', damage:40, affixes:[{nm:'<i>神</i>', value:-13.3}]},
+];
+const Clean = San.corpseDrops(EvilDrops);
+check('corpse 非法 kind 被丢弃', Clean.length===3?1:0, 1, 0.001);
+check('corpse damage 封顶 50000', Clean[0].damage===50000?1:0, 1, 0.001);
+check('corpse 字符串剥 HTML', Clean[0].name.indexOf('<')<0?1:0, 1, 0.001);
+check('corpse 合法负值词条保留', Clean[2].affixes[0].value===-13.3?1:0, 1, 0.001);
+check('corpse 最多 6 项', San.corpseDrops(new Array(20).fill({kind:'med'})).length===6?1:0, 1, 0.001);
+check('corpse 非数组返回空', San.corpseDrops('x').length===0?1:0, 1, 0.001);
+const ProtoDrop = JSON.parse('{"kind":"weapon","damage":10,"__proto__":{"polluted":1},"constructor":{"x":1}}');
+const ProtoClean = San.corpseDrops([ProtoDrop])[0];
+check('corpse 原型污染键被剔除', (!Object.prototype.hasOwnProperty.call(ProtoClean,'__proto__') && !Object.prototype.hasOwnProperty.call(ProtoClean,'constructor'))?1:0, 1, 0.001);
+check('P2P / HTTP 事件白名单同源', [...Srv.CLIENT_EVENT_TYPES].join(',')===San.CLIENT_EVENT_TYPES.join(',')?1:0, 1, 0.001);
+
+/* sanitizeEvent 全覆盖单测（评价 5） */
+const TRoom = { hostId:'H', peers:new Map([['H',{}],['P',{}]]), ai:[{i:'bot1'}] };
+const THost = { id:'H', name:'Host' }, TGuest = { id:'P', name:'Guest' };
+check('sanitizeEvent 拒绝未知类型', Srv.sanitizeEvent(TRoom,THost,{type:'join',data:{}})===null?1:0, 1, 0.001);
+check('sanitizeEvent 保留字不可伪造', Srv.sanitizeEvent(TRoom,THost,{type:'start',data:{}})===null?1:0, 1, 0.001);
+check('sanitizeEvent hitai 裁剪 dmg', Srv.sanitizeEvent(TRoom,THost,{type:'hitai',data:{id:'bot1',dmg:99999}}).data.dmg===2000?1:0, 1, 0.001);
+check('sanitizeEvent hitai 拒绝不存在的 AI', Srv.sanitizeEvent(TRoom,THost,{type:'hitai',data:{id:'ghost',dmg:1}})===null?1:0, 1, 0.001);
+check('sanitizeEvent corpse 非房主拒绝', Srv.sanitizeEvent(TRoom,TGuest,{type:'corpse',data:{x:1,y:2,d:[]}})===null?1:0, 1, 0.001);
+const TCorpse = Srv.sanitizeEvent(TRoom,THost,{type:'corpse',data:{x:10,y:20,n:'<b>PMC</b>',d:EvilDrops}});
+check('sanitizeEvent corpse 走 schema', (TCorpse && TCorpse.data.d.length===3 && TCorpse.data.d[0].damage===50000)?1:0, 1, 0.001);
+check('sanitizeEvent corpse 名字剥 HTML', (TCorpse && TCorpse.data.n.indexOf('<')<0)?1:0, 1, 0.001);
+check('sanitizeEvent dmg 只有房主可发', Srv.sanitizeEvent(TRoom,TGuest,{type:'dmg',data:{to:'H',dmg:5}})===null?1:0, 1, 0.001);
+check('sanitizeEvent chat 剥 HTML', Srv.sanitizeEvent(TRoom,TGuest,{type:'chat',data:{t:'<img src=x>'}}).data.t.indexOf('<')<0?1:0, 1, 0.001);
+check('sanitizeEvent chat 限长 80', Srv.sanitizeEvent(TRoom,TGuest,{type:'chat',data:{t:'x'.repeat(40000)}}).data.t.length===80?1:0, 1, 0.001);
+
+/* ==================== v0.22.0 组 32：存档码 + 旧存档迁移（评价 3 / 8） ==================== */
+console.log('');
+console.log('=== 32. 存档码导出/导入 + 旧存档迁移回归（v0.22.0）===');
+const Legacy = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures', 'legacy-saves.json'), 'utf8'));
+const __store = new Map();
+sandbox.localStorage = {
+  getItem: k => __store.has(k) ? __store.get(k) : null,
+  setItem: (k, v) => __store.set(k, String(v)),
+  removeItem: k => __store.delete(k),
+  clear: () => __store.clear(),
+};
+const LSET = (k, v) => G('localStorage.setItem(' + JSON.stringify(k) + ',' + JSON.stringify(v) + ')');
+const LGET = k => G('localStorage.getItem(' + JSON.stringify(k) + ')');
+__store.clear();
+check('空存档不生成空码', G('Save.exportCode()')===null?1:0, 1, 0.001);
+LSET('borderlands_web_save_v1', JSON.stringify({ name:'老兵·贺一杰', gold:12345, weapons:[] }));
+LSET('raid_stash_v2', JSON.stringify({ gold:999, guns:[] }));
+const __before = LGET('borderlands_web_save_v1');
+const __code = G('Save.exportCode()');
+check('存档码格式 BOPS1-<hash>-<b64url>', /^BOPS1-[0-9a-f]{8}-[A-Za-z0-9_-]+$/.test(__code)?1:0, 1, 0.001);
+check('存档码只含 URL 安全字符', !/[^A-Za-z0-9_-]/.test(__code)?1:0, 1, 0.001);
+__store.clear();
+const __imp = G('Save.importCode(' + JSON.stringify(__code) + ')');
+check('存档码导入成功（2 项）', (__imp && __imp.ok && __imp.count===2)?1:0, 1, 0.001);
+check('存档码往返字节一致', LGET('borderlands_web_save_v1')===__before?1:0, 1, 0.001);
+check('存档码中文无损', String(LGET('borderlands_web_save_v1')).indexOf('老兵')>=0?1:0, 1, 0.001);
+check('存档码带入塔科夫仓库', String(LGET('raid_stash_v2')).indexOf('999')>=0?1:0, 1, 0.001);
+check('损坏存档码被拒（校验和）', G('Save.importCode(' + JSON.stringify(__code.slice(0,-8)) + ').ok')===false?1:0, 1, 0.001);
+check('非法前缀被拒', G('Save.importCode("hello").ok')===false?1:0, 1, 0.001);
+const __wsCode = __code.slice(0, 20) + '\n ' + __code.slice(20);
+check('存档码容忍粘贴换行/空格', G('Save.importCode(' + JSON.stringify(__wsCode) + ').ok')===true?1:0, 1, 0.001);
+const __evil = G('(function(){ var b=_b64enc(JSON.stringify({app:"borderops",data:{__evil__:"x","borderlands_web_save_v1":"{}"}})); return "BOPS1-"+_b64hash(b)+"-"+b; })()');
+__store.clear();
+G('Save.importCode(' + JSON.stringify(__evil) + ')');
+check('存档码拒绝写白名单外 key', !__store.has('__evil__')?1:0, 1, 0.001);
+check('存档码仍写入合法 key', __store.has('borderlands_web_save_v1')?1:0, 1, 0.001);
+
+let __migBad = 0;
+for (const s of Legacy.samples) {
+  __store.clear();
+  const raw = JSON.stringify(s.data);
+  LSET(s.key, raw);
+  if (s.key === 'borderlands_web_save_v1') {
+    let okLoad = false;
+    try { okLoad = G('(function(){try{var d=Save.load(); return !!d && typeof d==="object";}catch(e){return false;}})()'); } catch (e) {}
+    if (!okLoad) __migBad++;
+    if (s.id === 'v0.14.10-campaign' && G('(function(){var d=Save.load();return d&&d.name;})()') !== '老兵·贺') __migBad++;
+  }
+  if (s.key === 'raid_stash_v2') {
+    let okMig = false;
+    try { okMig = G('(function(){try{var d=RaidStash.load(); return !!d && d.gunVer===3 && Array.isArray(d.shields) && Array.isArray(d.parts) && !!d.ammo && d.tokens!==undefined;}catch(e){return false;}})()'); } catch (e) {}
+    if (!okMig) __migBad++;
+  }
+  const c2 = G('Save.exportCode()');
+  __store.clear();
+  const r2 = G('Save.importCode(' + JSON.stringify(c2) + ')');
+  if (!(r2 && r2.ok && LGET(s.key) === raw)) __migBad++;
+}
+check('旧存档样本数量 >= 4', Legacy.samples.length>=4?1:0, 1, 0.001);
+check('旧存档样本迁移/往返全通过', __migBad===0?1:0, 1, 0.001);
+
+/* ==================== v0.22.0 组 33：赌博机 EV / 经济护栏（评价 6） ==================== */
+console.log('');
+console.log('=== 33. 赌博机 EV / 经济护栏（v0.22.0）===');
+const __ev = G(`(function(){
+  var w=SHOPS.gamble.weights, tot=0, sum=0, top3=0, bad=0, mono=1;
+  for(var k in w){ var r=RARITY_BY_ID[k]; if(!r){ bad++; continue; } tot+=w[k]; sum+=w[k]*r.price; if(r.weight===0) top3+=w[k]; }
+  var ids=RARITIES.map(function(r){return r.id;});
+  for(var i=3;i<ids.length;i++) if(!(w[ids[i]] < w[ids[i-1]])) mono=0;
+  return { tot:tot, ev:sum/tot, top3:top3/tot, mono:mono, bad:bad,
+           cost1:Shop.gambleCost({player:{level:1}}), cost60:Shop.gambleCost({player:{level:60}}) };
+})()`);
+check('赌博机权重全部映射品质', __ev.bad===0?1:0, 1, 0.001);
+check('赌博机第 3 档后权重严格递减', __ev.mono===1?1:0, 1, 0.001);
+check('最高三档概率 < 0.3%', (__ev.top3>0 && __ev.top3<0.003)?1:0, 1, 0.001);
+check('赌博机 EV 在护栏带 5~15', (__ev.ev>=5 && __ev.ev<=15)?1:0, 1, 0.001);
+check('赌博机成本随等级线性增长', (__ev.cost1===4 && __ev.cost60===122)?1:0, 1, 0.001);
+const __leak = G(`(function(){
+  var bad=0, q=["primordial","celestial","singularity"];
+  for(var k in SHOPS){ if(k==="gamble") continue; var w=SHOPS[k]&&SHOPS[k].weights; if(!w) continue;
+    for(var i=0;i<q.length;i++) if((w[q[i]]||0)>0) bad++; }
+  for(var j=0;j<q.length;j++) if((RARITY_BY_ID[q[j]].weight||0)>0) bad++;
+  return bad;
+})()`);
+check('最高三档唯一产出口仍是赌博机', __leak===0?1:0, 1, 0.001);
+console.log('  赌博机 EV=' + __ev.ev.toFixed(2) + '（按 RARITIES.price 加权）· 最高三档合计概率=' + (__ev.top3*100).toFixed(4) + '% · 成本 Lv1=' + __ev.cost1 + ' / Lv60=' + __ev.cost60);
+
+/* ==================== v0.22.0 组 34：FPS 基准 / 拆分 / 懒加载护栏（评价 2 / 7 / 9） ==================== */
+console.log('');
+console.log('=== 34. FPS 基准探针 + 拆分/懒加载护栏（v0.22.0）===');
+check('FPS 基准脚本存在', fs.existsSync(path.join(ROOT,'tools','fps_bench.cjs'))?1:0, 1, 0.001);
+const __bench = fs.readFileSync(path.join(ROOT,'tools','fps_bench.cjs'),'utf8');
+check('FPS 探针同时采样 2D 与 3D', /sample\('2d'\)/.test(__bench) && /sample\('3d'\)/.test(__bench)?1:0, 1, 0.001);
+check('FPS 探针输出 p95 与 fps', /p95Ms/.test(__bench) && /fps:/.test(__bench)?1:0, 1, 0.001);
+check('npm bench:fps 已注册', !!JSON.parse(fs.readFileSync(path.join(ROOT,'package.json'),'utf8')).scripts['bench:fps']?1:0, 1, 0.001);
+const __fp = fs.readFileSync(path.join(SRC,'fpview.js'),'utf8');
+check('3D 墙体走 _paintWalls 按面绘制', /_paintWalls\(ctx/.test(__fp) && /fillRect/.test(__fp)?1:0, 1, 0.001);
+check('3D 渐变对象数量受控（<=6）', (__fp.match(/ctx\.createLinearGradient\(/g)||[]).length<=6?1:0, 1, 0.001);
+const __parts = ['raid-data','raid-core','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
+const __maxLines = Math.max(...__parts.map(n => fs.readFileSync(path.join(SRC,n+'.js'),'utf8').split('\n').length));
+check('raid 分片全部 <=2000 行', (__maxLines<=2000 && __maxLines>1000)?1:0, 1, 0.001);
+check('原巨型 raid.js 已移除', !fs.existsSync(path.join(SRC,'raid.js'))?1:0, 1, 0.001);
+check('旧模式脚本已从静态 HTML 移除', !/src\/(world|endless|dust2|br)\.js/.test(html)?1:0, 1, 0.001);
+check('lazy-legacy.js 已接入 HTML', /src\/lazy-legacy\.js/.test(html)?1:0, 1, 0.001);
+check('GitHub Actions CI 已配置', fs.existsSync(path.join(ROOT,'.github','workflows','ci.yml'))?1:0, 1, 0.001);
+console.log('  raid 最大分片 ' + __maxLines + ' 行（目标 <=2000）');
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

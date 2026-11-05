@@ -5,3 +5,5 @@ shots/
 __pycache__/
 *.pyc
 .git/
+# FPS 基准运行产物（含本机 Chrome 绝对路径，实测值记在 CHANGELOG / WIKI）
+fps-baseline.json

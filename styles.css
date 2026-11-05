@@ -315,7 +315,10 @@ canvas#game.locked{cursor:none;}
 .mode-card[data-mode="dust2"] .mode-ico{color:#7fd0ff;}
 .mode-card[data-mode="dust2"] h3{color:#7fd0ff;}
 
-.cur-eri{color:#9c8fb5;font-weight:800;font-size:14px;text-shadow:0 0 8px #9c8fb533;}
+.cur-eri{color:#b061ff;font-weight:800;font-size:14px;text-shadow:0 0 8px #b061ff55;}   /* 美元 ◆ · 紫 */
+/* v0.22.0：GP 币 ◈ 用明确金色（亮金 + 轻描边），与紫色美元、黄铜色普通文字区分 */
+.cur-gp{color:#ffd23f;font-weight:900;text-shadow:0 0 9px #ffb02066,-1px -1px 0 #7a5410,1px 1px 0 #7a5410;}
+.shop-gold .cur-gp,.si-price .cur-gp,.btn .cur-gp{font-size:1.05em;}
 .inv-sec{margin:14px 0 6px;}
 .inv-sec h4{margin:0 0 6px;font-size:14px;color:var(--accent);letter-spacing:.5px;
   border-bottom:2px solid #0006;padding-bottom:5px;}
@@ -746,3 +749,11 @@ button:disabled:hover{filter:grayscale(.35);}
   .rc-label{min-width:56px;font-size:11px;}
   .rc-val{min-width:78px;font-size:12px;}
 }
+
+/* v0.22.0：存档码导出 / 导入面板（复用 wipe-box 布局，换成中性蓝灰） */
+.wipe-box.save-box{color:#cfe0ee;background:rgba(30,52,72,0.45);border:2px dashed rgba(120,170,210,0.45);text-align:left;}
+.save-box textarea{display:block;width:100%;box-sizing:border-box;margin:8px 0 0;
+  background:rgba(8,14,20,0.85);color:#dfe7f0;border:1px solid rgba(120,150,180,0.35);border-radius:6px;
+  padding:8px 10px;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;
+  word-break:break-all;resize:vertical;}
+.save-box textarea:focus{outline:none;border-color:var(--accent);}

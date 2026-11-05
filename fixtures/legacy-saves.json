@@ -1,0 +1,68 @@
+{
+  "_note": "v0.22.0 旧存档迁移回归固定样本。samples[].data 会原样写入对应 localStorage key，请勿随意增删字段；verify 组 32 会逐条跑迁移与存档码往返。",
+  "samples": [
+    {
+      "id": "v0.14.10-campaign",
+      "key": "borderlands_web_save_v1",
+      "data": {
+        "v": "0.14.10",
+        "mode": "campaign",
+        "classId": "assault",
+        "name": "老兵·贺",
+        "level": 12,
+        "xp": 340,
+        "skillPoints": 2,
+        "gold": 4800,
+        "eridium": 0,
+        "weapons": [],
+        "shields": [],
+        "relics": [],
+        "shieldIdx": 0,
+        "relicIdx": 0
+      }
+    },
+    {
+      "id": "v0.19-missing-fields",
+      "key": "borderlands_web_save_v1",
+      "data": {
+        "v": "0.19.0",
+        "name": "缺字段档",
+        "level": 3
+      }
+    },
+    {
+      "id": "v0.19-stash-legacy",
+      "key": "raid_stash_v2",
+      "data": {
+        "weapons": [
+          {
+            "name": "旧步枪",
+            "type": "rifle",
+            "rarity": "blue",
+            "ilvl": 20,
+            "power": 100,
+            "short": "旧缓存名",
+            "affixes": [],
+            "stats": {},
+            "parts": []
+          }
+        ],
+        "armors": [],
+        "helmets": [],
+        "cores": [
+          { "uid": "c1", "core": "elem", "elem": "fire", "lv": 2, "name": "旧火核" }
+        ],
+        "gunVer": 1
+      }
+    },
+    {
+      "id": "v0.21-future-fields",
+      "key": "raid_auction_v1",
+      "data": {
+        "bucket": 12345,
+        "listings": [],
+        "futureField": { "nested": [1, 2, 3], "中文键": "原样保留" }
+      }
+    }
+  ]
+}

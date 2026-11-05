@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.22.0 — 2026-11-06
+
+### 工程治理批次：CI / 巨型文件拆分 / 安全净化 / 存档可携带 / 性能基线
+
+按仓库评审的 1–8 项改进 + 用户追加需求一次性落地，**逻辑零改写**（拆分前后经 194 个 Raid 方法函数体、73 个顶层函数、80 个顶层常量逐项比对完全一致）。
+
+- **① GitHub Actions CI**：新增 `.github/workflows/ci.yml`，`push` / `pull_request` 到 `main` 时跑 `check_version.js` + `verify_v01410.cjs` + 全量 `node --check`（含 `tools/*.cjs`）+ fixtures 存在性。仓库零 npm 依赖，刻意不跑 `npm install`。
+- **② `raid.js` 物理拆分**：9750 行单文件按自然边界切成 7 片，最大 1621 行（目标 ≤2000）：
+  `raid-data.js`（数据表 / 工具函数 / RaidStash）、`raid-core.js` + `raid-core2.js` + `raid-core3.js`（主控 `Raid` 对象，在方法边界用 `};` + `Object.assign(Raid, {` 续接）、`raid-render.js`（`RenderRaid` + HUD）、`raid-ui.js` + `raid-ui2.js`（`UI.*` 补丁）。原 `src/raid.js` 删除。
+  同步四处清单：`index.html` 脚本顺序、`verify_v01410.cjs` 的 `RAID_PARTS` 聚合（80 处 `raidSrc` 源码正则仍作用于拼接后的全文）、`check_version.js`、`README.md`。
+- **③ 旧存档样本 + 迁移回归**：新增 `fixtures/legacy-saves.json`（4 份旧档：v0.14 战役、v0.19 缺字段、v0.19 塔科夫仓库含旧 `cores`、v0.21 含未来字段）。verify 组 32 逐条跑 `Save.load()` / `RaidStash.load()` 迁移（`gunVer` 补级、缺栏补空、旧核心并入配件）并校验存档码往返原样。
+- **④ corpse schema + text 剥 HTML**：新建 `src/sanitize.js`（UMD 同构内核，Node / 浏览器 / 单测共用一份规则）。`server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（GitHub Pages 上 WebRTC P2P）三条链路统一：掉落数组按 `kind` 白名单逐项裁剪、数值封顶、剥 HTML、剔除原型污染键、限制深度/键数/项数；`text()` 除控制字符外额外剥离 `<>&"'\``。
+  - 净化参数按 `probe_drops.js` 实测标定：合法武器对象**深度 7**、`damage` 峰值 ~6830、`value` 峰值 ~1651 万，故 `MAX_DEPTH=8`、攻击字段对称封顶 50000；实测合法装备净化前后 `JSON` 完全一致（含 `-13.3` 这类负面词条，早期下限写死 0 会把它钳成 0，已修）。
+- **⑤ sanitizeEvent 单测**：`server.js` 加 `require.main === module` 保护 + `module.exports` 暴露纯函数，verify 组 31 覆盖未知类型 / 保留字伪造 / 数值裁剪 / 房主权限 / chat 剥 HTML 与限长等 22 条。
+- **⑥ 赌博机 EV / 经济护栏**：verify 组 33 断言权重可映射、第 3 档后严格递减、最高三档合计概率 < 0.3%、EV 落在 5–15 带内、成本随等级线性、且**唯一产出口**仍是赌博机。实测 EV=9.21（`RARITIES.price` 加权）、三档合计 0.0886%、成本 Lv1=4 / Lv60=122。
+- **⑦ FPS 基准探针**：新增 `tools/fps_bench.cjs` + `npm run bench:fps`，零依赖自包含（本地静态服务 + headless Chromium + CDP），2D/3D 各采 120 帧，输出 `fps-baseline.json`（p50 / p95 / 平均 fps）。本机实测：2D 46.9 fps（p95 25.6ms）、3D 29.7 fps（p95 37.1ms），0 页面错误。CI 只做语法检查，不跑基准。
+- **⑧ 存档导出 / 导入码**：`save.js` 新增 `exportCode()` / `importCode()`，格式 `BOPS1-<8 位 FNV-1a 校验和>-<base64url(UTF-8 JSON)>`，纯 JS base64（不依赖 `btoa/atob`），按 key 白名单原样搬运存档（含未来字段、中文键），拒绝校验失败 / 非法前缀 / 白名单外 key。标题页新增「导出存档码 / 导入存档码」面板，存档与域名解绑，换浏览器或清缓存可自保；空存档不生成空码并给出提示。
+- **⑨ 旧模式按需懒加载**：新增 `src/lazy-legacy.js`。`CFG.onlyRaid=true`（线上默认）时战役 / 无尽 / 沙二 / 大逃杀 4 个脚本**完全不请求**（解析期 `document.write` 条件注入，仅 `onlyRaid=false` 复活旧模式时加载），并留最小全局占位防 `ReferenceError`。`check_version.js` 增加懒加载清单校验。
+- **额外：GP 币图标改金色**：`Shop.curIconHtml()` 返回带 class 的 `<span>`，`.cur-gp` 用 `#ffd23f` + 描边发光，`.cur-eri` 改明确紫色 `#b061ff`；`curIcon()` 仍返回纯字符供 canvas / textContent 使用。商店余额、价格、卖出、赌博机按钮与结算页统一换色。
+
+**验证**：`npm run check` 全绿（30 处 `?v=` / 29 个脚本 / 懒加载清单）、`npm run verify` **531 passed / 0 failed**（31–34 为新增组）、全量 `node --check` 通过、拆分等价性比对零差异、headless Chromium 实机冒烟 `ok:true`（版本 0.22.0、7 分片加载、旧模式 0 请求、存档码往返、进 raid + 3D、0 页面错误）、FPS 基准实跑通过。
+
 ## v0.21.8 — 2026-11-05
 
 ### 显示分层收尾 · 最高三档锁定黑市赌博机 · 3D 手感与修复

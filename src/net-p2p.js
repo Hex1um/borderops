@@ -280,12 +280,18 @@ const NetP2P = {
     p.last=this._now();
     p.state=msg.state || null;
     if(Array.isArray(msg.events)){
-      const allow=new Set(["hitai","hitpeer","dmg","loot","shot","corpse","extract","dead","chat"]);
+      // v0.22.0：白名单与 server.js / src/sanitize.js 共用同一份规则
+      const allow=new Set((typeof Sanitize!=="undefined" && Sanitize.CLIENT_EVENT_TYPES)
+        || ["hitai","hitpeer","dmg","loot","shot","corpse","extract","dead","chat"]);
       for(const ev of msg.events.slice(0,40)){
         if(!ev || !allow.has(ev.type)) continue;
+        let data=ev.data||null;
+        // corpse 掉落数组逐项按 schema 裁剪，防止伪造 item 直通 _collect
+        if(ev.type==="corpse" && data && typeof Sanitize!=="undefined")
+          data=Object.assign({}, data, { d:Sanitize.corpseDrops(data.d) });
         // 先让房主本地结算（命中 AI / PvP 校验），再进入事件环转发给其他客户端。
-        try{ Net._handle({ from:p.id, type:ev.type, data:ev.data||null }); }catch(e){}
-        this._pushEvent(p.id, ev.type, ev.data||null);
+        try{ Net._handle({ from:p.id, type:ev.type, data }); }catch(e){}
+        this._pushEvent(p.id, ev.type, data);
       }
     }
     this.room=this._publicRoom();

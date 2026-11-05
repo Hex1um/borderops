@@ -478,12 +478,20 @@ const Net = {
       case "corpse": {
         if(this.room && this.room.hostId && ev.from!==this.room.hostId) break;
         if(!Array.isArray(d.d)) break;
-        R.containers.push({ x:d.x, y:d.y, tier:2, searched:false, body:true,
-          drops:d.d.slice(0,6), cash:0, botName:d.n||"PMC" });
+        /* v0.22.0：联机尸体掉落逐项按 schema 裁剪（HTTP 轮询 / WebRTC P2P 两条链路共用）。
+         * 之前 d.d.slice(0,6) 会让任意对象直通 _collect，可伪造超高 dmg / 原型污染键。 */
+        const S=(typeof Sanitize!=="undefined")?Sanitize:null;
+        const drops=S?S.corpseDrops(d.d):d.d.slice(0,6);
+        const nx=S?S.num(d.x,0,20000):d.x, ny=S?S.num(d.y,0,20000):d.y;
+        R.containers.push({ x:nx==null?d.x:nx, y:ny==null?d.y:ny, tier:2, searched:false, body:true,
+          drops, cash:0, botName:(S?S.text(d.n,24):null)||"PMC" });
         break;
       }
       case "chat": {
-        R._feed(d.by||"队友", d.t||"", "无线电", false, "chat");
+        /* 无线电文本同样走净化，避免网络字符串日后被插入 DOM 触发 XSS */
+        const S=(typeof Sanitize!=="undefined")?Sanitize:null;
+        R._feed(S?(S.text(d.by,24)||"队友"):(d.by||"队友"),
+                S?S.text(d.t,80):(d.t||""), "无线电", false, "chat");
         break;
       }
       case "start": break;

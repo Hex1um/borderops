@@ -14,6 +14,13 @@ const Shop = {
 
   currencyOf(id){ return (SHOPS[id] && SHOPS[id].currency) || "gold"; },
   curIcon(id){ return this.currencyOf(id)==="eridium" ? "◆" : "◈"; },
+  /* v0.22.0：GP 币（金币）图标改用明确金色，和紫色美元 ◆ 一眼可分。
+   * 入参既可以是 shop id（"gamble"/"black"），也可以是货币种类（"gold"/"eridium"）。
+   * 返回带样式 span 的 HTML，仅供模板字符串使用；textContent / canvas 仍用 curIcon() 纯字符。 */
+  curIconHtml(idOrCur){
+    const c = (idOrCur==="gold" || idOrCur==="eridium") ? idOrCur : this.currencyOf(idOrCur);
+    return c==="eridium" ? '<span class="cur-eri">◆</span>' : '<span class="cur-gp">◈</span>';
+  },
   curName(id){ return this.currencyOf(id)==="eridium" ? "美元" : "金币"; },
   balance(id, game){
     return this.currencyOf(id)==="eridium" ? game.player.eridium : game.player.gold;

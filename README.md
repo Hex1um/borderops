@@ -60,11 +60,13 @@ python -m http.server 8132
 ## 技术约束（给后续维护者）
 
 1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载）。
-2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载：
-   `config → util → weapons → items → skills → player → enemies → combat → world → endless → dust2 → shop → input → render → ui → viewmode → fpview → raid → net → net-p2p → auction → br → save → main`
+2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载（v0.22.0 共 29 个）：
+   `sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`
+   其中 `raid-core2` / `raid-core3` 用 `Object.assign(Raid, {` 续接主控对象，**顺序不可调换**；`lazy-legacy.js` 在 `CFG.onlyRaid=true` 时不请求 `world` / `endless` / `dust2` / `br` 四个旧模式脚本。
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
 4. **兼容旧存档**：v0.15.0 保留了全部内部键名（`element` / `mayhem` / `elemPct` / `core` 等）与 localStorage 存档结构，仅改变语义与显示；`ELEMENTS` 是 `AMMO_TYPES` 的兼容别名。新代码请优先使用 `AMMO_TYPES`。
 5. 改动沿用现有风格：紧凑单行、中文注释带 `vX.Y.Z` 前缀。
+6. **门禁与工具**：`npm run check`（版本三处同步 + 静态/懒加载脚本清单）、`npm run verify`（无浏览器逻辑回归，含旧档迁移 / 净化 / EV 护栏）、`npm run bench:fps`（可选，需本机 Chrome，输出 `fps-baseline.json`）。`main` 分支由 `.github/workflows/ci.yml` 自动跑 check + verify + 全量语法检查。
 
 ## 目录结构
 
@@ -73,13 +75,19 @@ python -m http.server 8132
 | `index.html` | 唯一 HTML：画布 + overlay + 局内物品栏层 + 脚本清单 |
 | `styles.css` | 全部样式，含移动端断点 |
 | `src/config.js` | 全局常量、弹种/品质/改装词条/兵工厂/枪型定义 |
-| `src/raid.js` | 主战场（~7.9k 行）：地图/房间/商店/AI/战利品/钥匙/结算/配装大厅 |
+| `src/raid-*.js` | 主战场按自然边界拆成 7 片（合计 ~9.8k 行，单片 ≤1621 行）：`raid-data`（数据表/工具/RaidStash）、`raid-core`/`core2`/`core3`（主控 Raid，`Object.assign` 续接）、`raid-render`（RenderRaid + HUD）、`raid-ui`/`ui2`（UI 补丁） |
+| `src/sanitize.js` | 联机数据净化内核（UMD 同构）：HTTP 轮询 / WebRTC P2P / 单测共用一份 corpse schema 与文本净化规则 |
+| `src/lazy-legacy.js` | 旧模式按需加载器：`onlyRaid=true` 时不请求战役/无尽/沙二/大逃杀 4 个脚本 |
+| `src/save.js` | 存档读写 + 存档码导出/导入（`BOPS1-` 前缀，解绑域名） |
 | `src/weapons.js` | 枪械生成、改装词条、品级、部件与模块乘区 |
 | `src/combat.js` | 实体弹道、命中结算、弹种终点效应 |
 | `src/net.js` | 联机客户端（HTTP 轮询）+ 状态 / AI 快照生成 |
 | `src/net-p2p.js` | GitHub Pages / 纯静态托管联机（WebRTC P2P，PeerJS） |
 | `vendor/peerjs.min.js` | PeerJS 浏览器运行时（MIT，按需动态加载） |
-| `server.js` | 联机房服务器 + 静态托管（Node 原生 http，无依赖） |
+| `server.js` | 联机房服务器 + 静态托管（Node 原生 http，无依赖）；`require` 时不启动监听，纯函数供单测调用 |
+| `.github/workflows/ci.yml` | GitHub Actions：版本门禁 + 逻辑回归 + 全量语法检查 + fixtures 校验 |
+| `tools/fps_bench.cjs` | FPS 基准探针：本地静态服务 + headless Chromium + CDP，2D/3D 各采 120 帧 |
+| `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
 | `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，201 项断言） |

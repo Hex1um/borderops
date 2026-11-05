@@ -119,6 +119,8 @@ const UI = {
                    :'▾ <span class="mm-full">其他模式 · 战役 / 无尽 / 沙二 / 大逃杀</span><span class="mm-short">其他模式</span>'}
           </button>`}
           ${!onlyRaid&&hasSave?`<button class="btn ghost small" id="btn-continue">继续战役存档</button>`:''}
+          <button class="btn ghost small" id="btn-export">导出存档码</button>
+          <button class="btn ghost small" id="btn-import">导入存档码</button>
           <button class="btn ghost small btn-del" id="btn-wipe">删除存档</button>
         </div>
 
@@ -128,6 +130,24 @@ const UI = {
           <div class="row">
             <button class="btn small danger" id="btn-wipe-yes">确认删除</button>
             <button class="btn small ghost" id="btn-wipe-no">取消</button>
+          </div>
+        </div>`:''}
+
+        ${this._exportCode?`<div class="wipe-box save-box" id="save-export-box">
+          <div style="margin-bottom:6px;">存档码已生成（含战役进度 / 塔科夫仓库 / 拍卖行）。复制后妥善保存，换域名或清缓存后用「导入存档码」恢复：</div>
+          <textarea id="export-code" readonly rows="4" spellcheck="false">${this._exportCode}</textarea>
+          <div class="row">
+            <button class="btn small" id="btn-export-copy">复制</button>
+            <button class="btn small ghost" id="btn-export-close">关闭</button>
+          </div>
+        </div>`:''}
+        ${this._importArm?`<div class="wipe-box save-box" id="save-import-box">
+          <div style="margin-bottom:6px;">粘贴存档码。导入会<b>覆盖</b>本机同名存档，建议先导出备份：</div>
+          <textarea id="import-code" rows="4" spellcheck="false" placeholder="BOPS1-..."></textarea>
+          ${this._importMsg?`<div style="margin-top:6px;color:var(--accent);">${String(this._importMsg).replace(/[&<>"']/g,'')}</div>`:''}
+          <div class="row">
+            <button class="btn small danger" id="btn-import-go">确认导入</button>
+            <button class="btn small ghost" id="btn-import-cancel">取消</button>
           </div>
         </div>`:''}
 
@@ -212,6 +232,53 @@ const UI = {
       UI._aucTab="bid"; UI._aucSellTab="weapon";
       this.game.toTitle();
       this.game.toast("存档已删除，进度已重置");
+    };
+
+    // v0.22.0：存档码导出 / 导入（解绑域名，换浏览器 / 清缓存可自保）
+    const exBtn=document.getElementById('btn-export');
+    if(exBtn) exBtn.onclick=()=>{
+      SFX.ui();
+      const code=Save.exportCode();
+      if(!code){ this.game.toast("暂无存档可导出（先进入一次游戏）"); return; }
+      this._exportCode=code; this._importArm=false; this._importMsg=""; this.title();
+      const t=document.getElementById('export-code');
+      if(t){ t.focus(); t.select(); }
+      const box=document.getElementById('save-export-box');
+      if(box) box.scrollIntoView({block:"center",behavior:"smooth"});
+    };
+    const exClose=document.getElementById('btn-export-close');
+    if(exClose) exClose.onclick=()=>{ SFX.ui(); this._exportCode=null; this.title(); };
+    const exCopy=document.getElementById('btn-export-copy');
+    if(exCopy) exCopy.onclick=()=>{
+      SFX.ui();
+      const t=document.getElementById('export-code');
+      const done=()=>this.game.toast("存档码已复制");
+      if(!t) return;
+      t.select();
+      if(navigator.clipboard && navigator.clipboard.writeText)
+        navigator.clipboard.writeText(this._exportCode||t.value).then(done,()=>{ try{document.execCommand('copy');}catch(e){} done(); });
+      else { try{document.execCommand('copy');}catch(e){} done(); }
+    };
+    const imBtn=document.getElementById('btn-import');
+    if(imBtn) imBtn.onclick=()=>{
+      SFX.ui(); this._importArm=true; this._importMsg=""; this._exportCode=null; this.title();
+      const box=document.getElementById('save-import-box');
+      if(box) box.scrollIntoView({block:"center",behavior:"smooth"});
+    };
+    const imCancel=document.getElementById('btn-import-cancel');
+    if(imCancel) imCancel.onclick=()=>{ SFX.ui(); this._importArm=false; this._importMsg=""; this.title(); };
+    const imGo=document.getElementById('btn-import-go');
+    if(imGo) imGo.onclick=()=>{
+      SFX.ui();
+      const t=document.getElementById('import-code');
+      const r=Save.importCode(t?t.value:"");
+      if(r.ok){
+        this._importArm=false; this._importMsg="";
+        this.title();
+        this.game.toast(r.msg);
+      } else {
+        this._importMsg=r.msg; this.title();
+      }
     };
   },
 
@@ -383,7 +450,7 @@ const UI = {
         <div class="istat">${w.statLines().join(' · ')}</div>
         ${this._affixHtml(w)}
         <div class="si-buy">
-          <button class="btn small ghost" data-sell="${i}">卖出 ◈${sell}${eri?` ◆${eri}`:''}</button>
+          <button class="btn small ghost" data-sell="${i}">卖出 <span class="cur-gp">◈</span>${sell}${eri?` <span class="cur-eri">◆</span>${eri}`:''}</button>
           <span class="si-price">${i===p.wi?'装备中':''}</span>
         </div>
       </div>`;
@@ -397,7 +464,7 @@ const UI = {
         <div class="istat">${shieldLines(s).join(' · ')}</div>
         ${eff?`<div class="affix-row"><span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span></div>`:''}
         <div class="si-buy">
-          <button class="btn small ghost" data-ssell="${i}">卖出 ◈${itemSellGold(s)}${itemSellEridium(s)?` ◆${itemSellEridium(s)}`:''}</button>
+          <button class="btn small ghost" data-ssell="${i}">卖出 <span class="cur-gp">◈</span>${itemSellGold(s)}${itemSellEridium(s)?` <span class="cur-eri">◆</span>${itemSellEridium(s)}`:''}</button>
           <span class="si-price">${i===p.shieldIdx?'已装备':'点击装备'}</span>
         </div>
       </div>`;
@@ -409,7 +476,7 @@ const UI = {
         <div class="si-meta">${(RARITY_BY_ID[r.rarity]||RARITIES[0]).name} · Lv.${r.ilvl} · 随身装备</div>
         <div class="istat">${relicLines(r).join(' · ')}</div>
         <div class="si-buy">
-          <button class="btn small ghost" data-rsell="${i}">卖出 ◈${itemSellGold(r)}${itemSellEridium(r)?` ◆${itemSellEridium(r)}`:''}</button>
+          <button class="btn small ghost" data-rsell="${i}">卖出 <span class="cur-gp">◈</span>${itemSellGold(r)}${itemSellEridium(r)?` <span class="cur-eri">◆</span>${itemSellEridium(r)}`:''}</button>
           <span class="si-price">${i===p.relicIdx?'已装备':'点击装备'}</span>
         </div>
       </div>`).join('') : `<div class="empty-hint">没有随身装备 · 随身装备提供纯被动词条，一个槽位</div>`;
@@ -420,7 +487,7 @@ const UI = {
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <h2 class="title-big" style="font-size:30px;margin:0;">装备库</h2>
-          <div class="shop-gold">◈ ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>　<span style="font-size:12px;color:var(--muted);">搜集效率 +${p.mf}</span></div>
+          <div class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>　<span style="font-size:12px;color:var(--muted);">搜集效率 +${p.mf}</span></div>
         </div>
         <div class="subtitle">护甲：${sh?`${sh.name}（延迟 ${sh.delay.toFixed(1)}s · ${sh.rate.toFixed(1)}/s）`:"无"}</div>
 
@@ -508,7 +575,7 @@ const UI = {
     id = id || "marcus";
     const g=this.game, p=g.player, def=SHOPS[id];
     const cur=Shop.currencyOf(id);
-    const icon=cur==="eridium"?"◆":"◈";
+    const icon=Shop.curIconHtml(cur);
 
     let tabs="";
     for(const key of ["marcus","black","gamble"]){
@@ -524,7 +591,7 @@ const UI = {
         <div class="slot">?</div>
         <div style="color:var(--muted);font-size:13px;max-width:420px;line-height:1.6;">${def.desc}<br>
           ${weaponQualityHidden()?"精简显示下不标品质，切到「完整」可查看；":"特供 / 珍藏 / 孤品 三档神兵只有这台机器能出，" }物品等级 = 你的等级 +3。</div>
-        <button class="btn" id="btn-gamble" ${Shop.balance("gamble",g)<cost?'disabled style="opacity:.4"':''}>投币 ${Shop.curIcon("gamble")}${cost.toLocaleString()}</button>
+        <button class="btn" id="btn-gamble" ${Shop.balance("gamble",g)<cost?'disabled style="opacity:.4"':''}>投币 ${Shop.curIconHtml("gamble")}${cost.toLocaleString()}</button>
         <div class="gamble-result" id="gamble-result"></div>
       </div>`;
     } else {
@@ -545,7 +612,7 @@ const UI = {
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <h2 class="title-big" style="font-size:30px;margin:0;">军火市场</h2>
-          <div class="shop-gold">◈ ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span></div>
+          <div class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span></div>
         </div>
         <div class="subtitle">MARKET · 金币买军火，美元才能进黑市</div>
         <div class="shop-tabs">${tabs}</div>
@@ -584,9 +651,9 @@ const UI = {
         SFX.levelup(); this.game.shake(4);
       } else SFX.hurt();
       const goldEl=this.overlay.querySelector('.shop-gold');
-      if(goldEl) goldEl.textContent=Shop.curIcon("gamble")+" "+Shop.balance("gamble",g).toLocaleString();
+      if(goldEl) goldEl.innerHTML=Shop.curIconHtml("gamble")+" "+Shop.balance("gamble",g).toLocaleString();
       const cost=Shop.gambleCost(g);
-      if(gb){ gb.textContent=`投币 ${Shop.curIcon("gamble")}${cost.toLocaleString()}`; gb.disabled=Shop.balance("gamble",g)<cost; gb.style.opacity=Shop.balance("gamble",g)<cost?0.4:1; }
+      if(gb){ gb.innerHTML=`投币 ${Shop.curIconHtml("gamble")}${cost.toLocaleString()}`; gb.disabled=Shop.balance("gamble",g)<cost; gb.style.opacity=Shop.balance("gamble",g)<cost?0.4:1; }
     };
     document.getElementById('btn-back-pause').onclick=()=>{
       SFX.ui();
@@ -598,7 +665,7 @@ const UI = {
   _shopItem(it, i, gold, cur){
     const it0=it.item;
     const w=it0;
-    const icon=cur==="eridium"?"◆":"◈";
+    const icon=Shop.curIconHtml(cur);
     const cant = gold < it.price;
     const isGear = w.kind==="shield" || w.kind==="relic";
     let meta, stats, affix;
@@ -753,7 +820,7 @@ const UI = {
         <h2 class="title-big" style="font-size:36px;">暂停</h2>
         <div class="subtitle">${endless?`ENDLESS · 第 ${this.game.world?this.game.world.wave:1} 波`:"PAUSED"}</div>
         <div class="row" style="justify-content:center;margin-bottom:12px;">
-          <span class="shop-gold">◈ ${p.gold.toLocaleString()}</span>
+          <span class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}</span>
           <span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>
           <span style="color:var(--muted);font-size:13px;">Lv.${p.level} · 搜集效率 +${p.mf}${p.mayhem>0?` · 改装${p.mayhem}`:''}${p.souls>0?` · 功勋 ${p.souls}`:''}</span>
         </div>
@@ -923,7 +990,7 @@ const UI = {
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:34px;">区域肃清！</h2>
         <div class="subtitle">${zone.name} 已清除</div>
-        <p style="color:var(--muted);">等级 Lv.${p.level} · 技能点 ${p.skillPoints} · 金币 <b style="color:var(--accent)">◈${p.gold.toLocaleString()}</b> · 美元 <b style="color:#b061ff">◆${p.eridium}</b></p>
+        <p style="color:var(--muted);">等级 Lv.${p.level} · 技能点 ${p.skillPoints} · 金币 <b class="cur-gp">◈${p.gold.toLocaleString()}</b> · 美元 <b style="color:#b061ff">◆${p.eridium}</b></p>
         <p style="color:var(--muted);font-size:13px;">${last?'前方就是军械库':'下一片区域等级更高，先去军火市场补一补？'}</p>
         <div class="row" style="justify-content:center;">
           <button class="btn ghost" id="btn-shop-zone">军火市场</button>

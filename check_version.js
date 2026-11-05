@@ -50,5 +50,22 @@ const missing = scripts.filter(s => !fs.existsSync(path.join(ROOT, s.split("?")[
 if (missing.length) fail("以下脚本文件不存在：" + missing.join(", "));
 else ok("全部脚本文件存在");
 
+// 6) v0.22.0：懒加载脚本不出现在 <script src> 里，单独校验清单
+//    （防止删掉文件后 onlyRaid=false 的旧模式恢复路径静默 404）
+if (!html.includes("src/lazy-legacy.js")) fail("index.html 未引用 src/lazy-legacy.js");
+else {
+  const lazySrc = read("src/lazy-legacy.js");
+  const lm = lazySrc.match(/var\s+LAZY\s*=\s*\[([^\]]+)\]/);
+  const lazyNames = lm ? [...lm[1].matchAll(/['"]([^'"]+)['"]/g)].map(x => x[1]) : [];
+  if (!lazyNames.length) fail("lazy-legacy.js 找不到 LAZY 清单");
+  else {
+    const gone = lazyNames.filter(n => !fs.existsSync(path.join(ROOT, "src", n + ".js")));
+    if (gone.length) fail("懒加载脚本文件不存在：" + gone.join(", "));
+    else ok(`懒加载清单 ${lazyNames.length} 个脚本均存在（${lazyNames.join(", ")}）`);
+  }
+  if (!/CFG\.version/.test(lazySrc)) fail("lazy-legacy.js 未用 CFG.version 拼接缓存串（会拿到旧代码）");
+  else ok("懒加载脚本使用 CFG.version 动态拼接 ?v=");
+}
+
 if (failed) { console.error("\n检查未通过。请同步 package.json / CFG.version / index.html 的 ?v=。"); process.exit(1); }
 console.log("\n全部通过。");

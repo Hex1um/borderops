@@ -328,9 +328,19 @@
 
 ## 12. 存档
 
-- 全部存在浏览器 `localStorage`，换浏览器 / 清缓存即丢失。
+- 全部存在浏览器 `localStorage`；**v0.22.0 起可用存档码把进度带到别的浏览器 / 域名**。
 - 撤离成功才写回仓库；阵亡不写。
-- 兼容旧版本存档键名，升级版本不会清空进度。
+- 兼容旧版本存档键名，升级版本不会清空进度（旧档迁移样本见 `fixtures/legacy-saves.json` 与 verify 组 32）。
+
+### 12.1 存档码（v0.22.0）
+
+标题页 →「导出存档码」→ 复制 `BOPS1-` 开头的一串文本；在新浏览器 / 新域名打开游戏 →「导入存档码」→ 粘贴并确认。
+
+- 一个码打包**战役进度 + 塔科夫仓库 + 拍卖行**全部存档键，按白名单原样搬运，未来新增字段也能带走。
+- 带 8 位校验和：粘贴时少一截或串行会提示「校验失败」，不会写入半截存档。
+- 中文、Unicode 键无损（纯 JS base64 + UTF-8，不依赖 `btoa` / `atob`）。
+- 导入会**覆盖**本机同名存档，建议先导出备份；从未进入过游戏（无存档）时导出会提示「暂无存档可导出」。
+- 只写白名单内的存档键，拒绝在存档码里夹带任意 `localStorage` 键。
 
 ---
 
@@ -351,6 +361,9 @@ A：局内回收超市 1.2×（±0.4）远高于背包直售 0.5×。有能力�
 **Q：2D/3D 设置在哪？**
 A：只在**局内**出现：`ESC` → 设置 → 视角维度；或直接按 `V` 切换。标题页没有入口。
 
+**Q：换电脑 / 清了缓存，进度还能找回来吗？**
+A：之前导出过存档码就能，见 12.1。没导出过的话 `localStorage` 是绑域名的，无法跨设备恢复——建议长线开局前先导一份码存好。
+
 **Q：联机连不上？**
 A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRTC，对称 NAT 下可能失败。
 
@@ -360,12 +373,17 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 
 ```sh
 npm start            # node server.js，默认 3000 端口
-npm run check        # 版本三处同步 + index.html 全部 ?v= 缓存串
-npm run verify       # 无浏览器依赖的逻辑回归（398 条断言）
+npm run check        # 版本三处同步 + 静态/懒加载脚本清单
+npm run verify       # 无浏览器依赖的逻辑回归（531 条断言）
+npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
 
 - **零构建**：原生 HTML / CSS / JS 经典脚本，无 ES modules、无打包器。
-- **脚本顺序敏感**：`config → util → weapons → items → skills → player → enemies → combat → world → endless → dust2 → shop → input → render → ui → viewmode → fpview → raid → net → net-p2p → auction → br → save → main`。
+- **脚本顺序敏感**：`sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.22.0 共 29 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
+- **巨型文件拆分**：`src/raid.js`（9750 行）已拆为 7 个 `raid-*.js`（最大 1621 行）；verify 的 `RAID_PARTS` 会把分片拼回全文再做源码正则断言，新增分片记得同步 `index.html` / `check_version.js` / `README.md`。
+- **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。
+- **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
+- **FPS 基线**：`npm run bench:fps` 本机实测参考值 2D 46.9 fps / p95 25.6ms，3D 29.7 fps / p95 37.1ms（headless Chromium，120 帧）。改渲染热路径前后各跑一次对比。
 - **版本三处同步**：`package.json` / `src/config.js` 的 `CFG.version` / `index.html` 全部 `?v=`，改完必须一起改并跑 `npm run check`。
-- **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件，`src/raid.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。
+- **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件；`raid-*.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。
