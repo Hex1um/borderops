@@ -214,6 +214,8 @@ function partValue(p){
 class Weapon {
   constructor(spec){
     Object.assign(this, spec);
+    // v0.20.1：隐藏厂商名时，旧存档里已经写死的「图拉兵工厂…」也要剥掉。
+    if(typeof CFG!=="undefined" && CFG.showManufacturer===false) this.name=stripManufacturer(this.name);
     this.laser=false;   // 一律实体弹丸（旧存档的 laser 字段强制归一）
     if(!this.affixes) this.affixes=[];
     if(this.power===undefined) this.power=null;

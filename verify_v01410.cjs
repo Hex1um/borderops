@@ -894,6 +894,9 @@ check('厂商名默认隐藏', manHidden.flag === false ? 1 : 0, 1, 0.001);
 check('生成的枪名不含厂商前缀', manHidden.leak.length, 0, 0.001);
 if (manHidden.leak.length) console.log('  仍带厂商:', manHidden.leak.join(' / '));
 check('旧名清洗函数存在', /function stripManufacturer\(name\)/.test(fs.readFileSync(path.join(SRC,'weapons.js'),'utf8')) ? 1 : 0, 1, 0.001);
+const oldW = new (G('Weapon'))({ name:'图拉兵工厂步枪', type:'rifle', rarity:'white', ilvl:1, magSize:30, stats:{ damage:10, fireRate:5, accuracy:0.9, mag:30, reload:2, speed:800, pellets:1, splash:0, crit:1.5, critChance:0.15, auto:true, charge:false, spread:0.05, ammoType:'rifle', pierce:0, homing:false, lifesteal:0, elemChance:0, recoil:0, moveMul:1, rangeMul:1, splashDmgMul:1, shieldOnHit:0, ammoEff:0 } });
+check('Weapon 构造器清洗旧厂商前缀', oldW.name === '步枪' ? 1 : 0, 1, 0.001);
+check('旧仓库加载时清洗厂商前缀', /stripManufacturer/.test(raidSrc) && /showManufacturer/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);
