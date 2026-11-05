@@ -796,5 +796,92 @@ if (roomClash.length) console.log('  重叠:', roomClash.join(' / '));
 check('撤离点不压在建筑上', extClash.length, 0, 0.001);
 if (extClash.length) console.log('  压建筑:', extClash.join(' / '));
 
+console.log('\n=== 25. 弹药物品化（v0.20.0）===');
+const ammoMeta = JSON.parse(G(`JSON.stringify((()=>{
+  const ids=Object.keys(AMMO_DEFS);
+  const pens=AMMO_GRADES.map(g=>AMMO_TYPES[g.elem].pen);
+  const powers=AMMO_GRADES.map(g=>g.power);
+  return { n:ids.length, ids, pens, powers,
+    calOf:{ pistol:ammoCalOfType("pistol"), smg:ammoCalOfType("smg"), rifle:ammoCalOfType("rifle"),
+            sniper:ammoCalOfType("sniper"), shotgun:ammoCalOfType("shotgun"), launcher:ammoCalOfType("launcher") },
+    parse:JSON.stringify(ammoParseId("ammo_heavy_4")), badId:ammoParseId("ammo_nope_1"),
+    v:AMMO_CAL_LIST.map(cal=>ammoValue(cal,5)) };
+})())`));
+check('弹药共 4 口径 × 5 级 = 20 种', ammoMeta.n, 20, 0.001);
+check('弹药 id 可反解', ammoMeta.parse === '{"cal":"heavy","lv":4}' ? 1 : 0, 1, 0.001);
+check('非法弹药 id 返回 null', ammoMeta.badId === null ? 1 : 0, 1, 0.001);
+const calWant = { pistol:"light", smg:"light", rifle:"mid", sniper:"heavy", shotgun:"heavy", launcher:"grenade" };
+check('枪型 → 口径映射正确', Object.keys(calWant).every(k=>ammoMeta.calOf[k]===calWant[k]) ? 1 : 0, 1, 0.001);
+check('弹药穿深随级别递增', ammoMeta.pens.every((v,i)=>i===0||v>=ammoMeta.pens[i-1]) ? 1 : 0, 1, 0.001);
+check('弹药威力随级别递增', ammoMeta.powers.every((v,i)=>i===0||v>ammoMeta.powers[i-1]) ? 1 : 0, 1, 0.001);
+check('高级弹药更值钱', ammoMeta.v.every((v,i)=>i===0||v>ammoMeta.v[i-1]) ? 1 : 0, 1, 0.001);
+console.log(`  弹级穿深：${ammoMeta.pens.join(' → ')} · 威力 ×${ammoMeta.powers[0]} → ×${ammoMeta.powers[4]}`);
+
+/* 装填 / 扣弹 / 换弹闭环（纯逻辑，不依赖渲染） */
+const ammoLoop = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+  R.inv.ammo["ammo_mid_2"]=60;
+  const gun={ type:"rifle", mag:30, cal:"mid", ammoMag:0, ammoRes:0, element:"none" };
+  R.player={ x:0,y:0, isPlayer:true, gun:gun, secondary:null, reloadT:0, alive:true, angle:0 };
+  R._loadAmmo(gun, "ammo_mid_2");
+  const loaded={ elem:gun.element, power:gun.power, dotK:gun.dotK };
+  R._startReload(R.player);
+  const started=R.player.reloadT>0;
+  R.player.reloadT=0; R._finishReload(R.player);
+  const after={ mag:gun.ammoMag, left:R._ammoCount("ammo_mid_2"), res:gun.ammoRes };
+  // 再打空一次，但背包只剩 15 发 → 只装得进 15
+  R._ammoTake("ammo_mid_2", 15);
+  gun.ammoMag=0; R.player.reloadT=0; R._finishReload(R.player);
+  const partial={ mag:gun.ammoMag, left:R._ammoCount("ammo_mid_2") };
+  // 完全没有子弹时不能开始换弹
+  gun.ammoMag=0; R.player.reloadT=0; R._startReload(R.player);
+  const noAmmoReload=R.player.reloadT;
+  // 自动换用另一档
+  R.inv.ammo["ammo_mid_4"]=20;
+  R._startReload(R.player);
+  const swap={ loaded:gun.loaded, started:R.player.reloadT>0 };
+  // 上限
+  R.inv.ammo={}; const added=R._ammoAdd("ammo_light_1", 9999);
+  return { loaded, started, after, partial, noAmmoReload, swap, added };
+})())`));
+check('装填写入 element / power / dotK', ammoLoop.loaded.power > 1 && ammoLoop.loaded.elem === "cryo" ? 1 : 0, 1, 0.001);
+check('换弹会开始读条', ammoLoop.started ? 1 : 0, 1, 0.001);
+check('换弹从背包扣子弹', ammoLoop.after.mag === 30 && ammoLoop.after.left === 30 ? 1 : 0, 1, 0.001);
+check('子弹不足时只装现有的', ammoLoop.partial.mag === 15 && ammoLoop.partial.left === 0 ? 1 : 0, 1, 0.001);
+check('没有子弹不能换弹', ammoLoop.noAmmoReload === 0 ? 1 : 0, 1, 0.001);
+check('打光后自动换用另一档', ammoLoop.swap.loaded === "ammo_mid_4" && ammoLoop.swap.started ? 1 : 0, 1, 0.001);
+check('弹药总发数有上限', ammoLoop.added, 720, 0.001);
+
+/* 商店 / 合成 / 掉落 三个入口都接上了 */
+const shopAmmo = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid; R.lootLuck=0.2;
+  const out={};
+  for(const k of ["gun","mat","black"]){
+    const st=R._shopStock(k);
+    out[k]=st.ammo.length ? { n:st.ammo.length, price:st.ammo[0].shopPrice||st.ammo[0].tokenPrice||0,
+      id:st.ammo[0].id, hasField:!!st.ammo[0].id } : null;
+  }
+  return out;
+})())`));
+check('枪械店卖弹药', shopAmmo.gun && shopAmmo.gun.n > 0 ? 1 : 0, 1, 0.001);
+check('材料店卖弹药', shopAmmo.mat && shopAmmo.mat.n >= 8 ? 1 : 0, 1, 0.001);
+check('黑市卖高级弹药', shopAmmo.black && shopAmmo.black.n > 0 ? 1 : 0, 1, 0.001);
+check('商店弹药有价格', [shopAmmo.gun, shopAmmo.mat, shopAmmo.black].every(a=>a && a.price>0) ? 1 : 0, 1, 0.001);
+const craftAmmo = JSON.parse(G(`JSON.stringify((()=>{
+  const rs=RAID_RECIPES.filter(r=>r.kind==="ammo");
+  return { n:rs.length, names:rs.map(r=>r.name),
+    lv0:rs[0].make(null,0).id, lv8:rs[0].make(null,8).id, n0:rs[0].make(null,0).n };
+})())`));
+check('工坊有 4 条弹药配方', craftAmmo.n, 4, 0.001);
+check('低品质投料产出低级弹', craftAmmo.lv0 === "ammo_light_1" ? 1 : 0, 1, 0.001);
+check('高品质投料产出高级弹', craftAmmo.lv8 === "ammo_light_5" ? 1 : 0, 1, 0.001);
+check('一次合成出 30 发', craftAmmo.n0, 30, 0.001);
+check('AI 尸体掉落弹药', /drops\.push\(ammoDef\(gcal, lv\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('箱子掉落弹药', /_rollAmmo/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('拾取物支持弹药', /item\.kind==="ammo"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('旧档迁移补起步弹药', /RAID_AMMO_STARTER/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('大厅可按发数携带弹药', /data-ammo=/.test(raidSrc) && /_prepPlayerAmmo/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

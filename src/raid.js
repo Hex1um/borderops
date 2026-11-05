@@ -345,6 +345,15 @@ const RAID_ARMOR_TIERS = [1,2,3,4,5,6,7,8,9];
 // 局内物品栏容量上限（超出则无法继续拾取，提示「物品栏已满」）
 const RAID_INV_CAP = { weapons:6, armors:4, helmets:4, shields:3, parts:16, materials:24, meds:6, receivers:4, keys:8 };
 
+/* ---- 弹药（v0.20.0）----
+ * 子弹是背包里的独立物品，按发堆叠：inv.ammo = { "ammo_mid_3": 120, ... }
+ * 枪上只记「装填的是哪一种」（loaded）与弹匣内发数（ammoMag），不再有凭空的 ammoRes。 */
+const RAID_AMMO_CAP = 720;      // 局内可携带的总发数（跨口径合计）
+const RAID_AMMO_STACK = 30;     // 一条货 / 一次拾取 = 30 发
+const RAID_AMMO_STARTER = {     // 新档 / 旧档迁移时发的起步弹药（全是民用级）
+  ammo_light_1: 120, ammo_mid_1: 150, ammo_heavy_1: 60, ammo_grenade_1: 12,
+};
+
 /* ----------------------------- 9 阶统一品级 -----------------------------
  * 塔科夫全战利品共用同一套品级刻度（共 9 阶，严格由低到高）：
  *   民用 · 翻新 · 制式 · 军规 · 精工 · 特种 · 试验 · 原型 · 竞赛
@@ -968,6 +977,16 @@ for(const r of RAID_RECEIVERS){
     make:(mats,q)=>raidMakeReceiver(r, M.clamp(q,0,8)) });
 }
 
+/* v0.20.0：弹药合成 —— 每个弹族一张配方，产出的「级别」由投料品质决定。
+ * 材料越贵弹药越高级；投料 3 份，一次固定出 30 发。 */
+for(const cal of AMMO_CAL_LIST){
+  RAID_RECIPES.push({
+    id:"r_ammo_"+cal, name:AMMO_CALS[cal].name+"（30 发）", kind:"ammo", tag:"弹药", slots:3,
+    desc:`产出 ${AMMO_CALS[cal].spec} · 适用 ${AMMO_CALS[cal].types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")} · 级别由材料品质决定`,
+    make:(mats,q)=>({ kind:"ammo", id:ammoItemId(cal, M.clamp(1+Math.floor(q*0.62),1,5)), n:RAID_AMMO_STACK }),
+  });
+}
+
 /* v0.19.0：保证一把枪至少 1 条词缀；条数由 rollAffixCount 决定（大多数只有 1 条，
  * 少数 2 条及以上）。旧版强制「1 前缀 + 1 后缀」，导致每把枪都恰好 2 条，数量过于单一。 */
 function ensureGunAffixes(w){
@@ -1164,7 +1183,8 @@ const RaidStash = {
         helmets:[raidMakeHelmet(2,0)],
         shields:[raidMakeShield(2,0)],
         parts:[], materials:[], cores:[], receivers:[], meds:{hemo:0,medkit:0,stim:0,surgery:0}, bandages:1,
-        tokens:0, keys:[raidMakeKey(1)] };
+        tokens:0, keys:[raidMakeKey(1)],
+        ammo:Object.assign({}, RAID_AMMO_STARTER) };
     };
     try{
       const r=localStorage.getItem(this.KEY);
@@ -1204,6 +1224,14 @@ const RaidStash = {
           if(d.bandages===undefined) d.bandages=1;
           if(d.creds===undefined) d.creds=800;
           if(d.tokens===undefined) d.tokens=0;      // GP 币
+          /* v0.20.0：子弹变成独立物品 —— 旧档没有弹药栏就发一套民用弹，
+           * 旧枪身上残留的 loaded 一律作废（按约定统一回落到 T1 民用弹）。 */
+          if(!d.ammo || typeof d.ammo!=="object") d.ammo=Object.assign({}, RAID_AMMO_STARTER);
+          for(const k in d.ammo){ if(!ammoParseId(k) || !(d.ammo[k]>0)) delete d.ammo[k]; }
+          for(const w of (d.weapons||[])){
+            if(w && w.loaded && !ammoParseId(w.loaded)) delete w.loaded;
+            if(w && !w.cal) w.cal=ammoCalOfType(w.type);
+          }
           if(!Array.isArray(d.keys)) d.keys=[];      // 钥匙（5 级）
           for(const k of d.keys){ if(!k.uses) k.uses=raidKeyDef(k.lv).uses; if(!k.maxUses) k.maxUses=raidKeyDef(k.lv).uses; }
           return d;
@@ -1247,9 +1275,11 @@ class RaidOperator {
     this.armorTier=o.armorTier||0;
     this.armorRegen=o.armorRegen||0;   // 护甲耐久不再自动回复，仅保留字段兼容旧存档
     this.gun=o.gun||null; this.secondary=o.secondary||null;
-    // 每把枪独立记录弹药（修复：换枪瞬间满弹的漏洞）
-    if(this.gun){ this.gun.ammoMag=this.gun.mag; this.gun.ammoRes=this.gun.reserve; }
-    if(this.secondary){ this.secondary.ammoMag=this.secondary.mag; this.secondary.ammoRes=this.secondary.reserve; }
+    /* 每把枪独立记录弹药（修复：换枪瞬间满弹的漏洞）。
+     * v0.20.0：玩家的子弹在背包里，装填由 _prepPlayerAmmo / 换弹流程决定，
+     * 这里只给 AI 直接满上（AI 没有物品栏，靠「翻尸补弹」维持）。 */
+    if(this.gun && !this.isPlayer){ this.gun.ammoMag=this.gun.mag; this.gun.ammoRes=this.gun.reserve; }
+    if(this.secondary && !this.isPlayer){ this.secondary.ammoMag=this.secondary.mag; this.secondary.ammoRes=this.secondary.reserve; }
     // —— v1.0 AI 独立搜刮：每人自己的背包 / 钱包 / 智能等级 ——
     this.inv=o.inv||{ weapons:[], armors:[], helmets:[], parts:[], materials:[], meds:[], cores:[], receivers:[] };
     this.creds=o.creds||0;
@@ -1391,7 +1421,7 @@ const Raid = {
     this.meds={hemo:0,medkit:0,stim:0,surgery:0};
     this.insured=false; this.insuredVal=0;
     this.serverT=8; this.hitFlash=0; this.aimTgt=null; this._shownWarn=false;
-    this.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[]};
+    this.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
     this.uidN=0;
     this.elapsed=0; this.reinforceT=0; this._squadN=0;
     this.spawnGrace=8;                        // 开局 8 秒 AI 不主动锁定（玩家先开枪即失效）
@@ -1504,6 +1534,10 @@ const Raid = {
       shieldInvulnBase: this.carried.shield?this.carried.shield.invuln:0,
       shieldPerks: this.carried.shield?(this.carried.shield.perks||[]).slice():[],
     });
+
+    // v0.20.0：把仓库里的子弹搬进本局并给枪上膛（必须在 player 建好之后）
+    this._prepPlayerAmmo(opts);
+    if(typeof RaidStash!=="undefined" && RaidStash.save) RaidStash.save(this.stash);
 
     // AI：补满服务器 —— 只有房主（或单机）生成 AI；客户端等房主快照
     this.ops=[this.player];
@@ -2683,13 +2717,19 @@ const Raid = {
       this._feed("设施", g.label+" · 完成急救","",false,"info");
       SFX.pickup();
     } else if(g.kind==="ammo"){
+      /* v0.20.0：弹药柜直接往背包里塞两条同口径子弹（口径跟手上的枪走） */
       const gun=p.gun;
-      if(!gun){ this._float(p.x,p.y-52,"没有武器可补给","#ff8a5a"); return; }
-      gun.ammoRes=Math.max(gun.ammoRes||0, Math.round((gun.mag||10)*3));
+      const cal=gun ? (gun.cal||ammoCalOfType(gun.type)) : "mid";
+      const lv=gun&&gun.loaded ? ((ammoParseId(gun.loaded)||{}).lv||1) : 1;
+      const add=this._ammoAdd(ammoItemId(cal, lv), RAID_AMMO_STACK*2);
       g.used=true;
-      this._float(p.x,p.y-56,"备弹已补满","#ffd36a");
-      this._feed("设施", g.label+" · 弹药已补满","",false,"info");
-      SFX.reload();
+      if(add>0){
+        this._float(p.x,p.y-56,"+ "+add+" 发 "+((ammoDefFromId(ammoItemId(cal,lv))||{}).short||"弹药"),"#ffd36a");
+        this._feed("设施", g.label+" · 补给了 "+add+" 发弹药","",false,"info");
+        SFX.reload();
+      } else {
+        this._float(p.x,p.y-56,"弹药已满","#ff8a5a");
+      }
     } else if(g.kind==="siren"){
       const now=M.now();
       if((g.cdUntil||0)>now){
@@ -2772,7 +2812,16 @@ const Raid = {
     return w;
   },
   _shopStock(kind){
-    const out={ guns:[], parts:[], mats:[], meds:[], keys:[] };
+    const out={ guns:[], parts:[], mats:[], meds:[], keys:[], ammo:[] };
+    /* 一条子弹（30 发）：价格按「单发估值 × 30」走局内 0.8× 折扣 */
+    const pack=(cal, lv, payKind)=>{
+      const d=ammoDef(cal, lv);
+      const it={ id:d.id, cal:d.cal, lv:d.lv, n:RAID_AMMO_STACK, name:d.name, short:d.short,
+        spec:d.spec, color:d.color, value:d.value*RAID_AMMO_STACK, elem:d.elem };
+      if(payKind==="token") it.tokenPrice=Math.max(3, Math.round(d.value*RAID_AMMO_STACK/380));
+      else it.shopPrice=raidShopPrice(it.value, d.id);
+      return it;
+    };
     if(kind==="gun"){
       const tiers=[1,2,3,4];
       if(RNG.chance(0.35)) tiers.push(5);
@@ -2786,6 +2835,16 @@ const Raid = {
         const c=raidMakeBoostCore(RNG.pick(BOOST_CORE_IDS), 2+RNG.ri(0,1));
         c.shopPrice=raidShopPrice(raidCoreValue("boost", c.lv), c.uid);
         out.parts.push(c);
+      }
+      /* v0.20.0：枪械店兼卖弹药 —— 按本店在售枪型的口径，T2 / T3 各一条 */
+      {
+        const cals=[];
+        for(const g of out.guns){
+          const cal=g.cal||ammoCalOfType(g.type);
+          if(cals.indexOf(cal)<0) cals.push(cal);
+        }
+        if(!cals.length) cals.push("mid");
+        for(const cal of cals){ out.ammo.push(pack(cal, 2, "cash"), pack(cal, 3, "cash")); }
       }
     } else if(kind==="mat"){
       for(let i=0;i<6;i++){
@@ -2803,6 +2862,8 @@ const Raid = {
       out.meds=["bandage","hemo","medkit","stim","surgery"].map(id=>({
         id, n:1, price:raidShopPrice((RAID_MED_BY_ID[id]||{}).value||100, id),
       }));
+      /* v0.20.0：材料店是弹药的主要补给点 —— 全口径 T1 民用、T2 制式 */
+      for(const cal of AMMO_CAL_LIST){ out.ammo.push(pack(cal, 1, "cash"), pack(cal, 2, "cash")); }
       // 钥匙：材料商店只卖低阶 I~II，卢布结算
       out.keys=[raidMakeKey(1), raidMakeKey(2)];
       for(const k of out.keys) k.shopPrice=raidShopPrice(raidKeyDef(k.lv).value, "key"+k.lv);
@@ -2813,6 +2874,9 @@ const Raid = {
         g.tokenPrice=tokenPrice[t]||60;
         out.guns.push(g);
       }
+      /* v0.20.0：黑市卖高级弹（T4 / T5），GP 币结算 —— 高级弹只能从这里或 V 级箱稳定拿到 */
+      for(const cal of ["light","mid","heavy"]){ out.ammo.push(pack(cal, 4, "token"), pack(cal, 5, "token")); }
+      if(!out.ammo.length) out.ammo.push(pack("mid", 4, "token"));
       // 改装模块不可合成，黑市是唯一能稳定买到高阶改装模块的地方
       {
         const c1=raidMakeBoostCore(RNG.pick(BOOST_CORE_IDS), 4+RNG.ri(0,1));
@@ -3112,11 +3176,7 @@ const Raid = {
       o.fireCd=Math.max(0,o.fireCd-dt);
       if(o.reloadT>0){
         o.reloadT-=dt;
-        if(o.reloadT<=0){
-          if(!o.isPlayer && o.gun.ammoRes < o.gun.mag) o.gun.ammoRes = o.gun.mag;   // AI 会翻尸补弹
-          const need=o.gun.mag-o.gun.ammoMag, take=Math.min(need,o.gun.ammoRes);
-          o.gun.ammoMag+=take; o.gun.ammoRes-=take;
-        }
+        if(o.reloadT<=0) this._finishReload(o);
       }
     }
 
@@ -3284,7 +3344,12 @@ const Raid = {
     if(!it.uid) it.uid="rt"+Math.floor(Math.random()*1e9).toString(36);
     const key=it.uid;
     let g=this._rtCache[key];
-    if(!g){ g=raidGunFromItem(it); g.ammoMag=g.mag; g.ammoRes=g.reserve; this._rtCache[key]=g; }
+    if(!g){
+      g=raidGunFromItem(it);
+      g.cal=ammoCalOfType(g.type);          // 口径跟枪型走
+      g.ammoMag=0; g.ammoRes=0;             // 子弹在背包里，装填见 _prepPlayerAmmo / _startReload
+      this._rtCache[key]=g;
+    }
     return g;
   },
   // 背包里的枪 = 物品栏中「既不在手上、也不在副手位」的那些
@@ -3481,11 +3546,149 @@ const Raid = {
     if(p.hp<=0){ p.hp=0; p.alive=false; this._fail("失温溺亡", null, null); }
   },
 
+  /* ----------------------------- 弹药（v0.20.0） -----------------------------
+   * 子弹是背包里的独立物品：inv.ammo = { "ammo_mid_3": 120, ... }
+   * 枪上只存「装填的是哪一种」（loaded）与弹匣内发数（ammoMag）。 */
+  _ammoTotal(){
+    const a=(this.inv && this.inv.ammo)||{}; let n=0;
+    for(const k in a) n+=a[k]||0;
+    return n;
+  },
+  _ammoCount(id){ return (this.inv && this.inv.ammo && this.inv.ammo[id])||0; },
+  _ammoAdd(id, n){
+    if(!id || !(n>0) || !ammoParseId(id)) return 0;
+    this.inv.ammo=this.inv.ammo||{};
+    const room=Math.max(0, RAID_AMMO_CAP-this._ammoTotal());
+    const add=Math.min(n, room);
+    if(add<=0) return 0;
+    this.inv.ammo[id]=(this.inv.ammo[id]||0)+add;
+    this._invDirty=true;
+    return add;
+  },
+  _ammoTake(id, n){
+    if(!id || !(n>0)) return 0;
+    const have=this._ammoCount(id);
+    const take=Math.min(have, n);
+    if(take<=0) return 0;
+    const left=have-take;
+    if(left>0) this.inv.ammo[id]=left; else delete this.inv.ammo[id];
+    this._invDirty=true;
+    return take;
+  },
+  /* 按口径列出背包里的子弹，高级在前（换弹时优先用好的） */
+  _ammoListByCal(cal){
+    const out=[];
+    for(let lv=5; lv>=1; lv--){
+      const id=ammoItemId(cal, lv), n=this._ammoCount(id);
+      if(n>0) out.push({ id, lv, n, def:ammoDef(cal, lv) });
+    }
+    return out;
+  },
+  _bestAmmoFor(gun){
+    if(!gun) return null;
+    if(gun.loaded && this._ammoCount(gun.loaded)>0) return gun.loaded;
+    const cal=gun.cal||ammoCalOfType(gun.type);
+    const list=this._ammoListByCal(cal);
+    return list.length ? list[0].id : null;
+  },
+  /* 装填：同时改写 element / power / dotK —— 战斗结算只认这三个字段 */
+  _loadAmmo(gun, id){
+    const d=ammoDefFromId(id);
+    if(!gun || !d) return false;
+    gun.loaded=d.id; gun.cal=d.cal;
+    gun.element=d.elem; gun.power=d.power; gun.dotK=d.dotK;
+    return true;
+  },
+  _syncAmmo(o){
+    if(!o || !o.gun) return 0;
+    if(!o.isPlayer) return o.gun.ammoRes||0;
+    o.gun.ammoRes=this._ammoCount(o.gun.loaded);
+    return o.gun.ammoRes;
+  },
+  _noAmmoWarn(gun){
+    const now=M.now();
+    if((this._noAmmoT||0) > now-1.6) return;
+    this._noAmmoT=now;
+    const d=gun&&gun.loaded ? ammoDefFromId(gun.loaded) : null;
+    this._float(this.player.x, this.player.y-40,
+      d ? (d.name+" 打空了 · 去搜刮或买弹药") : "没有子弹 · 去搜刮或买弹药", "#ff8a5a");
+  },
+
+  /* 进场装填：按配装大厅的选择把子弹搬进本局，给手上的枪上膛 */
+  _prepPlayerAmmo(opts){
+    this.inv.ammo=this.inv.ammo||{};
+    const st=this.stash||{}, stAmmo=st.ammo||(st.ammo={});
+    const want=(opts && opts.ammo)||null;
+    const take=(id, n)=>{
+      const have=Math.max(0, stAmmo[id]||0);
+      const room=Math.max(0, RAID_AMMO_CAP-this._ammoTotal());
+      const k=Math.min(have, room, Math.max(0, Math.round(n)||0));
+      if(k<=0) return 0;
+      if(have-k>0) stAmmo[id]=have-k; else delete stAmmo[id];
+      this.inv.ammo[id]=(this.inv.ammo[id]||0)+k;
+      return k;
+    };
+    if(want){
+      for(const cal of Object.keys(want)){
+        const w=want[cal];
+        if(!w || !w.id) continue;
+        take(w.id, w.n===undefined ? 9999 : w.n);
+      }
+    } else {
+      /* 没指定就全带（受总发数上限约束，高级优先装走） */
+      const ids=Object.keys(stAmmo).sort((a,b)=>((ammoParseId(b)||{lv:0}).lv)-((ammoParseId(a)||{lv:0}).lv));
+      for(const id of ids) take(id, stAmmo[id]);
+    }
+    const p=this.player;
+    if(!p) return;
+    for(const gun of [p.gun, p.secondary]){
+      if(!gun) continue;
+      gun.cal=ammoCalOfType(gun.type);
+      const wantId=want && want[gun.cal] && want[gun.cal].id;
+      let id=(wantId && this._ammoCount(wantId)>0) ? wantId : this._bestAmmoFor(gun);
+      if(!id){ gun.ammoMag=0; gun.ammoRes=0; continue; }
+      this._loadAmmo(gun, id);
+      gun.ammoMag=this._ammoTake(id, gun.mag);
+      gun.ammoRes=this._ammoCount(id);
+    }
+  },
+
   _startReload(o){
     if(!o.gun) return;
-    if(o.reloadT>0 || o.gun.ammoMag>=o.gun.mag || o.gun.ammoRes<=0) return;
+    if(o.reloadT>0 || o.gun.ammoMag>=o.gun.mag) return;
+    if(o.isPlayer){
+      this._syncAmmo(o);
+      if(o.gun.ammoRes<=0){
+        /* 当前那档打光了：自动换用背包里同口径还没打光的子弹（高级优先） */
+        const alt=this._bestAmmoFor(o.gun);
+        if(alt && alt!==o.gun.loaded){
+          this._loadAmmo(o.gun, alt);
+          this._syncAmmo(o);
+          if(o.gun.ammoRes>0) this._float(o.x, o.y-40, "换用 "+ammoDefFromId(alt).short, "#ffd36a");
+        }
+      }
+      if(o.gun.ammoRes<=0){ this._noAmmoWarn(o.gun); return; }
+    } else if(o.gun.ammoRes<=0) return;
     o.reloadT = Math.max(0.9, 2.4 - o.gun.mag*0.02);
     SFX.reload();
+  },
+
+  /* 换弹读条结束：玩家从背包扣子弹，AI 直接补满（AI 没有物品栏） */
+  _finishReload(o){
+    if(!o || !o.gun) return;
+    const g=o.gun;
+    const need=Math.max(0, g.mag-g.ammoMag);
+    if(!o.isPlayer){
+      if(g.ammoRes < g.mag) g.ammoRes = g.mag;
+      const take=Math.min(need, g.ammoRes);
+      g.ammoMag+=take; g.ammoRes-=take;
+      return;
+    }
+    const id=g.loaded;
+    const take=id ? this._ammoTake(id, need) : 0;
+    g.ammoMag+=take;
+    g.ammoRes=id ? this._ammoCount(id) : 0;
+    if(take<=0) this._noAmmoWarn(g);
   },
 
   _moveOp(o, dx, dy){
@@ -4112,7 +4315,9 @@ const Raid = {
     const elem=(gun && gun.element && ELEMENTS[gun.element]) ? gun.element : "none";
     const at=raidArmorType(target);
     const eMul=elemMult(elem, at);
-    d*=eMul;
+    /* v0.20.0：子弹级别带来的整体威力（T1 1.00 → T5 1.30），叠在终点效应倍率之外 */
+    const pow=(gun && gun.power) ? gun.power : 1;
+    d*=eMul*pow;
     const E=elem!=="none"?ELEMENTS[elem]:null;
     const dmgCol=E?E.color:(target.isPlayer?"#ff6a6a":"#ffd36a");
 
@@ -4124,7 +4329,8 @@ const Raid = {
      *   辐射   → 命中后向附近单位连锁，连锁伤害不再二次触发连锁
      * 状态只在权威结算侧写入；远端玩家 / 影子 AI 走上面的转发分支，不会重复结算。 */
     if(d>0 && E){
-      const dotK=(E.dot||0)/6;
+      /* dotK 随子弹级别递减：高级弹靠穿深，不靠烧灼 */
+      const dotK=((E.dot||0)/6)*((gun && gun.dotK!==undefined) ? gun.dotK : 1);
       if(elem==="fire" && dotK>0){
         const fresh=(target.burnT||0)<=0;
         target.burnT=Math.min(BURN_CAP,(target.burnT||0)+BURN_ADD*dotK);
@@ -4390,6 +4596,16 @@ const Raid = {
     for(const a of (bot.inv.armors||[]).slice(0,1)) drops.push(a);
     for(const pt of (bot.inv.parts||[]).slice(0,1)) drops.push(pt);
     for(const c of (bot.inv.parts||[]).filter(p=>p.core).slice(0,1)) drops.push(c);
+    /* 弹药：按它自己那把枪的口径掉一批（级别跟枪的品级走，Scav 只会民用/制式） */
+    {
+      const gcal=bot.gun?(bot.gun.cal||ammoCalOfType(bot.gun.type)):null;
+      if(gcal && RNG.chance(0.78)){
+        const lv=bot.bounty?RNG.ri(4,5)
+          : bot.smart?RNG.ri(2,4)
+          : RNG.ri(1,2);
+        drops.push(ammoDef(gcal, lv));
+      }
+    }
     // PMC 身上（尤其 Raider）可能揣着保险箱钥匙
     if(RNG.chance(bot.smart?0.20:0.07)){
       const KLV=[{weight:52,lv:1},{weight:26,lv:2},{weight:14,lv:3},{weight:6,lv:4},{weight:2,lv:5}];
@@ -4460,11 +4676,13 @@ const Raid = {
         this._float(c.x, c.y-46, "+"+gain+" 卢布", "#8fe07a");
         // 箱内可能藏着钥匙 —— 等级上限 = 本箱等级 +1（V 级封顶），越高越罕见
         if(RNG.chance(0.34)) this._collect(raidRollBoxKey(lv), c.x, c.y);
+        if(RNG.chance(0.55)) this._collect(this._rollAmmo(0.35+lv*0.16), c.x, c.y);
       } else if(c.kind==="weapon"){
         // 武器箱也以原材料为主，整枪极少
         const wr=RNG.f();
         if(wr<0.05) this._collect(this._rollGunLoot("pmc", this.lootLuck), c.x, c.y);
         else if(wr<0.23) this._collect(this._rollPartGear("pmc", this.lootLuck), c.x, c.y);
+        else if(wr<0.52) this._collect(this._rollAmmo(this.lootLuck), c.x, c.y);   // 武器箱是找子弹的首选
         else this._collect(this._rollMaterial(this.lootLuck), c.x, c.y);
       } else if(c.kind==="medical"){
         if(RNG.chance(0.72)){
@@ -4484,7 +4702,10 @@ const Raid = {
       } else if(RNG.chance(0.16)){
         this._collect(raidRollMed(this.lootLuck), c.x, c.y);
         SFX.pickup();
-      } else if(RNG.chance(0.24)){
+      } else if(RNG.chance(0.35)){
+        this._collect(this._rollAmmo(this.lootLuck), c.x, c.y);
+        SFX.pickup();
+      } else if(RNG.chance(0.30)){
         // 普通箱现金：金额与概率双双下调
         const gain=RNG.ri(18,45)*(c.tier+1);
         this.creds+=gain;
@@ -4537,6 +4758,17 @@ const Raid = {
     if(arr.length>=RAID_INV_CAP[key]) return false;
     arr.push(item); return true;
   },
+  /* 掉一条子弹：口径有 45% 概率跟着玩家手上的枪，级别由箱子等级 / 运气决定 */
+  _rollAmmo(luck, cal){
+    const pg=this.player && this.player.gun;
+    const want=pg ? (pg.cal||ammoCalOfType(pg.type)) : null;
+    const c=cal || ((want && RNG.chance(0.45)) ? want : RNG.pick(AMMO_CAL_LIST));
+    const l=M.clamp(luck||0, 0, 1);
+    const lv=M.clamp(1+Math.floor(RNG.f()*(1.9+l*2.4)), 1, 5);
+    const d=ammoDef(c, lv);
+    d.n=RAID_AMMO_STACK;
+    return d;
+  },
   _collect(item, x, y, fromGround){
     this._invDirty=true;   // 物品栏开着时拾取会即时刷新
     const px=x!==undefined?x:this.player.x, py=(y!==undefined?y:this.player.y)-24;
@@ -4546,6 +4778,20 @@ const Raid = {
                                      : label+"已满 · 物品掉在脚下", "#ff8a5a");
       return false;
     };
+    /* 弹药：按发堆进弹药栏（不占物品格，但总发数有上限） */
+    if(item.kind==="ammo"){
+      const id=item.id || ammoItemId(item.cal, item.lv);
+      const want=item.n||RAID_AMMO_STACK;
+      const add=this._ammoAdd(id, want);
+      if(add>0){
+        const d=ammoDefFromId(id)||item;
+        this._float(px, py, "+"+add+" "+d.short, d.color||"#dfe7f0");
+        SFX.pickup();
+        return true;
+      }
+      this._float(px, py, "弹药已满（"+RAID_AMMO_CAP+" 发上限）", "#ff8a5a");
+      return false;
+    }
     // 原材料：直接进入材料栏（带品质颜色）
     if(item.kind==="material"){
       if(this._invPush(this.inv.materials, "materials", item)){
@@ -4987,9 +5233,9 @@ const Raid = {
     /* 装备中（不可丢，防止误操作把手上的枪/盔甲扔掉） */
     sec("装备中","撤离成功才带回仓库");
     line("主武器 · "+(p.gun?p.gun.name:"空手"), p.gun?raidGunColor(p.gun):"#8b95a5",
-      p.gun?`${p.gun.ammoMag}/${p.gun.mag} 发 · 备弹 ${p.gun.ammoRes}`:"按 Q 从背包取枪");
+      p.gun?`${p.gun.ammoMag}/${p.gun.mag} 发 · 背包 ${p.gun.ammoRes} · ${p.gun.loaded?(ammoDefFromId(p.gun.loaded)||{}).short||"?" : "未装填"}`:"按 Q 从背包取枪");
     if(p.secondary) line("副武器 · "+p.secondary.name, raidGunColor(p.secondary),
-      `${p.secondary.ammoMag}/${p.secondary.mag} 发 · 备弹 ${p.secondary.ammoRes}`);
+      `${p.secondary.ammoMag}/${p.secondary.mag} 发 · 背包 ${p.secondary.ammoRes} · ${p.secondary.loaded?(ammoDefFromId(p.secondary.loaded)||{}).short||"?" : "未装填"}`);
     if(p.armorTier) line("护甲 · "+RAID_ARMORS[p.armorTier].name, ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0",
       `T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?(' · 硬质插板（HP ×'+elemMult('corrosive','armor').toFixed(2)+'）'):' · 已击穿（无防护）'):''}`);
     if(p.helmetTier) line("头盔 · "+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
@@ -4998,6 +5244,28 @@ const Raid = {
       `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`);
     line("卢布", "#8fe07a", "₽ "+priceText(R.creds)+" · 撤离后结算进仓库");
     if((R.tokens||0)>0) line("GP 币", "#c07bff", "◆ "+R.tokens+" · 撤离才落袋");
+
+    /* 弹药栏（v0.20.0）：按口径 × 级别堆叠，总发数有上限 */
+    {
+      const ids=Object.keys(R.inv.ammo||{}).filter(id=>ammoParseId(id)&&R.inv.ammo[id]>0);
+      ids.sort((a,b)=>{
+        const A=ammoParseId(a), B=ammoParseId(b);
+        return (AMMO_CAL_LIST.indexOf(A.cal)-AMMO_CAL_LIST.indexOf(B.cal)) || (B.lv-A.lv);
+      });
+      sec("弹药 · "+R._ammoTotal()+"/"+RAID_AMMO_CAP+" 发","换弹时自动扣这里的子弹");
+      if(!ids.length){
+        rows.push(`<div class="inv-row"><div class="ir-main"><div class="ir-name" style="color:#8b95a5">没有子弹</div>
+          <div class="ir-meta">搜箱 / 商店 / 工坊合成都能拿到弹药</div></div></div>`);
+      }
+      for(const id of ids){
+        const d=ammoDefFromId(id), n=R.inv.ammo[id];
+        const E=AMMO_TYPES[d.elem]||AMMO_TYPES.none;
+        const onGun=(p.gun&&p.gun.loaded===id)||(p.secondary&&p.secondary.loaded===id);
+        line(d.name+(onGun?" · 已装填":""), d.color,
+          `${d.spec} · T${d.lv} ${(AMMO_GRADE_BY_LV[d.lv]||{}).name||""} · 穿深 ${E.pen} · ${n} 发 · ${money(d.value*n)}`,
+          `ammo:${id}`);
+      }
+    }
 
     /* 背包战利品（全部可丢，丢在脚下还能捡回来） */
     const capTxt=`武器 ${R.inv.weapons.length}/${RAID_INV_CAP.weapons} · 材料 ${R.inv.materials.length}/${RAID_INV_CAP.materials} · 钥匙 ${(R.inv.keys||[]).length}/${RAID_INV_CAP.keys}`;
@@ -5012,7 +5280,7 @@ const Raid = {
       any=true;
       const rtg=R._rtGun(w);
       line(w.name, raidGunColor(w),
-        `伤害 ${w.dmg} · 弹匣 ${rtg?rtg.ammoMag:0}/${w.mag} · 备弹 ${rtg?rtg.ammoRes:0} · 估值 ${money(w.value)}`,
+        `伤害 ${w.dmg} · 弹匣 ${rtg?rtg.ammoMag:0}/${w.mag} · 装填 ${rtg&&rtg.loaded?((ammoDefFromId(rtg.loaded)||{}).short||"?"):"未装填"} · 估值 ${money(w.value)}`,
         `weapons:${i}`, `weapons:${i}`);
     }
     for(let i=0;i<R.inv.armors.length;i++){
@@ -5075,7 +5343,7 @@ const Raid = {
       btn.onclick=(e)=>{
         e.preventDefault(); e.stopPropagation();
         const [type,idx]=btn.dataset.drop.split(":");
-        this._invDrop(type, parseInt(idx,10)||0);
+        this._invDrop(type, type==="ammo" ? idx : (parseInt(idx,10)||0));
       };
     });
     el.querySelectorAll('[data-use]').forEach(btn=>{
@@ -5116,6 +5384,21 @@ const Raid = {
   },
 
   _invDrop(type, idx){
+    /* 弹药按 id 丢：整条落在地上，之后还能捡回来 */
+    if(type==="ammo"){
+      const id=String(idx||"");
+      const n=this._ammoCount(id);
+      if(n<=0) return;
+      const d=ammoDefFromId(id);
+      this._ammoTake(id, n);
+      const it=Object.assign({}, d, { n });
+      this._dropGround(it, this.player.x, this.player.y);
+      this._float(this.player.x, this.player.y-46, "丢弃 "+n+" 发 "+d.short, "#ff9a8a");
+      SFX.ui();
+      this._invDirty=false;
+      this._invRender();
+      return;
+    }
     const R=this, p=R.player;
     let it=null;
     const take=(arr)=>{ if(!arr || idx<0 || idx>=arr.length) return null; return arr.splice(idx,1)[0]; };
@@ -6515,7 +6798,7 @@ const RenderRaid = {
       const col=raidGunColor(g);
       const elem=g.element&&g.element!=="none"&&ELEMENTS[g.element]?(" · "+ELEMENTS[g.element].name):"";
       line(i===0?"主武器":"副武器", g.name, col,
-        `伤害 ${g.dmg} · 穿甲 ${Math.round((g.armorPen||0)*100)}% · 弹药 ${g.ammoMag}/${g.mag} · 备弹 ${g.ammoRes}/${g.reserve}${elem}`);
+        `伤害 ${g.dmg} · 穿甲 ${Math.round((g.armorPen||0)*100)}% · 弹药 ${g.ammoMag}/${g.mag} · 背包 ${g.ammoRes} · ${g.loaded?(ammoDefFromId(g.loaded)||{}).short||"未装填":"未装填"}${elem}`);
       icon(g, gy);
     });
     if(guns.length){
@@ -6769,6 +7052,53 @@ UI.raidSetup=function(){
 
   const keysAll=stash.keys||[];
   const keySet=new Set(UI._raidKeys);
+
+  /* ---------------- 弹药携带（v0.20.0） ----------------
+   * 每个口径一行：默认选「仓库里该口径最高级别」的一种，按钮选带多少发。
+   * UI._raidAmmo = { light:{id,n}, mid:{...} } —— 传进 Raid 后由 _prepPlayerAmmo 搬进背包。 */
+  if(!UI._raidAmmo || typeof UI._raidAmmo!=="object") UI._raidAmmo={};
+  const ammoStock=stash.ammo||{};
+  const ammoRows=AMMO_CAL_LIST.map(cal=>{
+    const have=[];
+    for(let lv=5; lv>=1; lv--){
+      const id=ammoItemId(cal, lv), n=ammoStock[id]||0;
+      if(n>0) have.push({ id, lv, n });
+    }
+    const C=AMMO_CALS[cal];
+    const sel=UI._raidAmmo[cal];
+    const cur=have.find(h=>sel && sel.id===h.id) || have[0] || null;
+    if(!cur){
+      /* 没有库存：直接给一个「买 60 发 T1」的入口，避免仓库打空后进图才发现没子弹 */
+      delete UI._raidAmmo[cal];
+      const d0=ammoDef(cal,1);
+      const price=raidSuperPrice(d0.value*60, d0.id);
+      const can=stash.creds>=price;
+      return { cal, html:`<div class="ri" style="cursor:default;">
+        <div class="ri-main">
+          <div class="ri-name" style="color:#8b95a5">${C.name} · 无库存</div>
+          <div class="ri-meta">${C.spec} · 适用 ${C.types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")}</div>
+        </div>
+        <div class="ri-val"><button class="btn ghost small" data-ammobuy="${cal}" ${can?"":"disabled"}
+          style="padding:2px 8px;font-size:11px;">买 60 发 · ₽${priceText(price)}</button></div>
+      </div>` };
+    }
+    const cap=Math.min(cur.n, RAID_AMMO_CAP);
+    const n=(sel && sel.id===cur.id) ? Math.min(sel.n|0, cap) : cap;
+    UI._raidAmmo[cal]={ id:cur.id, n };
+    const btns=[0, 60, 120, cap].filter((v,i,a)=>a.indexOf(v)===i)
+      .map(v=>`<button class="btn ghost small" data-ammo="${cal}:${v}" style="padding:2px 7px;font-size:11px;${v===n?'border-color:#ffd36a;color:#ffd36a;':''}">${v===cap?'全带':v}</button>`).join("");
+    return { cal, html:`<div class="ri" style="cursor:default;">
+        <div class="ri-main">
+          <div class="ri-name" style="color:${C.color}">${C.name} · ${(AMMO_GRADE_BY_LV[cur.lv]||{}).name||"T"+cur.lv}</div>
+          <div class="ri-meta">${C.spec} · 适用 ${C.types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")} · 库存 ${cur.n} 发</div>
+        </div>
+        <div class="ri-val" style="display:flex;gap:4px;align-items:center;">${btns}
+          <button class="btn ghost small" data-ammobuy="${cal}" style="padding:2px 7px;font-size:11px;">补货 60</button>
+        </div>
+      </div>` };
+  });
+  const ammoCards=ammoRows.map(r=>r.html).filter(Boolean).join("")
+    || `<div class="empty-hint">仓库没有弹药 · 去工坊合成或在军火超市购买</div>`;
   const keyCards = keysAll.length ? keysAll.map(k=>{
     const on=keySet.has(k.uid);
     const lv=M.clamp(k.lv||1,1,5);
@@ -6821,6 +7151,7 @@ UI.raidSetup=function(){
           <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · GP 币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
           <b style="color:#8fe07a">可互动设施</b>：<b>监狱 / 小镇 / 大坝</b>里有医疗站（回 45 血并止血）、弹药柜（补满备弹）、警报器（拉响把 AI 引过去，撤离前调虎离山）与<b style="color:#8fd0ff">泄洪闸</b>——闸门一开，水库放空，水底露出 <b style="color:#ffd23f">IV 级 + III 级保险箱</b>各一口，代价是巨响会招来一票人。<br>
           <b style="color:#62c8ff">河流与桥</b>：河道可<b>缓慢涉水</b>通过（速度只剩 45%），泡在水里超过 4.5 秒开始<b style="color:#ff9a8a">失温扣血</b>且越拖越疼——桥面（8 座，含 3 座带双黄线的大桥）完全免减速，赶路还是走桥。<b style="color:#ffd76a">背包满时</b>捡到的多余物资不会消失，会<b>掉在脚下变成发光的小包裹</b>，腾出空间后按 E 还能捡回来；<b style="color:#ff8a5a">Tab 物品栏</b>里每件战利品都有 <b>✕ 丢弃</b> 按钮，丢掉的同样落在脚下，随时能回头捡。<br>
+          <b style="color:#ffb44a">子弹是独立物品</b>：4 个口径（9×19 / 5.45×39 / 7.62×54R·12-70 / 40mm）× <b>5 个级别</b>（民用 → 制式 → 军规 → 精工 → 特种，穿深 5→36 递增）。弹匣打空要<b style="color:#ffd36a">按 R 换弹，子弹从背包里扣</b>，背包没子弹就打不响。子弹能<b>合成</b>（工坊「弹药」页，材料越贵弹越高级）、<b>掉落</b>（武器箱首选、清尸必摸）与<b>购买</b>（材料店 T1/T2 卢布、枪械店 T2/T3、黑市 T4/T5 GP 币）。<br>
           <b style="color:#e0b84a">撤离费按带入装备估价浮动</b>：裸装跑刀只收 <b style="color:#8fe07a">0.2 倍</b>（约 ₽70~110，基本白坐）；带得越多折扣越小，带 ₽30 万的重装按原价付、封顶一两千 —— 贵重装备多、护送成本高。<br>
           <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◆ GP 币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。撤离费先扣局内现金，<b style="color:#ffd36a">不够再从仓库补扣</b>（只在真正撤离成功时扣）。</div>
       </details>
@@ -6888,6 +7219,16 @@ UI.raidSetup=function(){
           </h4>
           <div class="raid-list">${keyCards}</div>
         </div>
+        <div class="raid-col">
+          <h4 style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <span>弹药（携带 ${Object.keys(UI._raidAmmo).reduce((s,k)=>s+(UI._raidAmmo[k].n||0),0)}/${RAID_AMMO_CAP} 发）</span>
+            <span style="display:flex;gap:6px;">
+              <button class="btn ghost small" data-ammoall="1" style="padding:2px 8px;font-size:11px;">全带</button>
+              <button class="btn ghost small" data-ammoall="0" style="padding:2px 8px;font-size:11px;">全不带</button>
+            </span>
+          </h4>
+          <div class="raid-list">${ammoCards}</div>
+        </div>
       </div>
 
       <div class="row" style="margin-top:12px;gap:10px;align-items:center;">
@@ -6909,6 +7250,43 @@ UI.raidSetup=function(){
       </div>
     </div>`);
 
+  UI.overlay.querySelectorAll('[data-ammobuy]').forEach(el=>{
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const cal=el.dataset.ammobuy;
+      const d0=ammoDef(cal,1);
+      const price=raidSuperPrice(d0.value*60, d0.id);
+      if(stash.creds<price){ UI.toast && UI.toast("卢布不足"); return; }
+      stash.creds-=price;
+      stash.ammo=stash.ammo||{};
+      stash.ammo[d0.id]=(stash.ammo[d0.id]||0)+60;
+      RaidStash.save(stash); SFX.pickup();
+      const cur=UI._raidAmmo[cal];
+      UI._raidAmmo[cal]={ id:d0.id, n:Math.min(RAID_AMMO_CAP,(cur&&cur.n)||60) };
+      UI.raidSetup();
+    };
+  });
+  UI.overlay.querySelectorAll('[data-ammo]').forEach(el=>{
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const [cal,v]=el.dataset.ammo.split(":");
+      const cur=UI._raidAmmo[cal];
+      if(!cur) return;
+      cur.n=Math.max(0, Math.min(parseInt(v,10)||0, RAID_AMMO_CAP));
+      SFX.ui(); UI.raidSetup();
+    };
+  });
+  UI.overlay.querySelectorAll('[data-ammoall]').forEach(el=>{
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const all=el.dataset.ammoall==="1";
+      for(const cal of AMMO_CAL_LIST){
+        const cur=UI._raidAmmo[cal]; if(!cur) continue;
+        cur.n = all ? RAID_AMMO_CAP : 0;
+      }
+      SFX.ui(); UI.raidSetup();
+    };
+  });
   UI.overlay.querySelectorAll('[data-keyall]').forEach(el=>{
     el.onclick=(e)=>{
       e.stopPropagation();
@@ -6969,8 +7347,13 @@ UI.raidSetup=function(){
   document.getElementById('btn-raid-start').onclick=()=>{
     SFX.ui();
     const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():(stash.keys||[]).map(k=>k.uid);
+    const ammoPick={};
+    for(const cal of AMMO_CAL_LIST){
+      const a=UI._raidAmmo && UI._raidAmmo[cal];
+      if(a && a.n>0) ammoPick[cal]={ id:a.id, n:a.n };
+    }
     const opts={ weapons:[...sel.w], armor:sel.a, helmet:sel.h, shield:sel.s, insure:UI._raidIns&&gearVal>0, keys:pickedKeys,
-                 cash:cashIn, tokens:tokIn };
+                 cash:cashIn, tokens:tokIn, ammo:ammoPick };
     UI._raidSel={w:[],a:null,h:null,s:null}; UI._raidIns=false;
     game.startRaid(opts);
   };
@@ -7659,7 +8042,7 @@ UI.raidWorkshop=function(opts){
       <div class="subtitle">WORKSHOP · 模块一览 / 材料合成 / 用机匣与部件组装枪械</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
-        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
+        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹药</b>在「弹药」页单独合成：投 3 份材料出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-ws-back">${opts.from==='title'?'返回主菜单':'前往配装大厅'}</button>
       </div>
@@ -7764,6 +8147,10 @@ UI.raidWorkshop=function(opts){
       else if(r.kind==="helmet") stash.helmets.push(out);
       else if(r.kind==="shield") (stash.shields=stash.shields||[]).push(out);
       else if(r.kind==="receiver") stash.receivers.push(out);
+      else if(r.kind==="ammo"){
+        stash.ammo=stash.ammo||{};
+        stash.ammo[out.id]=(stash.ammo[out.id]||0)+(out.n||RAID_AMMO_STACK);
+      }
       UI._craft.sel=[];
       RaidStash.save(stash); SFX.pickup();
       UI.toast && UI.toast(`合成成功 · ${RAID_TIERS[q].name}级${r.name}`);
@@ -7879,6 +8266,23 @@ UI.raidFieldShop=function(key){
     </div>`;
   };
 
+  // 弹药卡：一条 30 发，带口径 / 级别 / 单发穿深
+  const ammoCard=(a, payKind, idx)=>{
+    const price = payKind==="token" ? (a.tokenPrice||0) : (a.shopPrice||0);
+    const can = payKind==="token" ? tokens>=price : money>=price;
+    const E=AMMO_TYPES[a.elem]||AMMO_TYPES.none;
+    const lvName=(AMMO_GRADE_BY_LV[a.lv]||{}).name||("T"+a.lv);
+    const owned=R._ammoCount(a.id);
+    return `<div class="si">
+      <div class="si-name" style="color:${a.color||"#dfe7f0"}">${a.name} <span style="font-size:11px;opacity:.7">×${a.n}</span></div>
+      <div class="si-stats">${a.spec} · ${lvName}级 · 单发估值 ₽${a.value?Math.round(a.value/a.n):0} · 穿深 ${E.pen}${owned?" · 背包已有 "+owned:""}</div>
+      <div class="si-buy">
+        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◆":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
+        <button class="btn ghost" data-fbuy="${payKind==="token"?"tokenammo":"cashammo"}:${sid}:${idx}" ${can?"":"disabled"}>购买</button>
+      </div>
+    </div>`;
+  };
+
   // 钥匙卡：开对应等级的上锁保险箱
   const keyCard=(k, payKind, idx)=>{
     const price = payKind==="token" ? (k.tokenPrice||0) : (k.shopPrice||raidKeyDef(k.lv).shop||0);
@@ -7915,6 +8319,9 @@ UI.raidFieldShop=function(key){
       const bkeys=sh.stock.keys||[];
       if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级钥匙（GP 币兑换 · 开同级及以下保险箱）</div>` +
         bkeys.map((k,i)=>keyCard(k,"token",i)).join("");
+      const bammo=sh.stock.ammo||[];
+      if(bammo.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级弹药 T4 / T5（GP 币兑换 · 一条 30 发）</div>` +
+        bammo.map((a,i)=>ammoCard(a,"token",i)).join("");
     } else if(kind==="gun"){
       // 改装模块不可合成 —— 枪械店常备低阶改装模块，卢布直接买
       const parts=sh.stock.parts||[];
@@ -7929,6 +8336,9 @@ UI.raidFieldShop=function(key){
               <button class="btn ghost" data-fbuy="cashpart:${sid}:${i}" ${can?"":"disabled"}>购买</button></div>
           </div>`;
         }).join("");
+      const gammo=sh.stock.ammo||[];
+      if(gammo.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 弹药（一条 30 发 · 本店枪型口径）</div>` +
+        gammo.map((a,i)=>ammoCard(a,"cash",i)).join("");
     }
   } else if(kind==="mat"){
     body = sh.stock.mats.map((m,i)=>{
@@ -7960,6 +8370,9 @@ UI.raidFieldShop=function(key){
           <button class="btn ghost" data-fbuy="cashmed:${sid}:${i}" ${can?"":"disabled"}>购买</button></div>
       </div>`;
     }).join("");
+    const mammo=sh.stock.ammo||[];
+    if(mammo.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 弹药（一条 30 发 · T1 民用 / T2 制式）</div>` +
+      mammo.map((a,i)=>ammoCard(a,"cash",i)).join("");
     const mkeys=sh.stock.keys||[];
     if(mkeys.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 钥匙（开对应等级的上锁保险箱 · 带进图才会生效）</div>` +
       mkeys.map((k,i)=>keyCard(k,"cash",i)).join("");
@@ -8040,7 +8453,7 @@ UI.raidFieldShop=function(key){
       else { if(R.creds<price) return; R.creds-=price; }
       shop.stock.guns.splice(idx,1);
       R.inv.weapons.push(g);
-      R._rtGun(g);                       // 建缓存 → 上手即满弹
+      R._rtGun(g);                       // 建缓存（空枪，弹药要自己装）
       R._float(R.player.x, R.player.y-40, "购入 "+g.name, raidGunColor(g));
       SFX.buy ? SFX.buy() : SFX.ui();
       RaidStash.save(R.stash);
@@ -8076,6 +8489,18 @@ UI.raidFieldShop=function(key){
       R.tokens-=c.tokenPrice;
       R.inv.parts.push(c); shop.stock.parts.splice(idx,1);
       R._float(R.player.x, R.player.y-40, "兑换 "+(c.name||"改装模块"), c.color||"#c07bff");
+      SFX.ui(); UI.raidFieldShop(sid);
+    } else if(pay==="cashammo" || pay==="tokenammo"){
+      const a=(shop.stock.ammo||[])[idx]; if(!a) return;
+      const tok=pay==="tokenammo";
+      const price=tok?(a.tokenPrice||0):(a.shopPrice||0);
+      if(tok){ if(R.tokens<price) return; } else { if(R.creds<price) return; }
+      if(R._ammoTotal()>=RAID_AMMO_CAP){ capMsg("弹药已满（"+RAID_AMMO_CAP+" 发上限）"); return; }
+      if(tok) R.tokens-=price; else R.creds-=price;
+      const add=R._ammoAdd(a.id, a.n);
+      if(add<=0){ capMsg("弹药已满"); return; }
+      shop.stock.ammo.splice(idx,1);
+      R._float(R.player.x, R.player.y-40, "购入 "+add+" 发 "+a.short, a.color||"#dfe7f0");
       SFX.ui(); UI.raidFieldShop(sid);
     } else if(pay==="key"){
       const ky=(shop.stock.keys||[])[idx]; if(!ky) return;

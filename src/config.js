@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.19.4",
+  version: "0.20.0",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -60,6 +60,83 @@ const ELEMENTS = AMMO_TYPES;
  * 均匀分布会让「每五把枪就有一把 RIP」这种不真实情况出现。
  * 顺序即正态轴：改顺序前先确认 pen 仍然升序。 */
 const AMMO_POOL_BY_PEN = ["corrosive","cryo","fire","radiation","shock"];
+
+/* ============================ 弹药物品（v0.20.0） ============================
+ * 子弹从「枪上的计数器」变成背包里的独立物品（可堆叠，按发计数）：
+ *   4 个弹族 × 5 个级别 = 20 种
+ *
+ *   弹族（口径）：口径与枪型绑定，见 shot 的 cal 字段
+ *     light 轻弹 9×19mm     → 手枪 / 冲锋枪
+ *     mid   中弹 5.45×39mm  → 步枪
+ *     heavy 重弹 7.62×54R / 12-70 → 狙击枪 / 霰弹枪
+ *     grenade 榴弹 40mm VOG → 榴弹发射器
+ *
+ *   级别（共用一套，穿深单调递增，复用 AMMO_TYPES 的终点效应）：
+ *     T1 民用 扩张弹(pen 5) → T2 制式 亚音速(11) → T3 军规 曳光(14)
+ *     → T4 精工 穿甲曳光(30) → T5 特种 淬火穿甲(36)
+ *   特效从 T3 才出现，且 dotK 随级别递减 —— 高级弹靠穿深，不靠烧灼。
+ *   power 叠在 elemMult 之外，提供整体威力递进（1.00 → 1.30）。
+ * ============================================================================ */
+const AMMO_CALS = {
+  light:  { id:"light",   name:"轻弹", spec:"9×19mm",           short:"9×19", types:["pistol","smg"],     k:1.00, color:"#c9c3b4" },
+  mid:    { id:"mid",     name:"中弹", spec:"5.45×39mm",        short:"5.45", types:["rifle"],            k:1.60, color:"#a9bc9a" },
+  heavy:  { id:"heavy",   name:"重弹", spec:"7.62×54R / 12-70", short:"7.62", types:["sniper","shotgun"], k:2.40, color:"#c2a888" },
+  grenade:{ id:"grenade", name:"榴弹", spec:"40mm VOG-25",      short:"40mm", types:["launcher"],         k:5.00, color:"#c2a05a" },
+};
+const AMMO_CAL_LIST = ["light","mid","heavy","grenade"];
+
+/* 5 个级别：name 级别名 / elem 终点效应 / power 整体威力 / dotK 持续效果折减 / value 基准估值（每发）*/
+const AMMO_GRADES = [
+  { lv:1, name:"民用", elem:"corrosive", power:1.00, dotK:1.00, value:2   },
+  { lv:2, name:"制式", elem:"cryo",      power:1.06, dotK:1.00, value:5   },
+  { lv:3, name:"军规", elem:"fire",      power:1.12, dotK:0.60, value:13  },
+  { lv:4, name:"精工", elem:"radiation", power:1.20, dotK:0.45, value:38  },
+  { lv:5, name:"特种", elem:"shock",     power:1.30, dotK:0.35, value:105 },
+];
+const AMMO_GRADE_BY_LV = {};
+for(const g of AMMO_GRADES) AMMO_GRADE_BY_LV[g.lv]=g;
+
+/* 枪型 → 弹族 */
+function ammoCalOfType(type){
+  for(let i=0;i<AMMO_CAL_LIST.length;i++){
+    const c=AMMO_CALS[AMMO_CAL_LIST[i]];
+    if(c.types.indexOf(type)>=0) return c.id;
+  }
+  return "mid";
+}
+function ammoItemId(cal, lv){ return "ammo_"+cal+"_"+lv; }
+function ammoGradeOf(lv){
+  const n=Math.max(1, Math.min(5, Math.round(lv)||1));
+  return AMMO_GRADE_BY_LV[n] || AMMO_GRADES[0];
+}
+/* 从物品 id 反解（"ammo_mid_3" → {cal:"mid", lv:3}），不认识返回 null */
+function ammoParseId(id){
+  const m=/^ammo_([a-z]+)_(\d)$/.exec(String(id||""));
+  if(!m || !AMMO_CALS[m[1]]) return null;
+  return { cal:m[1], lv:Math.max(1, Math.min(5, +m[2])) };
+}
+/* 单发估值：级别基准 × 弹族系数 */
+function ammoValue(cal, lv){
+  const c=AMMO_CALS[cal]||AMMO_CALS.mid, g=ammoGradeOf(lv);
+  return Math.max(1, Math.round(g.value*c.k));
+}
+/* 一发子弹的完整定义（拾取物 / 商店货 / 弹道结算都用它） */
+function ammoDef(cal, lv){
+  const c=AMMO_CALS[cal]||AMMO_CALS.mid, g=ammoGradeOf(lv);
+  return {
+    id: ammoItemId(c.id, g.lv), kind:"ammo", cal:c.id, lv:g.lv,
+    name: c.name+" · "+g.name, short:c.short+" "+g.name, elem:g.elem,
+    power:g.power, dotK:g.dotK, value:ammoValue(c.id, g.lv),
+    color:c.color, spec:c.spec, types:c.types,
+  };
+}
+/* id → 定义（枪的 loaded 字段、存档里的 ammo 键都用 id） */
+function ammoDefFromId(id){
+  const p=ammoParseId(id);
+  return p ? ammoDef(p.cal, p.lv) : null;
+}
+const AMMO_DEFS = {};
+for(const cal of AMMO_CAL_LIST) for(const g of AMMO_GRADES) AMMO_DEFS[ammoItemId(cal,g.lv)]=ammoDef(cal,g.lv);
 // 防护类型（raidArmorType 返回值）的显示名与血条色
 const ARMOR_TYPE_NAME  = { flesh:"无防护", shield:"护盾", armor:"硬质插板" };
 const ARMOR_TYPE_COLOR = { flesh:"#e23b3b", shield:"#4fd6ff", armor:"#ffd23f" };
