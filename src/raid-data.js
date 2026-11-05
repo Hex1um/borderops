@@ -543,7 +543,8 @@ function raidRollUnique(luck, kindFilter){
   let pool=RAID_UNIQUES.filter(u=>u.tier<=maxT);
   if(kindFilter) { const f=pool.filter(kindFilter); if(f.length) pool=f; }
   if(!pool.length) pool=RAID_UNIQUES.slice(0,1);
-  const w=pool.map(u=>({ weight:Math.pow(1.55, u.tier-5) }));
+  // v0.21.9：权重方向原先写反（tier-5 让 tier8 反而最常见，约占具名掉落 46%），倒置为 5-tier
+  const w=pool.map(u=>({ weight:Math.pow(1.55, 5-u.tier) }));
   return raidMakeUnique(pool[RNG.weighted(w)]);
 }
 

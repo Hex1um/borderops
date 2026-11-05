@@ -1587,5 +1587,70 @@ check('lazy-legacy.js 已接入 HTML', /src\/lazy-legacy\.js/.test(html)?1:0, 1,
 check('GitHub Actions CI 已配置', fs.existsSync(path.join(ROOT,'.github','workflows','ci.yml'))?1:0, 1, 0.001);
 console.log('  raid 最大分片 ' + __maxLines + ' 行（目标 <=2000）');
 
+/* ==================== v0.22.0 组 35：v0.21.9 合并护栏（合作者 15 处修复不回归） ==================== */
+console.log('');
+console.log('=== 35. v0.21.9 合并护栏（合作者 15 处修复）===');
+const __fee = G(`(function(){
+  try{
+    var R=Object.create(Raid);
+    R.creds=30; R.stash={creds:70};
+    var ok=R._payExtractFee(90);
+    var a={ ok:ok?1:0, purse:R.creds, stash:R.stash.creds };
+    R.creds=10; R.stash={creds:20};
+    a.no=R._payExtractFee(90)?1:0; a.noPurse=R.creds; a.noStash=R.stash.creds;
+    return a;
+  }catch(e){ return { err:String(e) }; }
+})()`);
+check('撤离费组合扣款（局内+仓库）', (__fee.ok===1 && __fee.purse===0 && __fee.stash===10)?1:0, 1, 0.001);
+check('撤离费资金不足不扣款', (__fee.no===0 && __fee.noPurse===10 && __fee.noStash===20)?1:0, 1, 0.001);
+check('命名装权重方向回正', /Math\.pow\(1\.55, 5-u\.tier\)/.test(raidSrc) && !/Math\.pow\(1\.55, u\.tier-5\)/.test(raidSrc) ?1:0, 1, 0.001);
+check('自动穿盾写入 carried.shield', /this\.carried\.shield=s/.test(raidSrc)?1:0, 1, 0.001);
+check('尸体掉落配件去重', /q\.core && q!==firstPart/.test(raidSrc)?1:0, 1, 0.001);
+check('撤离成功置 ext 标记', /this\._extractedFlag=true/.test(raidSrc)?1:0, 1, 0.001);
+check('回收超市材料按 id 售卖', /x\.id===row\.id/.test(raidSrc) && /id:item\.id/.test(raidSrc)?1:0, 1, 0.001);
+check('联机入场补 shield/ammo/support', /shield:sel\.s\|\|null/.test(raidSrc) && /ammo:ammoPick, support:supOn/.test(raidSrc)?1:0, 1, 0.001);
+const __term = G(`(function(){
+  var N=Object.create(Net); N._outbox=[];
+  var p=[]; for(var i=0;i<45;i++) p.push({type:'shot',data:i});
+  p.push({type:'extract',data:1});
+  N._requeue(p);
+  var a={ len:N._outbox.length, term:N._outbox.filter(function(e){return N._isTerm(e.type);}).length };
+  var M=Object.create(Net); M.online=true; M._flushT=null; M.sync=function(){};
+  M._outbox=[]; for(var j=0;j<40;j++) M._outbox.push({type:'shot',data:j});
+  M.sendEvent('extract',{x:1});
+  a.full=M._outbox.length; a.last=M._outbox[M._outbox.length-1].type==='extract'?1:0;
+  return a;
+})()`);
+check('终局事件重排保底（40 上限）', (__term.len===40 && __term.term===1)?1:0, 1, 0.001);
+check('队满仍保底入队终局事件', (__term.full===40 && __term.last===1)?1:0, 1, 0.001);
+const __p2p = G(`(function(){
+  var P=Object.create(NetP2P);
+  return { ok:P._send({open:true,send:function(){}},{t:'x'})===true?1:0,
+           bad:P._send(null,{t:'x'})===false?1:0 };
+})()`);
+check('P2P _send 返回成败供失败回补', (__p2p.ok===1 && __p2p.bad===1)?1:0, 1, 0.001);
+check('队友撤离 ext 接收端补读', /pr\.op\.ext=!!s\.ext/.test(netSrc)?1:0, 1, 0.001);
+const __plate = G(`(function(){
+  try{
+    var d=(typeof plateShieldLines==="function" && typeof shieldLines==="function" && plateShieldLines!==shieldLines)?1:0;
+    return { d:d, n:plateShieldLines({capacity:100,delay:2,rate:10}).length };
+  }catch(e){ return { d:0, n:-1 }; }
+})()`);
+check('旧插板函数改名消除全局冲突', (__plate.d===1 && __plate.n>=3)?1:0, 1, 0.001);
+const __econ = G(`(function(){
+  var mono=1;
+  for(var i=1;i<RARITIES.length;i++) if(RARITIES[i].price < RARITIES[i-1].price) mono=0;
+  var g=SKILLS.gunner.filter(function(s){return s.id==="g_cal";})[0];
+  return { mono:mono, acc:g?g.per.accuracyMul:-1 };
+})()`);
+check('品质价格序列不再倒挂', __econ.mono, 1, 0.001);
+check('归零校准精度回正为 +5%/级', __econ.acc, 0.05, 0.001);
+const __srvSrc = fs.readFileSync(path.join(ROOT,'server.js'),'utf8');
+const __uiSrc  = fs.readFileSync(path.join(SRC,'ui.js'),'utf8');
+const __aucSrc = fs.readFileSync(path.join(SRC,'auction.js'),'utf8');
+check('限速 XFF 仅在 TRUST_PROXY=1 时采信', /const TRUST_PROXY\s*=\s*process\.env\.TRUST_PROXY/.test(__srvSrc) && /TRUST_PROXY\s*&&\s*req\.headers/.test(__srvSrc)?1:0, 1, 0.001);
+check('标题页 btn-continue 判空绑定', /if\(contBtn\)/.test(__uiSrc)?1:0, 1, 0.001);
+check('拍卖成交清 state 防二次入账', /delete d\.state\[L\.id\]/.test(__aucSrc) && /delete d\.state\[id\]/.test(__aucSrc)?1:0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

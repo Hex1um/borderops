@@ -199,7 +199,8 @@ const RARITIES = [
   { id:"purple",      name:"精选", color:"#bc94e9", weight:3,      mult:1.28, affixes:[4,6],   minLv:4,  price:13   },
   { id:"orange",      name:"精工", color:"#ef93d6", weight:0.70,   mult:3.50, affixes:[3,3],   minLv:6,  price:44,  named:true },
   /* v0.21.7：原 3.20 比上一档 3.50 还低（品质越高反而越弱），已拉平为 4.10 */
-  { id:"pearl",       name:"特种", color:"#f5a8a2", weight:0.42,   mult:4.10, affixes:[4,4],   minLv:10, price:38,  named:true },
+  /* v0.21.9：price 同一处漏改 —— 38 比上一档 44 还低（品质越高反而越便宜），拉平为 68 保持价格序列单调 */
+  { id:"pearl",       name:"特种", color:"#f5a8a2", weight:0.42,   mult:4.10, affixes:[4,4],   minLv:10, price:68,  named:true },
   { id:"ancient",     name:"试验", color:"#f2bd54", weight:0.20,   mult:4.80, affixes:[6,6],   minLv:14, price:96,  named:true, power:true },
   { id:"rainbow",     name:"原型", color:"#b6de19", weight:0.06,   mult:5.60, affixes:[6,6],   minLv:18, price:280, named:true, power:true },
   { id:"mythic",      name:"定型", color:"#76ebd7", weight:0.030,  mult:6.20, affixes:[7,7],   minLv:22, price:620, named:true, power:true },

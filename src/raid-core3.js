@@ -510,8 +510,11 @@ Object.assign(Raid, {
       const g=Object.assign({},w); g.kind="weapon"; g.uid=mkUid("bw"); drops.push(g);
     }
     for(const a of (bot.inv.armors||[]).slice(0,1)) drops.push(a);
-    for(const pt of (bot.inv.parts||[]).slice(0,1)) drops.push(pt);
-    for(const c of (bot.inv.parts||[]).filter(p=>p.core).slice(0,1)) drops.push(c);
+    // v0.21.9：第一件配件与改装模块可能是同一对象（parts[0] 本身带 core），去重避免尸体掉落复制物品
+    const firstPart=(bot.inv.parts||[])[0]||null;
+    if(firstPart) drops.push(firstPart);
+    const corePart=(bot.inv.parts||[]).find(q=>q.core && q!==firstPart);
+    if(corePart) drops.push(corePart);
     /* 弹药：按它自己那把枪的口径掉一批（级别跟枪的品级走，Scav 只会民用/制式） */
     {
       const gcal=bot.gun?(bot.gun.cal||ammoCalOfType(bot.gun.type)):null;
@@ -848,23 +851,28 @@ Object.assign(Raid, {
     }
   },
 
-  /* 付撤离费：优先局内现金，其次仓库余额（钱只在真正撤离成功时才扣，读条被打断不白花） */
+  /* 付撤离费：优先局内现金，其次仓库余额（钱只在真正撤离成功时才扣，读条被打断不白花）。
+   * v0.21.9：改为组合扣款 —— 旧逻辑要求单一资金源足额，局内+仓库合计够但都单独不够时
+   * 读条能走满却永远付不出去（extractT 回退循环卡死），与「仓库兜底」的设计相悖。 */
   _payExtractFee(fee){
     if(fee<=0) return true;
-    if(this.creds>=fee){ this.creds-=fee; return true; }
     const st=Math.max(0,(this.stash&&this.stash.creds)||0);
-    if(st>=fee){
-      this.stash.creds=st-fee;
+    if(this.creds+st<fee) return false;
+    const fromPurse=Math.min(this.creds,fee); this.creds-=fromPurse;
+    const rest=fee-fromPurse;
+    if(rest>0){
+      this.stash.creds=st-rest;
       if(typeof RaidStash!=="undefined" && RaidStash.save) RaidStash.save(this.stash);
-      return true;
     }
-    return false;
+    return true;
   },
 
   _succeed(zone){
     if(!this.active || this._ended) return;
     this._ended=true;
     this.resetUiState();
+    // v0.21.9：补上撤离标记 —— net.js 快照里 ext 字段原先引用从未赋值的 _extractedFlag，同步链路是死的
+    this._extractedFlag=true;
     if(this.online && typeof Net!=="undefined") Net.sendExtract(zone?zone.name:"");
     // 联机：自己撤离后世界继续跑（房主还要给队友模拟 AI），镜头交给观战
     this.active=!!this.online;

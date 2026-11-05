@@ -207,7 +207,9 @@ const UI = {
       SFX.ui(); this._moreModes=!this._moreModes; this.title();
     };
 
-    if(hasSave) document.getElementById('btn-continue').onclick=()=>{ SFX.ui(); this.game.continueRun(); };
+    // v0.21.9：按钮只在 !onlyRaid&&hasSave 时渲染，这里必须判空，否则旧档会抛 TypeError 中断初始化
+    const contBtn=document.getElementById('btn-continue');
+    if(contBtn) contBtn.onclick=()=>{ SFX.ui(); this.game.continueRun(); };
 
     // 删除存档：两段式确认（避免误触），6 秒不操作自动收回
     const wipe=document.getElementById('btn-wipe');
@@ -461,7 +463,7 @@ const UI = {
       return `<div class="inv-item loot-${s.rarity} ${i===p.shieldIdx?'sel':''}" data-shield="${i}">
         <div class="iname c-${s.rarity}">${s.name}${i===p.shieldIdx?' · 装备中':''}</div>
         <div class="si-meta">${(RARITY_BY_ID[s.rarity]||RARITIES[0]).name} · Lv.${s.ilvl} · 护甲</div>
-        <div class="istat">${shieldLines(s).join(' · ')}</div>
+        <div class="istat">${plateShieldLines(s).join(' · ')}</div>
         ${eff?`<div class="affix-row"><span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span></div>`:''}
         <div class="si-buy">
           <button class="btn small ghost" data-ssell="${i}">卖出 <span class="cur-gp">◈</span>${itemSellGold(s)}${itemSellEridium(s)?` <span class="cur-eri">◆</span>${itemSellEridium(s)}`:''}</button>
@@ -671,7 +673,7 @@ const UI = {
     let meta, stats, affix;
     if(w.kind==="shield"){
       meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name} · Lv.${w.ilvl} · 护甲装备`;
-      stats=shieldLines(w).slice(0,3).join(' · ');
+      stats=plateShieldLines(w).slice(0,3).join(' · ');
       const eff=shieldEffectText(w);
       affix = eff?`<span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span>`:'<span class="affix">无特效</span>';
     } else if(w.kind==="relic"){

@@ -41,7 +41,8 @@ const SKILLS = {
   gunner: [
     { id:"g_bulk",   name:"重装携行", max:5, per:{maxHPAdd:30, maxShieldAdd:10}, desc:(l)=>`生命 +${l*30}，护甲 +${l*10}` },
     { id:"g_barrage",name:"持续射击", max:5, per:{fireRateMul:0.07}, desc:(l)=>`射速 +${l*7}%` },
-    { id:"g_cal",    name:"归零校准", max:3, per:{critAdd:0.04, accuracyMul:1.05}, desc:(l)=>`要害命中 +${l*4}%，精度 +${l*5}%` },
+    // v0.21.9：accuracyMul 是累加式每点增量，原 1.05 会让满级精度变 1+3.15=4.15 倍，按描述改回 +5%/级
+    { id:"g_cal",    name:"归零校准", max:3, per:{critAdd:0.04, accuracyMul:0.05}, desc:(l)=>`要害命中 +${l*4}%，精度 +${l*5}%` },
     { id:"g_mag",    name:"弹链供弹", max:3, per:{magMul:0.20}, desc:(l)=>`弹匣 +${l*20}%` },
     { id:"g_scrap",  name:"战场回收", max:3, per:{lootMul:0.12}, desc:(l)=>`战利品 +${l*12}%` },
     { id:"g_cap",    name:"阵地压制", max:1, per:{abilityPower:0.6, dmgMul:0.10}, desc:()=>`压制更强，伤害 +10%` },

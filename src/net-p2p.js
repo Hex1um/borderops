@@ -127,7 +127,8 @@ const NetP2P = {
   },
 
   _send(conn, obj){
-    try{ if(conn && conn.open) conn.send(obj); }catch(e){}
+    try{ if(conn && conn.open){ conn.send(obj); return true; } }catch(e){}
+    return false;
   },
   _broadcast(obj){
     for(const p of this.host.values()) this._send(p.conn, obj);
@@ -314,7 +315,9 @@ const NetP2P = {
       const state=Net._statePayload();
       const pending=Net._outbox||[];
       Net._outbox=[];
-      this._send(this.conn,{ t:"sync", state, events:pending, cursor:Net.cursor });
+      // v0.21.9：发送失败要把事件放回队列（与 HTTP 路径对齐），否则含 extract/dead 的这一批直接蒸发
+      if(!this._send(this.conn,{ t:"sync", state, events:pending, cursor:Net.cursor }))
+        Net._requeue ? Net._requeue(pending) : (Net._outbox=(pending.concat(Net._outbox||[])).slice(0,40));
       return;
     }
     if(this.mode!=="host" || !this.peer) return;

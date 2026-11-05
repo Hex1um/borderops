@@ -156,7 +156,8 @@ UI.raidFieldShop=function(key){
     if(R.player.gun) equipped.add(R.player.gun.uid);
     if(R.player.secondary) equipped.add(R.player.secondary.uid);
     const add=(key, item, name, col, note, base)=>{
-      rows.push({ key, uid:item.uid, name, col, note, base,
+      // v0.21.9：材料没有 uid（undefined===undefined 恒命中第一件），行上补 id 供按 id 匹配
+      rows.push({ key, uid:item.uid, id:item.id, name, col, note, base,
         val: raidFieldSellPrice(base, item.uid || name) });
     };
     for(const w of (R.inv.weapons||[])){
@@ -318,7 +319,12 @@ UI.raidFieldShop=function(key){
     else if(key==="h") it=pull(R.inv.helmets);
     else if(key==="s") it=pull(R.inv.shields||[]);
     else if(key==="p") it=pull(R.inv.parts);
-    else if(key==="m") it=pull(R.inv.materials);
+    else if(key==="m"){
+      // v0.21.9：材料无 uid，按 id 匹配，否则永远删掉材料栏第一件（卖错货 + 可刷钱）
+      const arr=R.inv.materials||[];
+      const i=arr.findIndex(x=>x.id===row.id);
+      if(i>=0) it=arr.splice(i,1)[0];
+    }
     if(!it) return;
     R.creds+=gain;
     R._float(R.player.x, R.player.y-40, "+₽"+gain, "#8fe07a");
@@ -912,16 +918,25 @@ UI._onlineEnter=function(){
   if(!Net.code || !Net.peerId) return;
   UI._onlineEntering=true;
   UI._onlineStop();
-  const sel=UI._raidSel||{w:[],a:null,h:null};
+  const sel=UI._raidSel||{w:[],a:null,h:null,s:null};
   const st=RaidStash.load();
   // 联机也必须沿用大厅选择的钥匙/现金/GP 币，不能默认把仓库全部钥匙带进图。
   const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():(st.keys||[]).map(k=>k.uid);
   const cash=Math.max(0,Math.min(Math.round(UI._raidCash||0),Math.floor(st.creds||0)));
   const tokens=Math.max(0,Math.min(Math.round(UI._raidTok||0),Math.floor(st.tokens||0)));
-  const hasGear=!!((sel.w||[]).length||sel.a||sel.h);
+  // v0.21.9：与单机出发保持一致 —— 护盾 / 弹药 / 初始装备包原先漏传，联机进图全丢；
+  // hasGear 也补上护盾，只带盾进场时保险不再被静默置否。
+  const ammoPick={};
+  for(const cal of AMMO_CAL_LIST){
+    const a=UI._raidAmmo && UI._raidAmmo[cal];
+    if(a && a.n>0) ammoPick[cal]={ id:a.id, n:a.n };
+  }
+  const supOn=UI._raidSupport===true && cash>=RAID_SUPPORT_CASH;
+  const hasGear=!!((sel.w||[]).length||sel.a||sel.h||sel.s);
   const opts={
-    weapons:[...(sel.w||[])], armor:sel.a||null, helmet:sel.h||null,
+    weapons:[...(sel.w||[])], armor:sel.a||null, helmet:sel.h||null, shield:sel.s||null,
     insure:!!UI._raidIns&&hasGear, keys:pickedKeys, cash, tokens,
+    ammo:ammoPick, support:supOn,
     online:true, seed:Net.seed,
   };
   UI._raidSel={w:[],a:null,h:null,s:null}; UI._raidIns=false;

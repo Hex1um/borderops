@@ -14,13 +14,47 @@
 - **④ corpse schema + text 剥 HTML**：新建 `src/sanitize.js`（UMD 同构内核，Node / 浏览器 / 单测共用一份规则）。`server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（GitHub Pages 上 WebRTC P2P）三条链路统一：掉落数组按 `kind` 白名单逐项裁剪、数值封顶、剥 HTML、剔除原型污染键、限制深度/键数/项数；`text()` 除控制字符外额外剥离 `<>&"'\``。
   - 净化参数按 `probe_drops.js` 实测标定：合法武器对象**深度 7**、`damage` 峰值 ~6830、`value` 峰值 ~1651 万，故 `MAX_DEPTH=8`、攻击字段对称封顶 50000；实测合法装备净化前后 `JSON` 完全一致（含 `-13.3` 这类负面词条，早期下限写死 0 会把它钳成 0，已修）。
 - **⑤ sanitizeEvent 单测**：`server.js` 加 `require.main === module` 保护 + `module.exports` 暴露纯函数，verify 组 31 覆盖未知类型 / 保留字伪造 / 数值裁剪 / 房主权限 / chat 剥 HTML 与限长等 22 条。
-- **⑥ 赌博机 EV / 经济护栏**：verify 组 33 断言权重可映射、第 3 档后严格递减、最高三档合计概率 < 0.3%、EV 落在 5–15 带内、成本随等级线性、且**唯一产出口**仍是赌博机。实测 EV=9.21（`RARITIES.price` 加权）、三档合计 0.0886%、成本 Lv1=4 / Lv60=122。
-- **⑦ FPS 基准探针**：新增 `tools/fps_bench.cjs` + `npm run bench:fps`，零依赖自包含（本地静态服务 + headless Chromium + CDP），2D/3D 各采 120 帧，输出 `fps-baseline.json`（p50 / p95 / 平均 fps）。本机实测：2D 46.9 fps（p95 25.6ms）、3D 29.7 fps（p95 37.1ms），0 页面错误。CI 只做语法检查，不跑基准。
+- **⑥ 赌博机 EV / 经济护栏**：verify 组 33 断言权重可映射、第 3 档后严格递减、最高三档合计概率 < 0.3%、EV 落在 5–15 带内、成本随等级线性、且**唯一产出口**仍是赌博机。实测 EV=9.71（`RARITIES.price` 加权；合并 v0.21.9 把 `pearl.price` 回正为 68 后重算，原 9.21）、三档合计 0.0886%、成本 Lv1=4 / Lv60=122。
+- **⑦ FPS 基准探针**：新增 `tools/fps_bench.cjs` + `npm run bench:fps`，零依赖自包含（本地静态服务 + headless Chromium + CDP），2D/3D 各采 120 帧，输出 `fps-baseline.json`（p50 / p95 / 平均 fps）。本机两次实测：2D 46.9~53.1 fps、3D 29.7~35.3 fps，0 页面错误（合并 v0.21.9 后复跑为 2D 53.1 fps / p95 22ms、3D 35.3 fps / p95 32.5ms）。CI 只做语法检查，不跑基准。
 - **⑧ 存档导出 / 导入码**：`save.js` 新增 `exportCode()` / `importCode()`，格式 `BOPS1-<8 位 FNV-1a 校验和>-<base64url(UTF-8 JSON)>`，纯 JS base64（不依赖 `btoa/atob`），按 key 白名单原样搬运存档（含未来字段、中文键），拒绝校验失败 / 非法前缀 / 白名单外 key。标题页新增「导出存档码 / 导入存档码」面板，存档与域名解绑，换浏览器或清缓存可自保；空存档不生成空码并给出提示。
 - **⑨ 旧模式按需懒加载**：新增 `src/lazy-legacy.js`。`CFG.onlyRaid=true`（线上默认）时战役 / 无尽 / 沙二 / 大逃杀 4 个脚本**完全不请求**（解析期 `document.write` 条件注入，仅 `onlyRaid=false` 复活旧模式时加载），并留最小全局占位防 `ReferenceError`。`check_version.js` 增加懒加载清单校验。
 - **额外：GP 币图标改金色**：`Shop.curIconHtml()` 返回带 class 的 `<span>`，`.cur-gp` 用 `#ffd23f` + 描边发光，`.cur-eri` 改明确紫色 `#b061ff`；`curIcon()` 仍返回纯字符供 canvas / textContent 使用。商店余额、价格、卖出、赌博机按钮与结算页统一换色。
 
-**验证**：`npm run check` 全绿（30 处 `?v=` / 29 个脚本 / 懒加载清单）、`npm run verify` **531 passed / 0 failed**（31–34 为新增组）、全量 `node --check` 通过、拆分等价性比对零差异、headless Chromium 实机冒烟 `ok:true`（版本 0.22.0、7 分片加载、旧模式 0 请求、存档码往返、进 raid + 3D、0 页面错误）、FPS 基准实跑通过。
+**验证**：`npm run check` 全绿（30 处 `?v=` / 29 个脚本 / 懒加载清单）、`npm run verify` **549 passed / 0 failed**（31–35 为新增组，其中组 35 的 18 条断言专门锁定 v0.21.9 的合作者修复不回归）、全量 `node --check` 通过、拆分等价性比对零差异、headless Chromium 实机冒烟 `ok:true`（版本 0.22.0、7 分片加载、旧模式 0 请求、存档码往返、进 raid + 3D、0 页面错误）、FPS 基准实跑通过。
+**合并说明**：本版发布时与合作者并行推送的 v0.21.9（15 处 bug 修复）做了完整合并。其中涉及原 `raid.js` 的 8 组改动（具名装权重方向 / 自动穿盾写入 carried / AI 索敌基线 / 尸体掉落去重 / 撤离费组合扣款 / 撤离标记 / 材料按 id 售卖 / 联机入场补配装）已按语义逐一映射到 7 个 `raid-*.js` 分片；其余改动由 git 自动合并。v0.21.9 的完整说明保留在下方条目，其修复全部随 v0.22.0 一起上线。
+
+## v0.21.9 — 2026-11-05
+
+### 集中修复 15 处确认 bug（崩溃 / 卡死 / 刷钱 / 数值反向 / 联机丢单）
+
+本版为纯修复版，不改玩法数值设计（仅两处明显反向的数据回正）。全量 478 项断言通过。
+
+**崩溃与卡死**
+- **修复标题页空引用崩溃**（`ui.js`）：`btn-continue` 只在 `!onlyRaid&&hasSave` 时渲染，绑定却只判 `hasSave` —— 存在旧档时（战役入口默认隐藏）`title()` 对 null 赋 `onclick` 抛 TypeError，中断初始化、连带「删除存档」绑定一起失效。改为判空绑定。
+- **修复旧式防弹插板渲染崩溃**（`items.js` / `shields.js` / `ui.js`）：`shieldLines` 全局同名定义两份，后加载的 `shields.js` 版本覆盖 `items.js` 版本并读取旧插板不存在的 `invuln` 字段 → 战役背包 / 商店打开即抛 TypeError。旧插板展示函数改名 `plateShieldLines`，消除全局冲突。
+- **修复撤离费「够钱却永远撤不出去」**（`raid.js`）：读条判定按「局内 + 仓库合计」，扣款却要求单一资金源足额 —— 资金拆分时读条永远走满再回退、循环卡死。`_payExtractFee` 改为组合扣款（先局内后仓库）。
+
+**刷钱与物品丢失**
+- **修复回收超市卖材料「卖错货 + 可刷钱」**（`raid.js`）：材料无 `uid`，`pull` 用 `x.uid===row.uid` 匹配时 `undefined===undefined` 恒命中第一件 —— 点贵行扣便宜货、按贵价入账。改为按 `id` 匹配。
+- **修复尸体掉落复制物品**（`raid.js`）：`_dropFromBot` 里「第一件配件」与「改装模块」两行会把同一对象 push 两次（`parts[0]` 自带 `core` 时）。去重。
+- **修复拍卖行二次入账**（`auction.js`）：一口价 / 成交下架后 `state[id].yourBid` 残留，跨期 `_closeBucket` 会把已成交的单再入库一次或把出价再退一次。成交路径清 `state`，`_closeBucket` 处理完即删记录。
+- **修复自动穿戴护盾撤离后凭空消失**（`raid.js`）：捡盾直接穿不进任何容器，撤离 / 保险结算只看 `carried.shield` → 该盾丢失。`_wearShield` 同步写入 `carried.shield`。
+
+**数值反向（同类笔误，v0.21.7 修了倍率、漏了价格）**
+- **修复「归零校准」精度爆炸**（`skills.js`）：`accuracyMul:1.05` 用于累加式每点增量，满级变 1+3.15=4.15 倍精度（直接吃满 0.999 上限），按描述改回 +5%/级。
+- **修复命名装权重方向写反**（`raid.js`）：`raidRollUnique` 权重 `pow(1.55, tier-5)` 让 tier8 反而最常见（约占具名掉落 46%），与「高档更稀有」注释和全库「高阶权重递减」约定相反。倒置为 `pow(1.55, 5-tier)`。
+- **修复品质价格序列倒挂**（`config.js`）：`pearl`（特种）`price:38` 比上一档 `orange`（精工）`44` 还低，与 v0.21.7 修掉的 `mult` 倒挂是同一处漏改。拉平为 `68` 保持单调。
+
+**联机**
+- **修复联机入场丢配装**（`raid.js`）：`_onlineEnter` 构造的 `opts` 漏传 `shield` / `ammo` / `support`，联机进图枪是空的、护盾和装备包全丢；`hasGear` 不计护盾导致只带盾时保险被静默置否。与单机出发对齐。
+- **修复终局事件静默丢失**（`net.js`）：事件队列 40 条上限不分优先级 —— 队满时 `extract`/`dead`/`corpse` 被丢，失败重排 `slice(0,40)` 又截掉最新的终局事件。终局事件保底入队、超限丢普通事件腾位，重排保终局。
+- **修复 P2P 发送失败事件蒸发**（`net-p2p.js`）：先清空 `_outbox` 再发送、失败被吞（HTTP 路径有回补）。`_send` 返回成败，失败放回队列。
+- **补全队友撤离状态同步**（`net.js` / `raid.js`）：`ext` 字段发送端引用从未赋值的 `_extractedFlag`、接收端漏读 —— 链路两头全断。撤离成功置标记，`_applyPeers` 补读。
+- **修复限速可被伪造绕过**（`server.js`）：`clientIp` 无条件信任客户端可控的 `X-Forwarded-For`，换头即可绕过全部限速再打满房间槽位。仅 `TRUST_PROXY=1` 时采信 XFF。
+
+**清理（死代码 / 重复代码）**
+- AI 索敌基线不再锚定玩家原始距离（被墙挡住的近处玩家会屏蔽更远可见目标，AI 对眼前敌人视而不见）。
+- `net.js` 删除恒假的 seed 同步行；`weapons.js` 删除两分支相同的死三元；`player.js` 删除只比较不执行的死语句；`combat.js` 删除从未读取的 `hitPlayer` 形参；`auction.js` 合并逐字重复的 `aucMatch2`/`aucMatch`。
 
 ## v0.21.8 — 2026-11-05
 

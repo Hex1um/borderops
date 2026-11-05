@@ -882,6 +882,12 @@ Object.assign(Raid, {
     const p=this.player;
     if(!p || !it) return false;
     const s=ensureShield(it);
+    // v0.21.9：自动穿戴的护盾必须记入 carried，否则撤离入库 / 阵亡保险只看 carried.shield，它会凭空消失
+    if(this.carried){
+      if(this.carried.shield && this.carried.shield!==s)
+        (this.inv.shields=this.inv.shields||[]).push(this.carried.shield);
+      this.carried.shield=s;
+    }
     p.shieldGear=s;
     p.maxShield=s.capacity||0;
     p.shield=p.maxShield;
@@ -1075,7 +1081,8 @@ Object.assign(Raid, {
       const sense=raidAISense(b);
       // 联机房主：AI 会在「自己 + 所有远端玩家」里挑最近的可见目标
       // AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
-      let tgt=p, d=M.dist(b.x,b.y,p.x,p.y);
+      // v0.21.9：基线不再预设玩家原始距离 —— 否则被墙挡住的近处玩家会屏蔽更远但可见的敌对目标
+      let tgt=null, d=Infinity;
       const _consider=(o)=>{
         if(o===b || !o.alive || o.ghost) return;
         let enemy;
@@ -1094,7 +1101,7 @@ Object.assign(Raid, {
       _consider(p);
       if(this.online){ for(const o of this.ops){ if(o.isPlayer||o.remote) _consider(o); } }
       for(const o of this.ops){ if(!o.isPlayer && !o.remote) _consider(o); }
-      if(!tgt.alive) tgt=p;
+      if(!tgt || !tgt.alive) tgt=p;
       /* 索敌分级：Scav 视距短、反应慢、忘得快；PMC 更警觉；Boss 几乎即时锁定。
        * _detectT 累积「持续看见」的时间，视线中断会快速衰减；已警觉的 AI 重新发现目标时不再重复反应延迟。 */
       const grace = this.spawnGrace>0 && (tgt.isPlayer || tgt.remote);

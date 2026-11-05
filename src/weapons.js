@@ -176,7 +176,7 @@ function rollPart(slotId, ilvl, rarityId){
   const n = R.id==="white" ? 1 : (R.mult>=3 ? 3 : 2);
   const mods=[], used=new Set();
   for(let i=0;i<n;i++){
-    let st = i===0 ? RNG.pick(slot.stats) : RNG.pick(slot.stats);
+    let st = RNG.pick(slot.stats);   // v0.21.9：原先 i===0 三元两分支完全相同，删掉死条件
     if(used.has(st)){
       const alt = slot.stats.filter(s=>!used.has(s));
       if(alt.length) st = RNG.pick(alt);

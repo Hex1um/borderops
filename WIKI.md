@@ -374,7 +374,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（531 条断言）
+npm run verify       # 无浏览器依赖的逻辑回归（549 条断言）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -383,7 +383,8 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **脚本顺序敏感**：`sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.22.0 共 29 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
 - **巨型文件拆分**：`src/raid.js`（9750 行）已拆为 7 个 `raid-*.js`（最大 1621 行）；verify 的 `RAID_PARTS` 会把分片拼回全文再做源码正则断言，新增分片记得同步 `index.html` / `check_version.js` / `README.md`。
 - **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。
+- **合并护栏**：v0.22.0 已并入合作者 v0.21.9 的 15 处 bug 修复（原 `raid.js` 的 8 组改动映射到 7 个 `raid-*.js` 分片）。verify 组 35 的 18 条断言会逐项锁定这些修复（撤离费组合扣款 / 终局事件保底 / 权重方向 / 价格单调 / 插板函数改名 / 限速 XFF 等），后续重构若误覆盖会直接红灯。
 - **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
-- **FPS 基线**：`npm run bench:fps` 本机实测参考值 2D 46.9 fps / p95 25.6ms，3D 29.7 fps / p95 37.1ms（headless Chromium，120 帧）。改渲染热路径前后各跑一次对比。
+- **FPS 基线**：`npm run bench:fps` 本机实测参考区间 2D 46.9~53.1 fps、3D 29.7~35.3 fps（headless Chromium，120 帧；合并 v0.21.9 后复跑为 2D 53.1 / p95 22ms，3D 35.3 / p95 32.5ms）。改渲染热路径前后各跑一次对比。
 - **版本三处同步**：`package.json` / `src/config.js` 的 `CFG.version` / `index.html` 全部 `?v=`，改完必须一起改并跑 `npm run check`。
 - **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件；`raid-*.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。
