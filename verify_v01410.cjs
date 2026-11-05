@@ -881,7 +881,8 @@ check('AI 尸体掉落弹药', /drops\.push\(ammoDef\(gcal, lv\)\)/.test(raidSrc
 check('箱子掉落弹药', /_rollAmmo/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('拾取物支持弹药', /item\.kind==="ammo"/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('旧档迁移补起步弹药', /RAID_AMMO_STARTER/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('大厅可按发数携带弹药', /data-ammo=/.test(raidSrc) && /_prepPlayerAmmo/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('大厅可按发数携带弹药（v0.21.3 改滑动条）',
+  /id="rc-ammo-\$\{cal\}" type="range"/.test(raidSrc) && /_prepPlayerAmmo/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* 合作者 b78b40e：暂时隐藏厂商名（只影响显示，manufacturer 字段保留） */
 const manHidden = JSON.parse(G(`JSON.stringify((()=>{
@@ -997,6 +998,90 @@ check('3D 枪口火焰改由 muzzleT 驱动', /if\(\(p\.muzzleT\|\|0\) > 0\)/.te
 check('3D 持枪改为竖握（长度方向压缩）', /const sxa=-0\.74\*sc, syb=0\.94\*sc/.test(fpSrc) ? 1 : 0, 1, 0.001);
 check('3D 手臂在屏幕空间重画', /_fpArms\(ctx, w, h, fh, rh, gunAng/.test(fpSrc) ? 1 : 0, 1, 0.001);
 check('2D 手持模型有开火火光', /globalCompositeOperation="lighter"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* v0.21.3：拍卖行改为「期号确定性货池」——同一期全网同一份货 */
+const aucSrc = fs.readFileSync(path.join(SRC, 'auction.js'), 'utf8');
+const aucDet = JSON.parse(G(`JSON.stringify((()=>{
+  const sig=p=>p.map(L=>[L.id,L.kind,L.seller,L.start,L.price,L.buyout,L.bids,L.endsAt].join("|")).join("\\n");
+  const rng0=RNG.rng;
+  const a=Auction.buildPool(777), b=Auction.buildPool(777), c=Auction.buildPool(778);
+  const restored = RNG.rng === rng0;                 // 生成完必须复原，否则搅乱局内随机序列
+  const kinds={}; for(const L of a) kinds[L.kind]=(kinds[L.kind]||0)+1;
+  return { same:sig(a)===sig(b), diff:sig(a)!==sig(c), n:a.length, restored,
+           core:a[0].kind==="part" && a[0].item && a[0].item.slot==="core",
+           oneEnd:a.every(L=>L.endsAt===a[0].endsAt),
+           endIsPeriod:a[0].endsAt===auctionBucketEnd(777),
+           kinds, max:AUCTION_MAX, pool:AUCTION_POOL,
+           bucketMs:AUCTION_BUCKET_MS, seed:auctionBucketSeed(777),
+           sameSeed:auctionBucketSeed(777)===auctionBucketSeed(777),
+           diffSeed:auctionBucketSeed(777)!==auctionBucketSeed(778),
+           bucketOf:(ms)=>0 };
+})())`));
+check('同期号重放货架完全一致（全网同一份货）', aucDet.same ? 1 : 0, 1, 0.001);
+check('换期号整批货不同', aucDet.diff ? 1 : 0, 1, 0.001);
+check('期号种子可复现', aucDet.sameSeed && aucDet.diffSeed ? 1 : 0, 1, 0.001);
+check('每期货池 18 件 / 货架 10 件', aucDet.n === aucDet.pool && aucDet.max === 10 ? 1 : 0, 1, 0.001);
+check('每期一件改装模块打底', aucDet.core ? 1 : 0, 1, 0.001);
+check('整期挂单结束时间统一', aucDet.oneEnd ? 1 : 0, 1, 0.001);
+check('结束时间 = 下一期起始', aucDet.endIsPeriod ? 1 : 0, 1, 0.001);
+check('一期货架涵盖枪 / 甲 / 盔 / 配件 / 材料',
+  Object.keys(aucDet.kinds).length >= 3 ? 1 : 0, 1, 0.001);
+check('生成货池后 RNG 种子已复原', aucDet.restored ? 1 : 0, 1, 0.001);
+check('拍卖行时长 10 分钟一期', aucDet.bucketMs, 600000, 0.5);
+check('货架生成链路里没有 Math.random（确定性前提）',
+  /Math\.random\(\)/.test(aucSrc.slice(aucSrc.indexOf('function auctionMakeListing'), aucSrc.indexOf('const Auction ='))) ? 0 : 1, 1, 0.001);
+check('配件属性抖动改用 RNG（不再 Math.random）',
+  /0\.85 \+ RNG\.f\(\)\*0\.35/.test(wpnSrc) ? 1 : 0, 1, 0.001);
+check('本地只存期号 / 货池 / 出价状态 / 已下架', /bucket:d\.bucket, pool:d\.pool, state:st, taken:d\.taken/.test(aucSrc) ? 1 : 0, 1, 0.001);
+check('买断后本地标记下架（池子下一件顶上）', /d\.taken\[L\.id\]=1/.test(aucSrc) ? 1 : 0, 1, 0.001);
+check('跨期收尾会结算冻结的出价', /_closeBucket\(d\)/.test(aucSrc) ? 1 : 0, 1, 0.001);
+check('旧的随机补货 ensureCore 已移除', /ensureCore/.test(aucSrc) ? 0 : 1, 1, 0.001);
+check('拍卖行标注「全网同一份货」', /全网同一份货/.test(aucSrc) ? 1 : 0, 1, 0.001);
+check('拍卖行有本期倒计时', /auc-period-left/.test(aucSrc) ? 1 : 0, 1, 0.001);
+check('刷新按钮改叫「同步货架」', /同步货架/.test(aucSrc) ? 1 : 0, 1, 0.001);
+
+/* v0.21.3：初始装备包默认不勾 / 弹药携带滑动条 / 超市合并护甲头盔并加子弹栏 */
+const supportTest = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+  R.grounds=[]; R.cashIn=2000; R.carried={weapons:[]}; R.floats=[];
+  R.supportPaid=false;                                  // 大厅默认不勾装备包 → 进场未付款
+  R.player={ isPlayer:true, maxShield:0, gun:null, secondary:null };
+  R._spawnSafePoint=()=>({x:5,y:5}); R._feed=()=>{};
+  R._dropSupportCache(0,0);
+  return { paid:!!R.supportPaid, dropped:R.grounds.length };
+})())`));
+check('初始装备包默认不勾选（不付款）', supportTest.paid === false ? 1 : 0, 1, 0.001);
+check('默认不投放初始装备包', supportTest.dropped, 0, 0.001);
+check('勾选框默认未选中', /UI\._raidSupport===undefined\) UI\._raidSupport=false/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('弹药携带改为滑动条', /id="rc-ammo-\$\{cal\}" type="range"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('弹药滑动条有数值回显', /id="rc-ammo-val-\$\{cal\}"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('弹药「买 / 补货」按钮已移除', /data-ammobuy=/.test(raidSrc) ? 0 : 1, 1, 0.001);
+check('军火超市护甲与头盔合并成一栏', /id:'armor',name:'护甲 · 头盔'/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('军火超市新增子弹一栏', /id:'ammo',name:'子弹'/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('超市子弹按 30 发一条卖', /RAID_AMMO_STACK/.test(raidSrc) && /data-buy="ammo:/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('超市护甲 / 头盔分区标题', /gridHead\("护甲 T1~T9/.test(raidSrc) && /gridHead\("头盔 T1~T9/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('旧头盔 tab 落回武器栏',
+  /\["weapon","armor","shield","part","ammo","med"\]\.indexOf\(UI\._raidShopTab\)<0\) UI\._raidShopTab="weapon"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* v0.21.3：工坊删除「模块一览」/ 榴弹发射器机匣 32 份 / 弹药造价按弹族分档 */
+check('工坊「模块一览」区块已删除', /<b>模块一览<\/b>/.test(raidSrc) ? 0 : 1, 1, 0.001);
+check('工坊小节重新编号 ① 合成表 / ② 组装枪械',
+  /① 合成表/.test(raidSrc) && /② 组装枪械/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const recGL = JSON.parse(G(`JSON.stringify((()=>{
+  const r=RAID_RECIPES.find(x=>x.id==="r_recGL")||null;
+  const base=RAID_RECEIVERS.find(x=>x.id==="recGL")||null;
+  return { has:!!r && !!base, slots:r?r.slots:0, type:base?base.type:"", tier:base?base.tier:-1 };
+})())`));
+check('新增榴弹发射器机匣', recGL.has ? 1 : 0, 1, 0.001);
+check('榴弹发射器机匣需要 32 份材料', recGL.slots, 32, 0.001);
+check('机匣槽位 launcher:32', /launcher:32/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const ammoCost = JSON.parse(G(`JSON.stringify({ slots:Object.assign({},AMMO_CRAFT_SLOTS),
+  cal:RAID_RECIPES.filter(r=>/^r_ammo_/.test(r.id)).map(r=>({ id:r.id.replace(/^r_ammo_/,""), slots:r.slots })) })`));
+check('弹药造价 轻1 / 中2 / 重4 / 榴弹8',
+  ammoCost.slots.light === 1 && ammoCost.slots.mid === 2 && ammoCost.slots.heavy === 4 && ammoCost.slots.grenade === 8 ? 1 : 0, 1, 0.001);
+check('弹药配方都按弹族取投料份数',
+  ammoCost.cal.length > 0 && ammoCost.cal.every(r => r.slots === (ammoCost.slots[r.id] || -1)) ? 1 : 0, 1, 0.001);
 
 /* 护盾：捡到即穿戴；已有护盾则进背包 */
 const shieldWear = JSON.parse(G(`JSON.stringify((()=>{

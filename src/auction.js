@@ -9,10 +9,27 @@
 const AUCTION_KEY      = "raid_auction_v1";
 const AUCTION_FEE      = 0.03;    // 上架费：按起拍价 3%（最低 ₽50）
 const AUCTION_COMM     = 0.05;    // 成交佣金 5%
-const AUCTION_MAX      = 10;      // 大厅常驻挂单数
+const AUCTION_MAX      = 10;      // 货架上同时展示的挂单数
+const AUCTION_POOL     = 18;      // 每期货池总量（买走一件就露出下一件，池子空了等下一期）
 const AUCTION_MAIL_MAX = 40;
 const AUCTION_SELL_MS  = 4*60*1000;   // 玩家挂单时长 4 分钟
-const AUCTION_REFRESH_MS = 40*1000;   // 免费刷新行情冷却
+
+/* v0.21.3：拍卖行改成「全网同一份货」。
+ * 没有后端也能做到：货架完全由**期号**决定 —— 期号 = floor(now / 10 分钟)，
+ * 期号 → 32 位种子 → 用 RNG.setSeed 重放生成整期货池。任何设备、任何存档，
+ * 只要在同一期打开，看到的就是同一批货、同一口价、同一结束时间。
+ * 玩家自己的出价 / 已买走的下架记录是本地状态（不带服务器没法共享），
+ * 但「货架上有什么」是全球一致的。 */
+const AUCTION_BUCKET_MS = 10*60*1000;
+function auctionBucket(ms){ return Math.floor((ms||Date.now())/AUCTION_BUCKET_MS); }
+function auctionBucketEnd(b){ return (b+1)*AUCTION_BUCKET_MS; }
+function auctionBucketSeed(b){
+  // FNV-1a：把期号稳定地摊成 32 位种子（同一个期号在任何设备上算出同一个值）
+  const str="borderops-auction-v1:"+b;
+  let h=0x811c9dc5;
+  for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
+  return h>>>0;
+}
 
 const AUCTION_SELLERS = ["黑鸦","老K","格里莎","夜莺","铁皮","库兹马","孤狼","白桦",
   "十三号","锈钉","邮差","雪松","雪貂","老兵","浣熊","锯齿","Кот","邮差七号"];
@@ -176,7 +193,7 @@ function auctionRollCoreItem(){
 }
 
 /* 把一件货变成一条挂单 */
-function auctionMakeListing(now, forceKind){
+function auctionMakeListing(endsAt, forceKind){
   const g=auctionRollItem(forceKind);
   const val=auctionValue(g.kind, g.item);
   // 低价货不再被硬性抬到 50：起拍真实反映估值（最低 5 卢布，避免出现 ₽0 挂单）
@@ -189,36 +206,119 @@ function auctionMakeListing(now, forceKind){
     seller:RNG.pick(AUCTION_SELLERS),
     start, price:start, buyout,
     bids:RNG.ri(0,6),
-    endsAt:now + Math.round(RNG.fr(2.5,9)*60000),
+    endsAt:endsAt,                       // v0.21.3：整期统一在同一时刻结束
     yourBid:0, outbidAt:0, outbidPrice:0,
   };
 }
 
 const Auction = {
   /* ----------------------------- 存取 ----------------------------- */
-  load(){
+  /* 本地只存三样：期号 / 确定性的货池 / 可变状态（出价、已买断的下架）
+   * 货架本身（d.listings）每次从「期号 + 种子」重放出来，所以是全网一致的。 */
+  _read(){
     let d=null;
     try{
       const raw=localStorage.getItem(AUCTION_KEY);
-      if(raw){
-        d=JSON.parse(raw);
-        if(!d || !Array.isArray(d.listings)) d=null;
-      }
+      if(raw){ d=JSON.parse(raw); if(!d || typeof d!=="object") d=null; }
     }catch(e){ d=null; }
-    if(!d) d={ listings:[], mine:[], mail:[], nextRefresh:0 };
-    d.listings=d.listings||[]; d.mine=d.mine||[]; d.mail=d.mail||[];
+    if(!d) d={};
+    d.mine=Array.isArray(d.mine)?d.mine:[];
+    d.mail=Array.isArray(d.mail)?d.mail:[];
+    d.state=(d.state && typeof d.state==="object")?d.state:{};
+    d.taken=(d.taken && typeof d.taken==="object")?d.taken:{};
+    d.pool=Array.isArray(d.pool)?d.pool:[];
     if(d.nextRefresh===undefined) d.nextRefresh=0;
-    this.refill(d);
+    if(d.bucket===undefined) d.bucket=-1;
     return d;
   },
-  save(d){ try{ localStorage.setItem(AUCTION_KEY, JSON.stringify(d)); }catch(e){} },
+
+  load(){
+    const d=this._read();
+    const b=auctionBucket();
+    if(d.bucket!==b){
+      // 跨期：先把上一期的出价收尾（拍下 / 退回），再整体换成本期全网同一份货
+      this._closeBucket(d);
+      d.bucket=b; d.pool=this.buildPool(b); d.state={}; d.taken={};
+      this.save(d);
+    }
+    if(!d.pool.length){ d.pool=this.buildPool(b); d.bucket=b; this.save(d); }
+    d.listings=this._materialize(d);
+    return d;
+  },
+
+  /* 本期货池：期号 → 种子 → 重放生成 AUCTION_POOL 件货。
+   * 第 0 位固定是改装模块（弹种 / 膛压组件是突袭之外唯一获取渠道）。 */
+  buildPool(bucket){
+    const end=auctionBucketEnd(bucket);
+    const prev=RNG.rng;
+    RNG.setSeed(auctionBucketSeed(bucket));
+    const pool=[];
+    try{
+      for(let i=0;i<AUCTION_POOL;i++){
+        const L=auctionMakeListing(end, i===0 ? "core" : null);
+        L.id="L"+bucket+"_"+i;      // 稳定 id：同一期在任何设备上都一样
+        pool.push(L);
+      }
+    }finally{ RNG.rng=prev; }       // 别把局内 / 其它系统的随机序列搅乱
+    return pool;
+  },
+
+  /* 货池 + 本地状态 → 当前货架（去掉已买断的，取前 AUCTION_MAX 件） */
+  _materialize(d){
+    const out=[];
+    for(const L of (d.pool||[])){
+      if(d.taken[L.id]) continue;
+      out.push(Object.assign({}, L, d.state[L.id]||{}));
+      if(out.length>=AUCTION_MAX) break;
+    }
+    return out;
+  },
+
+  /* 跨期收尾：还冻着出价的按「被超越就退钱 / 否则视为拍下」处理。
+   * 旧版本（v0.21.2 及以前）存的是自带倒计时的 listings，升级时也在这里退钱。 */
+  _closeBucket(d){
+    const stash=RaidStash.load();
+    let money=false, n=0;
+    for(const id of Object.keys(d.state||{})){
+      const st=d.state[id];
+      if(!st || !(st.yourBid>0)) continue;
+      const L=(d.pool||[]).find(x=>x.id===id);
+      if(!L){ stash.creds+=st.yourBid; money=true; n++; continue; }
+      if(st.outbidAt){
+        stash.creds+=st.yourBid; money=true; n++;
+        this.note(d,"竞价被超越",`${auctionItemInfo(L.kind,L.item).name} 被人抬到 ₽${priceText(st.outbidPrice||st.yourBid)}，出价已退回。`,"warn");
+      } else {
+        this.deposit(stash, L.kind, L.item); n++;
+        this.note(d,"竞拍成功",`上期以 ₽${priceText(st.yourBid)} 拍下 ${auctionItemInfo(L.kind,L.item).name}，已放入仓库。`,"ok");
+      }
+    }
+    for(const L of (Array.isArray(d.listings)?d.listings:[])){
+      if(L && L.yourBid>0){
+        stash.creds+=L.yourBid; money=true; n++;
+        this.note(d,"拍卖结束",`${auctionItemInfo(L.kind,L.item).name} 的旧挂单已下架，出价 ₽${priceText(L.yourBid)} 已退回。`,"warn");
+      }
+    }
+    if(money) RaidStash.save(stash);
+    return n;
+  },
+
+  save(d){
+    try{
+      // 把货架上的可变字段写回 state（价格 / 出价 / 被抬价时间）
+      const st=d.state=d.state||{};
+      for(const L of (d.listings||[])){
+        st[L.id]={ price:L.price, bids:L.bids, yourBid:L.yourBid,
+                   outbidAt:L.outbidAt||0, outbidPrice:L.outbidPrice||0 };
+      }
+      localStorage.setItem(AUCTION_KEY, JSON.stringify({
+        bucket:d.bucket, pool:d.pool, state:st, taken:d.taken||{},
+        mine:d.mine||[], mail:d.mail||[], nextRefresh:d.nextRefresh||0,
+      }));
+    }catch(e){}
+  },
 
   refill(d){
-    const now=Date.now();
-    let guard=0;
-    while(d.listings.length<AUCTION_MAX && guard++<AUCTION_MAX){
-      d.listings.push(auctionMakeListing(now));
-    }
+    d.listings=this._materialize(d);
     this.save(d);
   },
 
@@ -235,16 +335,6 @@ const Auction = {
     if(kind==="weapon"||kind==="armor"||kind==="helmet"||kind==="part") item.kind=kind;
     arr.push(item);
     return arr.length;
-  },
-
-  /* 改装模块保底：大厅里常驻至少 1 件改装模块（弹种 / 膛压组件是突袭之外唯一获取渠道） */
-  ensureCore(d, now){
-    d=d||this.load(); now=now||Date.now();
-    if(d.listings.some(L=>L.item && L.item.slot==="core" && !L.yourBid)) return false;
-    const i=d.listings.findIndex(L=>!L.yourBid && !L.outbidAt);
-    if(i>=0){ d.listings[i]=auctionMakeListing(now,"core"); return true; }
-    if(d.listings.length<=AUCTION_MAX){ d.listings.push(auctionMakeListing(now,"core")); return true; }
-    return false;
   },
 
   /* ----------------------------- 结算 ----------------------------- */
@@ -276,8 +366,9 @@ const Auction = {
     for(const L of d.listings){
       if(L.yourBid>0 && L.outbidAt && now>=L.outbidAt && L.outbidAt<=L.endsAt){
         stash.creds+=L.yourBid; money=true; changed=true; n++;
+        const nm=auctionItemInfo(L.kind,L.item).name;
         this.note(d, "竞价被超越",
-          `${L.name} 有人抬到 ₽${priceText(L.outbidPrice)}，你的 ₽${priceText(L.yourBid)} 已退回。`, "warn");
+          `${nm} 有人抬到 ₽${priceText(L.outbidPrice)}，你的 ₽${priceText(L.yourBid)} 已退回。`, "warn");
         L.price=Math.max(L.price, L.outbidPrice);
         L.bids++; L.yourBid=0; L.outbidAt=0; L.outbidPrice=0;
       }
@@ -288,21 +379,20 @@ const Auction = {
             `以 ₽${priceText(L.yourBid)} 拍下 ${auctionItemInfo(L.kind,L.item).name}，已放入仓库。`, "ok");
           n++;
         }
+        d.taken[L.id]=1;          // 拍下的货从本地下架，别被货池重新顶回来
         changed=true; continue;
       }
       keep.push(L);
     }
     d.listings=keep;
 
-    // 3) 补货
-    let guard=0;
-    while(d.listings.length<AUCTION_MAX && guard++<AUCTION_MAX){
-      d.listings.push(auctionMakeListing(now)); changed=true;
-    }
-    if(this.ensureCore(d, now)) changed=true;
-
+    /* 3) 先写回可变状态，再按本期货池重建货架（跨期换池在 load() 里做）。
+     * 顺序不能反：refill 是从 pool+state 重放出来的，先 refill 会把上面刚改的
+     * 价格 / yourBid 覆盖掉。 */
     if(money) RaidStash.save(stash);
-    if(changed || n) this.save(d);
+    this.save(d);
+    d.listings=this._materialize(d);
+    this.save(d);
     return n;
   },
 
@@ -349,7 +439,7 @@ const Auction = {
     stash.creds-=L.buyout;
     if(L.yourBid>0) stash.creds+=L.yourBid;          // 退还已冻结的出价
     this.deposit(stash, L.kind, L.item);
-    d.listings.splice(i,1);
+    d.taken[L.id]=1;                 // 本地下架：池子里下一件会顶上来（全网看到的仍是同一批）
     this.note(d, "一口价成交", `₽${priceText(L.buyout)} 拿下 ${auctionItemInfo(L.kind,L.item).name}，已放入仓库。`, "ok");
     RaidStash.save(stash);
     this.refill(d); this.save(d);
@@ -409,18 +499,13 @@ const Auction = {
     return { ok:true, msg:`已撤单，${L.name} 退回仓库（上架费不退）` };
   },
 
+  /* v0.21.3：货架由期号决定，不能「刷新重掷」—— 那会让每个人看到的货都不一样。
+   * 这个按钮降级成「同步本期货架」：重新读一次期号，顺手把跨期的出价收尾。 */
   refresh(){
     const d=this.load();
-    const now=Date.now();
-    if(now < (d.nextRefresh||0))
-      return { ok:false, msg:`行情刷新冷却中（${Math.ceil((d.nextRefresh-now)/1000)} 秒）` };
-    d.listings=d.listings.filter(L=>L.yourBid>0);   // 保留自己出过价的
-    let guard=0;
-    while(d.listings.length<AUCTION_MAX && guard++<AUCTION_MAX) d.listings.push(auctionMakeListing(now));
-    this.ensureCore(d, now);
-    d.nextRefresh=now+AUCTION_REFRESH_MS;
     this.save(d);
-    return { ok:true, msg:"行情已刷新" };
+    const left=auctionBucketEnd(auctionBucket())-Date.now();
+    return { ok:true, msg:`已同步本期货架 · 本期还剩 ${auctionCdText(left)}` };
   },
 
   counts(){
@@ -493,7 +578,7 @@ UI.raidAuction=function(opts){
           一口价 ₽${priceTextShort(L.buyout)}</button>
       </div>
     </div>`;
-  }).join('') : `<div class="empty-hint">${d.listings.length? "这个分类暂时没货 · 换个分类或点「刷新行情」":"货架空了 · 点「刷新行情」补货"}</div>`;
+  }).join('') : `<div class="empty-hint">${d.listings.length? "这个分类暂时没货 · 换个分类看看":"本期货架的货已被抢空 · 等下一期（10 分钟一轮）刷新"}</div>`;
 
   /* ----------------------------- 出售 ----------------------------- */
   const sellTabs=["weapon","armor","helmet","part","material","core"];
@@ -596,12 +681,13 @@ UI.raidAuction=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">拍卖行</h2>
-      <div class="subtitle">AUCTION HOUSE · 自由买卖 · 卢布结算 · 5% 成交佣金</div>
+      <div class="subtitle">AUCTION HOUSE · <b style="color:#ffd36a">全网同一份货</b> · 每 10 分钟一期 · 卢布结算 · 5% 成交佣金</div>
       <div class="shop-bar">
-        <div class="shop-desc">在这里与其他 PMC / Scav 交易：<b style="color:#ffd23f">竞拍</b>可以低于估值捡漏（但可能被抬价），<b style="color:#ffd23f">一口价</b>直接拿下；自己的战利品挂上去，成交价比商人回收（六折）高得多——挂单<b style="color:#8fe07a"> 4 分钟</b>，到期未售出自动退回仓库，上架费不退。<br>
-        <b style="color:#ff9a3a">弹种适配组件 / 膛压组件</b>在这里是除突袭箱子外<b>唯一</b>的获取渠道，货架保底常驻至少 1 件；也用「改装模块」分类快速筛出来。</div>
+        <div class="shop-desc"><b style="color:#ffd36a">这一期货架对所有人一样</b>：挂在货上的枪 / 甲 / 配件 / 材料由<b>期号</b>算出，同一期里谁打开都是同一批货、同一个一口价、同一结束时间（<b>本期还剩 <span id="auc-period-left" style="color:#8fe07a">${auctionCdText(auctionBucketEnd(auctionBucket(now))-now)}</span></b>）。<br>
+        <b style="color:#ffd23f">竞拍</b>可以低于估值捡漏（但可能被抬价），<b style="color:#ffd23f">一口价</b>直接拿下；自己的战利品挂上去，成交价比商人回收（六折）高得多——挂单<b style="color:#8fe07a"> 4 分钟</b>，到期未售出自动退回仓库，上架费不退。<br>
+        <b style="color:#ff9a3a">弹种适配组件 / 膛压组件</b>在这里是除突袭箱子外<b>唯一</b>的获取渠道，每期第 1 件保底就是改装模块；也用「改装模块」分类快速筛出来。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
-        <button class="btn ghost" id="btn-auc-refresh">刷新行情</button>
+        <button class="btn ghost" id="btn-auc-refresh">同步货架</button>
         <button class="btn ghost" id="btn-auc-back">前往配装大厅</button>
       </div>
       <div class="shop-tabs">
@@ -609,7 +695,7 @@ UI.raidAuction=function(opts){
           <b>${t.name}</b><span class="tab-tag">${t.tag}</span></button>`).join('')}
       </div>
       ${body}
-      <div class="hint" style="margin-top:12px;">提示：拍卖行的成交与退款是<b>实时结算</b>的——再次打开本页面时，到期的单子会自动入账或退回。出价的钱会先冻结，被抬价后立即退回。</div>
+      <div class="hint" style="margin-top:12px;">提示：成交与退款是<b>实时结算</b>的——再次打开本页面时，到期的单子会自动入账或退回。出价的钱会先冻结，被抬价后立即退回；跨期时若还有出价冻结，会按「被超越则退回 / 否则视为拍下」自动收尾。</div>
     </div>`);
 
   const rerender=()=>UI._keepScroll(()=>UI.raidAuction(opts));
@@ -674,6 +760,9 @@ UI.raidAuction=function(opts){
       clearInterval(UI._aucTimer); UI._aucTimer=null; return;
     }
     const t=Date.now();
+    // 本期货架剩余时间（整期统一结束，所以单独一行显示）
+    const pel=document.getElementById('auc-period-left');
+    if(pel) pel.textContent=auctionCdText(auctionBucketEnd(auctionBucket(t))-t);
     let overdue=false;
     UI.overlay.querySelectorAll('[data-cd]').forEach(el=>{
       const left=(+el.dataset.cd)-t;

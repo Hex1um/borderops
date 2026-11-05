@@ -128,7 +128,9 @@ for(const s of GUN_SLOTS) GUN_SLOT_BY_ID[s.id]=s;
 function partStatValue(stat, ilvl, R){
   if(AFFIX_INT.includes(stat)) return Math.max(1, Math.round(2 + ilvl*0.06 + R.mult*0.6));
   const scale = AFFIX_PCT.includes(stat) ? (1 + ilvl/150) : (1 + ilvl/100);
-  const v = 6 * scale * (0.7 + R.mult*0.42) * (0.85 + Math.random()*0.35);
+  /* v0.21.3：抖动改用 RNG（而不是 Math.random）—— 拍卖行要「全网同一份货」，
+   * 靠全局种子重放生成，只要有一处绕过 RNG 取随机，两台设备算出来的估值就会不一样。 */
+  const v = 6 * scale * (0.7 + R.mult*0.42) * (0.85 + RNG.f()*0.35);
   return Math.round(v*10)/10;
 }
 

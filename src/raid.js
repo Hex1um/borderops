@@ -907,6 +907,8 @@ const RAID_RECEIVERS = [
   { id:"recSMG", name:"冲锋枪机匣",   short:"SMG机匣", type:"smg",     tier:1, value:1400,  cost:{steel:2, polymer:2} },
   { id:"recSG",  name:"霰弹枪机匣",   short:"SG机匣",  type:"shotgun", tier:1, value:1100,  cost:{scrap:4, rubber:2} },
   { id:"recPS",  name:"手枪机匣",     short:"PS机匣",  type:"pistol",  tier:0, value:700,   cost:{scrap:3, cloth:2} },
+  // v0.21.3：榴弹发射器底材 —— 投料 32 份（RAID_RECV_SLOTS.launcher），产线最贵的一档
+  { id:"recGL",  name:"榴弹发射器机匣", short:"GL机匣", type:"launcher", tier:4, value:16000, cost:{steel:8, alloy:4} },
 ];
 const RAID_RECEIVER_BY_ID={}; for(const r of RAID_RECEIVERS) RAID_RECEIVER_BY_ID[r.id]=r;
 function raidMakeReceiver(r, tier){
@@ -976,7 +978,7 @@ const RAID_RECIPES = [
     make:(mats,q)=>raidMakeShield(M.clamp(q+1,1,9), M.clamp(q,0,8)) },
 ];
 // 底材按枪型定投料量——枪越大结构越复杂，要的材料越多
-const RAID_RECV_SLOTS = { rifle:16, sniper:20, smg:6, shotgun:12, pistol:2 };
+const RAID_RECV_SLOTS = { rifle:16, sniper:20, smg:6, shotgun:12, pistol:2, launcher:32 };
 for(const r of RAID_RECEIVERS){
   const slots = RAID_RECV_SLOTS[r.type] || 3;
   RAID_RECIPES.push({ id:"r_"+r.id, name:r.name, kind:"receiver", tag:"底材", slots:slots,
@@ -985,11 +987,14 @@ for(const r of RAID_RECEIVERS){
 }
 
 /* v0.20.0：弹药合成 —— 每个弹族一张配方，产出的「级别」由投料品质决定。
- * 材料越贵弹药越高级；投料 3 份，一次固定出 30 发。 */
+ * 材料越贵弹药越高级；一次固定出 30 发。
+ * v0.21.3：投料份数按弹族分档（轻 1 / 中 2 / 重 4 / 榴弹 8）—— 越重的弹越费材料。 */
+const AMMO_CRAFT_SLOTS = { light:1, mid:2, heavy:4, grenade:8 };
 for(const cal of AMMO_CAL_LIST){
+  const slots = AMMO_CRAFT_SLOTS[cal] || 3;
   RAID_RECIPES.push({
-    id:"r_ammo_"+cal, name:AMMO_CALS[cal].name+"（30 发）", kind:"ammo", tag:"弹药", slots:3,
-    desc:`产出 ${AMMO_CALS[cal].spec} · 适用 ${AMMO_CALS[cal].types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")} · 级别由材料品质决定`,
+    id:"r_ammo_"+cal, name:AMMO_CALS[cal].name+"（30 发）", kind:"ammo", tag:"弹药", slots:slots,
+    desc:`产出 ${AMMO_CALS[cal].spec} · 适用 ${AMMO_CALS[cal].types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")} · 每次 ${slots} 份材料 → ${RAID_AMMO_STACK} 发 · 级别由材料品质决定`,
     make:(mats,q)=>({ kind:"ammo", id:ammoItemId(cal, M.clamp(1+Math.floor(q*0.62),1,5)), n:RAID_AMMO_STACK }),
   });
 }
@@ -7122,7 +7127,8 @@ UI.raidSetup=function(){
   const auc = (typeof Auction!=="undefined") ? Auction.counts() : { listings:0, mine:0 };
   if(!UI._raidSel) UI._raidSel={ w:[], a:null, h:null, s:null };
   if(UI._raidIns===undefined) UI._raidIns=false;
-  if(UI._raidSupport===undefined) UI._raidSupport=true;   // 初始装备包默认勾选（钱够才生效）
+  // v0.21.3：初始装备包改成**默认不勾选**（要花 ₽512 买，别默认从玩家现金里扣钱）
+  if(UI._raidSupport===undefined) UI._raidSupport=false;
   const sel=UI._raidSel;
   if(sel.h===undefined) sel.h=null;
   if(sel.s===undefined) sel.s=null;
@@ -7204,18 +7210,14 @@ UI.raidSetup=function(){
     const sel=UI._raidAmmo[cal];
     const cur=have.find(h=>sel && sel.id===h.id) || have[0] || null;
     if(!cur){
-      /* 没有库存：直接给一个「买 60 发 T1」的入口，避免仓库打空后进图才发现没子弹 */
+      /* v0.21.3：这里不再放「买 60 发」的购买入口 —— 买子弹统一去军火超市的「子弹」页 */
       delete UI._raidAmmo[cal];
-      const d0=ammoDef(cal,1);
-      const price=raidSuperPrice(d0.value*60, d0.id);
-      const can=stash.creds>=price;
       return { cal, html:`<div class="ri" style="cursor:default;">
         <div class="ri-main">
           <div class="ri-name" style="color:#8b95a5">${C.name} · 无库存</div>
           <div class="ri-meta">${C.spec} · 适用 ${C.types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")}</div>
         </div>
-        <div class="ri-val"><button class="btn ghost small" data-ammobuy="${cal}" ${can?"":"disabled"}
-          style="padding:2px 8px;font-size:11px;">买 60 发 · ₽${priceText(price)}</button></div>
+        <div class="ri-val" style="color:#8b95a5;font-size:11px;">去「军火超市 · 子弹」购买，或在工坊「弹药」页合成</div>
       </div>` };
     }
     const cap=Math.min(cur.n, RAID_AMMO_CAP);
@@ -7223,15 +7225,18 @@ UI.raidSetup=function(){
      * 只有玩家点过数量按钮，才按他选的带。 */
     const n=(sel && sel.id===cur.id) ? Math.max(0, Math.min(sel.n|0, cap)) : 0;
     UI._raidAmmo[cal]={ id:cur.id, n, cap };
-    const btns=[0, 60, 120, cap].filter((v,i,a)=>a.indexOf(v)===i)
-      .map(v=>`<button class="btn ghost small" data-ammo="${cal}:${v}" style="padding:2px 7px;font-size:11px;${v===n?'border-color:#ffd36a;color:#ffd36a;':''}">${v===cap?'全带':v}</button>`).join("");
-    return { cal, html:`<div class="ri" style="cursor:default;">
-        <div class="ri-main">
+    /* v0.21.3：携带数量改成滑动条（和带入现金一致）—— 0 ~ 该口径库存，步长 30 发。
+     * 购买入口全部撤掉，买子弹去军火超市的「子弹」页 / 工坊合成。 */
+    const step=Math.max(1, Math.min(RAID_AMMO_STACK, Math.floor(cap/4)||1));
+    return { cal, html:`<div class="ri" style="cursor:default;flex-wrap:wrap;gap:8px;">
+        <div class="ri-main" style="flex:1 1 240px;">
           <div class="ri-name" style="color:${C.color}">${C.name} · ${(AMMO_GRADE_BY_LV[cur.lv]||{}).name||"T"+cur.lv}</div>
           <div class="ri-meta">${C.spec} · 适用 ${C.types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")} · 库存 ${cur.n} 发</div>
         </div>
-        <div class="ri-val" style="display:flex;gap:4px;align-items:center;">${btns}
-          <button class="btn ghost small" data-ammobuy="${cal}" style="padding:2px 7px;font-size:11px;">补货 60</button>
+        <div class="ri-val" style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
+          <input id="rc-ammo-${cal}" type="range" min="0" max="${cap}" step="${step}" value="${n}"
+            style="width:170px;vertical-align:middle;">
+          <b id="rc-ammo-val-${cal}" style="min-width:78px;text-align:right;color:#ffd36a;font-variant-numeric:tabular-nums;">${n} / ${cap}</b>
         </div>
       </div>` };
   });
@@ -7262,7 +7267,7 @@ UI.raidSetup=function(){
   const tokIn=Math.max(0, Math.min(UI._raidTok||0, maxTok));
   // 初始装备包（v0.21.2）：明码 ₽512，用带入的卢布现金买，钱不够就买不了
   const canSup=cashIn>=RAID_SUPPORT_CASH;
-  const supOn=UI._raidSupport!==false && canSup;
+  const supOn=UI._raidSupport===true && canSup;
   // 滑动条步长：卢布按 1%（至少 1），GP 币按 1 枚
   const credStep=Math.max(1, Math.round(maxCash/100));
   const tokWorth=raidTokenWorth(tokIn);
@@ -7403,32 +7408,23 @@ UI.raidSetup=function(){
       </div>
     </div>`);
 
-  UI.overlay.querySelectorAll('[data-ammobuy]').forEach(el=>{
-    el.onclick=(e)=>{
-      e.stopPropagation();
-      const cal=el.dataset.ammobuy;
-      const d0=ammoDef(cal,1);
-      const price=raidSuperPrice(d0.value*60, d0.id);
-      if(stash.creds<price){ UI.toast && UI.toast("卢布不足"); return; }
-      stash.creds-=price;
-      stash.ammo=stash.ammo||{};
-      stash.ammo[d0.id]=(stash.ammo[d0.id]||0)+60;
-      RaidStash.save(stash); SFX.pickup();
-      const cur=UI._raidAmmo[cal];
-      UI._raidAmmo[cal]={ id:d0.id, n:Math.min(RAID_AMMO_CAP,(cur&&cur.n)||60) };
-      UI.raidSetup();
+  for(const cal of AMMO_CAL_LIST){
+    const el=document.getElementById("rc-ammo-"+cal);
+    if(!el) continue;
+    const cur=UI._raidAmmo[cal];
+    if(!cur) continue;
+    el.oninput=()=>{
+      const v=Math.max(0, Math.min(parseInt(el.value,10)||0, cur.cap||0));
+      cur.n=v;
+      const b=document.getElementById("rc-ammo-val-"+cal);
+      if(b) b.textContent=v+" / "+(cur.cap||0);
     };
-  });
-  UI.overlay.querySelectorAll('[data-ammo]').forEach(el=>{
-    el.onclick=(e)=>{
-      e.stopPropagation();
-      const [cal,v]=el.dataset.ammo.split(":");
-      const cur=UI._raidAmmo[cal];
-      if(!cur) return;
-      cur.n=Math.max(0, Math.min(parseInt(v,10)||0, RAID_AMMO_CAP));
-      SFX.ui(); UI.raidSetup();
+    // 松手才重渲染整页（和现金 / GP 币滑动条一致）
+    el.onchange=()=>{
+      const v=Math.max(0, Math.min(parseInt(el.value,10)||0, cur.cap||0));
+      cur.n=v; SFX.ui(); UI.raidSetup();
     };
-  });
+  }
   UI.overlay.querySelectorAll('[data-ammoall]').forEach(el=>{
     el.onclick=(e)=>{
       e.stopPropagation();
@@ -7661,6 +7657,8 @@ UI.raidShop=function(opts){
   if(!opts.keep){ UI._raidShopGuns=null; UI._raidShopParts=null; UI._raidShopHelmets=null; }
   const stash=RaidStash.load();
   if(UI._raidShopTab===undefined) UI._raidShopTab="weapon";
+  // v0.21.3：旧版本可能存过 'helmet'（已并入「护甲 · 头盔」栏）→ 落回枪械
+  if(["weapon","armor","shield","part","ammo","med"].indexOf(UI._raidShopTab)<0) UI._raidShopTab="weapon";
   const TAB=UI._raidShopTab;
   // 护甲仍按估值着色
   const rarOf=v=> v>=700?2 : v>=400?1 : 0;
@@ -7686,6 +7684,11 @@ UI.raidShop=function(opts){
         <button class="btn" data-buy="weapon:${g.uid}" ${can?'':'disabled'}>购买</button></div>
     </div>`;
   }).join('');
+
+  // v0.21.3：护甲与头盔合并成一栏，用整行小标题分区
+  const gridHead=t=>`<div style="grid-column:1/-1;font-size:13px;font-weight:800;color:#cfd8e2;margin:12px 0 2px;padding-left:8px;border-left:3px solid #8fd0ff;">${t}</div>`;
+  const armorHead=gridHead("护甲 T1~T9 · 减伤 / 护甲值");
+  const helmetHead=gridHead("头盔 T1~T9 · 爆头减伤 / 耐久");
 
   // 9 级护甲（仅售普通品质；稀有度靠掉落 / 融合）
   const aCards=RAID_ARMOR_TIERS.map(t=>{
@@ -7739,6 +7742,26 @@ UI.raidShop=function(opts){
     </div>`;
   }).join('');
 
+  /* v0.21.3：子弹货架 —— 4 个弹族 × 5 个级别，按 30 发一条卖。
+   * 配装页只负责「带多少」，买子弹统一在这里（局内摊位仍然更便宜）。 */
+  const ammoCards = AMMO_CAL_LIST.map(cal=>{
+    const C=AMMO_CALS[cal];
+    return AMMO_GRADES.slice().reverse().map(g=>{
+      const d=ammoDef(cal,g.lv), id=d.id;
+      const have=(stash.ammo&&stash.ammo[id])||0;
+      const price=raidSuperPrice(d.value*RAID_AMMO_STACK, id);
+      const can=stash.creds>=price;
+      const E=ELEMENTS[g.elem]||null;
+      return `<div class="shop-item" style="border-left-color:${C.color}">
+        <div class="si-name" style="color:${C.color}">${C.short} · ${g.name} ×${RAID_AMMO_STACK}</div>
+        <div class="si-meta">${C.spec} · 适用 ${C.types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")}</div>
+        <div class="si-stats">威力 ×${g.power.toFixed(2)} · 弹种 <b style="color:${E?E.color:"#cfd8e2"}">${E?E.name:"无"}</b> · 当前库存 ${have} 发</div>
+        <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(price)}</span>
+          <button class="btn" data-buy="ammo:${cal}_${g.lv}" ${can?'':'disabled'}>购买</button></div>
+      </div>`;
+    }).join("");
+  }).join('');
+
   // 医疗货架：5 种医疗品（绷带单独计数，其余进医疗包堆叠）
   const medCard = RAID_MEDS.map(m=>{
     const price=raidSuperPrice(m.value, m.id), can=stash.creds>=price;
@@ -7768,9 +7791,10 @@ UI.raidShop=function(opts){
     </div>`;
   }).join('');
 
-  const tabs=[{id:'weapon',name:'枪械',tag:'WEAPONS'},{id:'armor',name:'护甲',tag:'ARMOR'},
-    {id:'helmet',name:'头盔',tag:'HELMET'},{id:'shield',name:'护盾',tag:'SHIELD'},
-    {id:'part',name:'配件',tag:'PARTS'},{id:'med',name:'医疗',tag:'MEDS'}];
+  // v0.21.3：护甲 / 头盔合并成一栏「护甲 · 头盔」，另加「子弹」栏
+  const tabs=[{id:'weapon',name:'枪械',tag:'WEAPONS'},{id:'armor',name:'护甲 · 头盔',tag:'ARMOR + HELMET'},
+    {id:'shield',name:'护盾',tag:'SHIELD'},{id:'part',name:'配件',tag:'PARTS'},
+    {id:'ammo',name:'子弹',tag:'AMMO'},{id:'med',name:'医疗',tag:'MEDS'}];
   const backLabel = opts.from==='title' ? '返回主菜单' : '前往配装大厅';
 
   UI._set(`
@@ -7778,9 +7802,10 @@ UI.raidShop=function(opts){
       <h2 class="title-big" style="font-size:32px;">军火超市</h2>
       <div class="subtitle">ARMS SUPERMARKET · 用卢布采购装备入库，带入下一局突袭</div>
       <div class="shop-bar">
-        <div class="shop-desc">这里只卖<b style="color:#ffd23f">成品</b>：枪械 / 护甲 / 头盔 / 护盾 / 配件 / 医疗品，
+        <div class="shop-desc">这里只卖<b style="color:#ffd23f">成品</b>：枪械 / 护甲与头盔（同栏分区）/ 护盾 / 配件 / <b style="color:#ffd36a">子弹</b> / 医疗品，
           护盾按<b style="color:#4fd6ff">容量 / 充能速度 / 充能延迟</b>三数值与配件、前后缀、独特加成区分；<b style="color:#ffd23f">全场统一按「估价 × 2.0（±0.5）」结算</b>——外场买贵，局内摊位便宜得多；<b style="color:#ff9a3a">原材料、底材、改装模块一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">改装模块完全不能合成</b>，只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
         护甲等级 T1~T9 与品质一一对应；<b style="color:#8fe07a">枪械与配件大多只有 1 条词缀，少数带 2 条以上</b>（护甲 / 头盔固定 1 前缀 + 1 后缀），买之前先看词条。仅撤离成功才会真正带走。<br>
+        <b style="color:#ffd36a">子弹</b>按 <b>30 发</b> 一条卖，4 个弹族 × 5 个级别（民用 → 特种，威力与弹种不同）；配装大厅里只决定「带多少发」，买子弹统一来这里，局内摊位更便宜。<br>
         <span style="color:var(--muted)">品质阶梯（低 → 高）：</span>${raidTierLegend()}</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-shop-refresh" ${stash.creds>=500?'':'disabled'}>刷新货架 ₽500</button>
@@ -7790,7 +7815,7 @@ UI.raidShop=function(opts){
         ${tabs.map(t=>`<button class="shop-tab ${TAB===t.id?'on':''}" data-tab="${t.id}"><b>${t.name}</b><span class="tab-tag">${t.tag}</span></button>`).join('')}
       </div>
       <div class="shop-list">
-        ${TAB==='weapon'?wCards : TAB==='armor'?aCards : TAB==='helmet'?hCards : TAB==='shield'?sCards : TAB==='part'?pCards : medCard}
+        ${TAB==='weapon'?wCards : TAB==='armor'?(armorHead+aCards+helmetHead+hCards) : TAB==='shield'?sCards : TAB==='part'?pCards : TAB==='ammo'?ammoCards : medCard}
       </div>
       <div class="hint" style="margin-top:12px;">卢布来自突袭中搜刮与撤离带出（V-EX 雇车等会消耗）。先下场搜刮攒钱，再来超市补强配装与绷带。</div>
     </div>`);
@@ -7851,6 +7876,17 @@ UI.raidShop=function(opts){
         stash.creds-=price;
         (stash.shields=stash.shields||[]).push(Object.assign({}, src));
         UI._raidShopShields.splice(i,1);   // 买走即下架
+      } else if(type==='ammo'){
+        // v0.21.3：子弹按 30 发一条卖（key = "light_1" 这种 cal_lv）
+        const m=/^([a-z]+)_(\d)$/.exec(key||"");
+        const cal=m?m[1]:null, lv=m?+m[2]:0;
+        if(!cal || !AMMO_CALS[cal]) return;
+        const d=ammoDef(cal, lv), id=d.id;
+        const price=raidSuperPrice(d.value*RAID_AMMO_STACK, id);
+        if(stash.creds<price) return;
+        stash.creds-=price;
+        stash.ammo=stash.ammo||{};
+        stash.ammo[id]=(stash.ammo[id]||0)+RAID_AMMO_STACK;
       } else if(type==='part'){
         const idx=+key, pt=UI._raidShopParts[idx];
         if(!pt) return;
@@ -8051,7 +8087,6 @@ UI.raidWorkshop=function(opts){
   const stash=RaidStash.load();
   stash.receivers=stash.receivers||[];
   stash.materials=stash.materials||[]; stash.parts=stash.parts||[];
-  const cores = stash.parts.filter(p=>p.core);   // 改装模块已并入配件池，按 core 字段筛选
   if(!UI._wsRecv || !stash.receivers.some(r=>r.uid===UI._wsRecv)) UI._wsRecv = stash.receivers[0]?stash.receivers[0].uid:null;
   // 配件不再限制 4 件 —— 每个槽位各装一件，最多装满 GUN_SLOTS 全部槽位
   UI._wsParts = (UI._wsParts||[]).filter(uid=>stash.parts.some(p=>p.uid===uid));
@@ -8075,22 +8110,8 @@ UI.raidWorkshop=function(opts){
     UI._wsMats=keep;
   }
 
-  /* --- 模块一览 --- */
-  const groups=raidCoreGroups(cores);
-  const coreRows = groups.length ? groups.map(g=>{
-    const name=raidCoreName(g.sample||g);
-    const col=raidCoreColor(g.sample||g);
-    const sub=Array.isArray((g.sample||{}).mods) ? g.sample.mods : [];
-    const modTxt=sub.map(m=>`${AFFIX_LABEL[m.stat]||m.stat} +${m.value}`).join(" · ");
-    const body = g.core==="chaos"
-      ? `改装等级 ${RAID_ROMAN[g.lv]} · 装入后伤害 ×${Math.pow(MAYHEM.corePower,g.lv).toFixed(2)}`
-      : (modTxt || "属性增益");
-    return `<div class="shop-item" style="border-left-color:${col}">
-      <div class="si-name" style="color:${col}">${name} ×${g.n}</div>
-      <div class="si-meta">${body}</div>
-      <div class="si-stats" style="opacity:.6;font-size:11px">估值 ₽${priceTextShort(raidCoreValue(g.core,g.lv))} · 仅掉落 / 购买</div>
-    </div>`;
-  }).join('') : `<div class="empty-hint">还没有改装模块 · 只能从<b>保险箱 / Raider</b>身上掉落，或在<b>枪械商店 / 黑市</b>购买</div>`;
+  /* --- 模块一览（v0.21.3 移除整块：改装模块已并入配件池，配装页 / 改装页都能直接看到，
+         工坊里再列一遍只是重复说明，还占掉合成表的位置） --- */
   stash.keys=stash.keys||[];
 
   /* --- 合成表：自选材料，产物品质随材料等级走 --- */
@@ -8214,23 +8235,19 @@ UI.raidWorkshop=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">枪匠台 · 工坊</h2>
-      <div class="subtitle">WORKSHOP · 模块一览 / 材料合成 / 用机匣与部件组装枪械</div>
+      <div class="subtitle">WORKSHOP · 材料合成 / 用机匣与部件组装枪械</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
-        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹药</b>在「弹药」页单独合成：投 3 份材料出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
+        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹药</b>在「弹药」页单独合成：轻弹 1 份 / 中弹 2 份 / 重弹 4 份 / 榴弹 8 份材料，每次出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-ws-back">${opts.from==='title'?'返回主菜单':'前往配装大厅'}</button>
       </div>
 
-      <h3 style="font-size:18px;margin:14px 0 8px;">① 模块一览 <span style="color:var(--muted);font-size:12px;font-weight:400;">不可合成 · 只能掉落或购买</span></h3>
-      <div class="shop-list">${coreRows}</div>
-      <div class="hint" style="margin:2px 0 6px;color:var(--muted)">改装模块既不能用材料合成，也不能两两升阶：I~V 级只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶）</b>、<b>黑市（高阶）</b>购买。作为补偿，单枚改装模块的属性增益比过去强得多（每级 +95%）。</div>
-
-      <h3 style="font-size:18px;margin:18px 0 8px;">② 合成表 <span style="color:var(--muted);font-size:12px;font-weight:400;">自选材料 · 只产出机匣 / 配件，不出改装模块</span></h3>
+      <h3 style="font-size:18px;margin:18px 0 8px;">① 合成表 <span style="color:var(--muted);font-size:12px;font-weight:400;">自选材料 · 只产出机匣 / 配件，不出改装模块</span></h3>
       <div class="shop-list">${recipeRows}</div>
       ${craftBar}
 
-      <h3 style="font-size:18px;margin:18px 0 8px;">③ 组装枪械 <span style="color:var(--muted);font-size:12px;font-weight:400;">选 1 个底材 + 每个槽位 1 件配件 + ${RAID_ASSEMBLE_MATS} 份材料</span></h3>
+      <h3 style="font-size:18px;margin:18px 0 8px;">② 组装枪械 <span style="color:var(--muted);font-size:12px;font-weight:400;">选 1 个底材 + 每个槽位 1 件配件 + ${RAID_ASSEMBLE_MATS} 份材料</span></h3>
       <div class="shop-list">${recvCards}</div>
       <div class="hint" style="margin:10px 0 6px;">配件（已选 ${UI._wsParts.length} 件 · 同一槽位只装一件，再点即替换）</div>
       <div class="shop-list">${partCards}</div>
