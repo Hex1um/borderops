@@ -15,8 +15,24 @@ const AFFIX_INT  = ["pierce","pellets"];       // 整数，不缩放
 // 反向语义：数值越高越「减负」（后坐力-、省弹）的词缀，文案用减号呈现
 const AFFIX_INVERT = { recoil:true, ammoEff:true };
 
+/* ----------------------------- 品质开关 ----------------------------- */
+// CFG.weaponQuality=false：暂时禁用武器品质。新枪统一按标准（white）生成，
+// 不参与品质倍率 / 具名 / 专属威能 / 品质门槛词缀；UI 用中性色、不显示品质名。
+function weaponQualityOff(){
+  return typeof CFG!=="undefined" && CFG.weaponQuality===false;
+}
+function weaponRarityId(w){
+  return weaponQualityOff() ? "white" : ((w && w.rarity) || "white");
+}
+function weaponRarityName(w){
+  if(weaponQualityOff()) return "";
+  const R = RARITY_BY_ID[(w && w.rarity) || "white"] || RARITIES[0];
+  return R.name;
+}
+
 /* ----------------------------- 品质随机 ----------------------------- */
 function rollQuality(ilvl, opts={}){
+  if(weaponQualityOff()) return "white";
   if(opts.rarity) return opts.rarity;
   const mf = opts.mf||0, luck = !!opts.luck, table = opts.weights;
   const pool=[];
@@ -246,8 +262,8 @@ class Weapon {
   }
 
   get rarityDef(){ return RARITY_BY_ID[this.rarity] || RARITIES[0]; }
-  get rarityColor(){ return this.rarityDef.color; }
-  get rarityName(){ return this.rarityDef.name; }
+  get rarityColor(){ return weaponQualityOff() ? "#cfcabb" : this.rarityDef.color; }
+  get rarityName(){ return weaponQualityOff() ? "" : this.rarityDef.name; }
   get elemName(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].name : AMMO_TYPES.none.name; }
   get elemColor(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].color : "#cfcabb"; }
   get value(){ return weaponPrice(this); }
@@ -351,7 +367,8 @@ class Weapon {
 /* ----------------------------- 生成 ----------------------------- */
 function generateWeapon(level, opts={}){
   const ilvl = Math.max(1, Math.round(opts.ilvl!==undefined ? opts.ilvl : level));
-  const quality = opts.rarity || rollQuality(ilvl, opts);
+  // 品质禁用时可以继续传入 rarity（掉落档位 / 商店档位），但武器本体一律按标准品质生成。
+  const quality = weaponQualityOff() ? "white" : (opts.rarity || rollQuality(ilvl, opts));
   const R = RARITY_BY_ID[quality] || RARITIES[0];
 
   // 枪型 / 厂商

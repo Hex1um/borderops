@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.21.4",
+  version: "0.21.5",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -19,6 +19,7 @@ const CFG = {
    * showManufacturer 保留为兼容字段，切到 full 时同步为 true。 */
   display: "compact",
   showManufacturer: false, // 由 display 派生：display==="full" 时为 true
+  weaponQuality: false,    // 暂时禁用武器品质：新枪统一按标准品质生成，UI 不显示品质/颜色
   // 画布逻辑分辨率基准（实际按窗口缩放）
   worldTile: 64,
   // 玩家基础

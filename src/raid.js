@@ -381,6 +381,7 @@ const RAID_RARITY_VAL   = RAID_TIERS.map(t=>t.val);
 
 // 9 阶品质图例（配装大厅 / 商店展示用）
 function raidTierLegend(){
+  if(weaponQualityOff()) return `<b style="color:#cfcabb">标准（武器品质已暂时禁用）</b>`;
   return RAID_TIERS.map(t=>`<b style="color:${t.color}">${t.name}</b>`).join(" / ");
 }
 
@@ -1017,8 +1018,14 @@ function ensureGunAffixes(w){
 }
 
 // 塔科夫枪械显示：优先使用本次掉落的 qTier/qName/qColor（与 9 阶品质刻度一致）
-function raidGunColor(g){ return (g && g.qColor) ? g.qColor : gunRarColor(g && g.rarity); }
-function raidGunName(g){ return (g && g.qName) ? g.qName : ((g && g.rarity && RARITY_BY_ID[g.rarity]) ? RARITY_BY_ID[g.rarity].name : "普通"); }
+function raidGunColor(g){
+  if(weaponQualityOff()) return "#cfcabb";
+  return (g && g.qColor) ? g.qColor : gunRarColor(g && g.rarity);
+}
+function raidGunName(g){
+  if(weaponQualityOff()) return "";
+  return (g && g.qName) ? g.qName : ((g && g.rarity && RARITY_BY_ID[g.rarity]) ? RARITY_BY_ID[g.rarity].name : "普通");
+}
 
 /* 配件小徽章：物品栏武器卡与融合台结果卡共用（原先定义在 UI.raidStash 内部，
  * 抽成共享武器卡后必须提到全局，否则会 ReferenceError） */
@@ -7334,7 +7341,9 @@ UI.raidSetup=function(){
         <summary>塔科夫模式 · 玩法说明（点此展开 / 折叠）</summary>
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
           与 30 名 <b style="color:#e0b84a">PMC / Scav</b> 加 3 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">◆</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
-          <b style="color:#ffd23f">战利品 9 阶品质</b>：${raidTierLegend()}。箱子<b style="color:#ffd76a">绝大多数是原材料与配件</b>，整枪 / 护甲只是少数——想拿到好枪，要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料，名字与品质由它们决定）。任意品质都可能刷出，但<b style="color:#8fd0ff">携带装备总估值</b>会显著抬高高阶物资的权重。<br>
+          ${weaponQualityOff()
+            ? `<b style="color:#ffd23f">武器品质已暂时禁用</b>：新枪统一按标准品质生成，不再有品质倍率 / 具名 / 品质颜色。箱子仍以原材料与配件为主，想拿到好枪要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料）。<b style="color:#8fd0ff">携带装备总估值</b>仍会影响高阶物资权重。<br>`
+            : `<b style="color:#ffd23f">战利品 9 阶品质</b>：${raidTierLegend()}。箱子<b style="color:#ffd76a">绝大多数是原材料与配件</b>，整枪 / 护甲只是少数——想拿到好枪，要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料，名字与品质由它们决定）。任意品质都可能刷出，但<b style="color:#8fd0ff">携带装备总估值</b>会显著抬高高阶物资的权重。<br>`}
           <b style="color:#ff7a3c">开局 3 分钟后</b>全图开始缓慢刷入<b>带装备的增援</b>：有的<b style="color:#e0b84a">组队推进</b>，有的会<b style="color:#ff7a3c">封锁撤离点</b>（封锁者存活时无法读条撤离）。<b style="color:#8fe07a">付费撤离点永不被封锁</b>，实在被堵死就花钱雇车；全图同时最多 2 处被封锁。<br>
           <b style="color:#ff8a5a">AI 更像真人</b>：视野 <b>1000px</b>、枪声能传 <b>1200px</b>，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（Raider 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#c07bff">本局第一次击杀</b>必得 <b>1 枚 ◆ GP 币</b>（撤离才落袋）—— 想攒 GP 币就得真开打，绕开所有人只会两手空空。<br>
           <b style="color:#8fe07a">只有成功撤离</b>，携带装备与战利品才写回仓库；阵亡或超时全部丢失。<br>
@@ -7853,7 +7862,7 @@ UI.raidShop=function(opts){
           护盾按<b style="color:#4fd6ff">容量 / 充能速度 / 充能延迟</b>三数值与配件、前后缀、独特加成区分；<b style="color:#ffd23f">全场统一按「估价 × 2.0（±0.5）」结算</b>——外场买贵，局内摊位便宜得多；<b style="color:#ff9a3a">原材料、底材、改装模块一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">改装模块完全不能合成</b>，只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
         护甲等级 T1~T9 与品质一一对应；<b style="color:#8fe07a">枪械与配件大多只有 1 条词缀，少数带 2 条以上</b>（护甲 / 头盔固定 1 前缀 + 1 后缀），买之前先看词条。仅撤离成功才会真正带走。<br>
         <b style="color:#ffd36a">子弹</b>按 <b>30 发</b> 一条卖，4 个弹族 × 5 个级别（民用 → 特种，威力与弹种不同）；配装大厅里只决定「带多少发」，买子弹统一来这里，局内摊位更便宜。<br>
-        <span style="color:var(--muted)">品质阶梯（低 → 高）：</span>${raidTierLegend()}</div>
+        <span style="color:var(--muted)">${weaponQualityOff()?"武器品质：标准（已暂时禁用）":"品质阶梯（低 → 高）："}</span>${raidTierLegend()}</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-shop-refresh" ${stash.creds>=500?'':'disabled'}>刷新货架 ₽500</button>
         <button class="btn ghost" id="btn-shop-back">${backLabel}</button>
@@ -8182,15 +8191,19 @@ UI.raidWorkshop=function(opts){
     }).join("") || `<span class="mat-slot">＋ 待投料 · 需 ${r.slots} 份</span>`;
     const fillHTML=`<div class="craft-fill"><span>投料 <b style="color:${full?'#7fe08a':'#ffd23f'}">${sel.length}/${r.slots}</b></span>
       <div class="craft-bar"><i style="width:${Math.round(sel.length/r.slots*100)}%;background:${full?'#7fe08a':'#ffd23f'}"></i></div></div>`;
-    let qInfo=`<div class="si-stats" style="opacity:.62">产出品质由所选材料决定 · 需要 ${r.slots} 份材料</div>`;
+    let qInfo=weaponQualityOff()
+      ? `<div class="si-stats" style="opacity:.62">武器品质已暂时禁用 · 产出按标准品质 · 需要 ${r.slots} 份材料</div>`
+      : `<div class="si-stats" style="opacity:.62">产出品质由所选材料决定 · 需要 ${r.slots} 份材料</div>`;
     let fee=raidCraftFee([], r.slots);
     let can=false;
     if(full){
       const rg=raidCraftQRange(mats);
       const c0=RAID_RARITY_COLOR[rg[0]], c1=RAID_RARITY_COLOR[rg[1]];
-      qInfo=`<div class="si-stats">产出品质 <b style="color:${c0}">${RAID_TIERS[rg[0]].name}</b>`+
-        (rg[1]!==rg[0]?` ~ <b style="color:${c1}">${RAID_TIERS[rg[1]].name}</b>`:"")+
-        `<span style="opacity:.6"> · 材料均值 T${raidAvgMatTier(mats).toFixed(1)}</span></div>`;
+      qInfo=weaponQualityOff()
+        ? `<div class="si-stats">产出：<b style="color:#cfcabb">标准品质</b><span style="opacity:.6"> · 材料均值 T${raidAvgMatTier(mats).toFixed(1)}</span></div>`
+        : `<div class="si-stats">产出品质 <b style="color:${c0}">${RAID_TIERS[rg[0]].name}</b>`+
+          (rg[1]!==rg[0]?` ~ <b style="color:${c1}">${RAID_TIERS[rg[1]].name}</b>`:"")+
+          `<span style="opacity:.6"> · 材料均值 T${raidAvgMatTier(mats).toFixed(1)}</span></div>`;
       fee=raidCraftFee(mats, r.slots);
       can = stash.creds>=fee;
     }
@@ -8275,7 +8288,9 @@ UI.raidWorkshop=function(opts){
     const matTier = mats.length ? mats.reduce((s,m)=>s+m.tier,0)/mats.length : 0;
     const qTier = M.clamp(Math.round(recv.tier*0.35 + partTier*0.45 + matTier*0.20), 0, 8);
     const boost=RAID_TYPE_BOOST[recv.gunType];
-    preview=`<div class="hint" style="color:${RAID_RARITY_COLOR[qTier]}">预估产物：<b>${RAID_TIERS[qTier].name}</b> · 底材 T${recv.tier} · 配件 ${parts.length} 件 · 材料 ${mats.length}/${RAID_ASSEMBLE_MATS} 份</div>`+
+    preview=(weaponQualityOff()
+      ? `<div class="hint" style="color:#cfcabb">预估产物：<b>标准品质</b> · 底材 T${recv.tier} · 配件 ${parts.length} 件 · 材料 ${mats.length}/${RAID_ASSEMBLE_MATS} 份</div>`
+      : `<div class="hint" style="color:${RAID_RARITY_COLOR[qTier]}">预估产物：<b>${RAID_TIERS[qTier].name}</b> · 底材 T${recv.tier} · 配件 ${parts.length} 件 · 材料 ${mats.length}/${RAID_ASSEMBLE_MATS} 份</div>`)+
       (boost?`<div class="hint" style="color:#7fe08a;margin-top:4px;">${boost.label}</div>`:"");
   }
 
@@ -8285,7 +8300,7 @@ UI.raidWorkshop=function(opts){
       <div class="subtitle">WORKSHOP · 材料合成 / 用机匣与部件组装枪械</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
-        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹药</b>在「弹药」页单独合成：轻弹 1 份 / 中弹 2 份 / 重弹 4 份 / 榴弹 8 份材料，每次出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定。</div>
+        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹药</b>在「弹药」页单独合成：轻弹 1 份 / 中弹 2 份 / 重弹 4 份 / 榴弹 8 份材料，每次出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，${weaponQualityOff()?"武器品质已暂时禁用，统一按标准品质生成":"名字与品质由底材、配件与材料共同决定"}。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-ws-back">${opts.from==='title'?'返回主菜单':'前往配装大厅'}</button>
       </div>
@@ -8392,7 +8407,7 @@ UI.raidWorkshop=function(opts){
       }
       UI._craft.sel=[];
       RaidStash.save(stash); SFX.pickup();
-      UI.toast && UI.toast(`合成成功 · ${RAID_TIERS[q].name}级${r.name}`);
+      UI.toast && UI.toast(`合成成功 · ${weaponQualityOff()?"标准品质":RAID_TIERS[q].name+"级"}${r.name}`);
       rerender();
     };
   });
@@ -8493,7 +8508,7 @@ UI.raidFieldShop=function(key){
     const can = payKind==="token" ? tokens>=price : money>=price;
     const col = raidGunColor(g);
     const tname=(WEAPON_TYPES[g.type]&&WEAPON_TYPES[g.type].name)||g.cat||"武器";
-    const qn=(RAID_TIERS[g.qTier]&&RAID_TIERS[g.qTier].name)||"";
+    const qn=weaponQualityOff() ? "" : ((RAID_TIERS[g.qTier]&&RAID_TIERS[g.qTier].name)||"");
     return `<div class="si">
       <div class="si-name" style="color:${col}">${gunNameOf(g)}</div>
       <div class="si-stats">${tname}${qn?" · "+qn:""} · 伤害 ${g.dmg} · 弹匣 ${g.mag} · 射速 ${g.rpm}<br>

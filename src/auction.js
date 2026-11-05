@@ -61,9 +61,10 @@ function auctionItemInfo(kind, it){
     const w=it, col=raidGunColor(w);
     const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:(w.cat||w.type||"枪械");
     const aff=(w.affixes||[]).map(a=>a.nm).join(" · ");
+    const qn=raidGunName(w);
     return {
       name:w.name, color:col, value:w.value||0,
-      meta:`${tname} · ${raidGunName(w)} · 伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}${w.uniqPerk?" · 传奇":""}`,
+      meta:`${tname}${qn?" · "+qn:""} · 伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}${w.uniqPerk?" · 传奇":""}`,
       stats:(w.uniqPerk?`✦ ${w.uniqPerk}<br>词条：${aff}`:(aff?`词条：${aff}`:"无词条")),
       perk:w.uniqPerk||"",
     };

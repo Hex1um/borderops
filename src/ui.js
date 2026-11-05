@@ -280,7 +280,7 @@ const UI = {
             </div>
             <div class="opt-card" data-gun="bl">
               <b>旧刷宝体系枪械</b>
-              <span>程序化生成的词缀枪，品质越高越离谱</span>
+              <span>${CFG.weaponQuality===false?"程序化生成的词缀枪（武器品质已暂时禁用）":"程序化生成的词缀枪，品质越高越离谱"}</span>
             </div>
           </div>
         </div>
@@ -375,10 +375,11 @@ const UI = {
 
     const weaponItems=p.weapons.map((w,i)=>{
       const sell=Math.max(10, Math.floor(weaponPrice(w)*0.25));
-      const eri=itemSellEridium({rarity:w.rarity});
-      return `<div class="inv-item loot-${w.rarity} ${i===p.wi?'sel':''}" data-i="${i}">
-        <div class="iname c-${w.rarity}">${gunNameOf(w)}</div>
-        <div class="si-meta">${w.rarityName} · Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
+      const eri=itemSellEridium({rarity:weaponRarityId(w)});
+      const qid=weaponRarityId(w), qnm=weaponRarityName(w);
+      return `<div class="inv-item loot-${qid} ${i===p.wi?'sel':''}" data-i="${i}">
+        <div class="iname c-${qid}">${gunNameOf(w)}</div>
+        <div class="si-meta">${qnm?qnm+" · ":""}Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
         <div class="istat">${w.statLines().join(' · ')}</div>
         ${this._affixHtml(w)}
         <div class="si-buy">
@@ -520,7 +521,7 @@ const UI = {
       body=`<div class="gamble-box">
         <div class="slot">?</div>
         <div style="color:var(--muted);font-size:13px;max-width:420px;line-height:1.6;">${def.desc}<br>
-          可能开出任何品质，物品等级 = 你的等级 +3。</div>
+          ${CFG.weaponQuality===false?"武器品质已暂时禁用，按标准品质生成；":"可能开出任何品质，" }物品等级 = 你的等级 +3。</div>
         <button class="btn" id="btn-gamble" ${p.gold<cost?'disabled style="opacity:.4"':''}>投币 ◈${cost.toLocaleString()}</button>
         <div class="gamble-result" id="gamble-result"></div>
       </div>`;
@@ -577,7 +578,7 @@ const UI = {
       if(r.ok){
         const w=r.weapon;
         const el=document.getElementById('gamble-result');
-        if(el) el.innerHTML=`<span class="c-${w.rarity}">${w.name}</span>`;
+        if(el) el.innerHTML=`<span class="c-${weaponRarityId(w)}">${w.name}</span>`;
         SFX.levelup(); this.game.shake(4);
       } else SFX.hurt();
       const goldEl=this.overlay.querySelector('.shop-gold');
@@ -609,12 +610,12 @@ const UI = {
       stats=relicLines(w).join(' · ');
       affix='<span class="affix suffix">纯被动加成</span>';
     } else {
-      meta=`${w.rarityName} · Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
+      meta=`${weaponRarityName(w)?weaponRarityName(w)+" · ":""}Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
       stats=`${w.stats.damage.toFixed(1)} 伤害 · ${w.stats.fireRate.toFixed(1)}/s · ${w.magSizeBase} 弹匣 · ${(w.stats.accuracy*100|0)}% 精准`;
       affix=w.affixLines().map(a=>`<span class="affix ${a.kind}">${a.nm} ${a.txt}</span>`).join('')||'<span class="affix">无词缀</span>';
     }
-    return `<div class="shop-item loot-${w.rarity} ${it.sold?'sold':''}">
-      <div class="si-name c-${w.rarity}">${w.name}</div>
+    return `<div class="shop-item loot-${weaponRarityId(w)} ${it.sold?'sold':''}">
+      <div class="si-name c-${weaponRarityId(w)}">${w.name}</div>
       <div class="si-meta">${meta}</div>
       <div class="si-stats">${stats}</div>
       <div class="affix-row">${affix}</div>
