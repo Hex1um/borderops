@@ -121,7 +121,7 @@ const RAID_ROOMS = [
   { id:"fRanger",name:"护林站",       x:7100, y:5200, w:340, h:260, tint:"#2e3a2c" },
   { id:"fCamp",  name:"林间营地",     x:7300, y:7700, w:380, h:280, tint:"#343a2c" },
   { id:"fHunt",  name:"猎人小屋",     x:7100, y:8600, w:320, h:240, tint:"#2e3a2c" },
-  { id:"fDepot", name:"机车段",       x:7400, y:5400, w:360, h:260, tint:"#3a3a3a" },
+  { id:"fDepot", name:"机车段",       x:7400, y:5488, w:360, h:260, tint:"#3a3a3a" },
   { id:"fNBridge",name:"北桥检查站",   x:7600, y:1700, w:300, h:210, tint:"#2e3a3a" },
   { id:"fSBridge",name:"南桥营地",     x:7700, y:8000, w:320, h:220, tint:"#2e3a3a" },
   { id:"rTower", name:"瞭望木塔",     x:10800,y:2300, w:260, h:240, tint:"#39434f" },
@@ -133,13 +133,13 @@ const RAID_ROOMS = [
   { id:"rYard",  name:"货运栈道",     x:10600,y:8200, w:360, h:260, tint:"#2e3a44" },
   { id:"rDock",  name:"河港码头",     x:9700, y:7700, w:400, h:300, tint:"#2e3a44" },
   // 新生态区撤离点
-  { id:"extL", name:"撤离点·林间空投", x:7300, y:7900, w:300, h:220, tint:"#22462f", extract:true },
-  { id:"extM", name:"撤离点·山顶缆车", x:10900,y:2400, w:280, h:200, tint:"#22462f", extract:true },
-  { id:"extN", name:"撤离点·河港渡轮", x:9750, y:7900, w:300, h:220, tint:"#22462f", extract:true },
-  { id:"extO", name:"撤离点·火车站台", x:11400,y:5250, w:280, h:200, tint:"#22462f", extract:true },
-  { id:"extP", name:"撤离点·北桥栈道", x:7600, y:1920, w:260, h:180, tint:"#22462f", extract:true },
+  { id:"extL", name:"撤离点·林间空投", x:7300, y:7998, w:300, h:220, tint:"#22462f", extract:true },
+  { id:"extM", name:"撤离点·山顶缆车", x:10800,y:2558, w:280, h:200, tint:"#22462f", extract:true },
+  { id:"extN", name:"撤离点·河港渡轮", x:9700, y:8018, w:300, h:220, tint:"#22462f", extract:true },
+  { id:"extO", name:"撤离点·火车站台", x:11400,y:5368, w:280, h:200, tint:"#22462f", extract:true },
+  { id:"extP", name:"撤离点·北桥栈道", x:7778, y:2050, w:260, h:180, tint:"#22462f", extract:true },
   { id:"extQ", name:"撤离点·货运专线", x:10700,y:8300, w:280, h:200, tint:"#22462f", extract:true },
-  { id:"extR", name:"撤离点·南岭索道", x:11800,y:7600, w:260, h:200, tint:"#22462f", extract:true },
+  { id:"extR", name:"撤离点·南岭索道", x:11800,y:7678, w:260, h:200, tint:"#22462f", extract:true },
   // —— 西南开发区：监狱 / 小镇 / 大坝（填补 x<4500 · y>4500 的大片空白）——
   { id:"prisonYard", name:"监狱操场",   x:1150, y:5250, w:900, h:620, tint:"#2f3238", open:true },
   { id:"prisonA", name:"监狱主楼",     x:1180, y:4850, w:460, h:300, tint:"#3a3a44" },
@@ -664,7 +664,14 @@ function raidEconJitter(key, jitter){
   const u=((h>>>0)%1000)/1000;                  // 0 ~ 0.999
   return (u*2-1)*jitter;                        // -jitter ~ +jitter
 }
-const raidEconRound=(v)=>Math.max(1, Math.round(v/10)*10);
+/* 取整：小额按 1、中等按 5、大额按 10。
+ * 一律 /10 取整会把 ₽10 的破布永远四舍五入回 ₽10、把 ₽20 的铜线抬到 ₽20，
+ * 于是低价货看起来「售价 = 估值」、也完全看不出浮动（v0.19.4 修）。 */
+const raidEconRound=(v)=>{
+  const a=Math.abs(v);
+  const step = a < 60 ? 1 : a < 320 ? 5 : 10;
+  return Math.max(1, Math.round(v/step)*step);
+};
 function raidShopPrice(value, key){             // 局内商店售价
   return raidEconRound((value||0)*(RAID_SHOP_RATE + raidEconJitter(key, RAID_SHOP_JITTER)));
 }
@@ -2783,7 +2790,8 @@ const Raid = {
     } else if(kind==="mat"){
       for(let i=0;i<6;i++){
         const m=raidMakeMaterial(0.35);
-        m.shopPrice=raidShopPrice(m.value||40, m.uid);
+        // 按材料 id 定价：同一种材料在同一个摊位上价格一致，不会出现「三块破布三个价」
+        m.shopPrice=raidShopPrice(m.value||40, m.id||m.uid);
         out.mats.push(m);
       }
       for(let i=0;i<3;i++){
@@ -7041,7 +7049,31 @@ UI.raidResult=function(res){
   };
 };
 
-UI.raidPause=function(){
+UI.raidPause=function(confirmQuit){
+  /* 放弃是不可逆的（携带装备 + 全部战利品直接蒸发），必须二次确认 ——「返回大厅」和
+     「放弃」摆在同一个面板上、又都靠近「继续行动」，一次误触就白打一局。 */
+  if(confirmQuit){
+    UI._set(`
+      <div class="panel" style="text-align:center;max-width:480px;border-color:rgba(255,110,90,0.45);">
+        <h2 class="title-big" style="font-size:30px;color:#ff8a5a;">确认放弃这一局？</h2>
+        <div class="subtitle">不可撤销</div>
+        <p style="color:var(--muted);line-height:1.7;">
+          放弃 = 本局判负：<b style="color:#ff8a5a">手上的枪械 / 护甲 / 头盔 / 护盾、带进来的卢布与 GP 币、以及全部战利品会直接丢失</b>。
+          ${Raid.insured ? '<br>已投保的装备按 <b style="color:#8fe07a">65%</b> 概率退回仓库。' : ''}
+        </p>
+        <div class="row" style="justify-content:center;margin-top:16px;">
+          <button class="btn" id="btn-quit-cancel">再想想（继续行动）</button>
+          <button class="btn ghost" id="btn-quit-ok" style="border-color:#a8342a;color:#ff9a8a;">确认放弃</button>
+        </div>
+      </div>`);
+    document.getElementById('btn-quit-cancel').onclick=()=>{ SFX.ui(); UI.raidPause(); };
+    document.getElementById('btn-quit-ok').onclick=()=>{
+      SFX.ui();
+      // 主动放弃 = 失败（携带装备丢失，已投保的按保险规则处理）
+      Raid._fail("主动放弃突袭");
+    };
+    return;
+  }
   UI._set(`
     <div class="panel" style="text-align:center;max-width:460px;">
       <h2 class="title-big" style="font-size:32px;">已暂停</h2>
@@ -7056,8 +7088,7 @@ UI.raidPause=function(){
   document.getElementById('btn-raid-resume').onclick=()=>{ SFX.ui(); game.resume(); };
   document.getElementById('btn-raid-quit').onclick=()=>{
     SFX.ui();
-    // 主动放弃 = 失败（携带装备丢失，已投保的按保险规则处理）
-    Raid._fail("主动放弃突袭");
+    UI.raidPause(true);          // 先确认，不直接判负
   };
 };
 

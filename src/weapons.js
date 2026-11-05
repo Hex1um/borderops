@@ -362,7 +362,7 @@ function generateWeapon(level, opts={}){
   if(type==="launcher") element = "explosive";
   else if(M0.forceExplosive) element = "explosive";
   else if(RNG.chance(0.35 + ilvl*0.006)){
-    element = RNG.pick(["fire","shock","corrosive","cryo","radiation"]);
+    element = RNG.normPick(AMMO_POOL_BY_PEN, { mid:2, sigma:1.0 });   // 截断正态：中段弹最常见
   }
   if(opts.element && AMMO_TYPES[opts.element]) element = opts.element;   // 枪匠台：指定弹种
 
@@ -624,7 +624,7 @@ function reforgeBlGun(gun, op, arg){
   };
   if(op==="element"){
     base.element = AMMO_TYPES[arg] ? arg
-      : RNG.pick(["fire","shock","corrosive","cryo","radiation"]);
+      : RNG.normPick(AMMO_POOL_BY_PEN, { mid:2, sigma:1.0 });
     base.affixes = gun.affixes || [];      // 换弹种：保留原词条，只换弹种并重算
   } else if(op==="mayhem"){
     base.mayhem = (gun.mayhem||0)+1;

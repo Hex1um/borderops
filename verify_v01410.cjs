@@ -737,5 +737,64 @@ check('2D 手持模型三种状态均无异常', hwErr ? 0 : 1, 1, 0.001);
 if (hwErr) console.log('  handWeapon error:', hwErr);
 check('文案：同场 AI 数量与实际一致', /与 30 名 <b style="color:#e0b84a">PMC \/ Scav<\/b> 加 3 名/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+console.log('\n=== 24. 放弃确认 / 价格波动 / 弹种正态 / 建筑重叠（v0.19.4）===');
+const wpnSrc = fs.readFileSync(path.join(SRC, 'weapons.js'), 'utf8');
+check('放弃突袭需要二次确认', /UI\.raidPause=function\(confirmQuit\)/.test(raidSrc) && /UI\.raidPause\(true\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('确认面板有取消与确认两键', /btn-quit-cancel/.test(raidSrc) && /btn-quit-ok/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('首次点击不直接判负', /UI\.raidPause\(true\);\s*\/\/ 先确认/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* 价格：小额按 1、中额按 5、大额按 10 —— 全按 10 会让低价货「售价 = 估值」且看不出浮动 */
+const pr = JSON.parse(G(`JSON.stringify((()=>{
+  const keys=["a","b","c","d","e","f","g","h"];
+  return {
+    r1: raidEconRound(1), r8: raidEconRound(8), r88: raidEconRound(88), r880: raidEconRound(880),
+    shop10: keys.map(k=>raidShopPrice(10,k)),
+    shop20: keys.map(k=>raidShopPrice(20,k)),
+    field10: keys.map(k=>raidFieldSellPrice(10,k)),
+  };
+})())`));
+check('小额取整不再吃掉折扣', pr.r8 === 8 ? 1 : 0, 1, 0.001);
+check('中额按 5 / 大额按 10 取整', pr.r88 === 90 && pr.r880 === 880 ? 1 : 0, 1, 0.001);
+check('最低价仍为正整数', pr.r1 >= 1 ? 1 : 0, 1, 0.001);
+check('₽10 材料售价低于估值', pr.shop10.every(v => v > 0 && v < 10) ? 1 : 0, 1, 0.001);
+check('低价材料有可见浮动', new Set(pr.shop10).size > 1 && new Set(pr.shop20).size > 1 ? 1 : 0, 1, 0.001);
+check('回收价同样按阶梯取整', new Set(pr.field10).size > 1 ? 1 : 0, 1, 0.001);
+console.log(`  材料售价：估值 ₽10 → ${pr.shop10.join('/')} · 估值 ₽20 → ${pr.shop20.join('/')}`);
+
+/* 弹种：截断正态（中段常见、两端罕见）而不是五种各 20% */
+const pens = JSON.parse(G('JSON.stringify(AMMO_POOL_BY_PEN.map(k=>AMMO_TYPES[k].pen))'));
+check('弹种梯队按穿深升序', pens.every((v,i) => i === 0 || v >= pens[i-1]) ? 1 : 0, 1, 0.001);
+check('弹种生成走截断正态', /RNG\.normPick\(AMMO_POOL_BY_PEN/.test(wpnSrc) ? 1 : 0, 1, 0.001);
+const dist = JSON.parse(G(`JSON.stringify((()=>{
+  const c={}; for(let i=0;i<20000;i++){ const e=RNG.normPick(AMMO_POOL_BY_PEN,{mid:2,sigma:1.0}); c[e]=(c[e]||0)+1; }
+  return c;
+})())`));
+const [c0,c1,c2,c3,c4] = pens.map((_,i)=>dist[["corrosive","cryo","fire","radiation","shock"][i]]||0);
+check('弹种抽样覆盖全部五档', (c0&&c1&&c2&&c3&&c4) ? 1 : 0, 1, 0.001);
+check('中段弹种最常见', c2 > c1 && c2 > c3 && c2 > c0 && c2 > c4 ? 1 : 0, 1, 0.001);
+check('两端弹种明显罕见', c0 < c2*0.5 && c4 < c2*0.5 ? 1 : 0, 1, 0.001);
+console.log(`  弹种分布 RIP ${(c0/200).toFixed(1)}% · SP-6 ${(c1/200).toFixed(1)}% · T ${(c2/200).toFixed(1)}% · BT ${(c3/200).toFixed(1)}% · BP ${(c4/200).toFixed(1)}%`);
+
+/* 建筑：任意两栋建筑不重叠；撤离点不压在任何建筑上（操场/堆场这类「场地」允许内含建筑） */
+const rooms = JSON.parse(G('JSON.stringify(RAID_ROOMS)'));
+const isYard = r => /Yard$/.test(r.id);
+const ov = (a,b) => {
+  const w = Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y+a.h, b.y+b.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? Math.round(w*h) : 0;
+};
+const roomClash = [], extClash = [];
+for (let i=0;i<rooms.length;i++){
+  for (let j=i+1;j<rooms.length;j++){
+    const a=rooms[i], b=rooms[j];
+    if (!ov(a,b) || isYard(a) || isYard(b)) continue;
+    (a.id.startsWith("ext") || b.id.startsWith("ext") ? extClash : roomClash).push(a.id+"×"+b.id);
+  }
+}
+check('地图建筑无重叠', roomClash.length, 0, 0.001);
+if (roomClash.length) console.log('  重叠:', roomClash.join(' / '));
+check('撤离点不压在建筑上', extClash.length, 0, 0.001);
+if (extClash.length) console.log('  压建筑:', extClash.join(' / '));
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

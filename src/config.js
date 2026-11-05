@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.19.3",
+  version: "0.19.4",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -55,6 +55,11 @@ const AMMO_TYPES = {
 };
 // ELEMENTS 作为兼容别名保留 —— 21 个脚本、旧 localStorage 存档与联机快照仍按 element 字段读写。
 const ELEMENTS = AMMO_TYPES;
+/* 战斗弹种梯队（按穿深升序）：RIP(5) → SP-6(11) → T(14) → BT(30) → BP(36)。
+ * 生成枪械时用截断正态抽样（RNG.normPick），中段常规弹最常见，两端扩张弹 / 穿甲弹罕见 ——
+ * 均匀分布会让「每五把枪就有一把 RIP」这种不真实情况出现。
+ * 顺序即正态轴：改顺序前先确认 pen 仍然升序。 */
+const AMMO_POOL_BY_PEN = ["corrosive","cryo","fire","radiation","shock"];
 // 防护类型（raidArmorType 返回值）的显示名与血条色
 const ARMOR_TYPE_NAME  = { flesh:"无防护", shield:"护盾", armor:"硬质插板" };
 const ARMOR_TYPE_COLOR = { flesh:"#e23b3b", shield:"#4fd6ff", armor:"#ffd23f" };
