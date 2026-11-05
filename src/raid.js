@@ -6921,7 +6921,7 @@ const RenderRaid = {
         const bw=Math.min(tw+30, v.w-60), bh=fs+11;
         const bx=v.w/2-bw/2, by=ty-rise;
         ctx.globalAlpha=fade;
-        ctx.fillStyle="rgba(8,12,16,0.74)";
+        ctx.fillStyle="rgba(8,12,16,0.88)";   // 底要够实，枪身 / 刀身从底下透上来会糊字
         ctx.beginPath();
         if(ctx.roundRect) ctx.roundRect(bx,by,bw,bh,6); else ctx.rect(bx,by,bw,bh);
         ctx.fill();
