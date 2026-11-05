@@ -567,7 +567,26 @@ check('3D 复用 2D 地面 / 装饰数据', missShared.length, 0, 0.001);
 if (missShared.length) console.log('  缺少:', missShared.join(','));
 check('3D 复用手电与探照灯色温', /R\.floodlights/.test(fpSrc) && /255,236,182/.test(fpSrc) ? 1 : 0, 1, 0.001);
 check('3D 有手持武器模型', /_gunModel/.test(fpSrc) && /_meleeModel/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 墙体取 2D 配色', /62, 70, 76/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 墙体取 2D 配色', /39, 45, 49/.test(fpSrc) ? 1 : 0, 1, 0.001);
+/* v0.19.1：3D 地面改为与 2D scene() 同数据同顺序的真透视投影，逐层核对 */
+const floorLayers = [
+  ['分区网格', /_hash2\(gx\*7\+3, gy\*11\+5\)/],
+  ['草丛碎石', /gx\*5\+91, gy\*3\+37/],
+  ['道路中线', /150,140,100/],
+  ['水面', /20,38,50,0\.96/],
+  ['铁路枕木', /58,48,36,0\.9/],
+  ['院子水泥缝', /170,200,180,0\.05/],
+  ['房间砖缝', /170,200,180,0\.06/],
+  ['踢脚板', /0,0,0,0\.20/],
+  ['地表贴花', /R\.decals/],
+  ['区域暗斑', /R\.darkSpots/],
+  ['房间名', /rm\.name/],
+  ['真透视投影', /_clipNear/],
+];
+const missLayer = floorLayers.filter(([n, re]) => !re.test(fpSrc)).map(([n]) => n);
+check('3D 地面逐层对齐 2D scene()', missLayer.length, 0, 0.001);
+if (missLayer.length) console.log('  缺少图层:', missLayer.join(' / '));
+check('3D 不再提供小地图入口', /vm-minimap/.test(vmSrc) ? 0 : 1, 1, 0.001);
 
 /* 开阔朝向 + 渲染不抛异常 */
 const grad = { addColorStop(){} };

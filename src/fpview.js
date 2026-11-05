@@ -21,7 +21,7 @@ const FPView = {
   EYE_H: 84,             // 视点离地高度
   MAX_D: 2600,           // 最远可见距离（同时是雾的终点）
   MIN_D: 22,             // 近裁剪：贴脸墙不参与求交，避免投影爆炸
-  CELL: 256,             // 小地图 / 参照网格
+  CELL: 256,             // 参照网格（地面分区 / 网格间距对照用）
   LIGHT_REACH: 560,      // 与 raid.js _lightLayer 的手电射程一致
 
   _zbuf: null,
@@ -33,7 +33,7 @@ const FPView = {
   _initColors(){
     if(this._colors) return;
     const haze = [26, 35, 41];
-    const base = [[62, 70, 76], [44, 50, 56]];       // X 面 / Y 面（暗面）
+    const base = [[39, 45, 49], [31, 36, 40]];       // 与 2D 墙体填充 #272d31 一致，Y 面略暗
     this._colors = [];
     for(let s=0;s<2;s++){
       const arr=[];
@@ -60,29 +60,24 @@ const FPView = {
     const horizon = h*0.5;
     const step = w > 1100 ? 3 : 2;
     const n = Math.ceil(w/step);
-    if(!this._zbuf || this._zbuf.length < n) this._zbuf = new Float32Array(n);
+    if(!this._zbuf || this._zbuf.length < n){
+      this._zbuf = new Float32Array(n);
+      this._wbot = new Float32Array(n);
+    }
     this._cols = n;
     this._step = step;
 
     ctx.save();
     this._sky(ctx, w, h, horizon);
-    this._floorBase(ctx, w, h, horizon, proj, p, R);
-    const near = this._castWalls(ctx, R, p, w, h, horizon, proj, yaw, step, n);
-    this._floorPatches(ctx, R, p, w, h, horizon, proj, yaw, step, n);
-    this._floorFog(ctx, w, h, horizon);      // 地面距离雾：让贴片边缘融进远处，而不是一块块硬边
-    this._floorGrid(ctx, w, h, horizon, proj, p);  // 网格压在雾上面，近处才看得见
+    /* 先投射墙体（拿到每列墙脚），再画地面 —— 地面用墙脚轮廓裁剪，天然被墙遮住 */
+    const near = this._castWalls(ctx, R, p, w, h, horizon, proj, yaw, step, n);  // 只算不画
+    this._floorLayer(ctx, R, p, w, h, horizon, proj, yaw);
+    this._paintWalls(ctx, w, h);                                                 // 墙面盖住地面
     this._drawSprites(ctx, R, p, w, h, horizon, proj, yaw, ca, sa, step, n, near);
     this._lighting(ctx, R, p, w, h, horizon, proj, yaw, ca, sa);
     this._drawWeapon(ctx, R, w, h);
     this._crosshair(ctx, R, w, h);
     ctx.restore();
-
-    /* 3D 下俯视小地图仍然有用（导航 / 找撤离点），复用 raid 自带实现。
-     * 它挂在 RenderRaid 上（不是 Raid），默认画在右下角会被手持武器压住，
-     * 这里传一个矮一点的 v 把它挪到屏幕右侧中段。 */
-    if(ViewMode.minimap && typeof RenderRaid !== "undefined" && typeof RenderRaid.minimap === "function"){
-      try{ RenderRaid.minimap(ctx, { w: v.w, h: Math.max(440, v.h*0.60) }); }catch(e){}
-    }
   },
 
   /* ----------------------------- 天空 ----------------------------- */
@@ -100,89 +95,43 @@ const FPView = {
     ctx.fillStyle = haze; ctx.fillRect(0, horizon-70, w, 76);
   },
 
-  /* 地面分区色：与 2D scene() 的 560px 网格同源（_hash2） */
-  _zoneColor(R, x, y){
-    const ZS = 560;
-    let hv = 0.5;
-    try{ if(typeof R._hash2 === "function") hv = R._hash2(Math.floor(x/ZS)*7+3, Math.floor(y/ZS)*11+5); }catch(e){}
-    return hv < 0.32 ? "#14191b" : hv < 0.62 ? "#101618" : hv < 0.84 ? "#181a1c" : "#0c1012";
-  },
-
-  _floorBase(ctx, w, h, horizon, proj, p, R){
-    const zone = this._zoneColor(R, p.x, p.y);
-    const g = ctx.createLinearGradient(0, horizon, 0, h);
-    g.addColorStop(0, "#0a0e11");
-    g.addColorStop(0.30, "#0d1214");
-    g.addColorStop(1, zone);
-    ctx.fillStyle = g; ctx.fillRect(0, horizon, w, h-horizon);
-  },
-
-  /* 地面距离雾：以 horizon 为最远点做一层由「雾色」到透明的渐变，
-   * 作用是把 _floorPatches 的硬边贴片压进远景，读起来才像地面而不是立着的色块。 */
-  _floorFog(ctx, w, h, horizon){
-    const g = ctx.createLinearGradient(0, horizon, 0, h);
-    g.addColorStop(0, "rgba(20,27,32,0.92)");
-    g.addColorStop(0.14, "rgba(19,25,30,0.62)");
-    g.addColorStop(0.42, "rgba(16,21,25,0.22)");
-    g.addColorStop(1, "rgba(14,18,21,0)");
-    ctx.fillStyle = g; ctx.fillRect(0, horizon, w, h-horizon);
-  },
-
-  /* 160px 世界网格（与 2D 户外网格同间距），透视投影后只留近处几格 */
-  _floorGrid(ctx, w, h, horizon, proj, p){
-    const G = 160, yaw = ViewMode.yaw;
-    const ca = Math.cos(yaw), sa = Math.sin(yaw);
-    const span = 1500;
-    ctx.strokeStyle = "rgba(122,164,112,0.11)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    const put = (wx, wy, move)=>{
-      const rx = wx-p.x, ry = wy-p.y;
-      const depth = rx*ca + ry*sa;
-      if(depth < 60) return false;
-      const lat = -rx*sa + ry*ca;
-      const sx = w/2 + (lat/depth)*proj;
-      const sy = horizon + (this.EYE_H/depth)*proj;
-      if(sy > h+4) return false;
-      if(move) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-      return true;
-    };
-    // 沿 X 方向的线（固定 world y）
-    let gy0 = Math.floor((p.y-span)/G)*G;
-    for(let gy=gy0; gy<=p.y+span; gy+=G){
-      let open=false;
-      for(let s=-8; s<=8; s++){
-        const ok = put(p.x + s*(span/8), gy, !open);
-        open = ok || open;
-      }
-    }
-    // 沿 Y 方向的线（固定 world x）
-    let gx0 = Math.floor((p.x-span)/G)*G;
-    for(let gx=gx0; gx<=p.x+span; gx+=G){
-      let open=false;
-      for(let s=-8; s<=8; s++){
-        const ok = put(gx, p.y + s*(span/8), !open);
-        open = ok || open;
-      }
-    }
-    ctx.stroke();
-  },
-
-  /* ----------------------------- 墙 ----------------------------- */
   _castWalls(ctx, R, p, w, h, horizon, proj, yaw, step, n){
     const src = R.walls || [];
     let pool = (typeof R._nearWalls === "function") ? R._nearWalls(p.x, p.y, this.MAX_D) : src;
+
+    /* 预筛：一次算好每面墙的「方位角 + 角半径」。
+       内层是 400 多列 × 上千面墙，逐个做 slab 求交是这一帧最贵的地方；
+       先用方位角把不在该列视锥里的墙剔掉，能砍掉九成以上。 */
     const near = [];
+    const TAU = Math.PI*2;
     for(let i=0;i<pool.length;i++){
       const wl = pool[i];
       // 站在墙里（出生点容差 / 贴墙滑行）时忽略这一面，否则整屏糊死
       if(p.x >= wl.x-0.5 && p.x <= wl.x+wl.w+0.5 && p.y >= wl.y-0.5 && p.y <= wl.y+wl.h+0.5) continue;
       const cx = wl.x + wl.w/2, cy = wl.y + wl.h/2;
-      if(Math.abs(cx-p.x) > this.MAX_D + wl.w/2) continue;
-      if(Math.abs(cy-p.y) > this.MAX_D + wl.h/2) continue;
-      near.push(wl);
+      const dx0 = cx-p.x, dy0 = cy-p.y;
+      if(Math.abs(dx0) > this.MAX_D + wl.w/2) continue;
+      if(Math.abs(dy0) > this.MAX_D + wl.h/2) continue;
+      const dist = Math.hypot(dx0, dy0);
+      const rad = Math.hypot(wl.w, wl.h)/2;
+      if(dist - rad > this.MAX_D) continue;
+      // 包围圆含相机时不裁角度（贴墙时整面墙都在视野里）
+      const halfAng = (dist <= rad + 1) ? Math.PI : Math.atan2(rad, dist-rad) + 0.02;
+      near.push({ wl, ac: Math.atan2(dy0, dx0), halfAng });
     }
     const MAX = this.MAX_D, MIND = this.MIN_D;
+
+    /* 逐列投射 → 先记进数组，再把「颜色相同的相邻列」合并成一次 fillRect。
+       427 列逐列 fill 光是墙面就要 3000+ 次绘制调用，合并后一般只剩 1/5，帧率差别很大。 */
+    if(!this._k || this._k.length < n){
+      this._k = new Int16Array(n);
+      this._top = new Float32Array(n);
+      this._bot = new Float32Array(n);
+      this._hgt = new Float32Array(n);
+      this._dam = new Float32Array(n);
+      this._pan = new Float32Array(n);
+    }
+    const K = this._k, TOP = this._top, BOT = this._bot, HGT = this._hgt, DAM = this._dam, PAN = this._pan;
 
     for(let c=0; c<n; c++){
       const sx = c*step;
@@ -192,7 +141,13 @@ const FPView = {
       let best = MAX, side = 0, hit = null;
 
       for(let i=0;i<near.length;i++){
-        const wl = near[i];
+        const item = near[i], wl = item.wl;
+        // 方位角粗筛：这一列根本不朝这面墙，直接跳过
+        if(item.halfAng < Math.PI){
+          let da = a - item.ac;
+          if(da > Math.PI) da -= TAU; else if(da < -Math.PI) da += TAU;
+          if(da > item.halfAng || da < -item.halfAng) continue;
+        }
         let tmin = MIND, tmax = best, sd = 0;
         if(adx){ if(p.x < wl.x || p.x > wl.x+wl.w) continue; }
         else {
@@ -214,23 +169,21 @@ const FPView = {
       }
 
       this._zbuf[c] = best;
-      if(!hit) continue;
+      this._wbot[c] = horizon;                 // 默认：这一列没有墙，地面一直铺到地平线
+      if(!hit){ K[c] = -1; continue; }
 
       const perp = Math.max(MIND, best*Math.cos(a-yaw));
       const yTop = horizon - ((this.WALL_H-this.EYE_H)/perp)*proj;
       const yBot = horizon + (this.EYE_H/perp)*proj;
-      const hh = yBot-yTop;
+      this._wbot[c] = Math.max(horizon, Math.min(h + 600, yBot));   // 墙脚：地面裁剪的边界
+      const hh = yBot - yTop;
       const fog = Math.max(0, 1-perp/MAX);
       const lvl = Math.max(0, Math.min(15, Math.round(fog*15)));
 
-      ctx.fillStyle = this._colors[side][lvl];
-      ctx.fillRect(sx, yTop, step+1, hh);
-
-      // 坝体：2D 里的混凝土冷灰 + 水痕，3D 里用冷色叠加区分
-      if(hit.dam || hit.kind === "cell"){
-        ctx.fillStyle = `rgba(92,120,140,${0.12+0.20*fog})`;
-        ctx.fillRect(sx, yTop, step+1, hh);
-      }
+      K[c] = side*16 + lvl;
+      TOP[c] = yTop; BOT[c] = yBot; HGT[c] = hh;
+      // 坝体 / 牢房隔断：2D 的混凝土冷灰叠加
+      DAM[c] = (hit.dam || hit.kind === "cell") ? fog : -1;
 
       // 竖向板缝：命中点沿墙边的位置决定，给墙面一个真实尺度
       const hx = p.x+dx*best, hy = p.y+dy*best;
@@ -238,132 +191,530 @@ const FPView = {
         ? (hy-hit.y)/Math.max(1, hit.h)
         : (hx-hit.x)/Math.max(1, hit.w);
       const panels = Math.max(1, Math.round((side===0?hit.h:hit.w)/170));
-      if(((u*panels)%1) < 0.05 && perp < 1500){
-        ctx.fillStyle = `rgba(0,0,0,${0.34*fog})`;
-        ctx.fillRect(sx, yTop, step+1, hh);
-      }
-
-      /* 水平砖缝 / 墙裙：把 y 轴线性映射到墙体世界高度，近距离也不会退化成一块灰板 */
-      if(hh > 18){
-        for(let b=1;b<=3;b++){
-          const yy = yBot - hh*(b/4);
-          if(yy <= 0 || yy >= h) continue;
-          ctx.fillStyle = `rgba(0,0,0,${0.20*fog})`;
-          ctx.fillRect(sx, yy, step+1, Math.max(1, hh*0.012));
-          ctx.fillStyle = `rgba(210,220,226,${0.05*fog})`;
-          ctx.fillRect(sx, yy+Math.max(1,hh*0.012), step+1, Math.max(1, hh*0.006));
-        }
-        // 墙裙（底部 12% 压暗，让墙脚落地）
-        const yb = yBot - hh*0.12;
-        if(yb > 0 && yb < h){
-          ctx.fillStyle = `rgba(0,0,0,${0.26*fog})`;
-          ctx.fillRect(sx, yb, step+1, Math.min(hh*0.12, h-yb));
-        }
-      }
-      // 顶沿高光（2D 的 rgba(170,195,205,0.16) 顶边）
-      if(yTop > -hh && yTop < h){
-        ctx.fillStyle = `rgba(170,195,205,${0.22*fog})`;
-        ctx.fillRect(sx, Math.max(0,yTop), step+1, Math.max(1, hh*0.014));
-      }
+      PAN[c] = (((u*panels)%1) < 0.05 && perp < 1500) ? fog : -1;
     }
+
     return near;
   },
 
-  /* ----------------------------- 地面贴片（道路 / 河 / 院子 / 房间） ----------------------------- */
-  _patchList(R){
-    const out = [];
-    const addRect = (x,y,w2,h2,color,alpha)=> out.push({ t:"r", x, y, w:w2, h:h2, color, alpha });
-    const addCircle = (x,y,r,color,alpha)=> out.push({ t:"c", x, y, r, color, alpha });
+  /* 合并绘制：同色相邻列一次填完。拆出来是为了让「地面 → 墙体」的绘制顺序可控，
+     墙面遮挡地面靠画序（画家算法），不需要一条 400 多点的裁剪路径（那才是真正的开销）。 */
+  _paintWalls(ctx, w, h){
+    const n = this._cols, step = this._step;
+    const K = this._k, TOP = this._top, BOT = this._bot, HGT = this._hgt, DAM = this._dam, PAN = this._pan;
+    if(!K) return;
+    for(let c=0; c<n; ){
+      const k = K[c];
+      if(k < 0){ c++; continue; }
+      let e = c;
+      while(e+1 < n && K[e+1] === k) e++;
+      const x0 = c*step, x1 = (e+1)*step, wd = x1-x0;
+      const yT = TOP[c], yB = BOT[c], hh = HGT[c];
+      const lvl = k & 15;
+      const fog = lvl/15;
 
-    // 与 2D 绘制顺序一致：密林 → 道路 → 水面 / 水库 → 桥 → 院子 → 房间
-    for(const fz of (R.forests||[])) addRect(fz.x, fz.y, fz.w, fz.h, "#1e2c1a", 0.55);
-    for(const rd of (R.roads||[])) addRect(rd.x, rd.y, rd.w, rd.h, "#34322b", 0.62);
-    for(const c of (R.waterCircles||[])) addCircle(c.x, c.y, c.r, "#142632", 0.96);
-    if(R.reservoirRect && !R.damOpen){
-      const rr=R.reservoirRect; addRect(rr.x, rr.y, rr.w, rr.h, "#142632", 0.97);
+      ctx.fillStyle = this._colors[k >> 4][lvl];
+      ctx.fillRect(x0, yT, wd, yB-yT);
+
+      // 坝体 / 牢房隔断的冷色叠加（取整段的平均值即可）
+      let dam = -1, pan = -1;
+      for(let i=c;i<=e;i++){ if(DAM[i] >= 0) dam = Math.max(dam, DAM[i]); if(PAN[i] >= 0) pan = Math.max(pan, PAN[i]); }
+      if(dam >= 0){
+        ctx.fillStyle = "rgba(92,120,140," + (0.12 + 0.20*dam).toFixed(3) + ")";
+        ctx.fillRect(x0, yT, wd, yB-yT);
+      }
+      if(pan >= 0){
+        ctx.fillStyle = "rgba(0,0,0," + (0.30*pan).toFixed(3) + ")";
+        ctx.fillRect(x0, yT, wd, yB-yT);
+      }
+
+      /* 水平砖缝 / 墙裙：把 y 轴线性映射到墙体世界高度，近距离不会退化成一块灰板 */
+      if(hh > 18){
+        ctx.fillStyle = "rgba(0,0,0," + (0.20*fog).toFixed(3) + ")";
+        ctx.beginPath();
+        for(let b=1;b<=3;b++){
+          const yy = Math.round(yB - hh*(b/4));
+          if(yy <= 0 || yy >= h) continue;
+          ctx.rect(x0, yy, wd, Math.max(1, hh*0.012));
+        }
+        const yb = yB - hh*0.12;
+        if(yb > 0 && yb < h) ctx.rect(x0, yb, wd, Math.min(hh*0.12, h-yb));
+        ctx.fill();
+        ctx.fillStyle = "rgba(210,220,226," + (0.045*fog).toFixed(3) + ")";
+        ctx.beginPath();
+        for(let b=1;b<=3;b++){
+          const yy = Math.round(yB - hh*(b/4) + Math.max(1, hh*0.012));
+          if(yy <= 0 || yy >= h) continue;
+          ctx.rect(x0, yy, wd, Math.max(1, hh*0.006));
+        }
+        ctx.fill();
+      }
+      // 墙顶描边（2D 的 #0b0e10 2px 外框）
+      if(yT > -hh && yT < h){
+        ctx.fillStyle = "rgba(6,9,11,0.85)";
+        ctx.fillRect(x0, Math.max(0, yT-2), wd, 2);
+      }
+      // 顶沿高光（2D 的 rgba(170,195,205,0.16) 顶边）
+      if(yT > -hh && yT < h){
+        ctx.fillStyle = "rgba(170,195,205," + (0.22*fog).toFixed(3) + ")";
+        ctx.fillRect(x0, Math.max(0, yT), wd, Math.max(1, hh*0.014));
+      }
+      c = e+1;
     }
-    for(const b of (R.bridges||[])) addRect(b.x-b.w/2, b.y-b.h/2, b.w, b.h, b.big?"#2b3036":"#25282c", 1);
-    for(const yd of (R.yards||[])) addRect(yd.x, yd.y, yd.w, yd.h, yd.tint || "#2a2f2c", 0.62);
-    for(const rm of (R.roomRects||[])) addRect(rm.x, rm.y, rm.w, rm.h, rm.extract ? "#25452f" : (rm.tint || "#2a2f2c"), 0.95);
+  },
+
+  /* ===================== 地面层：与 2D scene() 同数据 · 同顺序 · 真透视 =====================
+   *
+   *  2D 里所有地面元素都是「平铺在地面上」的矩形 / 椭圆 / 线段。地面是一个平面，
+   *  平面上的直线投影到图像后仍然是直线，所以只要把世界坐标顶点做透视变换再连线，
+   *  形状、位置、遮挡关系就与 2D 完全一致，而不是近似画几块色板。
+   *
+   *  墙体先画（逐列），再用地面的「墙脚轮廓」做一次 clip，地面永远盖不到墙上。
+   *  图层顺序照抄 2D scene()：
+   *    底面 → 分区 → 密林 → 道路 → 草丛碎石 → 网格 → 泄洪库底 → 水库 → 水面
+   *    → 桥 → 铁路 → 院子 → 房间 → 贴花 → 暗斑 → 距离雾
+   * ====================================================================================== */
+
+  _pf: null,       // 本帧投影上下文
+  _wbot: null,     // 每列墙脚屏幕 y（无墙则 = horizon）
+
+  _setProj(p, w, h, horizon, proj, yaw, ca, sa){
+    this._pf = { p, w, h, horizon, proj, ca, sa };
+  },
+
+  /* 世界点 → [sx, sy, depth]；在相机后方返回 null */
+  _toScreen(x, y){
+    const c = this._pf;
+    const rx = x-c.p.x, ry = y-c.p.y;
+    const d = rx*c.ca + ry*c.sa;
+    if(d < 6) return null;
+    const lat = -rx*c.sa + ry*c.ca;
+    return [c.w/2 + (lat/d)*c.proj, c.horizon + (this.EYE_H/d)*c.proj, d];
+  },
+
+  /* 对象整体在相机后方就跳过（省掉逐顶点判断） */
+  _behind(x, y, r){
+    const c = this._pf;
+    return ((x-c.p.x)*c.ca + (y-c.p.y)*c.sa) < -(r||0) - 6;
+  },
+
+  /* 世界多边形裁到 depth >= near 再投影填充 */
+  _clipNear(pts, near){
+    const c = this._pf, ca = c.ca, sa = c.sa, px = c.p.x, py = c.p.y;
+    const out = [];
+    for(let i=0;i<pts.length;i++){
+      const a = pts[i], b = pts[(i+1)%pts.length];
+      const da = (a[0]-px)*ca + (a[1]-py)*sa - near;
+      const db = (b[0]-px)*ca + (b[1]-py)*sa - near;
+      if(da >= 0) out.push(a);
+      if((da >= 0) !== (db >= 0)){
+        const t = da/(da-db);
+        out.push([a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]);
+      }
+    }
     return out;
   },
 
-  _floorPatches(ctx, R, p, w, h, horizon, proj, yaw, step, n){
-    const list = this._patchList(R);
-    const MAX = this.MAX_D, MIND = this.MIN_D;
-
-    for(const pt of list){
-      let cx, cy, rad;
-      if(pt.t === "r"){ cx = pt.x+pt.w/2; cy = pt.y+pt.h/2; rad = Math.hypot(pt.w, pt.h)/2; }
-      else { cx = pt.x; cy = pt.y; rad = pt.r; }
-
-      const dx0 = cx-p.x, dy0 = cy-p.y;
-      const dist = Math.hypot(dx0, dy0);
-      if(dist - rad > MAX) continue;
-      const ac = Math.atan2(dy0, dx0);
-      const half = dist <= rad ? Math.PI : Math.atan2(rad, Math.max(1, dist-rad));
-      if(half < 0.02) continue;
-
-      ctx.fillStyle = pt.color;
-      ctx.globalAlpha = pt.alpha;
-
-      for(let c=0; c<n; c++){
-        const sx = c*step;
-        const a = yaw + Math.atan((sx + step*0.5 - w/2)/proj);
-        // 角度粗筛：不在贴片角宽内直接跳过（省掉绝大多数求交）
-        let da = a - ac;
-        while(da > Math.PI) da -= Math.PI*2;
-        while(da < -Math.PI) da += Math.PI*2;
-        if(Math.abs(da) > half + 0.06) continue;
-
-        const dx = Math.cos(a), dy = Math.sin(a);
-        let t0, t1;
-        if(pt.t === "r"){
-          let tmin = 0, tmax = MAX;
-          if(Math.abs(dx) < 1e-9){ if(p.x < pt.x || p.x > pt.x+pt.w) continue; }
-          else {
-            let a1 = (pt.x-p.x)/dx, a2 = (pt.x+pt.w-p.x)/dx;
-            if(a1 > a2){ const t=a1; a1=a2; a2=t; }
-            if(a1 > tmin) tmin = a1;
-            if(a2 < tmax) tmax = a2;
-            if(tmin > tmax) continue;
-          }
-          if(Math.abs(dy) < 1e-9){ if(p.y < pt.y || p.y > pt.y+pt.h) continue; }
-          else {
-            let b1 = (pt.y-p.y)/dy, b2 = (pt.y+pt.h-p.y)/dy;
-            if(b1 > b2){ const t=b1; b1=b2; b2=t; }
-            if(b1 > tmin) tmin = b1;
-            if(b2 < tmax) tmax = b2;
-            if(tmin > tmax) continue;
-          }
-          t0 = Math.max(0, tmin); t1 = Math.min(MAX, tmax);
-        } else {
-          const ox = p.x-pt.x, oy = p.y-pt.y;
-          const b = ox*dx + oy*dy;
-          const cq = ox*ox + oy*oy - pt.r*pt.r;
-          const disc = b*b - cq;
-          if(disc < 0) continue;
-          const sq = Math.sqrt(disc);
-          t0 = Math.max(0, -b - sq);
-          t1 = Math.min(MAX, -b + sq);
-        }
-        if(t1 <= t0) continue;
-
-        // 被墙挡住的部分不要
-        const wallD = this._zbuf[c];
-        const nearD = Math.max(t0, 6);
-        const farD = Math.min(t1, wallD);
-        if(farD <= nearD) continue;
-
-        const yFar = horizon + (this.EYE_H/Math.max(MIND, farD))*proj;
-        const yNear = horizon + (this.EYE_H/Math.max(MIND, nearD))*proj;
-        const y0 = Math.max(horizon, Math.min(h, yFar));
-        const y1 = Math.max(horizon, Math.min(h+2, yNear));
-        if(y1 - y0 < 0.6) continue;
-        ctx.fillRect(sx, y0, step+1, y1-y0);
-      }
-      ctx.globalAlpha = 1;
+  _poly(ctx, pts, style){
+    if(!pts || pts.length < 3) return false;
+    const c = this._pf;
+    let needClip = false;
+    for(let i=0;i<pts.length;i++){
+      if((pts[i][0]-c.p.x)*c.ca + (pts[i][1]-c.p.y)*c.sa < 8){ needClip = true; break; }
     }
+    const poly = needClip ? this._clipNear(pts, 8) : pts;
+    if(poly.length < 3) return false;
+    ctx.beginPath();
+    for(let i=0;i<poly.length;i++){
+      const s = this._toScreen(poly[i][0], poly[i][1]);
+      if(!s) return false;
+      if(i === 0) ctx.moveTo(s[0], s[1]); else ctx.lineTo(s[0], s[1]);
+    }
+    ctx.closePath();
+    ctx.fillStyle = style;
+    ctx.fill();
+    return true;
+  },
+
+  /* 只追加子路径、不 fill：同色的大批多边形可以一次 stroke / fill 掉 */
+  _polyPath(ctx, pts){
+    if(!pts || pts.length < 3) return false;
+    const c = this._pf;
+    let needClip = false;
+    for(let i=0;i<pts.length;i++){
+      if((pts[i][0]-c.p.x)*c.ca + (pts[i][1]-c.p.y)*c.sa < 8){ needClip = true; break; }
+    }
+    const poly = needClip ? this._clipNear(pts, 8) : pts;
+    if(poly.length < 3) return false;
+    for(let i=0;i<poly.length;i++){
+      const sp = this._toScreen(poly[i][0], poly[i][1]);
+      if(!sp) return false;
+      if(i === 0) ctx.moveTo(sp[0], sp[1]); else ctx.lineTo(sp[0], sp[1]);
+    }
+    ctx.closePath();
+    return true;
+  },
+
+  /* 视锥 / 距离裁剪：后方、屏幕外、超远的对象直接跳过，省掉逐顶点投影 */
+  _off(x, y, r){
+    const c = this._pf;
+    const rx = x-c.p.x, ry = y-c.p.y;
+    const d = rx*c.ca + ry*c.sa;
+    if(d < -(r||0) - 6) return true;
+    if(d > this.MAX_D + (r||0)) return true;
+    if(d <= (r||0) + 8) return false;                    // 包围球含相机：不裁
+    const lat = -rx*c.sa + ry*c.ca;
+    const sx = c.w/2 + (lat/d)*c.proj;
+    const half = ((r||0)/d)*c.proj;
+    return (sx + half < -20 || sx - half > c.w + 20);
+  },
+
+  _rectPoly(x, y, w, h){ return [[x,y],[x+w,y],[x+w,y+h],[x,y+h]]; },
+
+  _circlePoly(x, y, r, seg){
+    seg = seg || 16;
+    const a = [];
+    for(let i=0;i<seg;i++){ const t = i/seg*6.2832; a.push([x+Math.cos(t)*r, y+Math.sin(t)*r]); }
+    return a;
+  },
+
+  /* 地面上的一条线段（两端近裁剪后投影，线宽不随距离变化，够用且便宜） */
+  _line(ctx, x1, y1, x2, y2, style, width){
+    const c = this._pf;
+    const d1 = (x1-c.p.x)*c.ca + (y1-c.p.y)*c.sa - 8;
+    const d2 = (x2-c.p.x)*c.ca + (y2-c.p.y)*c.sa - 8;
+    if(d1 < 0 && d2 < 0) return;
+    let ax = x1, ay = y1, bx = x2, by = y2;
+    if(d1 < 0){ const t = d1/(d1-d2); ax = x1+(x2-x1)*t; ay = y1+(y2-y1)*t; }
+    else if(d2 < 0){ const t = d2/(d2-d1); bx = x2+(x1-x2)*t; by = y2+(y1-y2)*t; }
+    const s1 = this._toScreen(ax, ay), s2 = this._toScreen(bx, by);
+    if(!s1 || !s2) return;
+    ctx.strokeStyle = style; ctx.lineWidth = width || 1;
+    ctx.beginPath(); ctx.moveTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.stroke();
+  },
+
+  /* 把一条地面线段追加进当前 path（不 stroke），用于批量画网格 */
+  _segPath(ctx, x1, y1, x2, y2){
+    const c = this._pf;
+    const d1 = (x1-c.p.x)*c.ca + (y1-c.p.y)*c.sa - 8;
+    const d2 = (x2-c.p.x)*c.ca + (y2-c.p.y)*c.sa - 8;
+    if(d1 < 0 && d2 < 0) return;
+    let ax = x1, ay = y1, bx = x2, by = y2;
+    if(d1 < 0){ const t = d1/(d1-d2); ax = x1+(x2-x1)*t; ay = y1+(y2-y1)*t; }
+    else if(d2 < 0){ const t = d2/(d2-d1); bx = x2+(x1-x2)*t; by = y2+(y1-y2)*t; }
+    const s1 = this._toScreen(ax, ay), s2 = this._toScreen(bx, by);
+    if(!s1 || !s2) return;
+    ctx.moveTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]);
+  },
+
+  /* 贴地的椭圆（油渍 / 血渍 / 草丛）：按透视压扁，模拟平铺在地面上 */
+  _flatEllipse(ctx, x, y, r, style, ratio){
+    if(this._behind(x, y, r)) return;
+    const s = this._toScreen(x, y);
+    if(!s || s[2] < 30) return;
+    const rx = (r/s[2])*this._pf.proj;
+    if(rx < 0.7 || rx > 6000) return;
+    const ry = Math.max(0.5, rx*(ratio || 0.42));
+    ctx.fillStyle = style;
+    ctx.beginPath(); ctx.ellipse(s[0], s[1], rx, ry, 0, 0, 6.2832); ctx.fill();
+  },
+
+  /* 贴地的旋转矩形（枕木 / 停车线 / 桥墩）：给中心 + 半长 + 半宽 + 角度 */
+  _flatBar(ctx, x, y, halfLen, halfWid, ang, style){
+    if(this._behind(x, y, Math.max(halfLen, halfWid))) return;
+    const cx = Math.cos(ang), sy = Math.sin(ang);
+    const ex = cx*halfLen, ey = sy*halfLen;      // 长轴方向
+    const fx = -sy*halfWid, fy = cx*halfWid;     // 短轴方向
+    this._poly(ctx, [
+      [x-ex-fx, y-ey-fy], [x+ex-fx, y+ey-fy],
+      [x+ex+fx, y+ey+fy], [x-ex+fx, y-ey+fy],
+    ], style);
+  },
+
+  /* ---------------------------------------------------------------- 主入口 */
+  _floorLayer(ctx, R, p, w, h, horizon, proj, yaw){
+    const ca = Math.cos(yaw), sa = Math.sin(yaw);
+    this._setProj(p, w, h, horizon, proj, yaw, ca, sa);
+    const MAX = this.MAX_D;
+
+    ctx.save();
+    /* ---- 1. 底面 ---- */
+    ctx.fillStyle = "#0d1114"; ctx.fillRect(0, horizon-2, w, h-horizon+2);
+
+    /* ---- 2. 地表分区（2D 同款 560 网格 + 同款四色） ---- */
+    const ZS = 560, ZR = 1650;
+    const gx0 = Math.floor((p.x-ZR)/ZS), gx1 = Math.floor((p.x+ZR)/ZS);
+    const gy0 = Math.floor((p.y-ZR)/ZS), gy1 = Math.floor((p.y+ZR)/ZS);
+    /* 四种底色按色分批：格子互不重叠，同色合并成一个 path 只 fill 一次 */
+    const ZPAL = ["#14191b", "#101618", "#181a1c", "#0c1012"];
+    const zb = this._zbuckets || (this._zbuckets = [[], [], [], []]);
+    for(let k=0;k<4;k++) zb[k].length = 0;
+    for(let gy=gy0; gy<=gy1; gy++){
+      for(let gx=gx0; gx<=gx1; gx++){
+        if(this._off(gx*ZS+ZS/2, gy*ZS+ZS/2, ZS*0.75)) continue;
+        const hv = (typeof R._hash2 === "function") ? R._hash2(gx*7+3, gy*11+5) : 0.5;
+        zb[hv < 0.32 ? 0 : hv < 0.62 ? 1 : hv < 0.84 ? 2 : 3].push(this._rectPoly(gx*ZS, gy*ZS, ZS, ZS));
+      }
+    }
+    for(let k=0;k<4;k++){
+      if(!zb[k].length) continue;
+      ctx.beginPath();
+      for(const poly of zb[k]) this._polyPath(ctx, poly);
+      ctx.fillStyle = ZPAL[k]; ctx.fill();
+    }
+
+    /* ---- 3. 密林地表 ---- */
+    for(const fz of (R.forests||[])){
+      if(this._behind(fz.x+fz.w/2, fz.y+fz.h/2, Math.hypot(fz.w, fz.h)/2)) continue;
+      if(!this._poly(ctx, this._rectPoly(fz.x, fz.y, fz.w, fz.h), "rgba(30,44,26,0.55)")) continue;
+      this._poly(ctx, this._rectPoly(fz.x+12, fz.y+12, fz.w-24, fz.h-24), "rgba(46,64,36,0.30)");
+    }
+
+    /* ---- 4. 道路 / 门外铺装 ---- */
+    for(const rd of (R.roads||[])){
+      if(this._behind(rd.x+rd.w/2, rd.y+rd.h/2, Math.hypot(rd.w, rd.h)/2)) continue;
+      if(!this._poly(ctx, this._rectPoly(rd.x, rd.y, rd.w, rd.h), "rgba(52,50,43,0.62)")) continue;
+      // 上沿高光
+      if(rd.w >= rd.h) this._line(ctx, rd.x, rd.y, rd.x+rd.w, rd.y, "rgba(96,92,78,0.20)", 2);
+      else this._line(ctx, rd.x, rd.y, rd.x, rd.y+rd.h, "rgba(96,92,78,0.20)", 2);
+      // 中线虚线（2D：26 划 / 30 空）
+      const horiz = rd.w >= rd.h;
+      const len = horiz ? rd.w : rd.h;
+      if(len <= 420) continue;
+      const lx = horiz ? rd.x : rd.x+rd.w/2;
+      const ly = horiz ? rd.y+rd.h/2 : rd.y;
+      for(let d=0; d+26<len; d+=56){
+        if(horiz) this._line(ctx, lx+d, ly, lx+d+26, ly, "rgba(150,140,100,0.15)", 2);
+        else      this._line(ctx, lx, ly+d, lx, ly+d+26, "rgba(150,140,100,0.15)", 2);
+      }
+    }
+
+    /* ---- 5. 草丛 / 碎石斑块（134 网格，2D 同源哈希） ---- */
+    const PS = 134, PR = 1150;
+    const px0 = Math.floor((p.x-PR)/PS), px1 = Math.floor((p.x+PR)/PS);
+    const py0 = Math.floor((p.y-PR)/PS), py1 = Math.floor((p.y+PR)/PS);
+    for(let gy=py0; gy<=py1; gy++){
+      for(let gx=px0; gx<=px1; gx++){
+        const hv = (typeof R._hash2 === "function") ? R._hash2(gx*5+91, gy*3+37) : 0;
+        if(hv < 0.54) continue;
+        const cx = gx*PS + R._hash2(gx, gy*7)*PS;
+        const cy = gy*PS + R._hash2(gx*13, gy)*PS;
+        if(this._off(cx, cy, 40)) continue;
+        this._flatEllipse(ctx, cx, cy, 14+hv*22,
+          hv > 0.88 ? "rgba(86,116,72,0.085)" : (hv > 0.70 ? "rgba(62,86,58,0.070)" : "rgba(48,60,44,0.060)"), 0.66);
+      }
+    }
+
+    /* ---- 6. 户外 160 网格（真投影：地面直线的两端投影后连线，近粗远细自然出现） ---- */
+    const G = 160, span = 1900;
+    ctx.beginPath();
+    for(let gx=Math.floor((p.x-span)/G)*G; gx<=p.x+span; gx+=G) this._segPath(ctx, gx, p.y-span, gx, p.y+span);
+    for(let gy=Math.floor((p.y-span)/G)*G; gy<=p.y+span; gy+=G) this._segPath(ctx, p.x-span, gy, p.x+span, gy);
+    ctx.strokeStyle = "rgba(120,160,110,0.062)"; ctx.lineWidth = 1; ctx.stroke();
+
+    /* ---- 7. 泄洪后的库底：淤泥 + 残水洼 ---- */
+    if(R.damOpen && R.reservoirRect){
+      const rr = R.reservoirRect;
+      if(this._poly(ctx, this._rectPoly(rr.x, rr.y, rr.w, rr.h), "#35312a")){
+        for(let y=rr.y+46; y<rr.y+rr.h; y+=72){
+          this._poly(ctx, this._rectPoly(rr.x, y, rr.w, 24), "rgba(72,66,52,0.45)");
+        }
+        for(let i=0;i<7;i++){
+          const bx2 = rr.x+120+((i*283)%Math.max(1, rr.w-260));
+          const by2 = rr.y+90+((i*197)%Math.max(1, rr.h-160));
+          if(this._poly(ctx, this._rectPoly(bx2, by2, 52, 34), "rgba(58,46,34,0.92)")) continue;
+        }
+        for(let i=0;i<9;i++){
+          const wx = rr.x+80+((i*157)%Math.max(1, rr.w-160));
+          const wy = rr.y+rr.h-80-((i*211)%260);
+          this._flatEllipse(ctx, wx, wy, 58+((i*37)%46), "rgba(46,86,104,0.55)", 0.36);
+        }
+      }
+    }
+
+    /* ---- 8. 大坝水库 ---- */
+    if(R.reservoirRect && !R.damOpen){
+      const rr = R.reservoirRect;
+      if(this._poly(ctx, this._rectPoly(rr.x, rr.y, rr.w, rr.h), "rgba(20,38,50,0.97)")){
+        this._poly(ctx, this._rectPoly(rr.x, rr.y+26, rr.w, rr.h-26), "rgba(32,58,74,0.5)");
+        this._line(ctx, rr.x, rr.y+2, rr.x+rr.w, rr.y+2, "rgba(130,190,210,0.22)", 3);
+        for(let i=0;i<26;i++){
+          const wy = rr.y+44+((i*67)%Math.max(1, rr.h-64));
+          const wx = rr.x+30+((i*233)%Math.max(1, rr.w-200));
+          this._line(ctx, wx, wy, wx+120+((i*31)%110), wy, "rgba(150,200,215,0.10)", 2);
+        }
+      }
+    }
+
+    /* ---- 9. 中央河谷水面 ---- */
+    if(R.waterCircles){
+      const wOut = this._wout || (this._wout = []), wIn = this._win || (this._win = []);
+      wOut.length = 0; wIn.length = 0;
+      for(const c of R.waterCircles){
+        if(this._off(c.x, c.y, c.r)) continue;
+        wOut.push(this._circlePoly(c.x, c.y, c.r+2, 14));
+        wIn.push(this._circlePoly(c.x, c.y, c.r*0.52, 12));
+      }
+      if(wOut.length){
+        ctx.beginPath(); for(const q of wOut) this._polyPath(ctx, q);
+        ctx.fillStyle = "rgba(20,38,50,0.96)"; ctx.fill();
+        ctx.beginPath(); for(const q of wIn) this._polyPath(ctx, q);
+        ctx.fillStyle = "rgba(30,56,72,0.55)"; ctx.fill();
+      }
+      for(let i=0;i<R.waterCircles.length;i+=5){
+        const c = R.waterCircles[i];
+        if(this._behind(c.x, c.y, c.r)) continue;
+        const wv = R._hash2(c.x|0, c.y|0);
+        this._line(ctx, c.x-c.r*0.36, c.y+(wv-0.5)*50, c.x+c.r*0.36, c.y+(wv-0.5)*50, "rgba(150,200,215,0.12)", 1.6);
+      }
+    }
+
+    /* ---- 10. 桥面 ---- */
+    for(const b of (R.bridges||[])){
+      const x0 = b.x-b.w/2, y0 = b.y-b.h/2;
+      if(this._behind(b.x, b.y, Math.hypot(b.w, b.h)/2)) continue;
+      if(!this._poly(ctx, this._rectPoly(x0, y0, b.w, b.h), b.big ? "#2b3036" : "#25282c")) continue;
+      this._poly(ctx, this._rectPoly(x0, y0, b.w, 4), "rgba(150,160,170,0.14)");
+      // 桥墩
+      for(let px=x0+40; px<x0+b.w-30; px+=110){
+        this._poly(ctx, this._rectPoly(px, y0+b.h*0.32, 16, b.h*0.36), "rgba(24,28,32,0.55)");
+      }
+      if(b.big){
+        for(let d=10; d<b.w-28; d+=32) this._line(ctx, x0+d, b.y, x0+d+18, b.y, "rgba(226,196,86,0.55)", 2);
+      }
+      this._line(ctx, x0, y0, x0+b.w, y0, "rgba(96,106,116,0.85)", 3);
+      this._line(ctx, x0, y0+b.h, x0+b.w, y0+b.h, "rgba(96,106,116,0.85)", 3);
+    }
+
+    /* ---- 11. 铁路：路基 + 枕木 + 双轨 ---- */
+    for(const rl of (R.rails||[])){
+      for(let s=0;s<rl.pts.length-1;s++){
+        const [x1,y1] = rl.pts[s], [x2,y2] = rl.pts[s+1];
+        const ang = Math.atan2(y2-y1, x2-x1), len = Math.hypot(x2-x1, y2-y1);
+        const mx = (x1+x2)/2, my = (y1+y2)/2;
+        if(this._behind(mx, my, len/2+26)) continue;
+        // 路基（一条与轨道同向的带）
+        this._flatBar(ctx, mx, my, len/2, 26, ang, "rgba(40,40,38,0.55)");
+        // 枕木
+        const cx = Math.cos(ang), sy2 = Math.sin(ang);
+        const stepD = len > 900 ? 60 : 30;          // 远处枕木抽稀，肉眼分辨不出来
+        for(let d=0; d<len; d+=stepD){
+          const px2 = x1+cx*d, py2 = y1+sy2*d;
+          if(this._off(px2, py2, 26)) continue;
+          this._flatBar(ctx, px2, py2, 5, 22, ang, "rgba(58,48,36,0.9)");
+        }
+        // 双轨
+        const nx = -Math.sin(ang), ny = Math.cos(ang);
+        this._line(ctx, x1+nx*14, y1+ny*14, x2+nx*14, y2+ny*14, "rgba(150,158,166,0.55)", 3);
+        this._line(ctx, x1-nx*14, y1-ny*14, x2-nx*14, y2-ny*14, "rgba(150,158,166,0.55)", 3);
+      }
+    }
+
+    /* ---- 12. 建筑院子：水泥地 + 分块缝 ---- */
+    for(const yd of (R.yards||[])){
+      if(this._behind(yd.x+yd.w/2, yd.y+yd.h/2, Math.hypot(yd.w, yd.h)/2)) continue;
+      if(!this._poly(ctx, this._rectPoly(yd.x, yd.y, yd.w, yd.h), yd.tint || "#2a2f2c")) continue;
+      ctx.save();
+      for(let i=yd.x+70;i<yd.x+yd.w;i+=70) this._line(ctx, i, yd.y, i, yd.y+yd.h, "rgba(170,200,180,0.05)", 1);
+      for(let i=yd.y+70;i<yd.y+yd.h;i+=70) this._line(ctx, yd.x, i, yd.x+yd.w, i, "rgba(170,200,180,0.05)", 1);
+      ctx.restore();
+    }
+
+    /* ---- 13. 房间地面 + 砖缝 + 踢脚板 ---- */
+    for(const rm of (R.roomRects||[])){
+      if(this._behind(rm.x+rm.w/2, rm.y+rm.h/2, Math.hypot(rm.w, rm.h)/2)) continue;
+      if(!this._poly(ctx, this._rectPoly(rm.x, rm.y, rm.w, rm.h), rm.extract ? "#25452f" : (rm.tint || "#2a2f2c"))) continue;
+      this._poly(ctx, this._rectPoly(rm.x, rm.y, rm.w, rm.h), "rgba(0,0,0,0.16)");
+      for(let gx=rm.x+40; gx<rm.x+rm.w; gx+=60) this._line(ctx, gx, rm.y, gx, rm.y+rm.h, "rgba(170,200,180,0.06)", 1);
+      for(let gy=rm.y+40; gy<rm.y+rm.h; gy+=60) this._line(ctx, rm.x, gy, rm.x+rm.w, gy, "rgba(170,200,180,0.06)", 1);
+      // 踢脚板：沿房间内侧一圈深色墙裙（2D 同款 inset 4 / 8）
+      const ix = rm.x+4, iy = rm.y+4, iw = rm.w-8, ih = rm.h-8;
+      this._line(ctx, ix, iy, ix+iw, iy, "rgba(0,0,0,0.20)", 4);
+      this._line(ctx, ix, iy+ih, ix+iw, iy+ih, "rgba(0,0,0,0.20)", 4);
+      this._line(ctx, ix, iy, ix, iy+ih, "rgba(0,0,0,0.20)", 4);
+      this._line(ctx, ix+iw, iy, ix+iw, iy+ih, "rgba(0,0,0,0.20)", 4);
+    }
+
+    /* ---- 14. 地表贴花：油渍 / 血渍 / 裂缝 / 草簇 / 碎石 / 标线 / 涂鸦 ---- */
+    const pfc = this._pf;
+    for(const d of (R.decals||[])){
+      const dep = (d.x-pfc.p.x)*pfc.ca + (d.y-pfc.p.y)*pfc.sa;
+      if(dep < 8 || dep > 900) continue;            // 贴花很小，900 之外看不见
+      if(this._off(d.x, d.y, 60)) continue;
+      switch(d.t){
+        case "oil":
+          this._flatEllipse(ctx, d.x, d.y, d.r||16, "rgba(8,14,10,"+(d.a||0.08)+")", 0.5);
+          this._flatEllipse(ctx, d.x-d.r*0.18, d.y-d.r*0.14, (d.r||16)*0.34, "rgba(90,110,95,"+((d.a||0.08)*0.5)+")", 0.5);
+          break;
+        case "stain":
+          this._flatEllipse(ctx, d.x, d.y, d.r||14, "rgba(70,54,38,"+(d.a||0.06)+")", 0.5);
+          break;
+        case "blood":
+          this._flatEllipse(ctx, d.x, d.y, d.r||12, "rgba(120,22,26,"+(d.a||0.1)+")", 0.5);
+          this._flatEllipse(ctx, d.x+d.r*0.4, d.y+d.r*0.2, (d.r||12)*0.4, "rgba(90,16,20,"+((d.a||0.1)*0.8)+")", 0.5);
+          break;
+        case "grass":
+          this._flatEllipse(ctx, d.x, d.y, d.r||14, "rgba(74,104,62,0.13)", 0.6);
+          break;
+        case "rocklet":
+          this._flatEllipse(ctx, d.x, d.y, d.r||6, "rgba(150,158,150,0.16)", 0.6);
+          break;
+        case "crack": {
+          const ang = d.ang||0, ww = d.w||40;
+          const c0 = Math.cos(ang), s0 = Math.sin(ang);
+          this._line(ctx, d.x-c0*ww/2, d.y-s0*ww/2, d.x+c0*ww/2, d.y+s0*ww/2, "rgba(150,160,150,0.13)", 1.4);
+          this._line(ctx, d.x, d.y, d.x+Math.cos(ang+1.1)*ww*0.3, d.y+Math.sin(ang+1.1)*ww*0.3, "rgba(150,160,150,0.13)", 1.2);
+          break;
+        }
+        case "line": {
+          const ang = d.ang||0, ww = d.w||60;
+          this._flatBar(ctx, d.x, d.y, ww/2, 3, ang, "rgba(220,210,150,"+(d.a||0.06)+")");
+          break;
+        }
+        case "glyph":
+          this._flatEllipse(ctx, d.x, d.y, d.r||16, d.c || "#b84a3a", 0.55);
+          break;
+      }
+    }
+
+    /* ---- 15. 区域明暗暗斑（2D 同源数据，压成地面上的大椭圆） ---- */
+    for(const s of (R.darkSpots||[])){
+      if(this._behind(s.x, s.y, s.r)) continue;
+      const sc = this._toScreen(s.x, s.y);
+      if(!sc || sc[2] < 20) continue;
+      const rr = (s.r/sc[2])*this._pf.proj;
+      if(rr < 2 || rr > 4000) continue;
+      const g = ctx.createRadialGradient(sc[0], sc[1], 0, sc[0], sc[1], rr);
+      g.addColorStop(0, "rgba(2,6,10,"+(s.a||0.1)+")");
+      g.addColorStop(1, "rgba(2,6,10,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(sc[0], sc[1], rr, rr*0.5, 0, 0, 6.2832); ctx.fill();
+    }
+
+    /* ---- 15.5 房间名（2D 在房间底部写名字，3D 贴到房间中心偏下，近处才显示） ---- */
+    ctx.textAlign = "center";
+    for(const rm of (R.roomRects||[])){
+      if(rm.extract || !rm.name) continue;
+      const cx = rm.x + rm.w/2, cy = rm.y + rm.h - 40;
+      const sp = this._toScreen(cx, cy);
+      if(!sp || sp[2] > 1300 || sp[2] < 40) continue;
+      const size = Math.max(11, Math.min(26, (46/sp[2])*this._pf.proj*0.55));
+      ctx.font = "bold " + size.toFixed(0) + "px system-ui,sans-serif";
+      ctx.fillStyle = "rgba(210,222,235,0.30)";
+      ctx.fillText(rm.name, sp[0], sp[1]);
+    }
+
+    /* ---- 16. 地面距离雾：把远景压进雾里，地面才不像一块立起来的色板 ---- */
+    const fog = ctx.createLinearGradient(0, horizon, 0, h);
+    fog.addColorStop(0, "rgba(20,27,32,0.62)");
+    fog.addColorStop(0.10, "rgba(19,25,30,0.34)");
+    fog.addColorStop(0.30, "rgba(16,21,25,0.10)");
+    fog.addColorStop(1, "rgba(14,18,21,0)");
+    ctx.fillStyle = fog; ctx.fillRect(0, horizon, w, h-horizon);
+    // 补一层极淡的环境光：2D 的画面是全场可见的，3D 不该压成纯夜景
+    ctx.fillStyle = "rgba(150,172,184,0.045)"; ctx.fillRect(0, horizon, w, h-horizon);
+
+    ctx.restore();
   },
 
   /* ----------------------------- 精灵（单位 / 箱子 / 掩体 / 设施 / 探照灯） ----------------------------- */
@@ -653,8 +1004,8 @@ const FPView = {
     const cx = w*0.5, cy = h*0.55;
     const vig = ctx.createRadialGradient(cx, cy, Math.min(w,h)*0.18, cx, cy, Math.max(w,h)*0.78);
     vig.addColorStop(0, "rgba(5,8,10,0)");
-    vig.addColorStop(0.55, "rgba(5,8,10,0.26)");
-    vig.addColorStop(1, "rgba(4,7,9,0.68)");
+    vig.addColorStop(0.55, "rgba(5,8,10,0.14)");
+    vig.addColorStop(1, "rgba(4,7,9,0.42)");
     ctx.fillStyle = vig; ctx.fillRect(0, 0, w, h);
 
     ctx.save();
@@ -663,8 +1014,8 @@ const FPView = {
     const reach = Math.max(w, h) * 0.52;
     const g = ctx.createRadialGradient(cx, h*0.60, Math.max(8, reach*0.06), cx, h*0.60, reach);
     // 色值与 2D _lightLayer 手电锥完全一致（255,236,182 / 255,224,160），只压强度
-    g.addColorStop(0, "rgba(255,236,182,0.13)");
-    g.addColorStop(0.5, "rgba(255,224,160,0.055)");
+    g.addColorStop(0, "rgba(255,236,182,0.20)");
+    g.addColorStop(0.5, "rgba(255,224,160,0.075)");
     g.addColorStop(1, "rgba(255,224,160,0)");
     ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
@@ -875,43 +1226,43 @@ const FPView = {
   /* 空手：握战术匕首的前臂特写（跑刀状态也有模型，而不是一把凭空的长枪） */
   _meleeModel(ctx, p){
     ctx.save();
-    // 前臂：从画布底边伸上来，握拳位置在 (24, -168)
+    // 前臂：从画布底边伸上来，握拳位置在 (10, -128)
     ctx.fillStyle = "#333f39";
     ctx.beginPath();
-    ctx.moveTo(-26, -150); ctx.lineTo(82, -190); ctx.lineTo(238, 96); ctx.lineTo(96, 150);
+    ctx.moveTo(-14, -112); ctx.lineTo(78, -150); ctx.lineTo(196, 150); ctx.lineTo(74, 210);
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.055)";
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
     ctx.beginPath();
-    ctx.moveTo(-6, -158); ctx.lineTo(56, -182); ctx.lineTo(150, 30); ctx.lineTo(84, 56);
+    ctx.moveTo(4, -120); ctx.lineTo(56, -140); ctx.lineTo(122, 70); ctx.lineTo(70, 92);
     ctx.closePath(); ctx.fill();
     // 袖口
     ctx.fillStyle = "#28322d";
     ctx.beginPath();
-    ctx.moveTo(120, 10); ctx.lineTo(238, 96); ctx.lineTo(96, 150); ctx.lineTo(52, 74);
+    ctx.moveTo(96, 40); ctx.lineTo(196, 150); ctx.lineTo(74, 210); ctx.lineTo(34, 110);
     ctx.closePath(); ctx.fill();
 
     // 刀柄（握拳处）
     ctx.fillStyle = "#1f2529";
     ctx.beginPath();
-    ctx.moveTo(-18, -196); ctx.lineTo(56, -222); ctx.lineTo(82, -152); ctx.lineTo(6, -128);
+    ctx.moveTo(-16, -152); ctx.lineTo(46, -174); ctx.lineTo(68, -114); ctx.lineTo(2, -94);
     ctx.closePath(); ctx.fill();
     // 护手
     ctx.fillStyle = "#3a4448";
     ctx.beginPath();
-    ctx.moveTo(-30, -204); ctx.lineTo(4, -218); ctx.lineTo(26, -160); ctx.lineTo(-10, -146);
+    ctx.moveTo(-28, -160); ctx.lineTo(0, -172); ctx.lineTo(20, -124); ctx.lineTo(-10, -112);
     ctx.closePath(); ctx.fill();
     // 刀身（指向左上方）
-    ctx.fillStyle = "#a3b0b5";
+    ctx.fillStyle = "#8894a0";
     ctx.beginPath();
-    ctx.moveTo(-26, -206); ctx.lineTo(-214, -318); ctx.lineTo(-244, -308); ctx.lineTo(-46, -168);
+    ctx.moveTo(-24, -162); ctx.lineTo(-168, -244); ctx.lineTo(-192, -232); ctx.lineTo(-40, -128);
     ctx.closePath(); ctx.fill();
     // 刀背高光
-    ctx.fillStyle = "rgba(255,255,255,0.34)";
+    ctx.fillStyle = "rgba(220,232,240,0.26)";
     ctx.beginPath();
-    ctx.moveTo(-30, -208); ctx.lineTo(-210, -314); ctx.lineTo(-214, -300); ctx.lineTo(-38, -196);
+    ctx.moveTo(-28, -164); ctx.lineTo(-164, -240); ctx.lineTo(-166, -230); ctx.lineTo(-34, -150);
     ctx.closePath(); ctx.fill();
     // 握拳
-    this._glove(ctx, 14, -166, 1.0, -0.16);
+    this._glove(ctx, 6, -124, 1.0, -0.16);
     ctx.restore();
   },
 

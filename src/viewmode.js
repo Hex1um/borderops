@@ -11,7 +11,7 @@ const ViewMode = {
   mode: "2d",          // "2d" 俯视角（原版） | "3d" 第一人称
   yaw: 0,              // 3D 视角朝向（弧度），等于玩家开火方向
   sensitivity: 1.0,
-  minimap: true,       // 3D 下显示俯视小地图
+  minimap: false,      // v0.19.1：3D 不再提供小地图（已在设置里移除入口）
   pointerLock: false,  // 点击画面锁定鼠标
   _from: "pause",
   _drag: null,
@@ -26,7 +26,6 @@ const ViewMode = {
       const s = JSON.parse(raw);
       if(s && (s.mode === "2d" || s.mode === "3d")) this.mode = s.mode;
       if(typeof s.sensitivity === "number") this.sensitivity = Math.max(0.3, Math.min(2.5, s.sensitivity));
-      if(typeof s.minimap === "boolean") this.minimap = s.minimap;
       if(typeof s.pointerLock === "boolean") this.pointerLock = s.pointerLock;
     }catch(e){}
   },
@@ -230,7 +229,6 @@ const ViewMode = {
 
         <div style="margin:18px 0;text-align:left;font-size:14px;line-height:2.2;">
           <div>鼠标灵敏度　<input id="vm-sens" type="range" min="0.3" max="2.5" step="0.1" value="${this.sensitivity}" style="vertical-align:middle;width:190px;">　<span id="vm-sens-val">${this.sensitivity.toFixed(1)}×</span></div>
-          <label style="cursor:pointer;"><input id="vm-minimap" type="checkbox" ${this.minimap?"checked":""} style="vertical-align:middle;"> 3D 模式显示小地图</label><br>
           <label style="cursor:pointer;"><input id="vm-lock" type="checkbox" ${this.pointerLock?"checked":""} style="vertical-align:middle;"> 点击画面锁定鼠标（按 ESC 退出）</label>
         </div>
 
@@ -251,8 +249,6 @@ const ViewMode = {
       if(lab) lab.textContent = this.sensitivity.toFixed(1)+"×";
       this.save();
     };
-    const mm = document.getElementById("vm-minimap");
-    if(mm) mm.onchange = ()=>{ this.minimap = !!mm.checked; this.save(); };
     const lk = document.getElementById("vm-lock");
     if(lk) lk.onchange = ()=>{
       this.pointerLock = !!lk.checked; this.save();
