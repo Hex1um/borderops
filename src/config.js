@@ -7,13 +7,18 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.21.0",
+  version: "0.21.1",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
   onlyRaid: true,        // 只显示塔科夫模式
   raidMinimap: false,    // 塔科夫 HUD 小地图
-  showManufacturer: false, // 暂时不在枪名 / 武器卡片里显示厂商（manufacturer 字段仍保留）
+  /* v0.21.1：显示密度（设置里可切）
+   *   "compact" 精简 —— 枪名只留型号 / 枪型，不显示厂商、前后缀词、弹种尾巴
+   *   "full"    完整 —— 厂商 + 型号 + 前后缀 + 弹种，卡片里也展开完整词缀
+   * showManufacturer 保留为兼容字段，切到 full 时同步为 true。 */
+  display: "compact",
+  showManufacturer: false, // 由 display 派生：display==="full" 时为 true
   // 画布逻辑分辨率基准（实际按窗口缩放）
   worldTile: 64,
   // 玩家基础
@@ -62,7 +67,7 @@ const ELEMENTS = AMMO_TYPES;
  * 顺序即正态轴：改顺序前先确认 pen 仍然升序。 */
 const AMMO_POOL_BY_PEN = ["corrosive","cryo","fire","radiation","shock"];
 
-/* ============================ 弹药物品（v0.21.0） ============================
+/* ============================ 弹药物品（v0.21.1） ============================
  * 子弹从「枪上的计数器」变成背包里的独立物品（可堆叠，按发计数）：
  *   4 个弹族 × 5 个级别 = 20 种
  *
@@ -87,7 +92,7 @@ const AMMO_CALS = {
 const AMMO_CAL_LIST = ["light","mid","heavy","grenade"];
 
 /* 5 个级别：name 级别名 / elem 终点效应 / power 整体威力 / dotK 持续效果折减 / value 基准估值（每发）*/
-/* power 梯度（v0.21.0 平衡重算）：
+/* power 梯度（v0.21.1 平衡重算）：
  * T1 是扩张弹，对裸目标天然最强（mult.flesh 1.55）；若 power 只涨 6%，T2 对无甲
  * 反而比 T1 弱（1.15×1.06=1.22 < 1.55）——「升级弹药」就变成了降级。
  * 这组值是用真实 mult 反解出来的，保证 T1→T5 对「无防护 / 护盾 / 插板」三轴都单调：

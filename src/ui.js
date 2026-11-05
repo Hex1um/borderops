@@ -377,8 +377,8 @@ const UI = {
       const sell=Math.max(10, Math.floor(weaponPrice(w)*0.25));
       const eri=itemSellEridium({rarity:w.rarity});
       return `<div class="inv-item loot-${w.rarity} ${i===p.wi?'sel':''}" data-i="${i}">
-        <div class="iname c-${w.rarity}">${w.name}</div>
-        <div class="si-meta">${w.rarityName} · Lv.${w.ilvl} · ${CFG.showManufacturer===false?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
+        <div class="iname c-${w.rarity}">${gunNameOf(w)}</div>
+        <div class="si-meta">${w.rarityName} · Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
         <div class="istat">${w.statLines().join(' · ')}</div>
         ${this._affixHtml(w)}
         <div class="si-buy">
@@ -609,7 +609,7 @@ const UI = {
       stats=relicLines(w).join(' · ');
       affix='<span class="affix suffix">纯被动加成</span>';
     } else {
-      meta=`${w.rarityName} · Lv.${w.ilvl} · ${CFG.showManufacturer===false?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
+      meta=`${w.rarityName} · Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
       stats=`${w.stats.damage.toFixed(1)} 伤害 · ${w.stats.fireRate.toFixed(1)}/s · ${w.magSizeBase} 弹匣 · ${(w.stats.accuracy*100|0)}% 精准`;
       affix=w.affixLines().map(a=>`<span class="affix ${a.kind}">${a.nm} ${a.txt}</span>`).join('')||'<span class="affix">无词缀</span>';
     }

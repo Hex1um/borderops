@@ -214,8 +214,9 @@ function partValue(p){
 class Weapon {
   constructor(spec){
     Object.assign(this, spec);
-    // 隐藏厂商名时，旧存档里已经写死的「图拉兵工厂…」也要剥掉（manufacturer 字段保留）
-    if(typeof CFG!=="undefined" && CFG.showManufacturer===false) this.name=stripManufacturer(this.name);
+    /* v0.21.1：「精简 / 完整」是**显示层**开关，不再在构造器里改写 name ——
+     * 改写会永久破坏存档名，切回完整模式也救不回来。这里只缓存一份精简名。 */
+    if(typeof CFG!=="undefined" && CFG.display!=="full") this.short=compactGunName(this.name, this);
     this.laser=false;   // 一律实体弹丸（旧存档的 laser 字段强制归一）
     if(!this.affixes) this.affixes=[];
     if(this.power===undefined) this.power=null;
@@ -517,6 +518,50 @@ function stripManufacturer(name){
   return name;
 }
 
+/* 把完整枪名压成「最基本内容」：去掉厂商前缀、前后缀词、弹种尾巴，只留型号 / 枪型。
+ * 生成的枪自带 short 字段；旧存档没有，就在第一次显示时推导并缓存（不写回 name）。
+ *
+ * 两个坑（v0.21.1 踩过）：
+ *   ① 顺序：弹种尾巴「 · SP-6」要**先**摘掉，否则 endsWith 判断不到后缀；
+ *   ② 边界：前后缀必须是一个**独立词**（前面是空格或「·」），否则「延长枪管」会被
+ *      更短的后缀「长枪管」吃掉，剩个「延」——所以要按分隔符校验 + 取最长匹配。 */
+function compactGunName(full, w){
+  let nm = stripManufacturer(full||"");
+  nm = nm.replace(/\s*·\s*[A-Za-z0-9×\-\.]+$/,"").trim();     // 弹种尾巴
+  /* 命名拼法是 `${厂商}${枪型}${" "+前缀}${后缀}${" · 弹种"}` ——
+   * 前缀、后缀都在**末尾**（前缀带空格、后缀直接黏在后面），所以两端都要从后往前剥。 */
+  const takeEnd=(pool)=>{
+    let best=null;
+    for(const a of pool){
+      const tag=a && a.nm ? String(a.nm) : "";
+      if(!tag || !nm.endsWith(tag)) continue;
+      const cut=nm.length-tag.length;
+      /* 词缀名本身带分隔符（实际数据是「·大容量」这种），此时无需再查前一个字符；
+       * 只有「紧贴上一个字」的词缀才要求前面是空格或「·」，避免「延长枪管」被「长枪管」吃掉。 */
+      if(cut>0 && !/^[\s·\-]/.test(tag) && !/[\s·]/.test(nm[cut-1])) continue;
+      if(!best || tag.length>best.length) best=tag;
+    }
+    if(!best) return false;
+    nm = nm.slice(0, nm.length-best.length).trim();
+    return true;
+  };
+  for(let i=0;i<6;i++){
+    if(!takeEnd(AFFIXES.suffix||[]) && !takeEnd(AFFIXES.prefix||[])) break;
+  }
+  nm = nm.replace(/[·\-\s]+$/,"").replace(/^[·\-\s]+/,"").trim();
+  if(!nm && w && w.type && typeof WEAPON_TYPES!=="undefined" && WEAPON_TYPES[w.type])
+    nm = WEAPON_TYPES[w.type].name;
+  return nm || full || "";
+}
+/* 所有 UI 显示枪名都走这里：精简 → 型号/枪型；完整 → 厂商 + 型号 + 前后缀 + 弹种 */
+function gunNameOf(w){
+  if(!w) return "";
+  if(typeof CFG==="undefined" || CFG.display==="full") return w.name||"";
+  if(w.short) return w.short;
+  w.short = compactGunName(w.name, w);
+  return w.short;
+}
+
 /* ----------------------------- 定价 / 词缀文案 ----------------------------- */
 function weaponPrice(w){
   const R = RARITY_BY_ID[w.rarity] || RARITIES[0];
@@ -602,7 +647,8 @@ function blGunConvert(w){
 }
 function blGunGen(ilvl, opts){
   const w=blGunConvert(generateWeapon(ilvl, opts));
-  if(typeof CFG!=="undefined" && CFG.showManufacturer===false) w.name=stripManufacturer(w.name);
+  // 精简名缓存（只用于显示，name 保持完整，切回完整模式即可恢复）
+  if(typeof CFG!=="undefined" && CFG.display!=="full") w.short=compactGunName(w.name, w);
   // Scav 等低阶配装可强制指定塔科夫实装型号，避免生成「兵工厂+枪型+词缀」的泛称。
   if(opts && opts.model){
     const ammo=(w.element && w.element!=="none" && AMMO_TYPES[w.element]) ? " · "+AMMO_TYPES[w.element].short : "";

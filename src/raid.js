@@ -1202,10 +1202,9 @@ const RaidStash = {
             d.gunVer=3;
             d.weapons=(d.weapons||[]).map(ensureGunParts);
           }
-          // 隐藏厂商名时，旧仓库里的枪名也要剥前缀（只影响显示名）
-          if(typeof CFG!=="undefined" && CFG.showManufacturer===false){
-            for(const w of (d.weapons||[])){ if(w && w.name) w.name=stripManufacturer(w.name); }
-          }
+          /* v0.21.1：不再改写旧档枪名（改了就回不去）。只清掉缓存的精简名，
+           * 让 gunNameOf() 按当前「精简 / 完整」设置重新推导。 */
+          for(const w of (d.weapons||[])){ if(w) delete w.short; }
           // 护甲 / 头盔：无论档位版本，一律按当前数值表校正
           d.armors=(d.armors||[]).map(ensureArmorTier);
           d.helmets=(d.helmets||[]).map(ensureArmorTier);
@@ -3413,7 +3412,7 @@ const Raid = {
     if(g===p.secondary){ p.secondary=old||null; p.gun=g; }
     else { p.gun=g; }   // 背包枪：手上的旧枪条目仍在 inv.weapons 里，等于收回背包
     p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
-    this._float(p.x, p.y-34, "手持 "+g.name, raidGunColor(g));
+    this._float(p.x, p.y-34, "手持 "+gunNameOf(g), raidGunColor(g));
   },
   // Q / 切枪：优先从背包取下一把；背包空则与副手互换；只剩一把则收枪入包（空手跑更快）
   _cycleGun(){
@@ -5369,7 +5368,7 @@ const Raid = {
       if(i<0) continue;
       any=true;
       const rtg=R._rtGun(w);
-      line(w.name, raidGunColor(w),
+      line(gunNameOf(w), raidGunColor(w),
         `伤害 ${w.dmg} · 弹匣 ${rtg?rtg.ammoMag:0}/${w.mag} · 装填 ${rtg&&rtg.loaded?((ammoDefFromId(rtg.loaded)||{}).short||"?"):"未装填"} · 估值 ${money(w.value)}`,
         `weapons:${i}`, `weapons:${i}`);
     }
@@ -6690,7 +6689,7 @@ const RenderRaid = {
       ctx.fillText(`${magN} / ${backN}`, bx, by+56);
       ctx.font=mob?"11px system-ui,sans-serif":"12px system-ui,sans-serif";
       ctx.fillStyle=dry?"#ff9a8a":"rgba(180,195,210,0.85)";
-      ctx.fillText(p.gun.name+" · "+(ad?ad.short:"未装填")
+      ctx.fillText(gunNameOf(p.gun)+" · "+(ad?ad.short:"未装填")
         +(p.reloadT>0?" · 换弹中…":(dry?" · 没有子弹":(magN<=0?" · 弹匣空（R 换弹）":""))), bx, by+74);
     } else {
       ctx.fillStyle="#ffb35a"; ctx.font=mob?"bold 15px system-ui,sans-serif":"bold 17px system-ui,sans-serif";
@@ -7105,7 +7104,7 @@ UI.raidSetup=function(){
     const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:w.cat;
     const elem=w.element&&w.element!=="none"?(ELEMENTS[w.element]?ELEMENTS[w.element].name:""):"";
     return `<div class="raid-item ${on?'sel':''}" data-w="${w.uid}">
-      <div class="ri-name" style="color:${col}">${w.name}</div>
+      <div class="ri-name" style="color:${col}">${gunNameOf(w)}</div>
       <div class="ri-meta">${tname}${elem?(' · '+elem):''} · 伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}</div>
       ${w.uniqPerk?`<div class="ri-meta" style="color:#ffd23f">✦ ${w.uniqPerk}</div>`:''}
       <div class="ri-val">估值 ₽${priceTextShort(w.value)}${on?' · 已携带':''}</div>
@@ -7216,15 +7215,16 @@ UI.raidSetup=function(){
     +(sel.h?((stash.helmets||[]).find(x=>x.uid===sel.h)||{value:0}).value:0)
     +(sel.s?(stash.shields.find(x=>x.uid===sel.s)||{value:0}).value:0);
   // 入场可携带现金 / GP 币（局内直接消费，阵亡即丢）
-  const cashIn=Math.max(0, Math.min(UI._raidCash||0, Math.floor(stash.creds||0)));
-  const tokIn=Math.max(0, Math.min(UI._raidTok||0, Math.floor(stash.tokens||0)));
+  const maxCash=Math.max(0, Math.floor(stash.creds||0));
+  const maxTok=Math.max(0, Math.floor(stash.tokens||0));
+  const cashIn=Math.max(0, Math.min(UI._raidCash||0, maxCash));
+  const tokIn=Math.max(0, Math.min(UI._raidTok||0, maxTok));
+  // 滑动条步长：卢布按 1%（至少 1），GP 币按 1 枚
+  const credStep=Math.max(1, Math.round(maxCash/100));
   const tokWorth=raidTokenWorth(tokIn);
   const cashVal=cashIn+tokWorth;
   const carryVal=gearVal+cashVal;
   const insCost=gearVal>0?Math.max(200, Math.round(gearVal*0.35)):0;
-  const cRatio=(stash.creds||0)>0?cashIn/stash.creds:0;
-  const tRatio=(stash.tokens||0)>0?tokIn/stash.tokens:0;
-  const nearR=(a,b)=>Math.abs(a-b)<0.09;
   const canIns=gearVal>0 && stash.creds>=insCost;
   // 顶部出发条：让玩家不必滚到底部才能进场；顺带把本次撤离费区间摊开
   const feeOf=id=>raidExtractFee(RAID_EXTRACT_RULES[id], gearVal);
@@ -7271,21 +7271,18 @@ UI.raidSetup=function(){
       <div class="raid-carry">
         <div class="rc-row">
           <span class="rc-label">带入卢布</span>
-          <span class="rc-val" style="color:#8fe07a">₽ <b>${priceText(cashIn)}</b></span>
+          <span class="rc-val" style="color:#8fe07a">₽ <b id="rc-creds-val">${priceText(cashIn)}</b><span style="font-size:11px;color:#6f8b78"> / ${priceText(maxCash)}</span></span>
           <span class="rc-btns">
-            <button class="btn ghost small ${cRatio<=0.02?'on':''}" data-carry="creds:0">不带</button>
-            <button class="btn ghost small ${nearR(cRatio,0.25)?'on':''}" data-carry="creds:0.25">25%</button>
-            <button class="btn ghost small ${nearR(cRatio,0.5)?'on':''}" data-carry="creds:0.5">50%</button>
-            <button class="btn ghost small ${nearR(cRatio,1)?'on':''}" data-carry="creds:1">全带</button>
+            <input id="rc-creds" type="range" min="0" max="${maxCash}" step="${credStep}" value="${cashIn}"
+              style="width:190px;vertical-align:middle;" ${maxCash>0?"":"disabled"}>
           </span>
         </div>
         <div class="rc-row">
           <span class="rc-label">带入 GP 币</span>
-          <span class="rc-val" style="color:#c07bff">◆ <b>${tokIn}</b>${tokIn>0?`<span style="font-size:11px;color:#8b7ba8"> ≈ ₽${priceText(tokWorth)}</span>`:''}</span>
+          <span class="rc-val" style="color:#c07bff">◆ <b id="rc-tok-val">${tokIn}</b>${tokIn>0?`<span style="font-size:11px;color:#8b7ba8"> ≈ ₽${priceText(tokWorth)}</span>`:''}<span style="font-size:11px;color:#6f6f8b"> / ${maxTok}</span></span>
           <span class="rc-btns">
-            <button class="btn ghost small ${tRatio<=0.02?'on':''}" data-carry="tokens:0">不带</button>
-            <button class="btn ghost small ${nearR(tRatio,0.5)?'on':''}" data-carry="tokens:0.5">一半</button>
-            <button class="btn ghost small ${nearR(tRatio,1)?'on':''}" data-carry="tokens:1">全带</button>
+            <input id="rc-tokens" type="range" min="0" max="${maxTok}" step="1" value="${tokIn}"
+              style="width:190px;vertical-align:middle;" ${maxTok>0?"":"disabled"}>
           </span>
         </div>
         <div class="rc-hint">带进图的现金可以在局内商店 / 黑市直接花（黑市只收 GP 币）；<b style="color:#ff8a5a">阵亡即丢失</b>，撤离成功则连本局所得一起带回仓库。<br>
@@ -7435,6 +7432,26 @@ UI.raidSetup=function(){
   document.getElementById('btn-raid-auction').onclick=()=>{ SFX.ui(); UI.raidAuction({from:'lobby'}); };
   document.getElementById('btn-raid-online').onclick=()=>{ SFX.ui(); UI._onlineKeep=false; UI.raidOnline(); };
   document.getElementById('btn-raid-back').onclick=()=>{ SFX.ui(); UI._raidSel={w:[],a:null,h:null,s:null}; UI._raidIns=false; UI.title(); };
+  const rcC=document.getElementById("rc-creds");
+  if(rcC){
+    const clamp=v=>Math.max(0, Math.min(maxCash, parseInt(v,10)||0));
+    rcC.oninput=()=>{
+      UI._raidCash=clamp(rcC.value);
+      const b=document.getElementById("rc-creds-val");
+      if(b) b.textContent=priceText(UI._raidCash);
+    };
+    rcC.onchange=()=>{ UI._raidCash=clamp(rcC.value); SFX.ui(); UI.raidSetup(); };
+  }
+  const rcT=document.getElementById("rc-tokens");
+  if(rcT){
+    const clamp=v=>Math.max(0, Math.min(maxTok, parseInt(v,10)||0));
+    rcT.oninput=()=>{
+      UI._raidTok=clamp(rcT.value);
+      const b=document.getElementById("rc-tok-val");
+      if(b) b.textContent=String(UI._raidTok);
+    };
+    rcT.onchange=()=>{ UI._raidTok=clamp(rcT.value); SFX.ui(); UI.raidSetup(); };
+  }
   UI.overlay.querySelectorAll('[data-carry]').forEach(el=>{
     el.onclick=(e)=>{
       e.stopPropagation();
@@ -7468,7 +7485,7 @@ UI.raidResult=function(res){
   let itemsHtml="";
   if(res.success){
     const list=[];
-    for(const w of res.looted.weapons) list.push(`<span style="color:${colOf(w)}">${w.name}</span>`);
+    for(const w of res.looted.weapons) list.push(`<span style="color:${colOf(w)}">${gunNameOf(w)}</span>`);
     for(const a of res.looted.armors) list.push(`<span style="color:${colOf(a)}">${a.name}</span>`);
     for(const h of (res.looted.helmets||[])) list.push(`<span style="color:${colOf(h)}">${h.name}</span>`);
     for(const s of (res.looted.shields||[])) list.push(`<span style="color:${shieldColor(s)}">${s.name}(护盾)</span>`);
@@ -7486,11 +7503,11 @@ UI.raidResult=function(res){
     itemsHtml = list.length ? list.join(" · ") : `<span style="color:var(--muted)">空手而归</span>`;
   } else {
     const lost=[];
-    for(const w of (res.lost.weapons||[])) lost.push(`<span style="color:${colOf(w)}">${w.name}</span>`);
+    for(const w of (res.lost.weapons||[])) lost.push(`<span style="color:${colOf(w)}">${gunNameOf(w)}</span>`);
     if(res.lost.armor) lost.push(`<span style="color:${colOf(res.lost.armor)}">${res.lost.armor.name}</span>`);
     if(res.lost.helmet) lost.push(`<span style="color:${colOf(res.lost.helmet)}">${res.lost.helmet.name}</span>`);
     if(res.lost.shield) lost.push(`<span style="color:${shieldColor(res.lost.shield)}">${res.lost.shield.name}(护盾)</span>`);
-    for(const w of (res.lost.lootW||[])) lost.push(`<span style="color:${colOf(w)}">${w.name}(物品栏)</span>`);
+    for(const w of (res.lost.lootW||[])) lost.push(`<span style="color:${colOf(w)}">${gunNameOf(w)}(物品栏)</span>`);
     for(const h of (res.lost.lootH||[])) lost.push(`<span style="color:${colOf(h)}">${h.name}(物品栏)</span>`);
     for(const pt of (res.lost.lootP||[])) lost.push(`<span style="color:${colOf(pt)}">${pt.name}(配件)</span>`);
     { const g=[]; for(const m of (res.lost.lootM||[])){
@@ -7565,7 +7582,7 @@ UI.raidPause=function(confirmQuit){
       <p style="color:var(--muted);">撤离倒计时已停止。继续行动，或放弃突袭返回大厅。</p>
       <div class="row" style="justify-content:center;margin-top:16px;">
         <button class="btn ghost" id="btn-raid-quit">放弃突袭（装备丢失）</button>
-        <button class="btn ghost" id="btn-pause-settings">设置 · 2D/3D</button>
+        <button class="btn ghost" id="btn-pause-settings">设置</button>
         <button class="btn" id="btn-raid-resume">继续行动</button>
       </div>
     </div>`);
@@ -8357,7 +8374,7 @@ UI.raidFieldShop=function(key){
     const tname=(WEAPON_TYPES[g.type]&&WEAPON_TYPES[g.type].name)||g.cat||"武器";
     const qn=(RAID_TIERS[g.qTier]&&RAID_TIERS[g.qTier].name)||"";
     return `<div class="si">
-      <div class="si-name" style="color:${col}">${g.name}</div>
+      <div class="si-name" style="color:${col}">${gunNameOf(g)}</div>
       <div class="si-stats">${tname}${qn?" · "+qn:""} · 伤害 ${g.dmg} · 弹匣 ${g.mag} · 射速 ${g.rpm}<br>
         配件 ${(g.parts||[]).length} 个 · 估值 ₽${priceTextShort(g.value||0)}</div>
       <div class="si-buy">
@@ -8489,7 +8506,7 @@ UI.raidFieldShop=function(key){
     };
     for(const w of (R.inv.weapons||[])){
       const on=equipped.has(w.uid);
-      add("w", w, w.name, raidGunColor(w), on?"手持/副手中 · 需先换下":"枪械", w.value||0);
+      add("w", w, gunNameOf(w), raidGunColor(w), on?"手持/副手中 · 需先换下":"枪械", w.value||0);
       if(on) rows[rows.length-1].on=true;
     }
     for(const a of (R.inv.armors||[])) add("a", a, a.name, ARMOR_TIER_COLOR[a.tier]||"#dfe7f0", "护甲", a.value||0);
@@ -8676,7 +8693,7 @@ UI.raidForge=function(opts){
     const elem=w.element&&w.element!=="none"?(AMMO_TYPES[w.element]?AMMO_TYPES[w.element].name:"特种弹"):AMMO_TYPES.none.name;
     return `<div class="shop-item ${on?'sel':''}" data-pick="${w.uid}" style="border-left-color:${col};cursor:pointer;${on?('box-shadow:inset 0 0 0 2px '+col+';'):''}">
       <div class="si-thumb">${gunSvg(w,46)}</div>
-      <div class="si-name" style="color:${col}">${w.name}</div>
+      <div class="si-name" style="color:${col}">${gunNameOf(w)}</div>
       <div class="si-meta">${tname} · ${elem}${w.mayhem>0?' · <b class="c-mayhem">改装'+w.mayhem+'级</b>':''}</div>
       <div class="si-stats">伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 射程 ${w.range}<br>配件 ${(w.parts||[]).length} 个 · 估值 ₽${priceTextShort(w.value)}</div>
     </div>`;
@@ -8897,7 +8914,7 @@ UI.raidFusion=function(opts){
       : partText(it);
     return `<div class="shop-item ${on?'sel':''}" data-fuse="${it.uid}"
       style="border-left-color:${col};cursor:pointer;${on?('box-shadow:inset 0 0 0 2px '+col+';'):''}">
-      <div class="si-name" style="color:${col}">${it.name}${isMain?' <em style="color:#ffd23f;font-style:normal;">［主］</em>':''}</div>
+      <div class="si-name" style="color:${col}">${gunNameOf(it)}${isMain?' <em style="color:#ffd23f;font-style:normal;">［主］</em>':''}</div>
       <div class="si-meta">${kindName(it)} · ${rarityName(it)}</div>
       <div class="si-stats">${stat}<br>估值 ₽${priceText(it.value||partValue(it)||0)}</div>
     </div>`;

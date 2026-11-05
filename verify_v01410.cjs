@@ -918,14 +918,27 @@ check('钥匙默认一把不带', /if\(!Array\.isArray\(UI\._raidKeys\)\) UI\._r
 check('开始突袭不再兜底全带钥匙', /UI\._raidKeys\.slice\(\):\[\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('大厅弹药默认 0 发', /: 0;\s*\n\s*UI\._raidAmmo\[cal\]=/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
-/* v0.20.2：旧存档里的枪名同样剥厂商前缀（合作者 d8e7efa 的意图，重新实现） */
-const manOld = JSON.parse(G(`JSON.stringify((()=>{
+/* v0.21.1：显示密度「精简 / 完整」—— 折中方案，显示层决定，不改写存档名 */
+const dispTest = JSON.parse(G(`JSON.stringify((()=>{
   const m=Object.values(MANUFACTURERS)[0].name;
-  const w=new Weapon({ name:m+" 测试枪", kind:"weapon", uid:"veri-old-1" });
-  return { m, got:w.name };
+  const w=new Weapon({ name:m+" 测试枪", kind:"weapon", uid:"veri-old-1", type:"rifle" });
+  const keep=w.name;                       // 构造器不应改写
+  const compact=gunNameOf(w);
+  CFG.display="full"; const full=gunNameOf(w);
+  CFG.display="compact";
+  return { m, keep, compact, full, def:CFG.display };
 })())`));
-check('旧存档武器名剥厂商前缀', manOld.got.indexOf(manOld.m) !== 0 && manOld.got.indexOf("测试枪") >= 0 ? 1 : 0, 1, 0.001);
-check('旧仓库加载时同样清洗', /d\.weapons\|\|\[\]\)\)\{ if\(w && w\.name\) w\.name=stripManufacturer/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('显示密度默认精简', dispTest.def === "compact" ? 1 : 0, 1, 0.001);
+check('构造器不再改写存档枪名', dispTest.keep.indexOf(dispTest.m) === 0 ? 1 : 0, 1, 0.001);
+check('精简模式枪名去掉厂商', dispTest.compact.indexOf(dispTest.m) === 0 ? 0 : 1, 1, 0.001);
+check('完整模式恢复厂商与全名', dispTest.full === dispTest.keep ? 1 : 0, 1, 0.001);
+check('设置里有精简 / 完整开关', /data-disp="compact"/.test(vmSrc) && /data-disp="full"/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('显示设置会持久化', /applyDisplay/.test(vmSrc) && vmSrc.indexOf('display:') >= 0 ? 1 : 0, 1, 0.001);
+
+/* v0.21.1：带入现金改滑动条；暂停菜单按钮改名 */
+check('带入卢布 / GP 币是滑动条', /id="rc-creds" type="range"/.test(raidSrc) && /id="rc-tokens" type="range"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('旧的百分比按钮已移除', /data-carry="creds:0\.25"/.test(raidSrc) ? 0 : 1, 1, 0.001);
+check('暂停菜单按钮只写「设置」', /id="btn-pause-settings">设置</.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* v0.20.3：出生补给 / HUD 无弹告警 / 回收超市收弹药 */
 const starter = JSON.parse(G(`JSON.stringify((()=>{

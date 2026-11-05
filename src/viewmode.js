@@ -27,14 +27,36 @@ const ViewMode = {
       if(s && (s.mode === "2d" || s.mode === "3d")) this.mode = s.mode;
       if(typeof s.sensitivity === "number") this.sensitivity = Math.max(0.3, Math.min(2.5, s.sensitivity));
       if(typeof s.pointerLock === "boolean") this.pointerLock = s.pointerLock;
+      if(s.display === "compact" || s.display === "full") this.applyDisplay(s.display);
     }catch(e){}
   },
   save(){
     try{
       localStorage.setItem(this.KEY, JSON.stringify({
         mode:this.mode, sensitivity:this.sensitivity, minimap:this.minimap, pointerLock:this.pointerLock,
+        display:(typeof CFG!=="undefined"?(CFG.display||"compact"):"compact"),
       }));
     }catch(e){}
+  },
+
+  /* 显示密度：精简 / 完整（v0.21.1）
+   * 只影响**显示**：枪名的厂商 / 前后缀、卡片里的厂商字段。
+   * 存档里 name 永远是完整名，所以随时可以切回来（不会像改写 name 那样一去不回）。 */
+  applyDisplay(mode){
+    const m = (mode==="full") ? "full" : "compact";
+    if(typeof CFG!=="undefined"){
+      CFG.display = m;
+      CFG.showManufacturer = (m==="full");
+    }
+    /* 已经缓存过 short 的枪在切到完整模式时不需要清 —— gunNameOf 会直接用 name。
+     * 但切回精简时要保证缓存与当前 name 一致，所以统一清掉让它们重算。 */
+    try{
+      const st = (typeof RaidStash!=="undefined" && RaidStash.load) ? RaidStash.load() : null;
+      if(st){ for(const w of (st.weapons||[])) if(w) delete w.short; }
+      const R = (typeof Raid!=="undefined") ? Raid : null;
+      if(R && R.inv){ for(const w of (R.inv.weapons||[])) if(w) delete w.short; }
+    }catch(e){}
+    return m;
   },
 
   /* 切换维度：进入 3D 时沿用当前朝向并立刻按开阔度修正一次；
@@ -203,6 +225,7 @@ const ViewMode = {
 
   renderSettings(){
     const is3 = this.is3D();
+    const disp = (typeof CFG!=="undefined" && CFG.display==="full") ? "full" : "compact";
     const btn = (id, on, label)=>`<button class="btn ${on?"":"ghost"}" id="${id}">${label}</button>`;
     const html = `
       <div class="panel" style="max-width:540px;text-align:center;">
@@ -229,6 +252,10 @@ const ViewMode = {
 
         <div style="margin:18px 0;text-align:left;font-size:14px;line-height:2.2;">
           <div>鼠标灵敏度　<input id="vm-sens" type="range" min="0.3" max="2.5" step="0.1" value="${this.sensitivity}" style="vertical-align:middle;width:190px;">　<span id="vm-sens-val">${this.sensitivity.toFixed(1)}×</span></div>
+          <div>显示　<span style="display:inline-flex;gap:6px;vertical-align:middle;">
+            <button class="btn ghost small ${disp==="compact"?'on':''}" data-disp="compact" style="padding:2px 10px;font-size:12px;">精简</button>
+            <button class="btn ghost small ${disp==="full"?'on':''}" data-disp="full" style="padding:2px 10px;font-size:12px;">完整</button>
+          </span>　<span style="font-size:12px;color:var(--muted);">${disp==="full"?"厂商 + 型号 + 前后缀，信息最全":"只显示型号 / 枪型，界面更干净"}</span></div>
           <label style="cursor:pointer;"><input id="vm-lock" type="checkbox" ${this.pointerLock?"checked":""} style="vertical-align:middle;"> 点击画面锁定鼠标（按 ESC 退出）</label>
         </div>
 
@@ -249,6 +276,9 @@ const ViewMode = {
       if(lab) lab.textContent = this.sensitivity.toFixed(1)+"×";
       this.save();
     };
+    document.querySelectorAll("[data-disp]").forEach(el=>{
+      el.onclick=()=>{ this.applyDisplay(el.dataset.disp); this.save(); SFX.ui(); this.renderSettings(); };
+    });
     const lk = document.getElementById("vm-lock");
     if(lk) lk.onchange = ()=>{
       this.pointerLock = !!lk.checked; this.save();
