@@ -999,6 +999,67 @@ check('3D 持枪改为竖握（长度方向压缩）', /const sxa=-0\.74\*sc, sy
 check('3D 手臂在屏幕空间重画', /_fpArms\(ctx, w, h, fh, rh, gunAng/.test(fpSrc) ? 1 : 0, 1, 0.001);
 check('2D 手持模型有开火火光', /globalCompositeOperation="lighter"/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+/* v0.21.4：3D 鼠标锁定（Minecraft 式）+ 3D 拾取提示 */
+const cssSrc = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+const lockWant = JSON.parse(G(`JSON.stringify((()=>{
+  const V=ViewMode, out={};
+  const keep={mode:V.mode, pl:V.pointerLock, active:Raid.active};
+  V.mode="3d"; V.pointerLock=true; Raid.active=true;
+  out.on3d = V._wantLock();                     // 3D + 战局在跑 + 没面板 → 该锁
+  V.mode="2d"; out.off2d = V._wantLock();       // 2D 永远不锁
+  V.mode="3d"; V.pointerLock=false; out.swOff = V._wantLock();
+  V.pointerLock=true; Raid.active=false; out.noRaid = V._wantLock();
+  V.mode=keep.mode; V.pointerLock=keep.pl; Raid.active=keep.active;
+  return out;
+})())`));
+check('3D 默认锁定鼠标（旧存档一次性升级）',
+  /pointerLock: true/.test(vmSrc) && /s\.lockVer !== this\.LOCK_VER/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('3D + 战局中才申请锁定', lockWant.on3d ? 1 : 0, 1, 0.001);
+check('2D 不锁鼠标', lockWant.off2d ? 0 : 1, 1, 0.001);
+check('关掉开关就不再锁', lockWant.swOff ? 0 : 1, 1, 0.001);
+check('不在战局里不锁', lockWant.noRaid ? 0 : 1, 1, 0.001);
+check('面板打开时不锁（鼠标自由移动）',
+  /UI\.overlay\.classList\.contains\("hidden"\)\) return false/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('暂停 / 非 playing 状态不锁', /game\.state !== "playing"\) return false/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('监听 pointerlockchange / pointerlockerror',
+  /addEventListener\("pointerlockchange"/.test(vmSrc) && /addEventListener\("pointerlockerror"/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('ESC 解锁 = 打开暂停菜单（浏览器吃掉 keydown）', /_onLockChange/.test(vmSrc) && /G\.pause\(\)/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('主动放锁不触发暂停（_selfUnlock）', /_selfUnlock/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('面板开 / 关自动放锁 / 重锁', /_watchOverlay/.test(vmSrc) && /MutationObserver/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('锁定后隐藏系统光标', /classList\.toggle\("locked"/.test(vmSrc) && /canvas#game\.locked\{cursor:none;\}/.test(cssSrc) ? 1 : 0, 1, 0.001);
+check('丢弃解锁瞬间的巨大位移', /Math\.abs\(dx\) > 260/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('点画面 / 按键都能触发锁定', /cv\.addEventListener\("mousedown"/.test(vmSrc) && /if\(!this\._hasLock\) this\.lock\(\)/.test(vmSrc) ? 1 : 0, 1, 0.001);
+
+/* v0.21.4：3D 拾取提示（世界坐标的 floats 在 3D 下不可见 → 屏幕空间提示条） */
+const toastTest = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid, V=ViewMode, out={};
+  const keep={mode:V.mode};
+  R.toasts=[]; R.floats=[];
+  V.mode="2d"; R._toast("+测试 2D","#fff"); out.in2d=R.toasts.length;    // 2D 不该推
+  V.mode="3d"; R._toast("+测试 3D","#fff");
+  out.in3d=R.toasts.length; out.text=R.toasts[0]&&R.toasts[0].text;
+  out.life=R.toasts[0]&&R.toasts[0].life;
+  for(let i=0;i<20;i++) R._toast("+x"+i,"#fff");
+  out.cap=R.toasts.length; out.oldest=R.toasts[0]&&R.toasts[0].text;
+  R.toasts=[]; R.floats=[];
+  R._pick(0,0,"+双通道","#fff");
+  out.floats=R.floats.length; out.pickToasts=R.toasts.length;
+  R.toasts=[]; R.floats=[];
+  V.mode=keep.mode;
+  return out;
+})())`));
+check('2D 不重复推提示条（看世界浮动文字就够）', toastTest.in2d, 0, 0.001);
+check('3D 推屏幕提示条', toastTest.in3d === 1 && toastTest.text === "+测试 3D" ? 1 : 0, 1, 0.001);
+check('提示条寿命 3 秒', toastTest.life, 3, 0.001);
+check('提示条最多堆 6 条', toastTest.cap, 6, 0.001);
+check('超出后丢最旧的', toastTest.oldest === "+x14" ? 1 : 0, 1, 0.001);
+check('_pick 同时写浮动文字与提示条', toastTest.floats === 1 && toastTest.pickToasts === 1 ? 1 : 0, 1, 0.001);
+check('拾取 / 丢弃 / 治疗走 _pick', (raidSrc.match(/_pick\(/g) || []).length >= 20 ? 1 : 0, 1, 0.001);
+check('提示条按 dt 老化', /this\.toasts\[i\]; t\.life-=dt/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('3D HUD 绘制提示条', /ViewMode\.is3D\(\) && R\.toasts/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('提示条滑入 + 淡出', /t\.life\/0\.5/.test(raidSrc) && /\(t\.maxLife-t\.life\)\/0\.14/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('开局清空上一局的提示条', /this\.floats=\[\]; this\.toasts=\[\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
 /* v0.21.3：拍卖行改为「期号确定性货池」——同一期全网同一份货 */
 const aucSrc = fs.readFileSync(path.join(SRC, 'auction.js'), 'utf8');
 const aucDet = JSON.parse(G(`JSON.stringify((()=>{

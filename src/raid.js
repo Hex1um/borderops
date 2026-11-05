@@ -1339,6 +1339,7 @@ const Raid = {
   tracers:[],
   killfeed:[],
   floats:[],
+  toasts:[],          // v0.21.4：3D 下的屏幕空间拾取提示（世界坐标的 floats 在 3D 里看不见）
   particles:[],
   camera:{x:0,y:0},
   timer:480,
@@ -1430,7 +1431,7 @@ const Raid = {
     this.cashIn=0; this.tokensIn=0; this.insured=false; this.insuredVal=0;
     this._stashPersisted=false;
     this.map={w:RAID_MAP_W,h:RAID_MAP_H};
-    this.tracers=[]; this.killfeed=[]; this.floats=[]; this.particles=[]; this.rockets=[]; this.blasts=[];
+    this.tracers=[]; this.killfeed=[]; this.floats=[]; this.toasts=[]; this.particles=[]; this.rockets=[]; this.blasts=[];
     this.timer=480; this.creds=0; this.extractT=0; this.search=null;
     this.bandages=1; this.medT=0; this.medUse=null; this.stimT=0;
     this.meds={hemo:0,medkit:0,stim:0,surgery:0};
@@ -3274,6 +3275,8 @@ const Raid = {
     for(let i=this.rockets.length-1;i>=0;i--){ if(this._updateRocket(this.rockets[i],dt)) this.rockets.splice(i,1); }
     for(let i=this.blasts.length-1;i>=0;i--){ const b=this.blasts[i]; b.life-=dt; if(b.life<=0) this.blasts.splice(i,1); }
     for(let i=this.floats.length-1;i>=0;i--){ const f=this.floats[i]; f.y+=f.vy*dt; f.life-=dt; if(f.life<=0) this.floats.splice(i,1); }
+    // v0.21.4：3D 拾取提示条老化（只在 3D 推送，2D 仍看世界坐标的 floats）
+    for(let i=this.toasts.length-1;i>=0;i--){ const t=this.toasts[i]; t.life-=dt; if(t.life<=0) this.toasts.splice(i,1); }
     for(let i=this.particles.length-1;i>=0;i--){ const q=this.particles[i]; q.x+=q.vx*dt; q.y+=q.vy*dt; q.vx*=0.9; q.vy*=0.9; q.life-=dt; if(q.life<=0) this.particles.splice(i,1); }
     // 击杀提示老化
     for(let i=this.killfeed.length-1;i>=0;i--){ this.killfeed[i].t-=dt; if(this.killfeed[i].t<=0) this.killfeed.splice(i,1); }
@@ -3309,7 +3312,7 @@ const Raid = {
     if(!this._medTake(id)) return false;
     this.medUse={ id, name:m.name, heal:m.heal, bleed:m.bleed, cast:m.cast, boost:!!m.boost, color:RAID_RARITY_COLOR[m.tier] };
     this.medT=m.cast;
-    this._float(p.x,p.y-34,"使用 "+m.name, RAID_RARITY_COLOR[m.tier]);
+    this._pick(p.x,p.y-34,"使用 "+m.name, RAID_RARITY_COLOR[m.tier]);
     return true;
   },
   // 指定使用某一种医疗品（HUD / 物品栏点「使用」都走这里）
@@ -3331,7 +3334,7 @@ const Raid = {
     if(has("stim"))   return pick("stim");
     if(has("surgery"))return pick("surgery");
     if(has("bandage"))return pick("bandage");
-    this._float(p.x,p.y-34,"没有医疗用品","#ff8a5a");
+    this._pick(p.x,p.y-34,"没有医疗用品","#ff8a5a");
     return false;
   },
   /* HUD 用：按固定顺序返回「实际拥有」的医疗品，0 件不出现 */
@@ -3426,7 +3429,7 @@ const Raid = {
     if(g===p.secondary){ p.secondary=old||null; p.gun=g; }
     else { p.gun=g; }   // 背包枪：手上的旧枪条目仍在 inv.weapons 里，等于收回背包
     p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
-    this._float(p.x, p.y-34, "手持 "+gunNameOf(g), raidGunColor(g));
+    this._pick(p.x, p.y-34, "手持 "+gunNameOf(g), raidGunColor(g));
   },
   // Q / 切枪：优先从背包取下一把；背包空则与副手互换；只剩一把则收枪入包（空手跑更快）
   _cycleGun(){
@@ -3436,14 +3439,14 @@ const Raid = {
     if(p.gun && p.secondary){
       const t=p.gun; p.gun=p.secondary; p.secondary=t;
       p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
-      this._float(p.x, p.y-34, "手持 "+p.gun.name, raidGunColor(p.gun));
+      this._pick(p.x, p.y-34, "手持 "+p.gun.name, raidGunColor(p.gun));
     } else if(p.gun){
       // 只有一把 → 收进背包，空手移动（跑刀 / 谈判时腾出手）
-      this._float(p.x, p.y-34, "收进背包 · 空手", "#8fd0ff");
+      this._pick(p.x, p.y-34, "收进背包 · 空手", "#8fd0ff");
       p.gun=null; p.reloadT=0;
     } else if(p.secondary){
       p.gun=p.secondary; p.secondary=null; p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
-      this._float(p.x, p.y-34, "手持 "+p.gun.name, raidGunColor(p.gun));
+      this._pick(p.x, p.y-34, "手持 "+p.gun.name, raidGunColor(p.gun));
     }
   },
 
@@ -4875,7 +4878,7 @@ const Raid = {
     const px=x!==undefined?x:this.player.x, py=(y!==undefined?y:this.player.y)-24;
     const spill=(label)=>{
       if(!fromGround) this._dropGround(item, x, y);
-      this._float(px, py, fromGround ? label+"已满 · 先腾出空间"
+      this._pick(px, py, fromGround ? label+"已满 · 先腾出空间"
                                      : label+"已满 · 物品掉在脚下", "#ff8a5a");
       return false;
     };
@@ -4886,17 +4889,17 @@ const Raid = {
       const add=this._ammoAdd(id, want);
       if(add>0){
         const d=ammoDefFromId(id)||item;
-        this._float(px, py, "+"+add+" "+d.short, d.color||"#dfe7f0");
+        this._pick(px, py, "+"+add+" "+d.short, d.color||"#dfe7f0");
         SFX.pickup();
         return true;
       }
-      this._float(px, py, "弹药已满（"+RAID_AMMO_CAP+" 发上限）", "#ff8a5a");
+      this._pick(px, py, "弹药已满（"+RAID_AMMO_CAP+" 发上限）", "#ff8a5a");
       return false;
     }
     // 原材料：直接进入材料栏（带品质颜色）
     if(item.kind==="material"){
       if(this._invPush(this.inv.materials, "materials", item)){
-        this._float(px, py, "+"+item.name, item.color||"#dfe7f0");
+        this._pick(px, py, "+"+item.name, item.color||"#dfe7f0");
         SFX.pickup();
         return true;
       }
@@ -4906,7 +4909,7 @@ const Raid = {
     if(item.kind==="key"){
       if(!this.inv.keys) this.inv.keys=[];
       if(this._invPush(this.inv.keys, "keys", item)){
-        this._float(px, py, "+"+item.name+"（"+RAID_LOCK_NAME[item.lv]+"）", item.color||"#8fe07a");
+        this._pick(px, py, "+"+item.name+"（"+RAID_LOCK_NAME[item.lv]+"）", item.color||"#8fe07a");
         SFX.pickup();
         return true;
       }
@@ -4914,16 +4917,16 @@ const Raid = {
     }
     // 医疗品：绷带进「绷带数」，其余进医疗包栏
     if(item.kind==="med"){
-      if(item.id==="bandage"){ this.bandages+=1; this._float(px,py,"+1 绷带",item.color||"#ff9a9a"); SFX.pickup(); return true; }
+      if(item.id==="bandage"){ this.bandages+=1; this._pick(px,py,"+1 绷带",item.color||"#ff9a9a"); SFX.pickup(); return true; }
       const slot = this.inv.meds.find(m=>m.id===item.id);
-      if(slot){ slot.n+=1; this._float(px,py,"+"+item.name, item.color||"#ff9a9a"); SFX.pickup(); return true; }
-      if(this.inv.meds.length < RAID_INV_CAP.meds){ this.inv.meds.push({id:item.id, name:item.name, n:1, tier:item.tier, color:item.color}); this._float(px,py,"+"+item.name,item.color||"#ff9a9a"); SFX.pickup(); return true; }
+      if(slot){ slot.n+=1; this._pick(px,py,"+"+item.name, item.color||"#ff9a9a"); SFX.pickup(); return true; }
+      if(this.inv.meds.length < RAID_INV_CAP.meds){ this.inv.meds.push({id:item.id, name:item.name, n:1, tier:item.tier, color:item.color}); this._pick(px,py,"+"+item.name,item.color||"#ff9a9a"); SFX.pickup(); return true; }
       return spill("医疗栏");
     }
     // 改装模块：现已并入配件，作为 slot:"core" 的配件进配件栏（由下方 part 分支统一处理）
     if(item.kind==="receiver"){
       const arr=this.inv.receivers;
-      if(arr.length<RAID_INV_CAP.receivers){ arr.push(item); this._float(px,py,"+"+item.name,item.color||"#8fd0ff"); SFX.pickup(); return true; }
+      if(arr.length<RAID_INV_CAP.receivers){ arr.push(item); this._pick(px,py,"+"+item.name,item.color||"#8fd0ff"); SFX.pickup(); return true; }
       return spill("底材栏");
     }
     // 武器：空手或没副手 → 直接上手并放入物品栏（这是裸装跑刀能翻身的关键）
@@ -4936,7 +4939,7 @@ const Raid = {
       if(!this.player.gun) this.player.gun=g; else this.player.secondary=g;
       this.player.fireCd=Math.max(this.player.fireCd,0.2);
       this.inv.weapons.push(item);                 // 已上手的枪也记入物品栏（统一上限管理）
-      this._float(px, py, slot+" "+item.name, raidGunColor(item));
+      this._pick(px, py, slot+" "+item.name, raidGunColor(item));
       SFX.pickup();
       return true;
     }
@@ -4944,13 +4947,13 @@ const Raid = {
       /* v0.21.0：身上没护盾就直接穿上（省一次开物品栏点「拿在手上」），
        * 已经有盾了才进背包 —— 免得捡到个更差的把好的顶掉。 */
       if(this.player && !(this.player.maxShield>0) && this._wearShield(item)){
-        this._float(px, py, "已穿戴 "+item.name, shieldColor(item));
+        this._pick(px, py, "已穿戴 "+item.name, shieldColor(item));
         SFX.pickup();
         return true;
       }
       if(!this.inv.shields) this.inv.shields=[];
       if(this._invPush(this.inv.shields, "shields", item)){
-        this._float(px, py, "+"+item.name, shieldColor(item)); SFX.pickup(); return true;
+        this._pick(px, py, "+"+item.name, shieldColor(item)); SFX.pickup(); return true;
       }
       return spill("护盾栏");
     }
@@ -4962,7 +4965,7 @@ const Raid = {
     if(this._invPush(arr, key, item)){
       const star=(item.kind==="armor"||item.kind==="helmet")&&item.rarity?(' '+RAID_RARITY_NAME[item.rarity]):'';
       // 双手都满时捡到的枪进背包，Q 键可随时换到手上
-      this._float(px, py, (item.kind==="weapon"?"背包 ":"+")+item.name+star, col);
+      this._pick(px, py, (item.kind==="weapon"?"背包 ":"+")+item.name+star, col);
       SFX.pickup();
       return true;
     }
@@ -5245,6 +5248,19 @@ const Raid = {
         color:i%2?"#bdefff":"#6fd6ff",size:2.4}); }
   },
   _float(x,y,text,color){ this.floats.push({x,y,text,color:color||"#fff",life:0.9,maxLife:0.9,vy:-30,size:13}); },
+  /* v0.21.4：3D 拾取提示
+   * 2D 的 _float 是画在**世界坐标系**里的（scene() 内 ctx 已 translate 到相机），
+   * 第一人称渲染器不铺那层世界变换，所以「+ 5.45×39 PS」这类浮动文字在 3D 下完全看不见。
+   * 拾取 / 丢弃 / 治疗这类即时反馈改成额外推一条屏幕空间提示条，由 hud() 在 3D 时绘制。 */
+  _toast(text, color){
+    if(!text) return;
+    if(typeof ViewMode==="undefined" || !ViewMode.is3D()) return;
+    this.toasts=this.toasts||[];
+    this.toasts.push({ text:String(text), color:color||"#dfe7f0", life:3.0, maxLife:3.0 });
+    if(this.toasts.length>6) this.toasts.splice(0, this.toasts.length-6);
+  },
+  /* 双通道：2D 走世界浮动文字，3D 走屏幕提示条（_toast 内部会自己判断维度） */
+  _pick(x,y,text,color){ this._float(x,y,text,color); this._toast(text,color); },
   _feed(a,v,gun,mine,type){ this.killfeed.unshift({a,v,gun,mine:!!mine,type:type||"kill",t:6}); if(this.killfeed.length>6) this.killfeed.pop(); },
 
   _screenToWorld(sx,sy,game){
@@ -5530,7 +5546,7 @@ const Raid = {
     }
     if(!it) return;
     R._dropGround(it, p.x, p.y);
-    R._float(p.x, p.y-46, "丢弃 "+it.name, "#ff9a8a");
+    R._pick(p.x, p.y-46, "丢弃 "+it.name, "#ff9a8a");
     SFX.ui();
     R._invDirty=false;
     this._invRender();
@@ -6887,6 +6903,37 @@ const RenderRaid = {
       const sx=(t.x-R.camera.x)*(game.zoom||1), sy=(t.y-R.camera.y)*(game.zoom||1);
       ctx.strokeStyle="rgba(255,90,90,0.8)"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(sx,sy,18,0,6.28); ctx.stroke();
+    }
+
+    /* --- 3D 拾取提示（v0.21.4）---
+     * 2D 的「+ 5.45×39 PS」是画在世界坐标里的，第一人称不铺那层变换 → 3D 下什么都看不到。
+     * 这里把 Raid.toasts 按屏幕空间自下而上排一列，滑入 + 淡出，位置取准星正下方（原版「拾取物名」的位置）。 */
+    if(typeof ViewMode!=="undefined" && ViewMode.is3D() && R.toasts && R.toasts.length){
+      ctx.textAlign="center";
+      const fs=mob?12:14;
+      let ty=v.h-(mob?150:Math.max(118, Math.round(v.h*0.15)));
+      for(let i=R.toasts.length-1;i>=0;i--){
+        const t=R.toasts[i];
+        const fade=Math.min(1, t.life/0.5);
+        const rise=Math.min(1,(t.maxLife-t.life)/0.14)*12;
+        ctx.font=`bold ${fs}px system-ui,sans-serif`;
+        const tw=ctx.measureText(t.text).width;
+        const bw=Math.min(tw+30, v.w-60), bh=fs+11;
+        const bx=v.w/2-bw/2, by=ty-rise;
+        ctx.globalAlpha=fade;
+        ctx.fillStyle="rgba(8,12,16,0.74)";
+        ctx.beginPath();
+        if(ctx.roundRect) ctx.roundRect(bx,by,bw,bh,6); else ctx.rect(bx,by,bw,bh);
+        ctx.fill();
+        ctx.strokeStyle="rgba(126,208,140,0.30)"; ctx.lineWidth=1;
+        ctx.beginPath();
+        if(ctx.roundRect) ctx.roundRect(bx,by,bw,bh,6); else ctx.rect(bx,by,bw,bh);
+        ctx.stroke();
+        ctx.fillStyle=t.color||"#dfe7f0";
+        ctx.fillText(t.text, v.w/2, by+bh-6);
+        ctx.globalAlpha=1;
+        ty-=bh+5;
+      }
     }
 
     /* --- 物品栏（Tab 开关）：现为 DOM 面板（#inv-layer），可逐件丢弃 --- */

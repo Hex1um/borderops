@@ -12,7 +12,12 @@ const ViewMode = {
   yaw: 0,              // 3D 视角朝向（弧度），等于玩家开火方向
   sensitivity: 1.0,
   minimap: false,      // v0.19.1：3D 不再提供小地图（已在设置里移除入口）
-  pointerLock: false,  // 点击画面锁定鼠标
+  /* v0.21.4：3D 默认锁定鼠标 —— Minecraft / FPS 那样的「鼠标永远锁在屏幕中心」。
+   * ESC（浏览器会自己解掉指针锁）→ 当作用户要开菜单：自动弹出暂停面板，鼠标自由移动。 */
+  pointerLock: true,
+  LOCK_VER: 2,         // 锁定语义版本：旧存档的 false 一次性升级为 true
+  _hasLock: false,     // 当前是否真的锁着（以 document.pointerLockElement 为准）
+  _selfUnlock: false,  // 是我们主动放的锁（开面板 / 切回 2D），不该再顺手弹暂停面板
   _from: "pause",
   _drag: null,
   _yawFor: null,        // 已经为哪个玩家对象定过朝向（换局 / 换维度时重置）
@@ -28,12 +33,16 @@ const ViewMode = {
       if(typeof s.sensitivity === "number") this.sensitivity = Math.max(0.3, Math.min(2.5, s.sensitivity));
       if(typeof s.pointerLock === "boolean") this.pointerLock = s.pointerLock;
       if(s.display === "compact" || s.display === "full") this.applyDisplay(s.display);
+      /* 旧的 pointerLock 语义是「点一下画面才锁」，默认关；v0.21.4 改成默认锁定，
+       * 所以旧存档里的 false 要一次性提上来 —— 之后再手动关掉就是用户自己的选择。 */
+      if(s.lockVer !== this.LOCK_VER){ this.pointerLock = true; this.save(); }
     }catch(e){}
   },
   save(){
     try{
       localStorage.setItem(this.KEY, JSON.stringify({
         mode:this.mode, sensitivity:this.sensitivity, minimap:this.minimap, pointerLock:this.pointerLock,
+        lockVer:this.LOCK_VER,
         display:(typeof CFG!=="undefined"?(CFG.display||"compact"):"compact"),
       }));
     }catch(e){}
@@ -144,6 +153,8 @@ const ViewMode = {
 
   /* 每个战局 + 每次切维度只定一次朝向；由第一人称渲染器每帧调用（幂等、开销极低） */
   ensureYaw(R){
+    /* 兜底：战局结束 / 切回 2D / 面板弹出来时把指针锁放掉（render 每帧都会走到这里） */
+    if(this._hasLock && !this._wantLock()) this._releaseLock();
     if(!this.is3D() || !R || !R.active || !R.player) return;
     if(this._yawFor === R.player) return;
     this.yaw = this.pickOpenYaw(R);
@@ -155,16 +166,79 @@ const ViewMode = {
     this.yaw += dx * 0.0022 * this.sensitivity;
     if(this.yaw > Math.PI*4 || this.yaw < -Math.PI*4) this.yaw %= Math.PI*2;
   },
+
+  /* ---------------------- 指针锁定（v0.21.4） ----------------------
+   * 目标：3D 下鼠标**始终**锁在屏幕中心（视角跟手、光标不飞出窗口）；
+   * 打开任何面板（暂停 / 设置 / 物品栏 / 商店）时自动放开，鼠标恢复自由移动。
+   *
+   * 浏览器限制：requestPointerLock 需要「用户手势」（点击 / 按键），否则静默失败。
+   * 所以所有申请点都挂在真实输入上（点画面、按任意键、关掉面板的那一下点击）。 */
+  isLocked(){ return !!this._hasLock; },
+
+  /* 该不该锁：3D + 开关打开 + 战局在跑 + 没有任何面板开着 */
+  _wantLock(){
+    if(!this.is3D() || this.pointerLock === false) return false;
+    const R = (typeof Raid !== "undefined") ? Raid : null;
+    if(!R || !R.active) return false;
+    if(typeof game !== "undefined" && game && game.state && game.state !== "playing") return false;
+    if(typeof UI !== "undefined" && UI.overlay && !UI.overlay.classList.contains("hidden")) return false;
+    return true;
+  },
+
+  /* 申请锁定：失败（iframe 没给 pointer-lock 权限 / 浏览器拒绝）就静默退回相对位移转向 */
+  lock(){
+    if(!this._wantLock() || this._hasLock) return;
+    const cv = document.getElementById("game");
+    if(!cv || !cv.requestPointerLock) return;
+    try{
+      const r = cv.requestPointerLock();
+      if(r && typeof r.then === "function") r.then(()=>{}).catch(()=>{});
+    }catch(e){}
+  },
+
   _releaseLock(){
-    try{ if(document.pointerLockElement) document.exitPointerLock(); }catch(e){}
+    // 没锁着的时候不要把 _selfUnlock 留成 true，否则下一次真正的 ESC 会被忽略
+    if(!document.pointerLockElement){ this._selfUnlock = false; return; }
+    this._selfUnlock = true;
+    try{ document.exitPointerLock(); }catch(e){}
+  },
+
+  _onLockChange(){
+    const el = document.pointerLockElement;
+    const had = this._hasLock;
+    this._hasLock = !!el && el.id === "game";
+    const cv = document.getElementById("game");
+    if(cv) cv.classList.toggle("locked", this._hasLock);
+    if(had && !this._hasLock){
+      const self = this._selfUnlock;
+      this._selfUnlock = false;
+      /* 用户按 ESC：浏览器吃掉那次 keydown 并解掉指针锁，页面收不到 Escape。
+       * 所以在这里补一次「开菜单」，鼠标恢复自由 —— 与 Minecraft 的 ESC 行为一致。 */
+      if(!self && this.is3D() && (typeof document === "undefined" || document.visibilityState !== "hidden")){
+        const R = (typeof Raid !== "undefined") ? Raid : null;
+        const overlayOpen = (typeof UI !== "undefined" && UI.overlay && !UI.overlay.classList.contains("hidden"));
+        const G = (typeof game !== "undefined" && game) ? game : ((typeof window !== "undefined" && window.game) || null);
+        if(R && R.active && !overlayOpen && G && typeof G.pause === "function"){
+          try{ G.pause(); }catch(e){}          // 走正规暂停：state="paused" + 弹暂停面板，战局计时停住
+        }
+      }
+    }
   },
 
   bindInput(){
-    /* 桌面：鼠标相对位移转向。不强制锁定鼠标，移到边缘仍可用 pointerLock 补救。 */
+    /* 指针锁状态：锁上 → 隐藏光标、只吃相对位移；被解掉（ESC / 切窗口）→ 按需补一次暂停面板 */
+    document.addEventListener("pointerlockchange", ()=>this._onLockChange());
+    document.addEventListener("pointerlockerror", ()=>{ this._hasLock=false; });
+
+    /* 桌面：鼠标相对位移转向。
+     * 锁定后 clientX/Y 固定在锁点，只有 movementX 有意义；未锁定时仍按相对位移转向，
+     * 保证 iframe 里拿不到 pointer-lock 权限时也能玩。 */
     window.addEventListener("mousemove", (e)=>{
       if(!this.is3D()) return;
       if(typeof UI !== "undefined" && UI.overlay && !UI.overlay.classList.contains("hidden")) return;
-      const dx = e.movementX || 0;
+      let dx = e.movementX || 0;
+      // 刚锁上 / 刚解锁那一下浏览器会给一个巨大的位移，丢掉，否则视角瞬移
+      if(Math.abs(dx) > 260) return;
       if(dx) this._turn(dx);
     });
 
@@ -172,8 +246,10 @@ const ViewMode = {
      * [ ] 在 3D 下做小幅转向，方向键仍保留给移动。 */
     window.addEventListener("keydown", (e)=>{
       const inRaid = (typeof Raid !== "undefined") && Raid.active;
-      if(e.code === "KeyV" && inRaid){ this.toggle(); return; }
+      if(e.code === "KeyV" && inRaid){ this.toggle(); if(this.is3D()) this.lock(); return; }
       if(!this.is3D()) return;
+      // 键盘也能触发锁定（keydown 属于用户手势）；面板开着时 _wantLock 会拦住
+      if(!this._hasLock) this.lock();
       if(e.code === "BracketLeft")  this._turn(-90);
       if(e.code === "BracketRight") this._turn(90);
     });
@@ -195,11 +271,16 @@ const ViewMode = {
         }
       }, {passive:true});
       cv.addEventListener("touchend", ()=>{ this._drag = null; }, {passive:true});
-      cv.addEventListener("click", ()=>{
-        if(!this.is3D() || !this.pointerLock) return;
-        if(!document.pointerLockElement && cv.requestPointerLock) cv.requestPointerLock();
-      });
+      /* 桌面点画面 = 锁定鼠标（也是开火的那一下，两者不冲突：锁定是异步的） */
+      cv.addEventListener("mousedown", ()=>{ if(this.is3D()) this.lock(); });
+      cv.addEventListener("click", ()=>{ if(this.is3D()) this.lock(); });
     }
+
+    /* 面板开 / 关：DOM 上只表现成 #overlay 的 hidden 类，直接盯属性最省事，
+     * 不用往 raid.js 那几十个 UI.raidXxx 里各插一行。
+     * 注意 bindInput 跑在 main.js 之前（那时 UI.init 还没执行、UI.overlay 还是 null），
+     * 所以这里轮询等 overlay 挂上去。 */
+    this._watchOverlay();
 
     /* 设置入口只在局内（暂停面板）。标题页不提供 2D/3D 开关，维度属于「战局内显示选项」。 */
     document.addEventListener("click", (e)=>{
@@ -209,6 +290,23 @@ const ViewMode = {
         e.preventDefault(); this.closeSettings();
       }
     });
+  },
+
+  _watchOverlay(){
+    if(this._overlayWatched) return;
+    const ov = (typeof UI !== "undefined") ? UI.overlay : null;
+    if(ov && typeof MutationObserver === "function"){
+      this._overlayWatched = true;
+      new MutationObserver(()=>{
+        const open = !ov.classList.contains("hidden");
+        if(open){ this._releaseLock(); }               // 面板打开 → 鼠标自由移动
+        else if(this.is3D()) this.lock();              // 面板关掉 → 回到锁定（这一下通常带着点击手势）
+      }).observe(ov, { attributes:true, attributeFilter:["class"] });
+      return;
+    }
+    this._watchTries = (this._watchTries||0) + 1;
+    if(this._watchTries < 300 && typeof requestAnimationFrame === "function")
+      requestAnimationFrame(()=>this._watchOverlay());
   },
 
   /* ----------------------------- 设置面板 ----------------------------- */
@@ -241,7 +339,9 @@ const ViewMode = {
         <div style="margin:14px 0 4px;padding:12px 14px;border:1px solid rgba(160,180,200,0.18);border-radius:10px;text-align:left;color:var(--muted);font-size:13px;line-height:1.75;">
           ${is3
             ? `<b style="color:var(--accent);">第一人称模式</b><br>
-               鼠标移动转向 · <span class="kbd">W A S D</span> 前后左右移动 · <span class="kbd">左键</span> 开火<br>
+               鼠标<b style="color:var(--accent);">锁定在屏幕中心</b>（像 Minecraft）：直接移动鼠标转向，光标不会飘出窗口<br>
+               <span class="kbd">ESC</span> 打开菜单，此时鼠标自动放开、可自由点选 · <span class="kbd">W A S D</span> 移动 ·
+               <span class="kbd">左键</span> 开火<br>
                <span class="kbd">[</span> <span class="kbd">]</span> 键盘转向 · <span class="kbd">V</span> 快速切换维度 ·
                <span class="kbd">E</span> 交互 / 搜索 · <span class="kbd">Tab</span> 物品栏<br>
                3D 视图由同一份地图 / 墙 / 单位数据实时投射渲染，拾取、AI、撤离等规则完全不变。`
@@ -256,7 +356,7 @@ const ViewMode = {
             <button class="btn ghost small ${disp==="compact"?'on':''}" data-disp="compact" style="padding:2px 10px;font-size:12px;">精简</button>
             <button class="btn ghost small ${disp==="full"?'on':''}" data-disp="full" style="padding:2px 10px;font-size:12px;">完整</button>
           </span>　<span style="font-size:12px;color:var(--muted);">${disp==="full"?"厂商 + 型号 + 前后缀，信息最全":"只显示型号 / 枪型，界面更干净"}</span></div>
-          <label style="cursor:pointer;"><input id="vm-lock" type="checkbox" ${this.pointerLock?"checked":""} style="vertical-align:middle;"> 点击画面锁定鼠标（按 ESC 退出）</label>
+          <label style="cursor:pointer;"><input id="vm-lock" type="checkbox" ${this.pointerLock?"checked":""} style="vertical-align:middle;"> 3D 下锁定鼠标（推荐 · 关掉则靠鼠标相对位移转向，光标会跑到屏幕边缘）</label>
         </div>
 
         <div class="row" style="justify-content:center;margin-top:8px;">
