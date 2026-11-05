@@ -927,5 +927,25 @@ const manOld = JSON.parse(G(`JSON.stringify((()=>{
 check('旧存档武器名剥厂商前缀', manOld.got.indexOf(manOld.m) !== 0 && manOld.got.indexOf("测试枪") >= 0 ? 1 : 0, 1, 0.001);
 check('旧仓库加载时同样清洗', /d\.weapons\|\|\[\]\)\)\{ if\(w && w\.name\) w\.name=stripManufacturer/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+/* v0.20.3：出生补给 / HUD 无弹告警 / 回收超市收弹药 */
+const starter = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  const mk=(ammo)=>{ R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:Object.assign({},ammo||{})};
+    R.grounds=[]; R.carried={weapons:[]};
+    R.player={ isPlayer:true, gun:{ type:"rifle", cal:"mid", ammoMag:0, ammoRes:0 }, secondary:null }; };
+  R._spawnSafePoint=()=>({x:10,y:10});
+  mk({}); R._dropStarterCache(0,0);
+  const dry={ n:R.grounds.length, id:((R.grounds[0]||{}).drops||[{}])[0].id,
+              n2:(((R.grounds[0]||{}).drops||[])[0]||{}).n };
+  mk({ "ammo_mid_1":30 }); R._dropStarterCache(0,0);
+  const fed={ n:R.grounds.length };
+  return { dry, fed };
+})())`));
+check('手上这把枪没弹时投放出生补给', starter.dry.n === 1 ? 1 : 0, 1, 0.001);
+check('补给是 60 发同口径民用弹', starter.dry.id === "ammo_mid_1" && starter.dry.n2 === 60 ? 1 : 0, 1, 0.001);
+check('已经带弹就不投放', starter.fed.n, 0, 0.001);
+check('HUD 无弹时标红告警', /const dry=magN<=0 && backN<=0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('回收超市可以卖弹药', /key==="am"/.test(raidSrc) && /弹药 · "\+d\.spec/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

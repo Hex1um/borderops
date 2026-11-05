@@ -1541,6 +1541,7 @@ const Raid = {
 
     // v0.20.0：把仓库里的子弹搬进本局并给枪上膛（必须在 player 建好之后）
     this._prepPlayerAmmo(opts);
+    this._dropStarterCache(px, py);
     if(typeof RaidStash!=="undefined" && RaidStash.save) RaidStash.save(this.stash);
 
     // AI：补满服务器 —— 只有房主（或单机）生成 AI；客户端等房主快照
@@ -3616,6 +3617,25 @@ const Raid = {
     const d=gun&&gun.loaded ? ammoDefFromId(gun.loaded) : null;
     this._float(this.player.x, this.player.y-40,
       d ? (d.name+" 打空了 · 去搜刮或买弹药") : "没有子弹 · 去搜刮或买弹药", "#ff8a5a");
+  },
+
+  /* 出生点旁的起始补给：**只在手上这把枪一发子弹都没有时**才投放，
+   * 免得「默认零携带」把裸装玩家直接锁死成走不动的靶子。
+   * 不是白送进背包 —— 要走到旁边按 E 搜（0.3 秒），带弹进场的玩家不会看到它。 */
+  _dropStarterCache(x, y){
+    const p=this.player;
+    if(!p) return;
+    const gun=p.gun||p.secondary;
+    const cal=gun ? (gun.cal||ammoCalOfType(gun.type))
+                  : (this.carried.weapons[0] ? ammoCalOfType(this.carried.weapons[0].type) : "mid");
+    if(this._ammoListByCal(cal).length) return;      // 已经有这个口径的子弹 → 不投放
+    if(!this.grounds) this.grounds=[];
+    const spot=this._spawnSafePoint(x+92, y+64, 18);
+    const ammo=ammoDef(cal, 1);
+    ammo.n=RAID_AMMO_STACK*2;                        // 两条民用弹（60 发）
+    this.grounds.push({ x:spot.x, y:spot.y, tier:0, ground:true, searched:false,
+      drops:[ammo, raidMakeMed("bandage")], cash:0, starter:true });
+    this._starterCache=true;
   },
 
   /* 进场装填：按配装大厅的选择把子弹搬进本局，给手上的枪上膛 */
@@ -6594,11 +6614,16 @@ const RenderRaid = {
     }
     // 弹药 / 武器（空手时给出引导）
     if(p.gun){
-      ctx.fillStyle="#e8eef4"; ctx.font=mob?"bold 16px system-ui,sans-serif":"bold 18px system-ui,sans-serif";
-      ctx.fillText(`${p.gun.ammoMag||0} / ${p.gun.ammoRes||0}`, bx, by+56);
+      const magN=p.gun.ammoMag||0, backN=p.gun.ammoRes||0;
+      const ad=p.gun.loaded ? ammoDefFromId(p.gun.loaded) : null;
+      const dry=magN<=0 && backN<=0;                 // 弹匣空 + 背包空 = 真打不响
+      ctx.fillStyle=dry?(Math.sin(M.now()*8)>0?"#ff5a4a":"#ff8a5a"):"#e8eef4";
+      ctx.font=mob?"bold 16px system-ui,sans-serif":"bold 18px system-ui,sans-serif";
+      ctx.fillText(`${magN} / ${backN}`, bx, by+56);
       ctx.font=mob?"11px system-ui,sans-serif":"12px system-ui,sans-serif";
-      ctx.fillStyle="rgba(180,195,210,0.85)";
-      ctx.fillText(p.gun.name + (p.reloadT>0?"  · 换弹中…":""), bx, by+74);
+      ctx.fillStyle=dry?"#ff9a8a":"rgba(180,195,210,0.85)";
+      ctx.fillText(p.gun.name+" · "+(ad?ad.short:"未装填")
+        +(p.reloadT>0?" · 换弹中…":(dry?" · 没有子弹":(magN<=0?" · 弹匣空（R 换弹）":""))), bx, by+74);
     } else {
       ctx.fillStyle="#ffb35a"; ctx.font=mob?"bold 15px system-ui,sans-serif":"bold 17px system-ui,sans-serif";
       ctx.fillText("空手 · 跑刀", bx, by+56);
@@ -8406,6 +8431,14 @@ UI.raidFieldShop=function(key){
       (RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color, pt.core?"改装模块":"配件",
       (pt.slot==="core"?pt.value:partValue(pt))||0);
     for(const m of (R.inv.materials||[])) add("m", m, m.name, m.color||"#dfe7f0", "原材料", m.value||0);
+    /* v0.20.3：多捡的子弹也能在这里变现（按「单发估值 × 数量」走 1.2× 回收价） */
+    for(const id of Object.keys(R.inv.ammo||{})){
+      const n=R.inv.ammo[id]; if(!(n>0)) continue;
+      const d=ammoDefFromId(id); if(!d) continue;
+      const base=d.value*n;
+      rows.push({ key:"am", uid:id, name:d.name+" ×"+n, col:d.color,
+        note:"弹药 · "+d.spec, base, val:raidFieldSellPrice(base, id), n });
+    }
     body = rows.length ? rows.map((r,i)=>`
       <div class="si">
         <div class="si-name" style="color:${r.col}">${r.name}</div>
@@ -8527,6 +8560,16 @@ UI.raidFieldShop=function(key){
   UI.overlay.querySelectorAll("[data-fsell]").forEach(el=>el.onclick=()=>{
     const [key, si]=el.dataset.fsell.split(":"); const idx=+si;
     const rows=R._sellRows||[]; const row=rows[idx]; if(!row) return;
+    if(key==="am"){
+      const n=R._ammoTake(row.uid, row.n||0);
+      if(n<=0) return;
+      const d=ammoDefFromId(row.uid);
+      const g2=Math.max(1, Math.round(raidFieldSellPrice(d.value*n, row.uid)/10)*10);
+      R.creds+=g2;
+      R._float(R.player.x, R.player.y-40, "卖 "+n+" 发 · +₽"+g2, "#8fe07a");
+      SFX.ui(); UI.raidFieldShop(sid);
+      return;
+    }
     const gain=Math.round(row.val/10)*10;
     const pull=(arr)=>{ const i=arr.findIndex(x=>x.uid===row.uid); if(i>=0) return arr.splice(i,1)[0]; return null; };
     let it=null;
