@@ -1,6 +1,12 @@
 # 边境行动 · BORDER OPS
 
-俯视角**拟真撤离射击**网页游戏（中文界面）。主玩法为**塔科夫模式 · 撤离突袭**：配装大厅 → 进入 13000×9600 大地图「海关流域」→ 搜刮 / 交战 / 商店交易 → 活着撤离才入库，阵亡或超时装备与战利品全丢。
+**俯视 / 第一人称双视角**的**拟真撤离射击**网页游戏（中文界面）。主玩法为**塔科夫模式 · 撤离突袭**：配装大厅 → 进入 13000×9600 大地图「海关流域」→ 搜刮 / 交战 / 商店交易 → 活着撤离才入库，阵亡或超时装备与战利品全丢。
+
+> 📖 **新手上路看 [WIKI.md](WIKI.md)** —— 玩法、操作、双视角、地图、词缀、弹药、医疗、经济、联机、FAQ 全在里面。
+> 📝 逐版改动看 [CHANGELOG.md](CHANGELOG.md)。
+
+> v0.19.0 起支持**局内 2D / 3D 视角切换**（`ESC` → 设置，或直接按 `V`）：3D 是第一人称光线投射视图，与 2D 共用同一份地图数据、同一套光照色温、同一套拾取 / AI / 伤害 / 撤离逻辑，切换不丢战局进度。
+> 同一版还修好了「医疗品只能用绷带和医疗包」的 bug（现在五种医疗品全部可用、HUD 只显示你实际拥有的），重做了经济四档价格（局内商店 0.8× ±0.1 / 回收超市 1.2× ±0.4 / 背包直售 0.5× / 军火超市 2.0× ±0.5），并把枪械与配件的词缀数量改成**大多 1 条、少数 2 条以上**。
 
 > v0.15.0 起全面拟真化：超现实与魔法内容（混乱等级、附魔、追踪弹、能量武器与神话品质）全部替换为现实弹种、军械改装、防护等级与军工品质。v0.16.0 在此基础上把弹种终点效应（引燃 / 撕裂 / 钝击失能 / 跳弹 / 迟滞）与全新护盾装备折回来，名称与说明仍全部使用现实军工术语。
 >
@@ -30,6 +36,8 @@
   爆炸 / splash 子弹带范围溅射，打穿的护甲报废且不再自愈
 - **大地图互动**：8 座桥、河流涉水失温、医疗站/弹药柜/警报器/泄洪闸
 - **2~4 人联机**：房主权威模拟；有 `server.js` 时走 HTTP 轮询，GitHub Pages / 纯静态托管自动切 WebRTC P2P（PeerJS），无需后端
+- **双视角**：默认 2D 俯视；局内可切 3D 第一人称（光线投射，零依赖）。3D 复用 2D 的全部地图 / 光照 / 装饰数据，含手持武器模型与配件外观、俯视小地图
+- **医疗品五件套**：绷带 / 止血针 / 急救包 / 强心针 / 手术包，仓库带入与局内捡到的合并计数，**捡到即可用**，HUD 只显示实际拥有的
 - 移动端触控（摇杆 + 按钮）、窄屏断点适配
 
 ## 运行
@@ -52,7 +60,7 @@ python -m http.server 8132
 
 1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载）。
 2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载：
-   `config → util → weapons → items → skills → player → enemies → combat → world → endless → dust2 → shop → input → render → ui → raid → net → net-p2p → auction → br → save → main`
+   `config → util → weapons → items → skills → player → enemies → combat → world → endless → dust2 → shop → input → render → ui → viewmode → fpview → raid → net → net-p2p → auction → br → save → main`
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
 4. **兼容旧存档**：v0.15.0 保留了全部内部键名（`element` / `mayhem` / `elemPct` / `core` 等）与 localStorage 存档结构，仅改变语义与显示；`ELEMENTS` 是 `AMMO_TYPES` 的兼容别名。新代码请优先使用 `AMMO_TYPES`。
 5. 改动沿用现有风格：紧凑单行、中文注释带 `vX.Y.Z` 前缀。

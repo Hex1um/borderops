@@ -308,7 +308,7 @@ function shieldCard(s,opts){
     <div class="si-stats">${shieldLines(s).slice(0,4).join(" · ")} · 估值 ₽${(typeof priceTextShort==="function"?priceTextShort(s.value):s.value)}
       ${parts?`<br><span class="part-row">${parts}</span>`:''}
       <br><span style="color:#9fd0ff">${(s.affixes||[]).map(shieldAffixText).join(" ； ")}</span></div>
-    ${opts.sell?`<div class="si-buy"><span class="si-price">₽ ${(typeof priceTextShort==="function"?priceTextShort(Math.round((s.value||0)*(typeof RAID_VENDOR_RATE!=="undefined"?RAID_VENDOR_RATE:0.42))):0)}</span>
+    ${opts.sell?`<div class="si-buy"><span class="si-price">₽ ${(typeof priceTextShort==="function"?priceTextShort(Math.round((s.value||0)*(typeof RAID_VENDOR_RATE!=="undefined"?RAID_VENDOR_RATE:0.5))):0)}</span>
         <button class="btn ghost" data-sell="s:${s.uid}">售卖</button></div>`:''}
   </div>`;
 }

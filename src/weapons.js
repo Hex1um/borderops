@@ -53,9 +53,23 @@ function affixFits(a, ctx){
   return true;
 }
 
+/* v0.19.0 词缀数量分布：枪械与配件「大部分只有 1 条词缀，少部分 2 条及以上」。
+ * 旧版直接吃 RARITIES 的 affixes:[min,max]，蓝色以上动辄 4~10 条，
+ * 一把枪光词缀就占满整张卡片，也和「改装件 + 配件」的定位重复。
+ * 现在统一按 1 条为主：1 条约 75%，2 条约 20%，3 条及以上约 5%（高品级只小幅上调）。 */
+function rollAffixCount(rarityId){
+  const idx = Math.max(0, RARITIES.findIndex(r=>r.id===rarityId));
+  const p3 = 0.05 + Math.min(0.05, idx*0.006);   // 3 条及以上
+  const p2 = 0.20 + Math.min(0.10, idx*0.012);   // 恰好 2 条
+  const r = RNG.f();
+  if(r < p3) return 3 + (RNG.chance(0.15 + Math.min(0.25, idx*0.02)) ? 1 : 0);
+  if(r < p3 + p2) return 2;
+  return 1;
+}
+
 // 按品质词缀数 + ilvl 门槛抽词缀
 function rollAffixes(R, ilvl, ctx){
-  const n = RNG.ri(R.affixes[0], R.affixes[1]);
+  const n = rollAffixCount(R.id);
   const out=[], used=new Set();
   // 品质下标（RARITIES 序号）统一注入 ctx，供 minQ 类稀有词条判定
   const q = Math.max(0, RARITIES.findIndex(r=>r.id===R.id));
@@ -133,20 +147,25 @@ function rollPart(slotId, ilvl, rarityId){
     used.add(st);
     mods.push({ stat:st, value:partStatValue(st, ilvl, R) });
   }
-  // 所有部件必带 1 前缀 + 1 后缀（参数直接计入部件与武器属性）
-  // 改装词条池已全部为现实工艺参数，不再需要按「弹种/额外弹丸」过滤
+  /* v0.19.0：配件词缀同样「大部分 1 条、少部分 2 条以上」
+   * 旧版固定 1 前缀 + 1 后缀；现在按 rollAffixCount 掷数量，1 条时只出前缀或后缀之一。 */
   const cleanPool = arr => arr.filter(a=>!a.elem && !a.elemOnly && !a.needSplash && a.minQ===undefined);
-  const pre = RNG.pick(cleanPool(AFFIXES.prefix));
-  const suf = RNG.pick(cleanPool(AFFIXES.suffix));
-  const affixes = [
-    { kind:"prefix", nm:pre.nm, mods:pre.mods.map(m=>({stat:m.stat, value:scaleModValue(m, ilvl)})) },
-    { kind:"suffix", nm:suf.nm, mods:suf.mods.map(m=>({stat:m.stat, value:scaleModValue(m, ilvl)})) },
-  ];
+  const want = rollAffixCount(R.id);
+  const affixes = [];
+  const usedNm = new Set();
+  for(let i=0;i<want;i++){
+    const isPre = i===0 ? RNG.chance(0.5) : RNG.chance(0.35);
+    const pool = cleanPool(isPre?AFFIXES.prefix:AFFIXES.suffix).filter(a=>!usedNm.has(a.nm));
+    const a = pool.length ? RNG.pick(pool) : RNG.pick(cleanPool(isPre?AFFIXES.prefix:AFFIXES.suffix));
+    if(!a || usedNm.has(a.nm)) continue;
+    usedNm.add(a.nm);
+    affixes.push({ kind:isPre?"prefix":"suffix", nm:a.nm, mods:a.mods.map(m=>({stat:m.stat, value:scaleModValue(m, ilvl)})) });
+  }
   for(const a of affixes) for(const m of a.mods) mods.push({ stat:m.stat, value:m.value });
   return {
     uid: "pt" + Math.floor(Math.random()*1e9).toString(36) + (ilvl%97),
     slot: slot.id,
-    name: pre.nm + suf.nm,
+    name: affixes.map(a=>a.nm).join("") || slot.name,
     shortName: slot.name,
     rarity: R.id,
     ilvl,
@@ -643,9 +662,9 @@ function salvageGun(gun){
   return (gun && gun.parts) ? gun.parts.slice() : [];
 }
 
-/* 售卖价：估值的六折（塔科夫商人收购价） */
+/* 售卖价：估价 × 0.5（背包/仓库直售，与 raid.js 的 RAID_VENDOR_RATE 保持一致；v0.19.0 由 0.42 → 0.5） */
 function gunSellPrice(gun){
-  return Math.max(20, Math.round((gun.value||0) * 0.75 / 10) * 10);
+  return Math.max(20, Math.round((gun.value||0) * 0.5 / 10) * 10);
 }
 
 /* =========================================================================
