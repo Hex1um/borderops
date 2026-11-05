@@ -53,23 +53,9 @@ function affixFits(a, ctx){
   return true;
 }
 
-/* v0.19.0 词缀数量分布：枪械与配件「大部分只有 1 条词缀，少部分 2 条及以上」。
- * 旧版直接吃 RARITIES 的 affixes:[min,max]，蓝色以上动辄 4~10 条，
- * 一把枪光词缀就占满整张卡片，也和「改装件 + 配件」的定位重复。
- * 现在统一按 1 条为主：1 条约 75%，2 条约 20%，3 条及以上约 5%（高品级只小幅上调）。 */
-function rollAffixCount(rarityId){
-  const idx = Math.max(0, RARITIES.findIndex(r=>r.id===rarityId));
-  const p3 = 0.05 + Math.min(0.05, idx*0.006);   // 3 条及以上
-  const p2 = 0.20 + Math.min(0.10, idx*0.012);   // 恰好 2 条
-  const r = RNG.f();
-  if(r < p3) return 3 + (RNG.chance(0.15 + Math.min(0.25, idx*0.02)) ? 1 : 0);
-  if(r < p3 + p2) return 2;
-  return 1;
-}
-
 // 按品质词缀数 + ilvl 门槛抽词缀
 function rollAffixes(R, ilvl, ctx){
-  const n = rollAffixCount(R.id);
+  const n = RNG.ri(R.affixes[0], R.affixes[1]);
   const out=[], used=new Set();
   // 品质下标（RARITIES 序号）统一注入 ctx，供 minQ 类稀有词条判定
   const q = Math.max(0, RARITIES.findIndex(r=>r.id===R.id));
@@ -147,25 +133,20 @@ function rollPart(slotId, ilvl, rarityId){
     used.add(st);
     mods.push({ stat:st, value:partStatValue(st, ilvl, R) });
   }
-  /* v0.19.0：配件词缀同样「大部分 1 条、少部分 2 条以上」
-   * 旧版固定 1 前缀 + 1 后缀；现在按 rollAffixCount 掷数量，1 条时只出前缀或后缀之一。 */
+  // 所有部件必带 1 前缀 + 1 后缀（参数直接计入部件与武器属性）
+  // 改装词条池已全部为现实工艺参数，不再需要按「弹种/额外弹丸」过滤
   const cleanPool = arr => arr.filter(a=>!a.elem && !a.elemOnly && !a.needSplash && a.minQ===undefined);
-  const want = rollAffixCount(R.id);
-  const affixes = [];
-  const usedNm = new Set();
-  for(let i=0;i<want;i++){
-    const isPre = i===0 ? RNG.chance(0.5) : RNG.chance(0.35);
-    const pool = cleanPool(isPre?AFFIXES.prefix:AFFIXES.suffix).filter(a=>!usedNm.has(a.nm));
-    const a = pool.length ? RNG.pick(pool) : RNG.pick(cleanPool(isPre?AFFIXES.prefix:AFFIXES.suffix));
-    if(!a || usedNm.has(a.nm)) continue;
-    usedNm.add(a.nm);
-    affixes.push({ kind:isPre?"prefix":"suffix", nm:a.nm, mods:a.mods.map(m=>({stat:m.stat, value:scaleModValue(m, ilvl)})) });
-  }
+  const pre = RNG.pick(cleanPool(AFFIXES.prefix));
+  const suf = RNG.pick(cleanPool(AFFIXES.suffix));
+  const affixes = [
+    { kind:"prefix", nm:pre.nm, mods:pre.mods.map(m=>({stat:m.stat, value:scaleModValue(m, ilvl)})) },
+    { kind:"suffix", nm:suf.nm, mods:suf.mods.map(m=>({stat:m.stat, value:scaleModValue(m, ilvl)})) },
+  ];
   for(const a of affixes) for(const m of a.mods) mods.push({ stat:m.stat, value:m.value });
   return {
     uid: "pt" + Math.floor(Math.random()*1e9).toString(36) + (ilvl%97),
     slot: slot.id,
-    name: affixes.map(a=>a.nm).join("") || slot.name,
+    name: pre.nm + suf.nm,
     shortName: slot.name,
     rarity: R.id,
     ilvl,
@@ -214,6 +195,8 @@ function partValue(p){
 class Weapon {
   constructor(spec){
     Object.assign(this, spec);
+    // v0.18.1：暂时隐藏厂商名；旧存档里已写入的「图拉兵工厂…」也在这里剥掉。
+    if(CFG.showManufacturer===false) this.name=stripManufacturer(this.name);
     this.laser=false;   // 一律实体弹丸（旧存档的 laser 字段强制归一）
     if(!this.affixes) this.affixes=[];
     if(this.power===undefined) this.power=null;
@@ -362,7 +345,7 @@ function generateWeapon(level, opts={}){
   if(type==="launcher") element = "explosive";
   else if(M0.forceExplosive) element = "explosive";
   else if(RNG.chance(0.35 + ilvl*0.006)){
-    element = RNG.normPick(AMMO_POOL_BY_PEN, { mid:2, sigma:1.0 });   // 截断正态：中段弹最常见
+    element = RNG.pick(["fire","shock","corrosive","cryo","radiation"]);
   }
   if(opts.element && AMMO_TYPES[opts.element]) element = opts.element;   // 枪匠台：指定弹种
 
@@ -489,18 +472,28 @@ function generateWeapon(level, opts={}){
 }
 
 /* ----------------------------- 命名 ----------------------------- */
-// 厂商显示中文兵工厂名，具名档用真实枪械型号，不再拼接奇幻词与弹种标签
+// 具名档用真实枪械型号。CFG.showManufacturer=false 时枪名只保留型号 / 枪型 / 词缀。
 function weaponName(man, base, R, element, affixes){
   const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;
+  const manTag = CFG.showManufacturer===false ? "" : M0.name;
   const ammoTag = element!=="none" && AMMO_TYPES[element] ? " · "+AMMO_TYPES[element].short : "";
   if(R.named){
     const nm = RNG.pick(base.named || ["制式"]);
-    return `${M0.name} ${nm}${ammoTag}`;
+    return `${manTag?manTag+" ":""}${nm}${ammoTag}`;
   }
-  if(R.id==="white") return `${M0.name}${base.name}${ammoTag}`;
+  if(R.id==="white") return `${manTag}${base.name}${ammoTag}`;
   const pre = affixes.find(a=>a.kind==="prefix");
   const suf = affixes.find(a=>a.kind==="suffix");
-  return `${M0.name}${base.name}${pre?" "+pre.nm:""}${suf?suf.nm:""}${ammoTag}`;
+  return `${manTag}${base.name}${pre?" "+pre.nm:""}${suf?suf.nm:""}${ammoTag}`;
+}
+
+// 去掉旧存档 / 旧拍卖行名称里的厂商前缀（只影响显示名，manufacturer 字段仍保留）。
+function stripManufacturer(name){
+  if(!name) return name;
+  for(const m of Object.values(MANUFACTURERS)){
+    if(m && m.name && String(name).startsWith(m.name)) return String(name).slice(m.name.length).trim();
+  }
+  return name;
 }
 
 /* ----------------------------- 定价 / 词缀文案 ----------------------------- */
@@ -624,7 +617,7 @@ function reforgeBlGun(gun, op, arg){
   };
   if(op==="element"){
     base.element = AMMO_TYPES[arg] ? arg
-      : RNG.normPick(AMMO_POOL_BY_PEN, { mid:2, sigma:1.0 });
+      : RNG.pick(["fire","shock","corrosive","cryo","radiation"]);
     base.affixes = gun.affixes || [];      // 换弹种：保留原词条，只换弹种并重算
   } else if(op==="mayhem"){
     base.mayhem = (gun.mayhem||0)+1;
@@ -662,9 +655,9 @@ function salvageGun(gun){
   return (gun && gun.parts) ? gun.parts.slice() : [];
 }
 
-/* 售卖价：估价 × 0.5（背包/仓库直售，与 raid.js 的 RAID_VENDOR_RATE 保持一致；v0.19.0 由 0.42 → 0.5） */
+/* 售卖价：估值的六折（塔科夫商人收购价） */
 function gunSellPrice(gun){
-  return Math.max(20, Math.round((gun.value||0) * 0.5 / 10) * 10);
+  return Math.max(20, Math.round((gun.value||0) * 0.75 / 10) * 10);
 }
 
 /* =========================================================================

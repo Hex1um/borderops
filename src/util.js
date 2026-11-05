@@ -35,24 +35,6 @@ const RNG = {
   chance(p){ return this.rng() < p; },
   // 正态分布近似（用于散布）
   gauss(){ return (this.rng()+this.rng()+this.rng()-1.5)/1.5; },
-  /* 截断正态抽样：把数组下标当连续轴，越靠近 mid 权重越高，两端衰减。
-   * 用途：弹种 / 枪型这类「有梯队、但中段才常见」的随机，比均匀分布更像真实世界。
-   *   opts.mid    中心下标（默认取正中）
-   *   opts.sigma  以「下标」为单位的宽度（默认 (n-1)/2.6，保证两端仍有极小概率） */
-  normPick(items, opts){
-    const n=items.length;
-    if(!n) return undefined;
-    if(n===1) return items[0];
-    const o=opts||{};
-    const mid=(o.mid!==undefined)?o.mid:(n-1)/2;
-    const sg=(o.sigma&&o.sigma>0)?o.sigma:Math.max(0.85,(n-1)/2.6);
-    const w=new Array(n);
-    let total=0;
-    for(let i=0;i<n;i++){ const d=(i-mid)/sg; const v=Math.exp(-0.5*d*d); w[i]=v; total+=v; }
-    let r=this.rng()*total;
-    for(let i=0;i<n;i++){ r-=w[i]; if(r<=0) return items[i]; }
-    return items[n-1];
-  },
 };
 
 const M = {

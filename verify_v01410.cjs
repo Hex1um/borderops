@@ -47,8 +47,7 @@ vm.createContext(sandbox);
 
 // 顺序必须与 index.html 一致（main.js 会 new Game() 故跳过）
 const files = ['config', 'util', 'weapons', 'items', 'shields', 'skills', 'player', 'enemies', 'combat',
-  'world', 'endless', 'dust2', 'shop', 'input', 'render', 'ui', 'viewmode', 'fpview',
-  'raid', 'net', 'net-p2p', 'auction', 'br', 'save'];
+  'world', 'endless', 'dust2', 'shop', 'input', 'render', 'ui', 'raid', 'net', 'net-p2p', 'auction', 'br', 'save'];
 let loaded = 0;
 for (const f of files) {
   try {
@@ -547,254 +546,25 @@ check('P2P 事件环去重游标', /_eventsSince/.test(p2pSrc) && /cursor/.test(
 check('PeerJS 已本地内置', fs.existsSync(path.join(ROOT, 'vendor', 'peerjs.min.js')) && fs.statSync(path.join(ROOT, 'vendor', 'peerjs.min.js')).size > 50000 ? 1 : 0, 1, 0.001);
 check('index.html 已引入 net-p2p', /src\/net-p2p\.js\?v=/.test(html) ? 1 : 0, 1, 0.001);
 
-console.log('\n=== 21. 2D/3D 维度 · 医疗品 · 经济数值（v0.19.0）===');
-const fpSrc = fs.readFileSync(path.join(SRC, 'fpview.js'), 'utf8');
-const vmSrc = fs.readFileSync(path.join(SRC, 'viewmode.js'), 'utf8');
-
-check('index.html 引入 viewmode.js', /src\/viewmode\.js\?v=/.test(html) ? 1 : 0, 1, 0.001);
-check('index.html 引入 fpview.js', /src\/fpview\.js\?v=/.test(html) ? 1 : 0, 1, 0.001);
-check('渲染器有 3D 分支', /FPView\.render\(ctx, game, R\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('3D 朝向覆盖开火角度', /p\.angle=ViewMode\.yaw/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('3D 移动按视角旋转', /ViewMode\.rotateMove\(mx,my\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('标题页不再提供 2D/3D 入口', /id="btn-settings"/.test(uiSrc) ? 0 : 1, 1, 0.001);
-check('暂停面板有设置入口', /id="btn-pause-settings"/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('局内 V 键切换维度', /KeyV/.test(vmSrc) && /inRaid/.test(vmSrc) ? 1 : 0, 1, 0.001);
-
-/* 3D 必须读同一份 2D 地图数据 */
-const shared = ['forests', 'roads', 'waterCircles', 'roomRects', 'yards', 'bridges', 'props'];
-const missShared = shared.filter(k => !fpSrc.includes('R.' + k));
-check('3D 复用 2D 地面 / 装饰数据', missShared.length, 0, 0.001);
-if (missShared.length) console.log('  缺少:', missShared.join(','));
-check('3D 复用手电与探照灯色温', /R\.floodlights/.test(fpSrc) && /255,236,182/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 有手持武器模型', /_gunModel/.test(fpSrc) && /_meleeModel/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 墙体取 2D 配色', /39, 45, 49/.test(fpSrc) ? 1 : 0, 1, 0.001);
-/* v0.19.1：3D 地面改为与 2D scene() 同数据同顺序的真透视投影，逐层核对 */
-const floorLayers = [
-  ['分区网格', /_hash2\(gx\*7\+3, gy\*11\+5\)/],
-  ['草丛碎石', /gx\*5\+91, gy\*3\+37/],
-  ['道路中线', /150,140,100/],
-  ['水面', /20,38,50,0\.96/],
-  ['铁路枕木', /58,48,36,0\.9/],
-  ['院子水泥缝', /170,200,180,0\.05/],
-  ['房间砖缝', /170,200,180,0\.06/],
-  ['踢脚板', /0,0,0,0\.20/],
-  ['地表贴花', /R\.decals/],
-  ['区域暗斑', /R\.darkSpots/],
-  ['房间名', /rm\.name/],
-  ['真透视投影', /_clipNear/],
-];
-const missLayer = floorLayers.filter(([n, re]) => !re.test(fpSrc)).map(([n]) => n);
-check('3D 地面逐层对齐 2D scene()', missLayer.length, 0, 0.001);
-if (missLayer.length) console.log('  缺少图层:', missLayer.join(' / '));
-check('3D 不再提供小地图入口', /vm-minimap/.test(vmSrc) ? 0 : 1, 1, 0.001);
-
-/* 开阔朝向 + 渲染不抛异常 */
-const grad = { addColorStop(){} };
-/* 统计绘制调用次数：面渲染是否真的落到 canvas 上，光看「不抛异常」是看不出来的 */
-sandbox.__ctxCalls = 0;
-const mockCtx = new Proxy({}, {
-  get(t, k){
-    if(k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
-    if(k === 'measureText') return () => ({width:10});
-    return () => { sandbox.__ctxCalls++; };
-  },
-  set(){ return true; },
-});
-sandbox.__mockCtx = mockCtx;
-sandbox.__mockGame = { view:{w:960,h:600,dpr:1}, zoom:1 };
-G(`Raid.walls=[{x:-320,y:-500,w:40,h:1000,kind:"wall"},{x:300,y:-200,w:40,h:400,kind:"wall"},{x:-60,y:420,w:520,h:40,kind:"wall",dam:true}];
-   Raid.props=[]; Raid.forests=[]; Raid.roads=[]; Raid.waterCircles=[]; Raid.yards=[];
-   Raid.roomRects=[]; Raid.bridges=[]; Raid.floodlights=[]; Raid.reservoirRect=null; Raid.damOpen=false;
-   Raid.containers=[]; Raid.grounds=[]; Raid.shops=[]; Raid.extracts=[]; Raid.gadgets=[];
-   Raid.player={x:0,y:0,angle:0,vx:0,vy:0,gun:null,fireCd:0,reloadT:0,parts:[]};
-   Raid.active=true; ViewMode.mode="3d"; ViewMode._yawFor=null; ViewMode.yaw=0;
-   ViewMode.ensureYaw(Raid);`);
-check('开局自动选开阔朝向', Math.cos(G('ViewMode.yaw')) > 0.5 ? 1 : 0, 1, 0.001);
-let rErr = '';
-try { G('FPView.render(__mockCtx, __mockGame, Raid)'); } catch(e){ rErr = e.message; }
-check('空手 3D 渲染无异常', rErr ? 0 : 1, 1, 0.001);
-if (rErr) console.log('  render error:', rErr);
-check('深度缓冲已写入', G('FPView._zbuf && FPView._zbuf.length > 100') ? 1 : 0, 1, 0.001);
-check('3D 墙面按面渲染并落到 canvas', G('__ctxCalls') > 200 ? 1 : 0, 1, 0.001);
-check('3D 墙面按深度排序（画家算法）', /valid\.sort\(\(a,b\)=> b\.dm - a\.dm\)/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 墙面按法线当面剔除', /if\(P\.y <= y0\) faces\.push/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 面渲染不再逐列合批', /_paintWalls\(ctx, w, h\)/.test(fpSrc) ? 0 : 1, 1, 0.001);
-check('3D 顶点缓冲复用（热路径零分配）', /_fq \|\| \(this\._fq = /.test(fpSrc) ? 1 : 0, 1, 0.001);
-const wallSrc = fpSrc.slice(fpSrc.indexOf('_paintWalls(ctx, near){'), fpSrc.indexOf('===================== 地面层'));
-check('3D 长墙切段代替渐变对象', /Math\.ceil\(f\.len\/420\)/.test(wallSrc) && !/ctx\.createLinearGradient/.test(wallSrc) ? 1 : 0, 1, 0.001);
-rErr = '';
-G('Raid.player.gun={ name:"AK-74N", type:"rifle", rarity:"blue", parts:[{slot:"scope"}], value:1000, ammoMag:30, ammoRes:90 };');
-try { G('FPView.render(__mockCtx, __mockGame, Raid)'); } catch(e){ rErr = e.message; }
-check('持枪 3D 渲染无异常', rErr ? 0 : 1, 1, 0.001);
-if (rErr) console.log('  gun render error:', rErr);
-
-/* 医疗品：背包里捡到的也能用 */
-G(`Raid.meds={hemo:0,medkit:1,stim:0,surgery:0}; Raid.bandages=0;
-   Raid.inv={meds:[{id:"stim",n:2,name:"强心针"},{id:"surgery",n:1,name:"手术包"}],weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],receivers:[],keys:[]};
-   Raid.floats=[];`);
-check('医疗计数含背包物品', G('Raid._medCount("stim")'), 2, 0.001);
-check('医疗计数含带入药品', G('Raid._medCount("medkit")'), 1, 0.001);
-check('没有的药品计数为 0', G('Raid._medCount("hemo")'), 0, 0.001);
-check('HUD 只列拥有的药品', G('Raid._medOwnedList().length'), 3, 0.001);
-G('Raid._medTake("stim");');
-check('使用后从背包扣除', G('Raid._medCount("stim")'), 1, 0.001);
-G('Raid._medTake("medkit");');
-check('带入药品用尽后归零', G('Raid._medCount("medkit")'), 0, 0.001);
-check('使用接口存在', G('typeof Raid._useMed === "function"') ? 1 : 0, 1, 0.001);
-check('物品栏有「使用」按钮', /data-use=/.test(raidSrc) && /_invUse/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('五种医疗品齐全', G('RAID_MEDS.length'), 5, 0.001);
-
-/* 经济数值：局内 0.8±0.1 / 回收 1.2±0.4 / 背包 0.5 / 局外 2.0±0.5 */
-const econ = JSON.parse(G(`JSON.stringify((()=>{
-  const keys=["a","b","c","d","e","f","g","h","i","j","k","l"];
-  const shop=keys.map(k=>raidShopPrice(1000,k)/1000);
-  const field=keys.map(k=>raidFieldSellPrice(1000,k)/1000);
-  const sup=keys.map(k=>raidSuperPrice(1000,k)/1000);
-  return { shop, field, sup, bag:raidBagSellPrice(1000)/1000,
-    vendor:RAID_VENDOR_RATE, fieldRate:RAID_FIELD_SELL_RATE, shopRate:RAID_SHOP_RATE, superRate:RAID_SUPER_RATE };
-})())`));
-check('局内商店倍率 0.8', econ.shopRate, 0.8, 0.001);
-check('回收超市倍率 1.2', econ.fieldRate, 1.2, 0.001);
-check('背包直售倍率 0.5', econ.bag, 0.5, 0.001);
-check('局外军火超市倍率 2.0', econ.superRate, 2.0, 0.001);
-check('局内售价落在 0.7~0.9', econ.shop.every(v => v >= 0.7 - 1e-9 && v <= 0.9 + 1e-9) ? 1 : 0, 1, 0.001);
-check('回收价落在 0.8~1.6', econ.field.every(v => v >= 0.8 - 1e-9 && v <= 1.6 + 1e-9) ? 1 : 0, 1, 0.001);
-check('局外售价落在 1.5~2.5', econ.sup.every(v => v >= 1.5 - 1e-9 && v <= 2.5 + 1e-9) ? 1 : 0, 1, 0.001);
-check('价格有浮动（非恒定）', new Set(econ.shop).size > 1 && new Set(econ.field).size > 1 ? 1 : 0, 1, 0.001);
-
-/* 词缀数量：大部分 1 条，少部分 2 条以上 */
-const aff = JSON.parse(G(`JSON.stringify((()=>{
-  const c={1:0,2:0,3:0,4:0};
-  for(let i=0;i<3000;i++){ const n=rollAffixCount("blue"); c[n]=(c[n]||0)+1; }
-  return c;
-})())`));
-const singleShare = aff[1] / 3000, multiShare = (aff[2] + aff[3] + aff[4]) / 3000;
-check('大部分枪械/配件只有 1 条词缀', singleShare > 0.6 ? 1 : 0, 1, 0.001);
-check('少部分有 2 条以上词缀', multiShare < 0.4 && multiShare > 0 ? 1 : 0, 1, 0.001);
-console.log(`  词缀分布：1 条 ${(singleShare*100).toFixed(1)}% · 2 条 ${(aff[2]/30).toFixed(1)}% · 3+ 条 ${((aff[3]+aff[4])/30).toFixed(1)}%`);
-const partAff = G(`(()=>{ const pt=rollPart("muzzle",20,"blue"); return pt.affixes.length; })()`);
-check('配件词缀数在 1~4 之间', partAff >= 1 && partAff <= 4 ? 1 : 0, 1, 0.001);
-
-console.log('\n=== 22. 撤离费阶梯 + 撤离点封锁规则（v0.19.2）===');
-/* 裸装 0.2 倍、带得越多折扣越小、绝对金额仍随装备升值上升、封顶 1.4 倍 */
-const feeTbl = JSON.parse(G(`JSON.stringify((()=>{
-  const z=RAID_EXTRACT_RULES.extJ, base0=z.cost*0.28;
-  const vs=[0,30000,90000,300000,900000];
-  return { base0, cap:z.cost*1.4,
-    rows: vs.map(v=>{ const fee=raidExtractFee(z,v);
-      const base=z.cost*0.28+v*(z.feeRate||0.018);
-      return { v, fee, mult:+raidExtractFeeMult(v).toFixed(3), ratio:+(fee/base).toFixed(3) }; }) };
-})())`));
-const r0 = feeTbl.rows[0];
-check('裸装撤离费约 0.2 倍', r0.mult > 0.199 && r0.mult < 0.201 ? 1 : 0, 1, 0.001);
-check('裸装撤离费 ≤ ₽120', r0.fee <= 120 ? 1 : 0, 1, 0.001);
-check('带的装备越多折扣越小', feeTbl.rows.every((r,i)=>
-  i === 0 || (r.mult > feeTbl.rows[i-1].mult - 1e-6 && r.mult <= 1)) ? 1 : 0, 1, 0.001);
-check('折扣永远到不了原价', feeTbl.rows[feeTbl.rows.length-1].mult < 1 ? 1 : 0, 1, 0.001);
-check('绝对费用随装备升值上升', feeTbl.rows.every((r,i)=>
-  i === 0 || r.fee >= feeTbl.rows[i-1].fee) ? 1 : 0, 1, 0.001);
-check('撤离费封顶 1.4 倍', feeTbl.rows.every(r => r.fee <= feeTbl.cap + 1) ? 1 : 0, 1, 0.001);
-const noFee = G(`(()=>{ const f=(id,v)=>raidExtractFee(RAID_EXTRACT_RULES[id],v);
-  const paid=["extC","extH","extJ","extP"];
-  return { all:paid.map(id=>f(id,0)), zero:f("extA",0), zero2:f("extB",300000) }; })()`);
-check('免费撤离点仍为 0 费', noFee.zero === 0 && noFee.zero2 === 0 ? 1 : 0, 1, 0.001);
-check('四个付费点裸装都低于 ₽120', noFee.all.every(v => v > 0 && v <= 120) ? 1 : 0, 1, 0.001);
-check('付费撤离点永不被封锁', /filter\(z=>!z\.closed && !\(z\.cost>0\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('同一撤离点不重复挂封锁者', /o\.alive && o\.blockZone===z\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('全图封锁者上限为 2', /liveBlockers < 2/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('撤离 HUD 显示真实原因', /const exLabel = blocked \? \(\(money/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('撤离费可走仓库兜底', /_payExtractFee/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('钱不够与封锁分开显示', /const money = !!blocked && blocked\.indexOf\("撤离费"\)===0/.test(raidSrc) ? 1 : 0, 1, 0.001);
-const feeShow = JSON.parse(G(`JSON.stringify((()=>{
-  const paid=["extC","extH","extJ","extP"], vs=[0,30000,90000,300000];
-  return paid.map(id=>[id].concat(vs.map(v=>raidExtractFee(RAID_EXTRACT_RULES[id],v))));
-})())`));
-console.log('  撤离费表（裸装 / ₽3万 / ₽9万 / ₽30万）：');
-feeShow.forEach(r => console.log('    ' + r[0] + '  ' + r.slice(1).map(x => '₽'+x).join('  →  ')));
-
-console.log('\n=== 23. 3D 掩体 / 手电 / 2D 手持模型 / 文案（v0.19.3）===');
-check('3D 不再把掩体当墙体渲染', /\(wl\.kind \|\| "wall"\) !== "wall"/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 深度缓冲改为垂直深度', /this\._zbuf\[c\] = best \* Math\.cos\(a - yaw\)/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 手电按面投射（跟随视线）', /0\.22 \* cone \* fall/.test(fpSrc) ? 1 : 0, 1, 0.001);
-check('3D 移除固定手电亮斑', /rgba\(255,236,182,0\.20\)/.test(fpSrc) ? 0 : 1, 1, 0.001);
-check('2D 有手持武器平面模型', /handWeapon\(ctx, o, r\)\{/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('2D 玩家改用武器模型', /if\(o\.isPlayer \|\| o\.remote\)\{/.test(raidSrc) &&
-  /this\.handWeapon\(ctx, o, r\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('空手画战术匕首', /战术匕首/.test(raidSrc) ? 1 : 0, 1, 0.001);
-/* 手持模型必须真的跑得通：空手 / 步枪带瞄具 / 狙击三种都画一遍 */
-let hwErr = '';
-try {
-  G(`(()=>{ const o={x:0,y:0,r:15,angle:0.7,gun:null,color:"#88a078",isPlayer:true,hp:100,maxHP:100,
-      armorType:0,armor:0,dr:0,freezeT:0,burnT:0,corrodeT:0,shockT:0,radT:0,kills:0};
-    RenderRaid.unit(__mockCtx, o, __mockGame);
-    o.gun={ type:"rifle", element:"fire", rarity:"blue", parts:[{slot:"optic"}] };
-    RenderRaid.unit(__mockCtx, o, __mockGame);
-    o.gun={ type:"sniper", element:"none", rarity:"purple", parts:[] };
-    RenderRaid.unit(__mockCtx, o, __mockGame);
-    return 1; })()`);
-} catch(e){ hwErr = e.message; }
-check('2D 手持模型三种状态均无异常', hwErr ? 0 : 1, 1, 0.001);
-if (hwErr) console.log('  handWeapon error:', hwErr);
-check('文案：同场 AI 数量与实际一致', /与 30 名 <b style="color:#e0b84a">PMC \/ Scav<\/b> 加 3 名/.test(raidSrc) ? 1 : 0, 1, 0.001);
-
-console.log('\n=== 24. 放弃确认 / 价格波动 / 弹种正态 / 建筑重叠（v0.19.4）===');
-const wpnSrc = fs.readFileSync(path.join(SRC, 'weapons.js'), 'utf8');
-check('放弃突袭需要二次确认', /UI\.raidPause=function\(confirmQuit\)/.test(raidSrc) && /UI\.raidPause\(true\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('确认面板有取消与确认两键', /btn-quit-cancel/.test(raidSrc) && /btn-quit-ok/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('首次点击不直接判负', /UI\.raidPause\(true\);\s*\/\/ 先确认/.test(raidSrc) ? 1 : 0, 1, 0.001);
-
-/* 价格：小额按 1、中额按 5、大额按 10 —— 全按 10 会让低价货「售价 = 估值」且看不出浮动 */
-const pr = JSON.parse(G(`JSON.stringify((()=>{
-  const keys=["a","b","c","d","e","f","g","h"];
-  return {
-    r1: raidEconRound(1), r8: raidEconRound(8), r88: raidEconRound(88), r880: raidEconRound(880),
-    shop10: keys.map(k=>raidShopPrice(10,k)),
-    shop20: keys.map(k=>raidShopPrice(20,k)),
-    field10: keys.map(k=>raidFieldSellPrice(10,k)),
-  };
-})())`));
-check('小额取整不再吃掉折扣', pr.r8 === 8 ? 1 : 0, 1, 0.001);
-check('中额按 5 / 大额按 10 取整', pr.r88 === 90 && pr.r880 === 880 ? 1 : 0, 1, 0.001);
-check('最低价仍为正整数', pr.r1 >= 1 ? 1 : 0, 1, 0.001);
-check('₽10 材料售价低于估值', pr.shop10.every(v => v > 0 && v < 10) ? 1 : 0, 1, 0.001);
-check('低价材料有可见浮动', new Set(pr.shop10).size > 1 && new Set(pr.shop20).size > 1 ? 1 : 0, 1, 0.001);
-check('回收价同样按阶梯取整', new Set(pr.field10).size > 1 ? 1 : 0, 1, 0.001);
-console.log(`  材料售价：估值 ₽10 → ${pr.shop10.join('/')} · 估值 ₽20 → ${pr.shop20.join('/')}`);
-
-/* 弹种：截断正态（中段常见、两端罕见）而不是五种各 20% */
-const pens = JSON.parse(G('JSON.stringify(AMMO_POOL_BY_PEN.map(k=>AMMO_TYPES[k].pen))'));
-check('弹种梯队按穿深升序', pens.every((v,i) => i === 0 || v >= pens[i-1]) ? 1 : 0, 1, 0.001);
-check('弹种生成走截断正态', /RNG\.normPick\(AMMO_POOL_BY_PEN/.test(wpnSrc) ? 1 : 0, 1, 0.001);
-const dist = JSON.parse(G(`JSON.stringify((()=>{
-  const c={}; for(let i=0;i<20000;i++){ const e=RNG.normPick(AMMO_POOL_BY_PEN,{mid:2,sigma:1.0}); c[e]=(c[e]||0)+1; }
-  return c;
-})())`));
-const [c0,c1,c2,c3,c4] = pens.map((_,i)=>dist[["corrosive","cryo","fire","radiation","shock"][i]]||0);
-check('弹种抽样覆盖全部五档', (c0&&c1&&c2&&c3&&c4) ? 1 : 0, 1, 0.001);
-check('中段弹种最常见', c2 > c1 && c2 > c3 && c2 > c0 && c2 > c4 ? 1 : 0, 1, 0.001);
-check('两端弹种明显罕见', c0 < c2*0.5 && c4 < c2*0.5 ? 1 : 0, 1, 0.001);
-console.log(`  弹种分布 RIP ${(c0/200).toFixed(1)}% · SP-6 ${(c1/200).toFixed(1)}% · T ${(c2/200).toFixed(1)}% · BT ${(c3/200).toFixed(1)}% · BP ${(c4/200).toFixed(1)}%`);
-
-/* 建筑：任意两栋建筑不重叠；撤离点不压在任何建筑上（操场/堆场这类「场地」允许内含建筑） */
-const rooms = JSON.parse(G('JSON.stringify(RAID_ROOMS)'));
-const isYard = r => /Yard$/.test(r.id);
-const ov = (a,b) => {
-  const w = Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x);
-  const h = Math.min(a.y+a.h, b.y+b.h) - Math.max(a.y, b.y);
-  return w > 0 && h > 0 ? Math.round(w*h) : 0;
-};
-const roomClash = [], extClash = [];
-for (let i=0;i<rooms.length;i++){
-  for (let j=i+1;j<rooms.length;j++){
-    const a=rooms[i], b=rooms[j];
-    if (!ov(a,b) || isYard(a) || isYard(b)) continue;
-    (a.id.startsWith("ext") || b.id.startsWith("ext") ? extClash : roomClash).push(a.id+"×"+b.id);
-  }
+console.log('\n=== 21. 暂时隐藏厂商名 ===');
+const CFGv = G('CFG');
+const MANU = G('MANUFACTURERS');
+const stripM = G('stripManufacturer');
+const WeaponC = G('Weapon');
+const manNames = Object.values(MANU).map(m => m.name);
+check('CFG.showManufacturer = false', CFGv.showManufacturer === false ? 1 : 0, 1, 0.001);
+let manInName = 0;
+for (let i = 0; i < 200; i++) {
+  const g = G('blGunGen')(1 + (i % 40), { type: ['pistol','smg','shotgun','rifle','sniper','launcher'][i%6], rarity: ['white','green','blue','purple','orange'][i%5] });
+  if (manNames.some(n => g.name.startsWith(n))) manInName++;
 }
-check('地图建筑无重叠', roomClash.length, 0, 0.001);
-if (roomClash.length) console.log('  重叠:', roomClash.join(' / '));
-check('撤离点不压在建筑上', extClash.length, 0, 0.001);
-if (extClash.length) console.log('  压建筑:', extClash.join(' / '));
+check('新生成枪名不含厂商前缀', manInName, 0, 0.001);
+check('旧存档枪名可剥离厂商前缀', stripM('图拉兵工厂 AK-74N 5.45×39 战术型') === 'AK-74N 5.45×39 战术型' ? 1 : 0, 1, 0.001);
+check('无前缀名称保持原样', stripM('AK-74N 5.45×39 战术型') === 'AK-74N 5.45×39 战术型' ? 1 : 0, 1, 0.001);
+const oldW = new WeaponC({ name:'图拉兵工厂步枪', type:'rifle', rarity:'white', ilvl:1, magSize:30, stats:{ damage:10, fireRate:5, accuracy:0.9, mag:30, reload:2, speed:800, pellets:1, splash:0, crit:1.5, critChance:0.15, auto:true, charge:false, spread:0.05, ammoType:'rifle', pierce:0, homing:false, lifesteal:0, elemChance:0, recoil:0, moveMul:1, rangeMul:1, splashDmgMul:1, shieldOnHit:0, ammoEff:0 } });
+check('Weapon 构造器剥离旧厂商前缀', oldW.name === '步枪' ? 1 : 0, 1, 0.001);
+check('UI 厂商名已条件显示', /CFG\.showManufacturer===false/.test(uiSrc) ? 1 : 0, 1, 0.001);
+check('仓库旧枪名加载时剥离', /stripManufacturer/.test(raidSrc) && /showManufacturer/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);
