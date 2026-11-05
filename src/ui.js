@@ -280,7 +280,7 @@ const UI = {
             </div>
             <div class="opt-card" data-gun="bl">
               <b>旧刷宝体系枪械</b>
-              <span>${CFG.weaponQuality===false?"程序化生成的词缀枪（武器品质已暂时禁用）":"程序化生成的词缀枪，品质越高越离谱"}</span>
+              <span>${weaponQualityHidden()?"程序化生成的词缀枪（精简显示：只留型号）":"程序化生成的词缀枪，品质越高越离谱"}</span>
             </div>
           </div>
         </div>
@@ -495,6 +495,8 @@ const UI = {
   },
 
   _affixHtml(w){
+    /* v0.21.6：精简模式不显示前后缀 */
+    if(typeof weaponQualityHidden==="function" && weaponQualityHidden()) return "";
     const lines=w.affixLines ? w.affixLines() : [];
     if(!lines.length) return `<div class="affix-row"><span class="affix">无词缀</span></div>`;
     return `<div class="affix-row">${lines.map(a=>
@@ -521,7 +523,7 @@ const UI = {
       body=`<div class="gamble-box">
         <div class="slot">?</div>
         <div style="color:var(--muted);font-size:13px;max-width:420px;line-height:1.6;">${def.desc}<br>
-          ${CFG.weaponQuality===false?"武器品质已暂时禁用，按标准品质生成；":"可能开出任何品质，" }物品等级 = 你的等级 +3。</div>
+          ${weaponQualityHidden()?"精简显示下不标品质，切到「完整」可查看；":"可能开出任何品质，" }物品等级 = 你的等级 +3。</div>
         <button class="btn" id="btn-gamble" ${p.gold<cost?'disabled style="opacity:.4"':''}>投币 ◈${cost.toLocaleString()}</button>
         <div class="gamble-result" id="gamble-result"></div>
       </div>`;

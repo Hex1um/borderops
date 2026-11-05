@@ -484,7 +484,21 @@ check('PMC -> pmc 档', senseOf({cls:'pmc'}) === AI_SENSE.pmc ? 1 : 0, 1, 0.001)
 check('悬赏目标 -> boss 档', senseOf({cls:'pmc',bounty:true}) === AI_SENSE.boss ? 1 : 0, 1, 0.001);
 check('7 种弹药均带塔科夫口径', Object.values(ELEMENTS).every(e => /^(5\.45|7\.62|9×|40mm)/.test(e.name)) ? 1 : 0, 1, 0.001);
 check('弹种代号已塔科夫化', Object.values(ELEMENTS).every(e => /^(PS|T|BP|RIP|SP-6|VOG|BT)$/.test(e.short)) ? 1 : 0, 1, 0.001);
-check('枪型池无旧型号残留', /"P226"|"USP \.45"|"P-07"|"UMP \.45"|"SPAS-12"|"M24"|"FN SCAR-L"/.test(cfgSrc) ? 1 : 0, 0, 0.001);
+/* v0.21.6：完整显示下枪品种大幅增加 —— 每个枪型都有一份真实型号池（≥9 个，且不重复） */
+const modelPools = JSON.parse(G(`JSON.stringify((()=>{
+  const out={};
+  for(const k of Object.keys(WEAPON_TYPES)){
+    const p=WEAPON_TYPES[k].models||[];
+    out[k]={ n:p.length, dup:p.length-new Set(p).size };
+  }
+  return out;
+})())`));
+check('每个枪型都有型号池（≥9 种）', Object.values(modelPools).every(v=>v.n>=9) ? 1 : 0, 1, 0.001);
+check('型号池内无重复型号', Object.values(modelPools).every(v=>v.dup===0) ? 1 : 0, 1, 0.001);
+const modelCount = Object.values(modelPools).reduce((a,b)=>a+b.n,0);
+console.log('  型号池合计 ' + modelCount + ' 个真枪型号 · ' +
+  Object.keys(modelPools).map(k=>k+':'+modelPools[k].n).join(' '));
+check('型号池总量 ≥ 60（品种大幅增加）', modelCount>=60 ? 1 : 0, 1, 0.001);
 check('旧弹种名已清除', /FMJ 全被甲弹|T 曳光弹|AP 钢芯穿甲弹/.test(cfgSrc) ? 1 : 0, 0, 0.001);
 
 console.log('\n=== 18. Scav 低阶武器限制 ===');
@@ -884,15 +898,20 @@ check('旧档迁移补起步弹药', /RAID_AMMO_STARTER/.test(raidSrc) ? 1 : 0, 
 check('大厅可按发数携带弹药（v0.21.3 改滑动条）',
   /id="rc-ammo-\$\{cal\}" type="range"/.test(raidSrc) && /_prepPlayerAmmo/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
-/* 合作者 b78b40e：暂时隐藏厂商名（只影响显示，manufacturer 字段保留） */
+/* v0.21.6：厂商改为「显示层」剥离 —— 存档名一律写全，精简模式下 gunNameOf 才剥掉厂商 */
 const manHidden = JSON.parse(G(`JSON.stringify((()=>{
   const mans=Object.values(MANUFACTURERS).map(m=>m.name);
-  const names=[0,1,2,3,4,5,6,7].map(()=>generateWeapon(14).name);
-  return { flag:CFG.showManufacturer, names,
-    leak:names.filter(n=>mans.some(mn=>n.indexOf(mn)===0)) };
+  const ws=[0,1,2,3,4,5,6,7].map(()=>generateWeapon(14));
+  const prev=CFG.display; CFG.display="compact";
+  const shown=ws.map(w=>gunNameOf(w));
+  CFG.display=prev;
+  return { flag:CFG.showManufacturer, full:ws[0].name,
+    stored:ws.filter(w=>mans.some(mn=>w.name.indexOf(mn)===0)).length,
+    leak:shown.filter(n=>mans.some(mn=>n.indexOf(mn)===0)) };
 })())`));
-check('厂商名默认隐藏', manHidden.flag === false ? 1 : 0, 1, 0.001);
-check('生成的枪名不含厂商前缀', manHidden.leak.length, 0, 0.001);
+check('厂商字段仍保留（showManufacturer 兼容）', typeof manHidden.flag === "boolean" ? 1 : 0, 1, 0.001);
+check('存档名写全厂商（完整模式能看回来）', manHidden.stored > 0 ? 1 : 0, 1, 0.001);
+check('精简显示下枪名不含厂商前缀', manHidden.leak.length, 0, 0.001);
 if (manHidden.leak.length) console.log('  仍带厂商:', manHidden.leak.join(' / '));
 check('旧名清洗函数存在', /function stripManufacturer\(name\)/.test(fs.readFileSync(path.join(SRC,'weapons.js'),'utf8')) ? 1 : 0, 1, 0.001);
 
@@ -1129,26 +1148,148 @@ console.log('  弹级倍率 无防护 '+mono.flesh.join(' → '));
 console.log('  弹级倍率 护盾   '+mono.shield.join(' → '));
 console.log('  弹级倍率 插板   '+mono.armor.join(' → '));
 
-console.log('\n=== 26. 暂时禁用武器品质（v0.21.5）===');
+console.log('\n=== 26. 武器品质：生成恢复，显示分「精简 / 完整」（v0.21.6）===');
 const CFGq = G('CFG');
-check('CFG.weaponQuality = false', CFGq.weaponQuality === false ? 1 : 0, 1, 0.001);
-check('rollQuality 固定返回标准品质', G('rollQuality')(40) === 'white' ? 1 : 0, 1, 0.001);
-const qOffList = JSON.parse(G(`JSON.stringify((()=>{
+check('CFG.weaponQuality 恢复为 true（不再全局禁用）', CFGq.weaponQuality === true ? 1 : 0, 1, 0.001);
+const qList = JSON.parse(G(`JSON.stringify((()=>{
   const out=[];
   for(let i=0;i<120;i++) out.push(generateWeapon(10+i, { rarity:['green','blue','purple','orange','pearl'][i%5] }));
-  return { bad:out.filter(w=>w.rarity!=='white').length,
-    named:out.filter(w=>w.power).length };
+  const seen={}; for(const w of out) seen[w.rarity]=1;
+  return { kinds:Object.keys(seen).length, sample:out[0].rarity };
 })())`));
-check('生成器忽略传入的品质档位', qOffList.bad, 0, 0.001);
-check('标准品质不带专属威能', qOffList.named, 0, 0.001);
-const qOffGun = G('generateWeapon')(30, { type:'rifle', rarity:'orange' });
-check('新枪 rarity 固定为 white', qOffGun.rarity === 'white' ? 1 : 0, 1, 0.001);
-check('新枪不显示品质名', qOffGun.rarityName === '' ? 1 : 0, 1, 0.001);
-check('品质图例显示已禁用', /已暂时禁用/.test(G('raidTierLegend')()) ? 1 : 0, 1, 0.001);
-check('武器颜色统一为中性色', G('raidGunColor')({ qColor:'#ff0000', rarity:'orange' }) === '#cfcabb' ? 1 : 0, 1, 0.001);
-check('UI 使用武器品质开关 helper', /weaponRarityId\(w\)/.test(uiSrc) && /weaponRarityName\(w\)/.test(uiSrc) ? 1 : 0, 1, 0.001);
-check('只关武器品质，护甲品质仍在', G('raidMakeArmor')(5, 3).rarity === 3 ? 1 : 0, 1, 0.001);
+check('品质重新参与生成（传入 5 档全部生效）', qList.kinds>=3 ? 1 : 0, 1, 0.001);
+const qGun = G('generateWeapon')(30, { type:'rifle', rarity:'orange' });
+check('传入什么品质就出什么品质', qGun.rarity === 'orange' ? 1 : 0, 1, 0.001);
+
+/* 精简模式（默认）：品质名 / 品质色 / 前后缀 / 厂商 全部隐藏 */
+const compactView = JSON.parse(G(`JSON.stringify((()=>{
+  const prev=CFG.display; CFG.display="compact";
+  const w=generateWeapon(30,{ type:'rifle', rarity:'orange' });
+  const out={ qname:w.rarityName, col:raidGunColor(w), rname:raidGunName(w),
+    legend:raidTierLegend(), name:gunNameOf(w), short:w.short||"",
+    hasAffix:(w.affixes||[]).length>0, hidden:weaponQualityHidden() };
+  CFG.display=prev;
+  return out;
+})())`));
+check('精简：不显示品质名', compactView.qname === '' ? 1 : 0, 1, 0.001);
+check('精简：武器用中性色', compactView.col === '#cfcabb' ? 1 : 0, 1, 0.001);
+check('精简：不显示品质档位名', compactView.rname === '' ? 1 : 0, 1, 0.001);
+check('精简：图例改提示「精简显示」', /精简显示/.test(compactView.legend) ? 1 : 0, 1, 0.001);
+check('精简：枪名不含厂商与前后缀',
+  compactView.name === compactView.short && compactView.hasAffix ? 1 : 0, 1, 0.001);
+
+/* 完整模式：厂商 + 型号 + 前后缀 + 弹种 + 品质色全开 */
+const fullView = JSON.parse(G(`JSON.stringify((()=>{
+  const prev=CFG.display; CFG.display="full";
+  const w=generateWeapon(30,{ type:'rifle', rarity:'orange' });
+  const out={ qname:w.rarityName, col:raidGunColor(w), legend:raidTierLegend(),
+    name:w.name, man:(MANUFACTURERS[w.manufacturer]||{}).name||"",
+    model:w.model||"", pool:WEAPON_TYPES.rifle.models.indexOf(w.model)>=0,
+    hasAffix:(w.affixes||[]).length>0, hidden:weaponQualityHidden() };
+  CFG.display=prev;
+  return out;
+})())`));
+check('完整：显示品质名', fullView.qname.length>0 ? 1 : 0, 1, 0.001);
+check('完整：恢复品质色', fullView.col !== '#cfcabb' ? 1 : 0, 1, 0.001);
+check('完整：枪名带厂商', fullView.man && fullView.name.indexOf(fullView.man)===0 ? 1 : 0, 1, 0.001);
+check('完整：枪名带前后缀', fullView.hasAffix && fullView.name !== fullView.man+" "+fullView.model ? 1 : 0, 1, 0.001);
+check('枪名以真实型号为主体', fullView.pool ? 1 : 0, 1, 0.001);
+check('完整：图例恢复 9 阶刻度', /军规|精工|民用/.test(fullView.legend) ? 1 : 0, 1, 0.001);
+
+/* 型号稳定：同一条枪重算（重调词缀 / 换配件）不会改名 */
+const modelStable = JSON.parse(G(`JSON.stringify((()=>{
+  const a=generateWeapon(24,{ type:'smg', rarity:'blue', manufacturer:'Vladof' });
+  const b=generateWeapon(24,{ type:'smg', rarity:'blue', manufacturer:'Vladof' });
+  return { same:a.model===b.model, model:a.model };
+})())`));
+check('同参数生成的型号一致（重算不改名）', modelStable.same ? 1 : 0, 1, 0.001);
+check('UI 使用品质开关 helper', /weaponRarityId\(w\)/.test(uiSrc) && /weaponRarityName\(w\)/.test(uiSrc) ? 1 : 0, 1, 0.001);
+check('护甲品质不受影响', G('raidMakeArmor')(5, 3).rarity === 3 ? 1 : 0, 1, 0.001);
 check('配件品质仍按档位生成', G('rollPart')('muzzle', 20, 'blue').rarity === 'blue' ? 1 : 0, 1, 0.001);
+
+console.log('\n=== 27. 局内体验：放回背包 / 箱子枪带弹 / 跑刀移速 / 配件拆解（v0.21.6）===');
+const stowTest = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+  R._rtCache={}; R.floats=[]; R.toasts=[];
+  R.player={ isPlayer:true, x:0, y:0, gun:null, secondary:null, reloadT:0, fireCd:0 };
+  const w=generateWeapon(20,{ type:'rifle', manufacturer:'Vladof' });
+  w.uid='vt1'; w.kind='weapon';
+  // 空手捡枪 → 主手
+  R._collect(w, 0, 0);
+  const pick={ main:R.player.gun?R.player.gun.uid:null, sec:R.player.secondary, bag:R._gunBag().length };
+  // 放回背包
+  const ok=R._stowGun("main");
+  const after={ gun:R.player.gun, bag:R._gunBag().length, invN:R.inv.weapons.length };
+  // 再拿起来
+  R._invEquip(0);
+  const back={ gun:R.player.gun?R.player.gun.uid:null };
+  // 不在物品栏里的枪不许放（防丢枪）
+  R.inv.weapons=[]; const deny=R._stowGun("main");
+  return { pick, ok, after, back, deny };
+})())`));
+check('空手捡枪默认进主手', stowTest.pick.main ? 1 : 0, 1, 0.001);
+check('捡到的枪不会在背包里多出一把（运行时缓存一致）', stowTest.pick.bag, 0, 0.001);
+check('放回背包成功', stowTest.ok ? 1 : 0, 1, 0.001);
+check('放回后手上空出来', stowTest.after.gun === null ? 1 : 0, 1, 0.001);
+check('放回后枪出现在背包里', stowTest.after.bag, 1, 0.001);
+check('放回不会把枪从物品栏里删掉', stowTest.after.invN, 1, 0.001);
+check('背包里可以再拿回手上', stowTest.back.gun === 'vt1' ? 1 : 0, 1, 0.001);
+check('物品栏里没有的枪拒绝放回', stowTest.deny === false ? 1 : 0, 1, 0.001);
+check('物品栏有「放回背包」按钮', /data-stow=/ === null ? 0 : (/放回背包/.test(raidSrc) && /data-stow="\$\{stow\}"/.test(raidSrc) ? 1 : 0), 1, 0.001);
+
+const gunAmmo = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+  R._rtCache={}; R.floats=[]; R.toasts=[]; R.carried={weapons:[]};
+  R.player={ isPlayer:true, x:0, y:0, gun:null, secondary:null, reloadT:0, fireCd:0 };
+  const g=generateWeapon(20,{ type:'rifle', manufacturer:'Vladof' });
+  g.uid='ga1'; g.kind='weapon';
+  const before=R._ammoTotal();
+  R._giveGunAmmo(g, 0, 0);
+  const ids=Object.keys(R.inv.ammo);
+  return { add:R._ammoTotal()-before, ids, cal:ammoParseId(ids[0]||'') };
+})())`));
+check('箱子里的枪自带 30 发匹配口径弹药', gunAmmo.add, 30, 0.001);
+check('随枪弹药按枪的口径发（步枪=中弹）', gunAmmo.cal && gunAmmo.cal.cal === 'mid' ? 1 : 0, 1, 0.001);
+check('开箱出枪时调用 _giveGunAmmo', (raidSrc.match(/_giveGunAmmo\(/g)||[]).length>=4 ? 1 : 0, 1, 0.001);
+
+check('跑刀移速加成 = +20%', G('RAID_BAREHAND_SPEED'), 1.20, 0.001);
+check('移速计算乘上空手加成', /\*\(p\.gun\?1:RAID_BAREHAND_SPEED\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+const salvage = JSON.parse(G(`JSON.stringify((()=>{
+  const out={};
+  const barrel={ kind:'part', slot:'barrel', name:'重枪管', ilvl:20, rarity:'blue', value:900 };
+  const optic ={ kind:'part', slot:'optic',  name:'高倍镜', ilvl:20, rarity:'blue', value:900 };
+  const core  ={ kind:'part', slot:'core',   name:'膛压组件', ilvl:20, rarity:'blue', core:'chaos', lv:2, value:900 };
+  out.barrel=raidSalvageYield(barrel);
+  out.optic =raidSalvageYield(optic);
+  out.core  =raidSalvageYield(core);
+  // 高档次配件拆出更高档材料
+  const lo=raidSalvageYield({ kind:'part', slot:'barrel', ilvl:4, rarity:'white' });
+  const hi=raidSalvageYield({ kind:'part', slot:'barrel', ilvl:40, rarity:'pearl' });
+  out.lo=lo; out.hi=hi;
+  out.loTier=(RAID_MAT_BY_ID[lo[0].id]||{}).tier;
+  out.hiTier=(RAID_MAT_BY_ID[hi[0].id]||{}).tier;
+  return out;
+})())`));
+check('配件可拆出原材料', Array.isArray(salvage.barrel) && salvage.barrel.length>0 ? 1 : 0, 1, 0.001);
+check('枪管拆金属 / 瞄具拆电子', /steel|alloy|scrap/.test(salvage.barrel[0].id) && /copper|circuit|coil/.test(salvage.optic[0].id) ? 1 : 0, 1, 0.001);
+check('改装模块不可拆解', salvage.core === null ? 1 : 0, 1, 0.001);
+check('高档配件拆出更高档材料', salvage.hiTier > salvage.loTier ? 1 : 0, 1, 0.001);
+
+const salvageRun = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+  R.floats=[]; R.toasts=[];
+  R.player={ isPlayer:true, x:0, y:0, gun:null, secondary:null };
+  R.inv.parts.push({ kind:'part', slot:'barrel', name:'重枪管', ilvl:20, rarity:'blue', value:900 });
+  const ok=R._salvagePart(0);
+  return { ok, parts:R.inv.parts.length, mats:R.inv.materials.length, name:(R.inv.materials[0]||{}).name };
+})())`));
+check('局内拆解：配件消失、材料入库', salvageRun.ok && salvageRun.parts===0 && salvageRun.mats>0 ? 1 : 0, 1, 0.001);
+check('局内物品栏有「拆解」按钮', /data-salvage="\$\{salvage\}"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('仓库配件也能拆解', /data-partsalvage/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

@@ -21,11 +21,30 @@ const AFFIX_INVERT = { recoil:true, ammoEff:true };
 function weaponQualityOff(){
   return typeof CFG!=="undefined" && CFG.weaponQuality===false;
 }
+/* v0.21.6：**显示**分层（不关生成）
+ *   精简模式（默认）：枪名只留型号，不显示品质名、品质色、前后缀、厂商
+ *   完整模式：厂商 + 型号 + 前后缀 + 弹种 + 品质名与品质色
+ * 存档里的 rarity / affixes / manufacturer 一个字都不改，随时切回完整模式就能看全。 */
+function weaponQualityHidden(){
+  if(weaponQualityOff()) return true;
+  return !(typeof CFG!=="undefined" && CFG.display==="full");
+}
+/* 型号：由「厂商 + 枪型 + 等级 + 品级」确定性映射到型号池里的一个真枪型号。
+ * 做成确定性而不是 RNG，是为了让重调词缀 / 换配件 / 换弹种时枪名不会跳。 */
+function gunModelFor(base, man, ilvl, rarity){
+  if(!base) return "";
+  const pool = (base.models && base.models.length) ? base.models : (base.named || []);
+  if(!pool.length) return base.name || "";
+  const key = (man||"")+"|"+(base.name||"")+"|"+Math.round(ilvl||1)+"|"+(rarity||"");
+  let h=0x811c9dc5;
+  for(let i=0;i<key.length;i++){ h^=key.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
+  return pool[h % pool.length];
+}
 function weaponRarityId(w){
   return weaponQualityOff() ? "white" : ((w && w.rarity) || "white");
 }
 function weaponRarityName(w){
-  if(weaponQualityOff()) return "";
+  if(weaponQualityHidden()) return "";
   const R = RARITY_BY_ID[(w && w.rarity) || "white"] || RARITIES[0];
   return R.name;
 }
@@ -262,8 +281,8 @@ class Weapon {
   }
 
   get rarityDef(){ return RARITY_BY_ID[this.rarity] || RARITIES[0]; }
-  get rarityColor(){ return weaponQualityOff() ? "#cfcabb" : this.rarityDef.color; }
-  get rarityName(){ return weaponQualityOff() ? "" : this.rarityDef.name; }
+  get rarityColor(){ return weaponQualityHidden() ? "#cfcabb" : this.rarityDef.color; }
+  get rarityName(){ return weaponQualityHidden() ? "" : this.rarityDef.name; }
   get elemName(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].name : AMMO_TYPES.none.name; }
   get elemColor(){ return AMMO_TYPES[this.element] ? AMMO_TYPES[this.element].color : "#cfcabb"; }
   get value(){ return weaponPrice(this); }
@@ -481,10 +500,12 @@ function generateWeapon(level, opts={}){
   splash   = Math.round(splash);
   speed    = Math.round(speed);
 
-  const name = weaponName(man, base, R, element, affixes);
+  /* 型号：重算时用枪上已有的 model（keepModel），保证枪名稳定 */
+  const model = (opts.keepModel || opts.model || "").toString() || gunModelFor(base, man, ilvl, quality);
+  const name = weaponName(man, base, R, element, affixes, model);
 
   return new Weapon({
-    name, type, manufacturer:man, element, rarity:quality, ilvl,
+    name, model, type, manufacturer:man, element, rarity:quality, ilvl,
     magSize,
     mayhem: mh>0 ? mh : 0,
     power: R.power ? true : null,
@@ -512,20 +533,23 @@ function generateWeapon(level, opts={}){
 
 /* ----------------------------- 命名 ----------------------------- */
 // 厂商显示中文兵工厂名，具名档用真实枪械型号，不再拼接奇幻词与弹种标签
-function weaponName(man, base, R, element, affixes){
+function weaponName(man, base, R, element, affixes, model){
   const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;
-  /* 暂时不显示厂商（CFG.showManufacturer=false）：manufacturer 字段仍保留，
-   * 把开关改回 true 就能原样恢复；具名档 / 民用档也只留型号与枪型。 */
-  const manTag = CFG.showManufacturer===false ? "" : M0.name;
+  /* v0.21.6：枪名一律以「型号」为主体（AKM / MP5 / M4A1 …），不再所有枪都叫「步枪」。
+   * 具名档仍从 named 池里取标志性型号；其余用型号池。 */
+  const mdl = model || gunModelFor(base, man, 0, R.id);
+  /* v0.21.6：**存档名一律写全**（厂商 + 型号 + 前后缀 + 弹种），
+   * 精简 / 完整只是显示层的事（gunNameOf → compactGunName 负责剥掉厂商与前后缀）。
+   * 以前的写法在生成时就把厂商抹掉了，切回完整模式也补不回来。 */
+  const manTag = M0.name;
   const ammoTag = element!=="none" && AMMO_TYPES[element] ? " · "+AMMO_TYPES[element].short : "";
-  if(R.named){
-    const nm = RNG.pick(base.named || ["制式"]);
-    return `${manTag}${manTag?" ":""}${nm}${ammoTag}`;
-  }
-  if(R.id==="white") return `${manTag}${base.name}${ammoTag}`;
+  const head = (manTag ? manTag+" " : "") + mdl;
   const pre = affixes.find(a=>a.kind==="prefix");
   const suf = affixes.find(a=>a.kind==="suffix");
-  return `${manTag}${base.name}${pre?" "+pre.nm:""}${suf?suf.nm:""}${ammoTag}`;
+  /* 具名档（精锐以上）同样带前后缀 —— 完整显示下最该看的正是它们 */
+  const tail = `${pre?" "+pre.nm:""}${suf?suf.nm:""}`;
+  if(R.id==="white") return `${head}${ammoTag}`;
+  return `${head}${tail}${ammoTag}`;
 }
 
 /* 去掉旧存档 / 旧拍卖行名称里的厂商前缀（只影响显示名，manufacturer 字段仍保留） */

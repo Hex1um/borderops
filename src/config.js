@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.21.5",
+  version: "0.21.6",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -19,7 +19,7 @@ const CFG = {
    * showManufacturer 保留为兼容字段，切到 full 时同步为 true。 */
   display: "compact",
   showManufacturer: false, // 由 display 派生：display==="full" 时为 true
-  weaponQuality: false,    // 暂时禁用武器品质：新枪统一按标准品质生成，UI 不显示品质/颜色
+  weaponQuality: true,     // 武器品质总开关（v0.21.6：恢复生成；精简模式只在显示层隐藏品质与前后缀）
   // 画布逻辑分辨率基准（实际按窗口缩放）
   worldTile: 64,
   // 玩家基础
@@ -492,17 +492,30 @@ const MANUFACTURERS = {
 // 具名池全部改为现实枪械型号
 const WEAPON_TYPES = {
   pistol:  { name:"手枪",   baseDmg:11, fireRate:3.2, accuracy:0.92, mag:12, reload:1.1, speed:760, pellets:1, ammoType:"pistol",  spread:0.05, auto:false,
-             named:["PM","GSh-18","MP-443 Grach","PB","PL-15","Glock 17"] },
+             named:["PM","GSh-18","MP-443 Grach","PB","PL-15","Glock 17"],
+             /* v0.21.6：型号池 —— 「完整显示」下每条枪都有自己的真实型号，
+              * 不再所有手枪都叫「手枪」。精简模式只显示型号，完整模式再叠厂商 / 前后缀 / 品质。 */
+             models:["PM","PB","TT","MP-443 Grach","GSh-18","PL-15","P226R","M1911A1","Glock 17","Glock 19",
+                     "PX4 Storm","Five-seveN","USP .45","APS Stechkin","RSh-12","Desert Eagle"] },
   smg:     { name:"冲锋枪", baseDmg:6,  fireRate:11,  accuracy:0.82, mag:30, reload:1.5, speed:720, pellets:1, ammoType:"smg",     spread:0.10, auto:true,
-             named:["PP-19-01 Vityaz","MP5","MP7A1","PP-9 Klin","PPSh-41","FN P90"] },
+             named:["PP-19-01 Vityaz","MP5","MP7A1","PP-9 Klin","PPSh-41","FN P90"],
+             models:["PP-91 Kedr","PP-9 Klin","PP-19-01 Vityaz","PP-19 Bizon","PPSh-41","MP5","MP5SD","MP7A1",
+                     "UMP .45","FN P90","SIG MPX","Vector .45","UZI","MAC-10","Scorpion EVO 3","PP-90M1"] },
   shotgun: { name:"霰弹枪", baseDmg:7,  fireRate:1.8, accuracy:0.65, mag:6,  reload:2.2, speed:680, pellets:8, ammoType:"shotgun", spread:0.22, auto:false,
-             named:["Saiga-12","TOZ-106","MP-153","MP-155","M870","KS-23M"] },
+             named:["Saiga-12","TOZ-106","MP-153","MP-155","M870","KS-23M"],
+             models:["MP-133","MP-153","MP-155","TOZ-106","TOZ-34","KS-23M","M870","M590A1","Saiga-12",
+                     "Vepr-12","S12K","Benelli M4","SPAS-12","Remington 11-87"] },
   rifle:   { name:"步枪", baseDmg:16, fireRate:6.0, accuracy:0.9,  mag:24, reload:1.8, speed:820, pellets:1, ammoType:"rifle",   spread:0.06, auto:true,
-             named:["AK-74N","AK-103","AKM","M4A1","HK 416A5","ADAR 2-15"] },
+             named:["AK-74N","AK-103","AKM","M4A1","HK 416A5","ADAR 2-15"],
+             models:["AK-74N","AK-74M","AKM","AK-103","AK-105","AK-12","AK-15","M4A1","M16A4","HK 416A5",
+                     "HK G36","SCAR-L","SCAR-H","SIG SG550","FN FAL","ADAR 2-15","SKS","VPO-136","AS VAL","SR-3M"] },
   sniper:  { name:"狙击枪", baseDmg:55, fireRate:1.1, accuracy:0.99, mag:5,  reload:2.0, speed:1100,pellets:1, ammoType:"sniper",  spread:0.01, auto:false, charge:true,
-             named:["SVD-S","SV-98","VSS Vintorez","M700","DVL-10","ORSIS T-5000"] },
+             named:["SVD-S","SV-98","VSS Vintorez","M700","DVL-10","ORSIS T-5000"],
+             models:["SVD-S","SVDS","SV-98","VSS Vintorez","M700","M24","DVL-10","ORSIS T-5000","TRG-42",
+                     "AWM","M82A1","RSASS","M1A","Sako TRG","SVCh"] },
   launcher:{ name:"榴弹发射器", baseDmg:70, fireRate:0.9, accuracy:0.88, mag:4,  reload:2.6, speed:300, pellets:1, ammoType:"launcher",spread:0.04, auto:false, splash:120,
-             named:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","GP-25"] },
+             named:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","GP-25"],
+             models:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","M320 GLM","Milkor MGL","RG-6","Hawk MM-1"] },
 };
 
 /* ----------------------------- Scav 低阶武器池 -----------------------------
