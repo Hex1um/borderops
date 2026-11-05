@@ -590,17 +590,19 @@ check('3D 不再提供小地图入口', /vm-minimap/.test(vmSrc) ? 0 : 1, 1, 0.0
 
 /* 开阔朝向 + 渲染不抛异常 */
 const grad = { addColorStop(){} };
+/* 统计绘制调用次数：面渲染是否真的落到 canvas 上，光看「不抛异常」是看不出来的 */
+sandbox.__ctxCalls = 0;
 const mockCtx = new Proxy({}, {
   get(t, k){
     if(k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
     if(k === 'measureText') return () => ({width:10});
-    return () => {};
+    return () => { sandbox.__ctxCalls++; };
   },
   set(){ return true; },
 });
 sandbox.__mockCtx = mockCtx;
 sandbox.__mockGame = { view:{w:960,h:600,dpr:1}, zoom:1 };
-G(`Raid.walls=[{x:-320,y:-500,w:40,h:1000,kind:"wall"}];
+G(`Raid.walls=[{x:-320,y:-500,w:40,h:1000,kind:"wall"},{x:300,y:-200,w:40,h:400,kind:"wall"},{x:-60,y:420,w:520,h:40,kind:"wall",dam:true}];
    Raid.props=[]; Raid.forests=[]; Raid.roads=[]; Raid.waterCircles=[]; Raid.yards=[];
    Raid.roomRects=[]; Raid.bridges=[]; Raid.floodlights=[]; Raid.reservoirRect=null; Raid.damOpen=false;
    Raid.containers=[]; Raid.grounds=[]; Raid.shops=[]; Raid.extracts=[]; Raid.gadgets=[];
@@ -613,6 +615,13 @@ try { G('FPView.render(__mockCtx, __mockGame, Raid)'); } catch(e){ rErr = e.mess
 check('空手 3D 渲染无异常', rErr ? 0 : 1, 1, 0.001);
 if (rErr) console.log('  render error:', rErr);
 check('深度缓冲已写入', G('FPView._zbuf && FPView._zbuf.length > 100') ? 1 : 0, 1, 0.001);
+check('3D 墙面按面渲染并落到 canvas', G('__ctxCalls') > 200 ? 1 : 0, 1, 0.001);
+check('3D 墙面按深度排序（画家算法）', /valid\.sort\(\(a,b\)=> b\.dm - a\.dm\)/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 墙面按法线当面剔除', /if\(P\.y <= y0\) faces\.push/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 面渲染不再逐列合批', /_paintWalls\(ctx, w, h\)/.test(fpSrc) ? 0 : 1, 1, 0.001);
+check('3D 顶点缓冲复用（热路径零分配）', /_fq \|\| \(this\._fq = /.test(fpSrc) ? 1 : 0, 1, 0.001);
+const wallSrc = fpSrc.slice(fpSrc.indexOf('_paintWalls(ctx, near){'), fpSrc.indexOf('===================== 地面层'));
+check('3D 长墙切段代替渐变对象', /Math\.ceil\(f\.len\/420\)/.test(wallSrc) && !/ctx\.createLinearGradient/.test(wallSrc) ? 1 : 0, 1, 0.001);
 rErr = '';
 G('Raid.player.gun={ name:"AK-74N", type:"rifle", rarity:"blue", parts:[{slot:"scope"}], value:1000, ammoMag:30, ammoRes:90 };');
 try { G('FPView.render(__mockCtx, __mockGame, Raid)'); } catch(e){ rErr = e.message; }
@@ -665,6 +674,43 @@ check('少部分有 2 条以上词缀', multiShare < 0.4 && multiShare > 0 ? 1 :
 console.log(`  词缀分布：1 条 ${(singleShare*100).toFixed(1)}% · 2 条 ${(aff[2]/30).toFixed(1)}% · 3+ 条 ${((aff[3]+aff[4])/30).toFixed(1)}%`);
 const partAff = G(`(()=>{ const pt=rollPart("muzzle",20,"blue"); return pt.affixes.length; })()`);
 check('配件词缀数在 1~4 之间', partAff >= 1 && partAff <= 4 ? 1 : 0, 1, 0.001);
+
+console.log('\n=== 22. 撤离费阶梯 + 撤离点封锁规则（v0.19.2）===');
+/* 裸装 0.2 倍、带得越多折扣越小、绝对金额仍随装备升值上升、封顶 1.4 倍 */
+const feeTbl = JSON.parse(G(`JSON.stringify((()=>{
+  const z=RAID_EXTRACT_RULES.extJ, base0=z.cost*0.28;
+  const vs=[0,30000,90000,300000,900000];
+  return { base0, cap:z.cost*1.4,
+    rows: vs.map(v=>{ const fee=raidExtractFee(z,v);
+      const base=z.cost*0.28+v*(z.feeRate||0.018);
+      return { v, fee, mult:+raidExtractFeeMult(v).toFixed(3), ratio:+(fee/base).toFixed(3) }; }) };
+})())`));
+const r0 = feeTbl.rows[0];
+check('裸装撤离费约 0.2 倍', r0.mult > 0.199 && r0.mult < 0.201 ? 1 : 0, 1, 0.001);
+check('裸装撤离费 ≤ ₽120', r0.fee <= 120 ? 1 : 0, 1, 0.001);
+check('带的装备越多折扣越小', feeTbl.rows.every((r,i)=>
+  i === 0 || (r.mult > feeTbl.rows[i-1].mult - 1e-6 && r.mult <= 1)) ? 1 : 0, 1, 0.001);
+check('折扣永远到不了原价', feeTbl.rows[feeTbl.rows.length-1].mult < 1 ? 1 : 0, 1, 0.001);
+check('绝对费用随装备升值上升', feeTbl.rows.every((r,i)=>
+  i === 0 || r.fee >= feeTbl.rows[i-1].fee) ? 1 : 0, 1, 0.001);
+check('撤离费封顶 1.4 倍', feeTbl.rows.every(r => r.fee <= feeTbl.cap + 1) ? 1 : 0, 1, 0.001);
+const noFee = G(`(()=>{ const f=(id,v)=>raidExtractFee(RAID_EXTRACT_RULES[id],v);
+  const paid=["extC","extH","extJ","extP"];
+  return { all:paid.map(id=>f(id,0)), zero:f("extA",0), zero2:f("extB",300000) }; })()`);
+check('免费撤离点仍为 0 费', noFee.zero === 0 && noFee.zero2 === 0 ? 1 : 0, 1, 0.001);
+check('四个付费点裸装都低于 ₽120', noFee.all.every(v => v > 0 && v <= 120) ? 1 : 0, 1, 0.001);
+check('付费撤离点永不被封锁', /filter\(z=>!z\.closed && !\(z\.cost>0\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('同一撤离点不重复挂封锁者', /o\.alive && o\.blockZone===z\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('全图封锁者上限为 2', /liveBlockers < 2/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('撤离 HUD 显示真实原因', /const exLabel = blocked \? \(\(money/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('撤离费可走仓库兜底', /_payExtractFee/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('钱不够与封锁分开显示', /const money = !!blocked && blocked\.indexOf\("撤离费"\)===0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const feeShow = JSON.parse(G(`JSON.stringify((()=>{
+  const paid=["extC","extH","extJ","extP"], vs=[0,30000,90000,300000];
+  return paid.map(id=>[id].concat(vs.map(v=>raidExtractFee(RAID_EXTRACT_RULES[id],v))));
+})())`));
+console.log('  撤离费表（裸装 / ₽3万 / ₽9万 / ₽30万）：');
+feeShow.forEach(r => console.log('    ' + r[0] + '  ' + r.slice(1).map(x => '₽'+x).join('  →  ')));
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

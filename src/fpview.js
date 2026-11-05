@@ -29,11 +29,12 @@ const FPView = {
   _step: 3,
   _colors: null,
 
-  /* 墙面色阶：0 = 最远（融进雾里），15 = 最近（2D 同款 #272d31） */
+  /* 面法线明暗：0 = X 面（与视轴垂直，最亮），1 = Z 面（侧向，压暗）
+     色阶 0 = 最远（融进雾里），15 = 最近（2D 同款 #272d31） */
   _initColors(){
     if(this._colors) return;
     const haze = [26, 35, 41];
-    const base = [[39, 45, 49], [31, 36, 40]];       // 与 2D 墙体填充 #272d31 一致，Y 面略暗
+    const base = [[39, 45, 49], [29, 34, 38]];       // 与 2D 墙体填充 #272d31 一致，Z 面压暗
     this._colors = [];
     for(let s=0;s<2;s++){
       const arr=[];
@@ -62,17 +63,17 @@ const FPView = {
     const n = Math.ceil(w/step);
     if(!this._zbuf || this._zbuf.length < n){
       this._zbuf = new Float32Array(n);
-      this._wbot = new Float32Array(n);
     }
     this._cols = n;
     this._step = step;
 
     ctx.save();
     this._sky(ctx, w, h, horizon);
-    /* 先投射墙体（拿到每列墙脚），再画地面 —— 地面用墙脚轮廓裁剪，天然被墙遮住 */
-    const near = this._castWalls(ctx, R, p, w, h, horizon, proj, yaw, step, n);  // 只算不画
+    /* 画家算法三段式：算遮挡深度（只写 _zbuf） → 铺地面 → 按面画墙盖住地面 → 精灵 */
+    this._setProj(p, w, h, horizon, proj, yaw, ca, sa);
+    const near = this._castWalls(ctx, R, p, w, h, horizon, proj, yaw, step, n);
     this._floorLayer(ctx, R, p, w, h, horizon, proj, yaw);
-    this._paintWalls(ctx, w, h);                                                 // 墙面盖住地面
+    this._paintWalls(ctx, near);
     this._drawSprites(ctx, R, p, w, h, horizon, proj, yaw, ca, sa, step, n, near);
     this._lighting(ctx, R, p, w, h, horizon, proj, yaw, ca, sa);
     this._drawWeapon(ctx, R, w, h);
@@ -121,24 +122,14 @@ const FPView = {
     }
     const MAX = this.MAX_D, MIND = this.MIN_D;
 
-    /* 逐列投射 → 先记进数组，再把「颜色相同的相邻列」合并成一次 fillRect。
-       427 列逐列 fill 光是墙面就要 3000+ 次绘制调用，合并后一般只剩 1/5，帧率差别很大。 */
-    if(!this._k || this._k.length < n){
-      this._k = new Int16Array(n);
-      this._top = new Float32Array(n);
-      this._bot = new Float32Array(n);
-      this._hgt = new Float32Array(n);
-      this._dam = new Float32Array(n);
-      this._pan = new Float32Array(n);
-    }
-    const K = this._k, TOP = this._top, BOT = this._bot, HGT = this._hgt, DAM = this._dam, PAN = this._pan;
-
+    /* 逐列求「最近墙面距离」——只写深度缓冲，供精灵遮挡使用。
+     * v0.19.2 起墙面几何不再从这里出：逐列矩形是「墙壁伸缩」的根源，见 _paintWalls。 */
     for(let c=0; c<n; c++){
       const sx = c*step;
       const a = yaw + Math.atan((sx + step*0.5 - w/2)/proj);
       const dx = Math.cos(a), dy = Math.sin(a);
       const adx = Math.abs(dx) < 1e-9, ady = Math.abs(dy) < 1e-9;
-      let best = MAX, side = 0, hit = null;
+      let best = MAX;
 
       for(let i=0;i<near.length;i++){
         const item = near[i], wl = item.wl;
@@ -148,12 +139,12 @@ const FPView = {
           if(da > Math.PI) da -= TAU; else if(da < -Math.PI) da += TAU;
           if(da > item.halfAng || da < -item.halfAng) continue;
         }
-        let tmin = MIND, tmax = best, sd = 0;
+        let tmin = MIND, tmax = best;
         if(adx){ if(p.x < wl.x || p.x > wl.x+wl.w) continue; }
         else {
           let t1 = (wl.x-p.x)/dx, t2 = (wl.x+wl.w-p.x)/dx;
           if(t1 > t2){ const t=t1; t1=t2; t2=t; }
-          if(t1 > tmin){ tmin=t1; sd=0; }
+          if(t1 > tmin){ tmin=t1; }
           if(t2 < tmax) tmax=t2;
           if(tmin > tmax) continue;
         }
@@ -161,105 +152,234 @@ const FPView = {
         else {
           let t1 = (wl.y-p.y)/dy, t2 = (wl.y+wl.h-p.y)/dy;
           if(t1 > t2){ const t=t1; t1=t2; t2=t; }
-          if(t1 > tmin){ tmin=t1; sd=1; }
+          if(t1 > tmin){ tmin=t1; }
           if(t2 < tmax) tmax=t2;
           if(tmin > tmax) continue;
         }
-        if(tmin < best){ best=tmin; side=sd; hit=wl; }
+        if(tmin < best) best = tmin;
       }
 
       this._zbuf[c] = best;
-      this._wbot[c] = horizon;                 // 默认：这一列没有墙，地面一直铺到地平线
-      if(!hit){ K[c] = -1; continue; }
-
-      const perp = Math.max(MIND, best*Math.cos(a-yaw));
-      const yTop = horizon - ((this.WALL_H-this.EYE_H)/perp)*proj;
-      const yBot = horizon + (this.EYE_H/perp)*proj;
-      this._wbot[c] = Math.max(horizon, Math.min(h + 600, yBot));   // 墙脚：地面裁剪的边界
-      const hh = yBot - yTop;
-      const fog = Math.max(0, 1-perp/MAX);
-      const lvl = Math.max(0, Math.min(15, Math.round(fog*15)));
-
-      K[c] = side*16 + lvl;
-      TOP[c] = yTop; BOT[c] = yBot; HGT[c] = hh;
-      // 坝体 / 牢房隔断：2D 的混凝土冷灰叠加
-      DAM[c] = (hit.dam || hit.kind === "cell") ? fog : -1;
-
-      // 竖向板缝：命中点沿墙边的位置决定，给墙面一个真实尺度
-      const hx = p.x+dx*best, hy = p.y+dy*best;
-      const u = side===0
-        ? (hy-hit.y)/Math.max(1, hit.h)
-        : (hx-hit.x)/Math.max(1, hit.w);
-      const panels = Math.max(1, Math.round((side===0?hit.h:hit.w)/170));
-      PAN[c] = (((u*panels)%1) < 0.05 && perp < 1500) ? fog : -1;
     }
 
     return near;
   },
 
-  /* 合并绘制：同色相邻列一次填完。拆出来是为了让「地面 → 墙体」的绘制顺序可控，
-     墙面遮挡地面靠画序（画家算法），不需要一条 400 多点的裁剪路径（那才是真正的开销）。 */
-  _paintWalls(ctx, w, h){
-    const n = this._cols, step = this._step;
-    const K = this._k, TOP = this._top, BOT = this._bot, HGT = this._hgt, DAM = this._dam, PAN = this._pan;
-    if(!K) return;
-    for(let c=0; c<n; ){
-      const k = K[c];
-      if(k < 0){ c++; continue; }
-      let e = c;
-      while(e+1 < n && K[e+1] === k) e++;
-      const x0 = c*step, x1 = (e+1)*step, wd = x1-x0;
-      const yT = TOP[c], yB = BOT[c], hh = HGT[c];
-      const lvl = k & 15;
-      const fog = lvl/15;
+  /* ===================== 墙面：按「面」渲染（v0.19.2 · Minecraft 式） =====================
+   *
+   *  上一版为了省绘制调用，把「颜色相同的相邻列」合批成一次 fillRect —— 整段墙共用
+   *  一个 yTop/yBot，墙面因此退化成矩形（正确形状是梯形）；批次边界还随移动不断变化，
+   *  屏幕上看就成了「墙壁在伸缩」。这里改成按面渲染：
+   *
+   *    每面墙 = 一个长方体 · 只画朝向相机的侧面（最多 2 个）
+   *    每个侧面 = 4 个世界顶点 → 近平面裁剪 → 透视投影 → 填充
+   *    面内的板缝 / 水平缝 / 墙裙 / 顶沿都在世界空间里定位后再投影，天然跟着透视收拢
+   *
+   *  明暗按面法线固定（X 面亮、Z 面暗），与《我的世界》一致：不管怎么转身、
+   *  同一个面的亮度都不变，眼睛就不会读到「明暗在流动」。
+   *
+   *  性能约束：单帧最多几百个面，所以
+   *    · 顶点缓冲复用，热路径不分配数组（每帧上千个临时数组是最大的一笔开销）
+   *    · 不用 createLinearGradient（每面一个渐变对象，几百个直接吃掉 20ms）
+   *      长墙改成沿长度切 ≤3 段、每段一个雾阶，肉眼是连续渐变，代价只是几次 fill
+   * ====================================================================================== */
 
-      ctx.fillStyle = this._colors[k >> 4][lvl];
-      ctx.fillRect(x0, yT, wd, yB-yT);
+  _fq: null,       // 复用的四点世界坐标缓冲
+  _fs: null,       // 复用的四点屏幕坐标缓冲
 
-      // 坝体 / 牢房隔断的冷色叠加（取整段的平均值即可）
-      let dam = -1, pan = -1;
-      for(let i=c;i<=e;i++){ if(DAM[i] >= 0) dam = Math.max(dam, DAM[i]); if(PAN[i] >= 0) pan = Math.max(pan, PAN[i]); }
-      if(dam >= 0){
-        ctx.fillStyle = "rgba(92,120,140," + (0.12 + 0.20*dam).toFixed(3) + ")";
-        ctx.fillRect(x0, yT, wd, yB-yT);
+  /* 世界点 (x, y, 世界高度 hgt) → [sx, sy, depth]；在相机后方返回 null
+     （面渲染的热路径不调它，见 _facePoly；这条给缝线 / 顶沿用，数量少） */
+  _p3(x, y, hgt){
+    const c = this._pf;
+    const rx = x-c.p.x, ry = y-c.p.y;
+    const d = rx*c.ca + ry*c.sa;
+    if(d < 8) return null;
+    const lat = -rx*c.sa + ry*c.ca;
+    return [c.w/2 + (lat/d)*c.proj, c.horizon + ((this.EYE_H-hgt)/d)*c.proj, d];
+  },
+
+  /* 三维顶点多边形裁到 depth >= near（Sutherland–Hodgman，只裁一个平面） */
+  _clipNear3(pts, near){
+    const c = this._pf, ca = c.ca, sa = c.sa, px = c.p.x, py = c.p.y;
+    const out = [];
+    for(let i=0;i<pts.length;i++){
+      const a = pts[i], b = pts[(i+1)%pts.length];
+      const da = (a[0]-px)*ca + (a[1]-py)*sa - near;
+      const db = (b[0]-px)*ca + (b[1]-py)*sa - near;
+      if(da >= 0) out.push(a);
+      if((da >= 0) !== (db >= 0)){
+        const t = da/(da-db);
+        out.push([a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]);
       }
-      if(pan >= 0){
-        ctx.fillStyle = "rgba(0,0,0," + (0.30*pan).toFixed(3) + ")";
-        ctx.fillRect(x0, yT, wd, yB-yT);
-      }
+    }
+    return out;
+  },
 
-      /* 水平砖缝 / 墙裙：把 y 轴线性映射到墙体世界高度，近距离不会退化成一块灰板 */
-      if(hh > 18){
-        ctx.fillStyle = "rgba(0,0,0," + (0.20*fog).toFixed(3) + ")";
-        ctx.beginPath();
-        for(let b=1;b<=3;b++){
-          const yy = Math.round(yB - hh*(b/4));
-          if(yy <= 0 || yy >= h) continue;
-          ctx.rect(x0, yy, wd, Math.max(1, hh*0.012));
-        }
-        const yb = yB - hh*0.12;
-        if(yb > 0 && yb < h) ctx.rect(x0, yb, wd, Math.min(hh*0.12, h-yb));
+  /* 把一个世界矩形面 (x0,y0)-(x1,y1) × 高度 [h0,h1] 建成 ctx path。
+     顶点缓冲复用 → 每帧零分配；完全在身后 / 屏幕上太小时返回 false。 */
+  _facePoly(ctx, x0, y0, x1, y1, h0, h1){
+    const c = this._pf, ca = c.ca, sa = c.sa, px = c.p.x, py = c.p.y;
+    const b = this._fq || (this._fq = [[0,0,0],[0,0,0],[0,0,0],[0,0,0]]);
+    b[0][0]=x0; b[0][1]=y0; b[0][2]=h0;
+    b[1][0]=x1; b[1][1]=y1; b[1][2]=h0;
+    b[2][0]=x1; b[2][1]=y1; b[2][2]=h1;
+    b[3][0]=x0; b[3][1]=y0; b[3][2]=h1;
+    let need = false;
+    for(let i=0;i<4;i++){ if((b[i][0]-px)*ca + (b[i][1]-py)*sa < 12){ need = true; break; } }
+    const poly = need ? this._clipNear3(b, 12) : b;
+    if(poly.length < 3) return false;
+
+    const proj = c.proj, hw = c.w/2, hor = c.horizon, eye = this.EYE_H;
+    ctx.beginPath();
+    for(let i=0;i<poly.length;i++){
+      const rx = poly[i][0]-px, ry = poly[i][1]-py;
+      const d = rx*ca + ry*sa;
+      if(d < 8) return false;
+      const sx = hw + ((-rx*sa + ry*ca)/d)*proj;
+      const sy = hor + ((eye-poly[i][2])/d)*proj;
+      if(i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.closePath();
+    return true;
+  },
+
+  /* 距离 → 雾阶（0 = 纯雾，15 = 最近） */
+  _fogLvl(d){
+    const f = 1 - d/this.MAX_D;
+    return Math.max(0, Math.min(15, Math.round((f > 0 ? f : 0)*15)));
+  },
+
+  /* 把一条「世界高度 = hh 的水平线」加进当前 path；任一端在身后就放弃 */
+  _faceH(ctx, f, hh){
+    const p0 = this._p3(f.ax, f.ay, hh), p1 = this._p3(f.bx, f.by, hh);
+    if(!p0 || !p1) return false;
+    ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]);
+    return true;
+  },
+
+  _paintWalls(ctx, near){
+    const pf = this._pf;
+    if(!pf || !near || !near.length) return;
+    const P = pf.p, ca = pf.ca, sa = pf.sa, proj = pf.proj;
+    const MAX = this.MAX_D;
+    const faces = [];
+
+    /* 只收朝向相机的侧面：法线点向相机才画（背面剔除） */
+    for(let i=0;i<near.length;i++){
+      const wl = near[i].wl;
+      const x0 = wl.x, y0 = wl.y, x1 = wl.x+wl.w, y1 = wl.y+wl.h;
+      const top = wl.hgt || this.WALL_H;
+      if(P.y <= y0) faces.push({ wl, ax:x0, ay:y0, bx:x1, by:y0, top, sh:1 });   // 北面（-Z）
+      if(P.y >= y1) faces.push({ wl, ax:x1, ay:y1, bx:x0, by:y1, top, sh:1 });   // 南面（+Z）
+      if(P.x <= x0) faces.push({ wl, ax:x0, ay:y1, bx:x0, by:y0, top, sh:0 });   // 西面（-X）
+      if(P.x >= x1) faces.push({ wl, ax:x1, ay:y0, bx:x1, by:y1, top, sh:0 });   // 东面（+X）
+    }
+    if(!faces.length) return;
+
+    const valid = [];
+    for(let i=0;i<faces.length;i++){
+      const f = faces[i];
+      f.d1 = (f.ax-P.x)*ca + (f.ay-P.y)*sa;
+      f.d2 = (f.bx-P.x)*ca + (f.by-P.y)*sa;
+      f.dm = (f.d1+f.d2)*0.5;
+      const dn = f.d1 < f.d2 ? f.d1 : f.d2;
+      const df = f.d1 < f.d2 ? f.d2 : f.d1;
+      if(df < 14 || dn > MAX) continue;             // 整面在身后 / 整面在雾外
+      /* 屏幕上不到 1px 的面直接丢：远墙段有上千段，省下来的是纯利润 */
+      const len = Math.abs(f.bx-f.ax) + Math.abs(f.by-f.ay);
+      const widthPx = (len/Math.max(14, f.dm))*proj;
+      if(widthPx < 1) continue;
+      f.len = len; f.widthPx = widthPx;
+      valid.push(f);
+    }
+    if(!valid.length) return;
+    valid.sort((a,b)=> b.dm - a.dm);               // 远 → 近（画家算法）
+
+    for(let i=0;i<valid.length;i++){
+      const f = valid[i];
+      const fog = Math.max(0, Math.min(1, 1 - f.dm/MAX));
+      const pal = this._colors[f.sh];
+
+      /* 主体：长墙沿长度切段，每段一个雾阶 —— 视觉上是渐变，代价只有几次 fill。
+         避免 createLinearGradient：每面一个渐变对象，几百面就是 20ms 级别。 */
+      const pieces = f.len > 420 ? Math.min(3, Math.ceil(f.len/420)) : 1;
+      for(let s=0; s<pieces; s++){
+        const u0 = s/pieces, u1 = (s+1)/pieces;
+        const xa = f.ax+(f.bx-f.ax)*u0, ya = f.ay+(f.by-f.ay)*u0;
+        const xb = f.ax+(f.bx-f.ax)*u1, yb = f.ay+(f.by-f.ay)*u1;
+        const dm = f.d1+(f.d2-f.d1)*((u0+u1)*0.5);
+        if(!this._facePoly(ctx, xa, ya, xb, yb, 0, f.top)) continue;
+        ctx.fillStyle = pal[this._fogLvl(Math.max(14, dm))];
         ctx.fill();
-        ctx.fillStyle = "rgba(210,220,226," + (0.045*fog).toFixed(3) + ")";
-        ctx.beginPath();
-        for(let b=1;b<=3;b++){
-          const yy = Math.round(yB - hh*(b/4) + Math.max(1, hh*0.012));
-          if(yy <= 0 || yy >= h) continue;
-          ctx.rect(x0, yy, wd, Math.max(1, hh*0.006));
+      }
+
+      /* 坝体 / 牢房隔断：2D 的混凝土冷灰叠加 */
+      if(f.wl.dam || f.wl.cell){
+        if(this._facePoly(ctx, f.ax, f.ay, f.bx, f.by, 0, f.top)){
+          ctx.fillStyle = "rgba(92,120,140," + (0.12 + 0.20*fog).toFixed(3) + ")";
+          ctx.fill();
         }
+      }
+
+      /* 远墙只保留轮廓；近墙才补细节（每面 5~7 次绘制，不能无条件铺开） */
+      if(f.dm > 900 || f.widthPx < 34) continue;
+
+      /* 墙裙（2D 房间里的踢脚板） */
+      const sk = f.top*0.12;
+      if(this._facePoly(ctx, f.ax, f.ay, f.bx, f.by, 0, sk)){
+        ctx.fillStyle = "rgba(0,0,0," + (0.22*fog).toFixed(3) + ")";
         ctx.fill();
       }
-      // 墙顶描边（2D 的 #0b0e10 2px 外框）
-      if(yT > -hh && yT < h){
-        ctx.fillStyle = "rgba(6,9,11,0.85)";
-        ctx.fillRect(x0, Math.max(0, yT-2), wd, 2);
+
+      /* 板缝：按世界 X/Y 每 170 一条，锚在世界上而不是屏幕上 —— 移动时会正确滑动收拢 */
+      const spanX = Math.abs(f.bx-f.ax) > 0.5;
+      const t0 = spanX ? f.ax : f.ay, t1 = spanX ? f.bx : f.by;
+      const lo = t0 < t1 ? t0 : t1, hi = t0 < t1 ? t1 : t0;
+      if(hi - lo > 170){
+        ctx.beginPath();
+        let drew = false;
+        for(let t = Math.ceil(lo/170)*170; t < hi; t += 170){
+          if(t - lo < 24 || hi - t < 24) continue;
+          const u = (t - t0)/(t1 - t0);
+          const x = f.ax + (f.bx-f.ax)*u, y = f.ay + (f.by-f.ay)*u;
+          const pb = this._p3(x, y, 0), pt = this._p3(x, y, f.top);
+          if(!pb || !pt) continue;
+          ctx.moveTo(pb[0], pb[1]); ctx.lineTo(pt[0], pt[1]);
+          drew = true;
+        }
+        if(drew){
+          ctx.strokeStyle = "rgba(0,0,0," + (0.26*fog).toFixed(3) + ")";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
       }
-      // 顶沿高光（2D 的 rgba(170,195,205,0.16) 顶边）
-      if(yT > -hh && yT < h){
-        ctx.fillStyle = "rgba(170,195,205," + (0.22*fog).toFixed(3) + ")";
-        ctx.fillRect(x0, Math.max(0, yT), wd, Math.max(1, hh*0.014));
+
+      /* 水平砖缝：世界高度 1/4、2/4、3/4 三档，近处不再是灰板 */
+      ctx.beginPath();
+      let anyH = false;
+      anyH = this._faceH(ctx, f, f.top*0.25) || anyH;
+      anyH = this._faceH(ctx, f, f.top*0.50) || anyH;
+      anyH = this._faceH(ctx, f, f.top*0.75) || anyH;
+      if(anyH){
+        ctx.strokeStyle = "rgba(0,0,0," + (0.18*fog).toFixed(3) + ")";
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
-      c = e+1;
+
+      /* 顶沿：2D 的 #0b0e10 外框 + rgba(170,195,205,0.16) 高光 */
+      const e0 = this._p3(f.ax, f.ay, f.top), e1 = this._p3(f.bx, f.by, f.top);
+      if(e0 && e1){
+        ctx.beginPath();
+        ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]);
+        ctx.strokeStyle = "rgba(6,9,11," + (0.45 + 0.40*fog).toFixed(3) + ")";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(e0[0], e0[1]+1.5); ctx.lineTo(e1[0], e1[1]+1.5);
+        ctx.strokeStyle = "rgba(170,195,205," + (0.10 + 0.16*fog).toFixed(3) + ")";
+        ctx.lineWidth = Math.max(1, Math.min(2.5, f.top*0.012));
+        ctx.stroke();
+      }
     }
   },
 
@@ -269,14 +389,14 @@ const FPView = {
    *  平面上的直线投影到图像后仍然是直线，所以只要把世界坐标顶点做透视变换再连线，
    *  形状、位置、遮挡关系就与 2D 完全一致，而不是近似画几块色板。
    *
-   *  墙体先画（逐列），再用地面的「墙脚轮廓」做一次 clip，地面永远盖不到墙上。
+   *  地面在墙之前铺（一次无裁剪的全铺），墙体随后按面盖上去 —— 画家算法，
+   *  不需要一条 400 多点的裁剪路径（那种 clip 会让每次 fill 都重新栅格化）。
    *  图层顺序照抄 2D scene()：
    *    底面 → 分区 → 密林 → 道路 → 草丛碎石 → 网格 → 泄洪库底 → 水库 → 水面
    *    → 桥 → 铁路 → 院子 → 房间 → 贴花 → 暗斑 → 距离雾
    * ====================================================================================== */
 
   _pf: null,       // 本帧投影上下文
-  _wbot: null,     // 每列墙脚屏幕 y（无墙则 = horizon）
 
   _setProj(p, w, h, horizon, proj, yaw, ca, sa){
     this._pf = { p, w, h, horizon, proj, ca, sa };

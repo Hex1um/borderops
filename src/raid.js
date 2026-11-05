@@ -225,16 +225,26 @@ const RAID_EXTRACT_RULES = {
   extS: { need:8, cost:0,    openChance:0.75, note:"大坝坝顶 · 每局随机开放" },
 };
 
-/* 撤离费 = 基础价×0.28 + 带入装备估值×费率
- *   · 裸装跑刀：约 300~500 卢布（旧版 4000+，等于直接把新手劝退）
- *   · 带 ₽50,000：约 1,300~1,700
- *   · 带 ₽300,000：约 6,000~7,500（重装才该多付）
+/* 撤离费 = (基础价×0.28 + 带入装备估值×费率) × 轻装折扣
+ *   轻装折扣 mult = 0.2 + 0.8 × v/(v+90000)
+ *     · 裸装跑刀 v=0      → 0.20 倍，约 70~110 卢布（基本等于白坐）
+ *     · 带 ₽30,000        → 0.40 倍
+ *     · 带 ₽90,000        → 0.60 倍
+ *     · 带 ₽300,000       → 0.82 倍（重装几乎按原价付）
+ *   「带的装备越多，折扣越小」，绝对金额仍随装备升值上升，重装才该多付。
  *   封顶 = 基础价×1.4，避免顶级装备出现天价车费。 */
+const RAID_FEE_LIGHT = 0.20;     // 裸装折扣下限
+const RAID_FEE_SOFT  = 90000;    // 折扣衰减半程的装备估值
+/* 折扣系数本体：0.2 → 趋近 1.0 的单调递增曲线（拆出来便于单独校验） */
+function raidExtractFeeMult(carryVal){
+  const v=Math.max(0, carryVal||0);
+  return RAID_FEE_LIGHT + (1-RAID_FEE_LIGHT)*(v/(v+RAID_FEE_SOFT));
+}
 function raidExtractFee(zone, carryVal){
   if(!zone || !zone.cost) return 0;
   const v=Math.max(0, carryVal||0);
-  const raw = zone.cost*0.28 + v*(zone.feeRate||0.018);
-  return Math.round(M.clamp(raw, 120, zone.cost*1.4)/10)*10;
+  const base = zone.cost*0.28 + v*(zone.feeRate||0.018);
+  return Math.round(M.clamp(base*raidExtractFeeMult(v), 60, zone.cost*1.4)/10)*10;
 }
 
 // PMC / Scav巡逻点（开阔处）
@@ -4616,14 +4626,19 @@ const Raid = {
       }
       // 付费撤离点：费用随带入装备估值浮动；余额不足时不计时
       const fee=raidExtractFee(zone, this.carryVal||0);
-      if(fee>0 && this.creds<fee){
+      const purse=this.creds + Math.max(0, (this.stash&&this.stash.creds)||0);
+      if(fee>0 && purse<fee){
         this.extractT=Math.max(0, this.extractT-dt*1.6);
-        this._extractBlockReason="需 "+fee+" 卢布（当前 "+this.creds+"）";
+        this._extractBlockReason="撤离费 "+fee+" 卢布不足（局内 "+this.creds+" + 仓库 "+Math.max(0,(this.stash&&this.stash.creds)||0)+"）";
       } else {
         this._extractBlockReason=null;
         this.extractT=Math.min(zone.need, this.extractT+dt);
         if(this.extractT>=zone.need){
-          if(fee>0) this.creds-=fee;   // V-EX 车费（按带入装备浮动）
+          if(fee>0 && !this._payExtractFee(fee)){   // V-EX 车费（局内现金优先，仓库兜底）
+            this.extractT=Math.max(0, this.extractT-dt*1.6);
+            this._extractBlockReason="撤离费 "+fee+" 卢布不足";
+            return;
+          }
           this._succeed(zone);
         }
       }
@@ -4631,6 +4646,19 @@ const Raid = {
       this._extractBlockReason=null;
       this.extractT=Math.max(0, this.extractT-dt*1.6);
     }
+  },
+
+  /* 付撤离费：优先局内现金，其次仓库余额（钱只在真正撤离成功时才扣，读条被打断不白花） */
+  _payExtractFee(fee){
+    if(fee<=0) return true;
+    if(this.creds>=fee){ this.creds-=fee; return true; }
+    const st=Math.max(0,(this.stash&&this.stash.creds)||0);
+    if(st>=fee){
+      this.stash.creds=st-fee;
+      if(typeof RaidStash!=="undefined" && RaidStash.save) RaidStash.save(this.stash);
+      return true;
+    }
+    return false;
   },
 
   _succeed(zone){
@@ -4767,10 +4795,15 @@ const Raid = {
     const isSquad = RNG.chance(0.5);
     const squadId = isSquad ? ("sq"+(this._squadN++)) : null;
     const n = isSquad ? RNG.ri(2,3) : 1;
-    // 约 45% 的小队会去封锁某个开放的撤离点
+    /* 约 45% 的小队会去封锁某个开放的撤离点。三条约束（v0.19.2）：
+     *   · 付费撤离点永不封锁 —— 它是「花钱买路」的保底出口，堵了就真没路走了
+     *   · 同一个点不重复挂封锁者（否则杀一个还有下一个，永远清不完）
+     *   · 全图同时存在的封锁者最多 2 个，避免后期所有撤离点全红 */
     let blockZone=null;
-    if(isSquad && RNG.chance(0.45)){
-      const open=this.extracts.filter(z=>!z.closed);
+    const liveBlockers=this.ops.filter(o=>o.alive && o.blockZone).length;
+    if(isSquad && RNG.chance(0.45) && liveBlockers < 2){
+      const open=this.extracts.filter(z=>!z.closed && !(z.cost>0) &&
+        !this.ops.some(o=>o.alive && o.blockZone===z));
       if(open.length) blockZone=RNG.pick(open);
     }
     // 选一个离玩家足够远的房间进场，避免「凭空刷在脸上」
@@ -6249,11 +6282,13 @@ const RenderRaid = {
       const t=R.extractT/inZone.need;
       const cw=Math.min(300,v.w-36), cx=v.w/2-cw/2, cy=mob?v.h*0.56:(v.h-140);
       const blocked = R._extractBlockReason;
-      ctx.fillStyle=blocked?"rgba(52,10,8,0.88)":"rgba(8,16,12,0.8)"; ctx.fillRect(cx,cy,cw,26);
-      ctx.fillStyle=blocked?"#ff6a5a":"#4fe08a"; ctx.fillRect(cx,cy,cw*Math.max(0.02,t),26);
+      /* 钱不够和「被封锁」是两回事，颜色与文案都要分开：一个是去清人，一个是去搞钱 */
+      const money = !!blocked && blocked.indexOf("撤离费")===0;
+      ctx.fillStyle=blocked?(money?"rgba(46,34,6,0.90)":"rgba(52,10,8,0.88)"):"rgba(8,16,12,0.8)"; ctx.fillRect(cx,cy,cw,26);
+      ctx.fillStyle=blocked?(money?"#e8c05a":"#ff6a5a"):"#4fe08a"; ctx.fillRect(cx,cy,cw*Math.max(0.02,t),26);
       ctx.textAlign="center"; ctx.font=mob?"bold 12px system-ui,sans-serif":"bold 13px system-ui,sans-serif";
-      ctx.fillStyle=blocked?"#ffe0dc":"#04140c";
-      const exLabel = blocked ? "⛔ 撤离点被封锁 · 清除封锁者"
+      ctx.fillStyle=blocked?(money?"#ffe9b8":"#ffe0dc"):"#04140c";
+      const exLabel = blocked ? ((money?"⛕ ":"⛔ ")+blocked)
         : (mob ? `撤离中 ${(R.extractT).toFixed(1)} / ${inZone.need.toFixed(0)} 秒`
                : `撤离中 · ${inZone.name}  ${(R.extractT).toFixed(1)} / ${inZone.need.toFixed(0)} 秒`);
       ctx.fillText(exLabel, v.w/2, cy+18);
@@ -6681,7 +6716,7 @@ UI.raidSetup=function(){
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
           与 15 名 <b style="color:#e0b84a">PMC / Scav</b> 加 2 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">◆</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
           <b style="color:#ffd23f">战利品 9 阶品质</b>：${raidTierLegend()}。箱子<b style="color:#ffd76a">绝大多数是原材料与配件</b>，整枪 / 护甲只是少数——想拿到好枪，要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料，名字与品质由它们决定）。任意品质都可能刷出，但<b style="color:#8fd0ff">携带装备总估值</b>会显著抬高高阶物资的权重。<br>
-          <b style="color:#ff7a3c">开局 3 分钟后</b>全图开始缓慢刷入<b>带装备的增援</b>：有的<b style="color:#e0b84a">组队推进</b>，有的会<b style="color:#ff7a3c">封锁撤离点</b>（封锁者存活时无法读条撤离）。<br>
+          <b style="color:#ff7a3c">开局 3 分钟后</b>全图开始缓慢刷入<b>带装备的增援</b>：有的<b style="color:#e0b84a">组队推进</b>，有的会<b style="color:#ff7a3c">封锁撤离点</b>（封锁者存活时无法读条撤离）。<b style="color:#8fe07a">付费撤离点永不被封锁</b>，实在被堵死就花钱雇车；全图同时最多 2 处被封锁。<br>
           <b style="color:#ff8a5a">AI 更像真人</b>：视野 <b>1000px</b>、枪声能传 <b>1200px</b>，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（Raider 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#c07bff">本局第一次击杀</b>必得 <b>1 枚 ◆ GP 币</b>（撤离才落袋）—— 想攒 GP 币就得真开打，绕开所有人只会两手空空。<br>
           <b style="color:#8fe07a">只有成功撤离</b>，携带装备与战利品才写回仓库；阵亡或超时全部丢失。<br>
           <b style="color:#4fd6ff">护盾装备</b>：血条<b>上方</b>那条独立蓝色条，伤害<b>先扣盾、再扣护甲耐久、最后扣血</b>；
@@ -6693,8 +6728,8 @@ UI.raidSetup=function(){
           <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · GP 币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
           <b style="color:#8fe07a">可互动设施</b>：<b>监狱 / 小镇 / 大坝</b>里有医疗站（回 45 血并止血）、弹药柜（补满备弹）、警报器（拉响把 AI 引过去，撤离前调虎离山）与<b style="color:#8fd0ff">泄洪闸</b>——闸门一开，水库放空，水底露出 <b style="color:#ffd23f">IV 级 + III 级保险箱</b>各一口，代价是巨响会招来一票人。<br>
           <b style="color:#62c8ff">河流与桥</b>：河道可<b>缓慢涉水</b>通过（速度只剩 45%），泡在水里超过 4.5 秒开始<b style="color:#ff9a8a">失温扣血</b>且越拖越疼——桥面（8 座，含 3 座带双黄线的大桥）完全免减速，赶路还是走桥。<b style="color:#ffd76a">背包满时</b>捡到的多余物资不会消失，会<b>掉在脚下变成发光的小包裹</b>，腾出空间后按 E 还能捡回来；<b style="color:#ff8a5a">Tab 物品栏</b>里每件战利品都有 <b>✕ 丢弃</b> 按钮，丢掉的同样落在脚下，随时能回头捡。<br>
-          <b style="color:#e0b84a">撤离费按带入装备估价浮动</b>：裸装跑刀约 ₽300，带 ₽30 万的满配才需要一两千 —— 贵重装备多、护送成本高。<br>
-          <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◆ GP 币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。</div>
+          <b style="color:#e0b84a">撤离费按带入装备估价浮动</b>：裸装跑刀只收 <b style="color:#8fe07a">0.2 倍</b>（约 ₽70~110，基本白坐）；带得越多折扣越小，带 ₽30 万的重装按原价付、封顶一两千 —— 贵重装备多、护送成本高。<br>
+          <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◆ GP 币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。撤离费先扣局内现金，<b style="color:#ffd36a">不够再从仓库补扣</b>（只在真正撤离成功时扣）。</div>
       </details>
       <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · GP 币 <b style="color:#c07bff">◆ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 护盾 ${stash.shields.length} · 配件 ${(stash.parts||[]).length} · 改装模块 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
 
