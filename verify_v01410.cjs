@@ -1398,5 +1398,33 @@ check('完整模式图例按「从低到高」顺序列出',
   legendPlain.indexOf(tierNames9[0][0])>=0 &&
   legendPlain.indexOf(tierNames9[8][0]) > legendPlain.indexOf(tierNames9[0][0]) ? 1 : 0, 1, 0.001);
 
+console.log('\n=== 30. 完整模式显示前后缀 + T10 改名「特供」 + 最高三档仅黑市赌博机产出 ===');
+// 完整模式：显示分层关闭（显示前后缀 / 品质）
+const prevD = G('CFG.display'); G('CFG.display="full"');
+check('完整模式 weaponQualityHidden=false', G('weaponQualityHidden()')?0:1, 1, 0.001);
+check('第10档品质改名 特供', G('RARITIES.find(r=>r.id==="primordial").name==="特供"')?1:0, 1, 0.001);
+// 完整模式：枪名应含前后缀
+const preOk = G('(function(){ const w=generateWeapon(40,{rarity:"primordial"}); const a=w.affixes.find(x=>x.kind==="prefix")||w.affixes[0]; return a? gunNameOf(w).indexOf(a.nm)>=0 : false; })()');
+check('完整模式枪名含前后缀', preOk?1:0, 1, 0.001);
+// 精简模式：隐藏前后缀与品质
+G('CFG.display="compact"');
+check('精简模式 weaponQualityHidden=true', G('weaponQualityHidden()')?1:0, 1, 0.001);
+const preOkC = G('(function(){ const w=generateWeapon(40,{rarity:"primordial"}); const a=w.affixes.find(x=>x.kind==="prefix")||w.affixes[0]; return a? gunNameOf(w).indexOf(a.nm)>=0 : true; })()');
+check('精简模式枪名不含前后缀', preOkC?0:1, 1, 0.001);
+G('CFG.display="'+prevD+'"');
+
+// 最高三档（特供/珍藏/孤品）默认权重归零
+check('默认权重 特供=0', G('RARITIES.find(r=>r.id==="primordial").weight'), 0, 0.001);
+check('默认权重 珍藏=0', G('RARITIES.find(r=>r.id==="celestial").weight'), 0, 0.001);
+check('默认权重 孤品=0', G('RARITIES.find(r=>r.id==="singularity").weight'), 0, 0.001);
+check('黑市权重不再含特供', ("primordial" in G('SHOPS.black.weights'))?0:1, 1, 0.001);
+check('赌博机改为金币(gold)结算', G('(SHOPS.gamble.currency||"gold")==="gold"')?1:0, 1, 0.001);
+check('赌博机权重含 特供', G('(SHOPS.gamble.weights.primordial||0)>0')?1:0, 1, 0.001);
+check('赌博机权重含 珍藏', G('(SHOPS.gamble.weights.celestial||0)>0')?1:0, 1, 0.001);
+check('赌博机权重含 孤品', G('(SHOPS.gamble.weights.singularity||0)>0')?1:0, 1, 0.001);
+// rollQuality 默认表（无权重参数）绝不出最高三档
+check('rollQuality 默认不出特供', G('(function(){ for(let i=0;i<500;i++){ if(rollQuality(60,{})==="primordial") return false; } return true; })()')?1:0, 1, 0.001);
+check('rollQuality 默认不出孤品', G('(function(){ for(let i=0;i<500;i++){ if(rollQuality(60,{})==="singularity") return false; } return true; })()')?1:0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

@@ -523,8 +523,8 @@ const UI = {
       body=`<div class="gamble-box">
         <div class="slot">?</div>
         <div style="color:var(--muted);font-size:13px;max-width:420px;line-height:1.6;">${def.desc}<br>
-          ${weaponQualityHidden()?"精简显示下不标品质，切到「完整」可查看；":"可能开出任何品质，" }物品等级 = 你的等级 +3。</div>
-        <button class="btn" id="btn-gamble" ${p.gold<cost?'disabled style="opacity:.4"':''}>投币 ◈${cost.toLocaleString()}</button>
+          ${weaponQualityHidden()?"精简显示下不标品质，切到「完整」可查看；":"特供 / 珍藏 / 孤品 三档神兵只有这台机器能出，" }物品等级 = 你的等级 +3。</div>
+        <button class="btn" id="btn-gamble" ${Shop.balance("gamble",g)<cost?'disabled style="opacity:.4"':''}>投币 ${Shop.curIcon("gamble")}${cost.toLocaleString()}</button>
         <div class="gamble-result" id="gamble-result"></div>
       </div>`;
     } else {
@@ -584,9 +584,9 @@ const UI = {
         SFX.levelup(); this.game.shake(4);
       } else SFX.hurt();
       const goldEl=this.overlay.querySelector('.shop-gold');
-      if(goldEl) goldEl.textContent="◈ "+g.player.gold.toLocaleString();
+      if(goldEl) goldEl.textContent=Shop.curIcon("gamble")+" "+Shop.balance("gamble",g).toLocaleString();
       const cost=Shop.gambleCost(g);
-      if(gb){ gb.textContent=`投币 ◈${cost.toLocaleString()}`; gb.disabled=g.player.gold<cost; gb.style.opacity=g.player.gold<cost?0.4:1; }
+      if(gb){ gb.textContent=`投币 ${Shop.curIcon("gamble")}${cost.toLocaleString()}`; gb.disabled=Shop.balance("gamble",g)<cost; gb.style.opacity=Shop.balance("gamble",g)<cost?0.4:1; }
     };
     document.getElementById('btn-back-pause').onclick=()=>{
       SFX.ui();
@@ -614,7 +614,9 @@ const UI = {
     } else {
       meta=`${weaponRarityName(w)?weaponRarityName(w)+" · ":""}Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
       stats=`${w.stats.damage.toFixed(1)} 伤害 · ${w.stats.fireRate.toFixed(1)}/s · ${w.magSizeBase} 弹匣 · ${(w.stats.accuracy*100|0)}% 精准`;
-      affix=w.affixLines().map(a=>`<span class="affix ${a.kind}">${a.nm} ${a.txt}</span>`).join('')||'<span class="affix">无词缀</span>';
+      affix = (typeof weaponQualityHidden==="function" && !weaponQualityHidden())
+        ? (w.affixLines().map(a=>`<span class="affix ${a.kind}">${a.nm} ${a.txt}</span>`).join('')||'<span class="affix">无词缀</span>')
+        : '';
     }
     return `<div class="shop-item loot-${weaponRarityId(w)} ${it.sold?'sold':''}">
       <div class="si-name c-${weaponRarityId(w)}">${w.name}</div>

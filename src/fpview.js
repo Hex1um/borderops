@@ -29,6 +29,9 @@ const FPView = {
   _cols: 0,
   _step: 3,
   _colors: null,
+  _shells: [],          // 抛出的弹壳（屏幕空间，开火时生成）
+  _smoke: [],           // 枪口烟（屏幕空间）
+  _lm: 0,               // 上一帧 muzzleT，用于检测开火上升沿
 
   /* 面法线明暗：0 = X 面（与视轴垂直，最亮），1 = Z 面（侧向，压暗）
      色阶 0 = 最远（融进雾里），15 = 最近（2D 同款 #272d31） */
@@ -1206,6 +1209,7 @@ const FPView = {
     const bobY = Math.sin(t*6.4) * Math.min(6, mv*0.016);
     const kick = Math.max(0, Math.min(2.2, p.kick||0));          // 开火后坐冲量
     const reload = p.reloadT > 0 ? Math.min(1, p.reloadT/1.1) : 0;
+    let ejectX=null, ejectY=null, muzX=null, muzY=null;           // 抛壳口 / 枪口屏幕坐标（用于开火特效）
 
     ctx.save();
     if(p.gun){
@@ -1234,6 +1238,11 @@ const FPView = {
       this._gunModel(ctx, p, g, true);                  // 枪身（true = 不要模型自带的胳膊）
       ctx.restore();
       this._fpArms(ctx, w, h, fh, rh, gunAng, true);    // 手套（压在枪身上）
+      // 枪管轴线 / 枪口位置（模型坐标，与 proj 的 my+238 约定一致：y0=-238 对应枪身中轴）
+      const y0 = -238, muzzle = -len;
+      // 抛壳口 / 枪口在屏幕上的当前坐标（弹壳与枪口烟从这里迸出，之后在屏幕空间自由飞行）
+      const ej = proj(hgEnd+18, y0-20), mz = proj(muzzle-14, y0);
+      ejectX=ej.x; ejectY=ej.y; muzX=mz.x; muzY=mz.y;
     } else {
       /* 空手：匕首特写（原本就是枪口朝左上方的构图，单独一套锚点） */
       ctx.translate(w*0.745 + bobX, h - 4 + bobY + reload*52);
@@ -1241,6 +1250,48 @@ const FPView = {
       ctx.scale(sc, sc);
       this._meleeModel(ctx, p);
     }
+
+    /* ---- 开火特效：弹壳抛出 + 枪口烟（屏幕空间自由飞行，不随枪摆动）---- */
+    const mzNow = p.muzzleT||0;
+    if(mzNow > (this._lm||0) + 0.0005 && mzNow > 0){
+      if(ejectX!=null){
+        const n = 1 + (Math.random()<0.45?1:0);
+        for(let s=0;s<n;s++){
+          this._shells.push({ x:ejectX+(Math.random()*6-3), y:ejectY+(Math.random()*6-3),
+            vx:(45+Math.random()*60)*sc, vy:-(130+Math.random()*100)*sc,
+            rot:Math.random()*6.283, vr:(6+Math.random()*9)*(Math.random()<0.5?-1:1),
+            born:t, life:0.85 });
+        }
+      }
+      if(muzX!=null){
+        for(let s=0;s<2;s++){
+          this._smoke.push({ x:muzX+(Math.random()*8-4), y:muzY+(Math.random()*8-4),
+            vx:(Math.random()*44-22)*sc, vy:(-26-Math.random()*46)*sc,
+            born:t, life:0.30+Math.random()*0.18, r:6+Math.random()*4 });
+        }
+      }
+    }
+    this._lm = mzNow;
+
+    if(!this._shells) this._shells=[];
+    if(!this._smoke) this._smoke=[];
+    for(let i=this._shells.length-1;i>=0;i--){
+      const sh=this._shells[i], age=t-sh.born;
+      if(age<0||age>sh.life){ this._shells.splice(i,1); continue; }
+      const x=sh.x+sh.vx*age, y=sh.y+sh.vy*age+260*sc*age*age, a=1-age/sh.life;
+      ctx.save(); ctx.translate(x,y); ctx.rotate(sh.rot+sh.vr*age);
+      ctx.fillStyle="rgba(216,178,98,"+a.toFixed(3)+")";
+      ctx.fillRect(-3*sc,-1.7*sc,6*sc,3.4*sc);
+      ctx.restore();
+    }
+    for(let i=this._smoke.length-1;i>=0;i--){
+      const sm=this._smoke[i], age=t-sm.born;
+      if(age<0||age>sm.life){ this._smoke.splice(i,1); continue; }
+      const k=age/sm.life, r=sm.r*sc*(1+k*2.4);
+      ctx.fillStyle="rgba(222,222,228,"+(0.20*(1-k)).toFixed(3)+")";
+      ctx.beginPath(); ctx.arc(sm.x+sm.vx*age, sm.y+sm.vy*age, r, 0, 6.2832); ctx.fill();
+    }
+
     ctx.restore();
   },
 

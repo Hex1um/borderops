@@ -7067,8 +7067,9 @@ const RenderRaid = {
     /* --- 小地图 --- */
     if(CFG.raidMinimap) this.minimap(ctx, v);
 
-    /* --- 触屏瞄准指示 --- */
-    if(Input.isTouch && R.aimTgt && R.aimTgt.alive){
+    /* --- 触屏瞄准指示（仅 2D：3D 第一人称用屏幕中心准星，且此处用 2D 相机投影，
+     *   在 3D 下会落到错误位置、变成「天空红圈」；3D 模式直接跳过）--- */
+    if(Input.isTouch && R.aimTgt && R.aimTgt.alive && !(typeof ViewMode!=="undefined" && ViewMode.is3D())){
       const t=R.aimTgt;
       const sx=(t.x-R.camera.x)*(game.zoom||1), sy=(t.y-R.camera.y)*(game.zoom||1);
       ctx.strokeStyle="rgba(255,90,90,0.8)"; ctx.lineWidth=2;

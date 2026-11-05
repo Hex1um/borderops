@@ -110,7 +110,8 @@ const Shop = {
     pl.gold -= cost;
     const base = Math.max(game.world ? game.world.level : 1, pl.level);
     const gm = rollGearMayhem(pl.mayhem||0);
-    const w = generateWeapon(base+3+gm, { mf: pl.mf, luck:true, mayhem:gm });
+    // v0.21.8：用黑市赌博机专属权重表 —— 最高三档（特供/珍藏/孤品）只能从这里出
+    const w = generateWeapon(base+3+gm, { mf: pl.mf, luck:true, mayhem:gm, weights: SHOPS.gamble.weights });
     pl.buyWeapon(w, 0);
     return { ok:true, weapon:w, msg:"开出："+w.name };
   },

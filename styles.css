@@ -146,7 +146,7 @@ canvas#game.locked{cursor:none;}
 .loot-rainbow{border-left-color:#c2a76a;}
 .c-rainbow{color:#c2a76a;font-weight:800;}
 
-/* 高规格品相（定制 / 竞赛级 / 收藏级 / 出厂封存）：与 config.js 的 RARITIES 配色一致 */
+/* 高规格品相（特供 / 竞赛级 / 收藏级 / 出厂封存）：与 config.js 的 RARITIES 配色一致 */
 .loot-mythic{border-left-color:#b2645c;} .c-mythic{color:#b2645c;text-shadow:0 0 6px #b2645c55;font-weight:800;}
 .loot-primordial{border-left-color:#9a86a8;} .c-primordial{color:#9a86a8;text-shadow:0 0 6px #9a86a855;font-weight:800;}
 .loot-celestial{border-left-color:#7fa8a0;} .c-celestial{color:#7fa8a0;text-shadow:0 0 6px #7fa8a055;font-weight:800;}
