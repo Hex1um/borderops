@@ -918,5 +918,14 @@ check('钥匙默认一把不带', /if\(!Array\.isArray\(UI\._raidKeys\)\) UI\._r
 check('开始突袭不再兜底全带钥匙', /UI\._raidKeys\.slice\(\):\[\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('大厅弹药默认 0 发', /: 0;\s*\n\s*UI\._raidAmmo\[cal\]=/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+/* v0.20.2：旧存档里的枪名同样剥厂商前缀（合作者 d8e7efa 的意图，重新实现） */
+const manOld = JSON.parse(G(`JSON.stringify((()=>{
+  const m=Object.values(MANUFACTURERS)[0].name;
+  const w=new Weapon({ name:m+" 测试枪", kind:"weapon", uid:"veri-old-1" });
+  return { m, got:w.name };
+})())`));
+check('旧存档武器名剥厂商前缀', manOld.got.indexOf(manOld.m) !== 0 && manOld.got.indexOf("测试枪") >= 0 ? 1 : 0, 1, 0.001);
+check('旧仓库加载时同样清洗', /d\.weapons\|\|\[\]\)\)\{ if\(w && w\.name\) w\.name=stripManufacturer/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

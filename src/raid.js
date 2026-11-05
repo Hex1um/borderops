@@ -1195,6 +1195,10 @@ const RaidStash = {
             d.gunVer=3;
             d.weapons=(d.weapons||[]).map(ensureGunParts);
           }
+          // 隐藏厂商名时，旧仓库里的枪名也要剥前缀（只影响显示名）
+          if(typeof CFG!=="undefined" && CFG.showManufacturer===false){
+            for(const w of (d.weapons||[])){ if(w && w.name) w.name=stripManufacturer(w.name); }
+          }
           // 护甲 / 头盔：无论档位版本，一律按当前数值表校正
           d.armors=(d.armors||[]).map(ensureArmorTier);
           d.helmets=(d.helmets||[]).map(ensureArmorTier);
