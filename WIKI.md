@@ -198,8 +198,8 @@
 ## 11. 联机（2~4 人）
 
 - **房主权威**：AI 由房主本地模拟，每 150ms 广播 `room + ai + events` 快照。
-- **两种传输层，自动选择**：
-  - 有 `server.js`（官方部署 / 本地 `npm start`）→ HTTP 轮询，`/api/*`。
+- **官方网页走 GitHub Pages（纯静态）**，所以线上默认就是 WebRTC P2P。两种传输层自动选择：
+  - 有 `server.js`（本地 `npm start` 或自建 Node 托管）→ HTTP 轮询，`/api/*`。
   - GitHub Pages / 纯静态托管 / `file://` → 自动切 **WebRTC P2P**（PeerJS，本地 `vendor/peerjs.min.js`，不依赖 CDN）。
 - **房间码 4 位**；P2P 侧实际房间 ID 为 `borderops-v1-<房间码>`。
 - 客户端能发的事件受白名单限制，`shot / corpse / dmg` 仍需房主校验，客户端改不了别人的血量。

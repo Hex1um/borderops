@@ -12,7 +12,7 @@
 >
 > v0.14.9 起默认**只显示塔科夫模式入口**；战役 / 无尽 / 沙二 / 大逃杀代码仍保留，把 `src/config.js` 的 `CFG.onlyRaid` 改为 `false` 可恢复。塔科夫 HUD 小地图默认关闭，`CFG.raidMinimap` 改为 `true` 可恢复。
 
-线上地址：`https://borderops.app.workbuddy.host/`（官方部署，含联机后端）
+线上地址：`https://hex1um.github.io/borderops/`（GitHub Pages，纯静态托管；联机自动走 WebRTC P2P，无需后端）
 
 ## 特性
 
