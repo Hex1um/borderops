@@ -883,5 +883,17 @@ check('拾取物支持弹药', /item\.kind==="ammo"/.test(raidSrc) ? 1 : 0, 1, 0
 check('旧档迁移补起步弹药', /RAID_AMMO_STARTER/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('大厅可按发数携带弹药', /data-ammo=/.test(raidSrc) && /_prepPlayerAmmo/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+/* 合作者 b78b40e：暂时隐藏厂商名（只影响显示，manufacturer 字段保留） */
+const manHidden = JSON.parse(G(`JSON.stringify((()=>{
+  const mans=Object.values(MANUFACTURERS).map(m=>m.name);
+  const names=[0,1,2,3,4,5,6,7].map(()=>generateWeapon(14).name);
+  return { flag:CFG.showManufacturer, names,
+    leak:names.filter(n=>mans.some(mn=>n.indexOf(mn)===0)) };
+})())`));
+check('厂商名默认隐藏', manHidden.flag === false ? 1 : 0, 1, 0.001);
+check('生成的枪名不含厂商前缀', manHidden.leak.length, 0, 0.001);
+if (manHidden.leak.length) console.log('  仍带厂商:', manHidden.leak.join(' / '));
+check('旧名清洗函数存在', /function stripManufacturer\(name\)/.test(fs.readFileSync(path.join(SRC,'weapons.js'),'utf8')) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

@@ -492,15 +492,27 @@ function generateWeapon(level, opts={}){
 // 厂商显示中文兵工厂名，具名档用真实枪械型号，不再拼接奇幻词与弹种标签
 function weaponName(man, base, R, element, affixes){
   const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;
+  /* 暂时不显示厂商（CFG.showManufacturer=false）：manufacturer 字段仍保留，
+   * 把开关改回 true 就能原样恢复；具名档 / 民用档也只留型号与枪型。 */
+  const manTag = CFG.showManufacturer===false ? "" : M0.name;
   const ammoTag = element!=="none" && AMMO_TYPES[element] ? " · "+AMMO_TYPES[element].short : "";
   if(R.named){
     const nm = RNG.pick(base.named || ["制式"]);
-    return `${M0.name} ${nm}${ammoTag}`;
+    return `${manTag}${manTag?" ":""}${nm}${ammoTag}`;
   }
-  if(R.id==="white") return `${M0.name}${base.name}${ammoTag}`;
+  if(R.id==="white") return `${manTag}${base.name}${ammoTag}`;
   const pre = affixes.find(a=>a.kind==="prefix");
   const suf = affixes.find(a=>a.kind==="suffix");
-  return `${M0.name}${base.name}${pre?" "+pre.nm:""}${suf?suf.nm:""}${ammoTag}`;
+  return `${manTag}${base.name}${pre?" "+pre.nm:""}${suf?suf.nm:""}${ammoTag}`;
+}
+
+/* 去掉旧存档 / 旧拍卖行名称里的厂商前缀（只影响显示名，manufacturer 字段仍保留） */
+function stripManufacturer(name){
+  if(!name) return name;
+  for(const m of Object.values(MANUFACTURERS)){
+    if(m && m.name && String(name).startsWith(m.name)) return String(name).slice(m.name.length).trim();
+  }
+  return name;
 }
 
 /* ----------------------------- 定价 / 词缀文案 ----------------------------- */
@@ -588,6 +600,7 @@ function blGunConvert(w){
 }
 function blGunGen(ilvl, opts){
   const w=blGunConvert(generateWeapon(ilvl, opts));
+  if(typeof CFG!=="undefined" && CFG.showManufacturer===false) w.name=stripManufacturer(w.name);
   // Scav 等低阶配装可强制指定塔科夫实装型号，避免生成「兵工厂+枪型+词缀」的泛称。
   if(opts && opts.model){
     const ammo=(w.element && w.element!=="none" && AMMO_TYPES[w.element]) ? " · "+AMMO_TYPES[w.element].short : "";

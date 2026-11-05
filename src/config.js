@@ -13,6 +13,7 @@ const CFG = {
   // 界面开关（其他模式代码仍保留，只是不显示入口）
   onlyRaid: true,        // 只显示塔科夫模式
   raidMinimap: false,    // 塔科夫 HUD 小地图
+  showManufacturer: false, // 暂时不在枪名 / 武器卡片里显示厂商（manufacturer 字段仍保留）
   // 画布逻辑分辨率基准（实际按窗口缩放）
   worldTile: 64,
   // 玩家基础
