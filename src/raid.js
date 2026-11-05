@@ -538,7 +538,9 @@ function raidRollUnique(luck, kindFilter){
   let pool=RAID_UNIQUES.filter(u=>u.tier<=maxT);
   if(kindFilter) { const f=pool.filter(kindFilter); if(f.length) pool=f; }
   if(!pool.length) pool=RAID_UNIQUES.slice(0,1);
-  const w=pool.map(u=>({ weight:Math.pow(1.55, u.tier-5) }));
+  // v0.21.9：权重方向原先写反（Math.pow(1.55, tier-5) 让 tier8 反而最常见，约占具名掉落 46%），
+  // 与「高档更稀有」注释和全库「高阶权重递减」的约定相反，倒置为 5-tier。
+  const w=pool.map(u=>({ weight:Math.pow(1.55, 5-u.tier) }));
   return raidMakeUnique(pool[RNG.weighted(w)]);
 }
 
@@ -3738,6 +3740,12 @@ const Raid = {
     const p=this.player;
     if(!p || !it) return false;
     const s=ensureShield(it);
+    // v0.21.9：自动穿戴的护盾必须记入 carried，否则撤离入库 / 阵亡保险只看 carried.shield，它会凭空消失
+    if(this.carried){
+      if(this.carried.shield && this.carried.shield!==s)
+        (this.inv.shields=this.inv.shields||[]).push(this.carried.shield);
+      this.carried.shield=s;
+    }
     p.shieldGear=s;
     p.maxShield=s.capacity||0;
     p.shield=p.maxShield;
@@ -3931,7 +3939,8 @@ const Raid = {
       const sense=raidAISense(b);
       // 联机房主：AI 会在「自己 + 所有远端玩家」里挑最近的可见目标
       // AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
-      let tgt=p, d=M.dist(b.x,b.y,p.x,p.y);
+      // v0.21.9：基线不再预设玩家原始距离 —— 否则被墙挡住的近处玩家会屏蔽更远但可见的敌对目标（AI 对眼前敌人视而不见）
+      let tgt=null, d=Infinity;
       const _consider=(o)=>{
         if(o===b || !o.alive || o.ghost) return;
         let enemy;
@@ -3950,7 +3959,7 @@ const Raid = {
       _consider(p);
       if(this.online){ for(const o of this.ops){ if(o.isPlayer||o.remote) _consider(o); } }
       for(const o of this.ops){ if(!o.isPlayer && !o.remote) _consider(o); }
-      if(!tgt.alive) tgt=p;
+      if(!tgt || !tgt.alive) tgt=p;
       /* 索敌分级：Scav 视距短、反应慢、忘得快；PMC 更警觉；Boss 几乎即时锁定。
        * _detectT 累积「持续看见」的时间，视线中断会快速衰减；已警觉的 AI 重新发现目标时不再重复反应延迟。 */
       const grace = this.spawnGrace>0 && (tgt.isPlayer || tgt.remote);
@@ -4788,8 +4797,11 @@ const Raid = {
       const g=Object.assign({},w); g.kind="weapon"; g.uid=mkUid("bw"); drops.push(g);
     }
     for(const a of (bot.inv.armors||[]).slice(0,1)) drops.push(a);
-    for(const pt of (bot.inv.parts||[]).slice(0,1)) drops.push(pt);
-    for(const c of (bot.inv.parts||[]).filter(p=>p.core).slice(0,1)) drops.push(c);
+    // v0.21.9：第一件配件与改装模块可能是同一对象（parts[0] 本身带 core），去重避免尸体掉落复制物品
+    const firstPart=(bot.inv.parts||[])[0]||null;
+    if(firstPart) drops.push(firstPart);
+    const corePart=(bot.inv.parts||[]).find(q=>q.core && q!==firstPart);
+    if(corePart) drops.push(corePart);
     /* 弹药：按它自己那把枪的口径掉一批（级别跟枪的品级走，Scav 只会民用/制式） */
     {
       const gcal=bot.gun?(bot.gun.cal||ammoCalOfType(bot.gun.type)):null;
@@ -5126,23 +5138,28 @@ const Raid = {
     }
   },
 
-  /* 付撤离费：优先局内现金，其次仓库余额（钱只在真正撤离成功时才扣，读条被打断不白花） */
+  /* 付撤离费：优先局内现金，其次仓库余额（钱只在真正撤离成功时才扣，读条被打断不白花）。
+   * v0.21.9：改为组合扣款 —— 旧逻辑要求单一资金源足额，局内+仓库合计够但都单独不够时
+   * 读条能走满却永远付不出去（extractT 回退循环卡死），与「仓库兜底」的设计相悖。 */
   _payExtractFee(fee){
     if(fee<=0) return true;
-    if(this.creds>=fee){ this.creds-=fee; return true; }
     const st=Math.max(0,(this.stash&&this.stash.creds)||0);
-    if(st>=fee){
-      this.stash.creds=st-fee;
+    if(this.creds+st<fee) return false;
+    const fromPurse=Math.min(this.creds,fee); this.creds-=fromPurse;
+    const rest=fee-fromPurse;
+    if(rest>0){
+      this.stash.creds=st-rest;
       if(typeof RaidStash!=="undefined" && RaidStash.save) RaidStash.save(this.stash);
-      return true;
     }
-    return false;
+    return true;
   },
 
   _succeed(zone){
     if(!this.active || this._ended) return;
     this._ended=true;
     this.resetUiState();
+    // v0.21.9：补上撤离标记 —— net.js 快照里 ext 字段原先引用从未赋值的 _extractedFlag，同步链路是死的
+    this._extractedFlag=true;
     if(this.online && typeof Net!=="undefined") Net.sendExtract(zone?zone.name:"");
     // 联机：自己撤离后世界继续跑（房主还要给队友模拟 AI），镜头交给观战
     this.active=!!this.online;
@@ -8811,7 +8828,8 @@ UI.raidFieldShop=function(key){
     if(R.player.gun) equipped.add(R.player.gun.uid);
     if(R.player.secondary) equipped.add(R.player.secondary.uid);
     const add=(key, item, name, col, note, base)=>{
-      rows.push({ key, uid:item.uid, name, col, note, base,
+      // v0.21.9：材料没有 uid（undefined===undefined 恒命中第一件），行上补 id 供按 id 匹配
+      rows.push({ key, uid:item.uid, id:item.id, name, col, note, base,
         val: raidFieldSellPrice(base, item.uid || name) });
     };
     for(const w of (R.inv.weapons||[])){
@@ -8973,7 +8991,12 @@ UI.raidFieldShop=function(key){
     else if(key==="h") it=pull(R.inv.helmets);
     else if(key==="s") it=pull(R.inv.shields||[]);
     else if(key==="p") it=pull(R.inv.parts);
-    else if(key==="m") it=pull(R.inv.materials);
+    else if(key==="m"){
+      // v0.21.9：材料无 uid，按 id 匹配，否则永远删掉材料栏第一件（卖错货 + 可刷钱）
+      const arr=R.inv.materials||[];
+      const i=arr.findIndex(x=>x.id===row.id);
+      if(i>=0) it=arr.splice(i,1)[0];
+    }
     if(!it) return;
     R.creds+=gain;
     R._float(R.player.x, R.player.y-40, "+₽"+gain, "#8fe07a");
@@ -9567,16 +9590,25 @@ UI._onlineEnter=function(){
   if(!Net.code || !Net.peerId) return;
   UI._onlineEntering=true;
   UI._onlineStop();
-  const sel=UI._raidSel||{w:[],a:null,h:null};
+  const sel=UI._raidSel||{w:[],a:null,h:null,s:null};
   const st=RaidStash.load();
   // 联机也必须沿用大厅选择的钥匙/现金/GP 币，不能默认把仓库全部钥匙带进图。
   const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():(st.keys||[]).map(k=>k.uid);
   const cash=Math.max(0,Math.min(Math.round(UI._raidCash||0),Math.floor(st.creds||0)));
   const tokens=Math.max(0,Math.min(Math.round(UI._raidTok||0),Math.floor(st.tokens||0)));
-  const hasGear=!!((sel.w||[]).length||sel.a||sel.h);
+  // v0.21.9：与单机出发保持一致 —— 护盾 / 弹药 / 初始装备包原先漏传，联机进图全丢；
+  // hasGear 也补上护盾，只带盾进场时保险不再被静默置否。
+  const ammoPick={};
+  for(const cal of AMMO_CAL_LIST){
+    const a=UI._raidAmmo && UI._raidAmmo[cal];
+    if(a && a.n>0) ammoPick[cal]={ id:a.id, n:a.n };
+  }
+  const supOn=UI._raidSupport===true && cash>=RAID_SUPPORT_CASH;
+  const hasGear=!!((sel.w||[]).length||sel.a||sel.h||sel.s);
   const opts={
-    weapons:[...(sel.w||[])], armor:sel.a||null, helmet:sel.h||null,
+    weapons:[...(sel.w||[])], armor:sel.a||null, helmet:sel.h||null, shield:sel.s||null,
     insure:!!UI._raidIns&&hasGear, keys:pickedKeys, cash, tokens,
+    ammo:ammoPick, support:supOn,
     online:true, seed:Net.seed,
   };
   UI._raidSel={w:[],a:null,h:null,s:null}; UI._raidIns=false;

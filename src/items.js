@@ -41,7 +41,10 @@ function generateShield(ilvl, opts={}){
   };
 }
 
-function shieldLines(s){
+/* v0.21.9：原名 shieldLines 与 shields.js 的新护盾展示函数同名冲突，
+ * 后加载的 shields.js 版本会覆盖本函数，旧式防弹插板（无 invuln 字段）渲染必抛 TypeError。
+ * 改名 plateShieldLines 专供旧式插板（战役 / 商店路径）使用。 */
+function plateShieldLines(s){
   const out = [
     `防护值 ${s.capacity}`,
     `整备延迟 ${s.delay.toFixed(1)}s`,

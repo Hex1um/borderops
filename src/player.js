@@ -353,7 +353,8 @@ class Player {
     this.shieldCharging = this.shieldTimer<=0 && this.shield<this.stats.maxShield-0.01;
     if(this.abilityCD>0) this.abilityCD-=dt;
     if(this.iframe>0) this.iframe-=dt;
-    if(this.abilityActive>0){ this.abilityActive-=dt; if(this.abilityActive<=0) this.abilityType==="phaselock"; }
+    // v0.21.9：原句 abilityType==="phaselock" 是只比较不执行的死语句；所有技能效果都以 abilityActive>0 作门控，倒计时归零即自然失效
+    if(this.abilityActive>0) this.abilityActive-=dt;
     this.meleeCd=Math.max(0,this.meleeCd-dt);
   }
 

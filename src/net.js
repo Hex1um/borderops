@@ -174,20 +174,20 @@ const Net = {
     catch(e){
       this.inflight=false; this.fails++;
       // 请求失败才把这一批事件放回队列；成功后再丢弃，避免网络抖动导致 extract/dead 丢失。
-      this._outbox=(pending.concat(this._outbox||[])).slice(0,40);
+      this._requeue(pending);
       if(this.fails===3) this._toast("联机同步中断，正在重试…");
       return;
     }
     this.inflight=false;
     if(!r || !r.ok){
-      this._outbox=(pending.concat(this._outbox||[])).slice(0,40);
+      this._requeue(pending);
       this.fails++;
       if(r && r.auth===false){ this.online=false; this._toast("联机身份已失效，请重新加入房间"); return; }
       if(this.fails>10){ this._toast("房间已断开"); this.online=false; }
       return;
     }
     this.fails=0;
-    if(typeof r.seed==="number" && r.seed!==this.seed && !this.raid) this.seed=r.seed;
+    // v0.21.9：删除恒假的 seed 同步（!this.raid 在此恒为 false，整行是死代码）
     this.room=r.room;
     this.cursor=r.cursor||this.cursor;
 
@@ -268,6 +268,7 @@ const Net = {
         pr.op.maxArmor=s.maxArmor||0; pr.op.armor=s.armor||0;
         pr.op.armorTier=s.at||0;
         pr.op.kills=s.kills||0;
+        pr.op.ext=!!s.ext;   // v0.21.9：接收端原先漏读 ext，队友撤离状态同步是死链路
         pr.op.gun=s.gun?{ type:s.gun.t, element:s.gun.e, name:s.gun.n, parts:[] }:null;
         pr.op.name=p.name;
       }
@@ -350,12 +351,31 @@ const Net = {
   },
 
   /* ----------------------------- 事件 ----------------------------- */
+  // v0.21.9：终局事件（extract/dead/corpse）一律保底入队；超限时从最旧的普通事件开始丢，不丢终局事件
+  _isTerm(type){ return type==="extract"||type==="dead"||type==="corpse"; },
+  _requeue(pending){
+    const all=(pending||[]).concat(this._outbox||[]);
+    if(all.length<=40){ this._outbox=all; return; }
+    const kept=[]; let toDrop=all.length-40;
+    for(const e of all){
+      if(!this._isTerm(e.type) && toDrop>0){ toDrop--; continue; }
+      kept.push(e);
+    }
+    this._outbox=kept;
+  },
   sendEvent(type, data){
     if(!this.online) return;
     this._outbox=this._outbox||[];
+    const term=this._isTerm(type);
     if(this._outbox.length<40) this._outbox.push({ type, data:data||null });
+    else if(term){
+      // 队满也不能丢终局事件：丢掉最旧的普通事件腾位
+      const i=this._outbox.findIndex(e=>!this._isTerm(e.type));
+      if(i>=0) this._outbox.splice(i,1);
+      this._outbox.push({ type, data:data||null });
+    }
     // 撤离 / 阵亡这类「终局事件」之后不再有 tick，必须立刻冲一次
-    if(type==="extract" || type==="dead" || type==="corpse"){
+    if(term){
       if(this._flushT) clearTimeout(this._flushT);
       this._flushT=setTimeout(()=>{ this._flushT=null; this.sync(true); }, 30);
     }

@@ -73,8 +73,12 @@ const COMPRESS_CACHE = new Map(); // 静态压缩缓存：file|mtime|size|enc ->
 
 function now(){ return Date.now(); }
 
+// v0.21.9：X-Forwarded-For 直连时完全由客户端控制，无条件信任会让限速键可被任意伪造绕过。
+// 只有明确部署在反向代理后面（TRUST_PROXY=1）才采信 XFF。
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+
 function clientIp(req){
-  const xff = req.headers && req.headers['x-forwarded-for'];
+  const xff = TRUST_PROXY && req.headers && req.headers['x-forwarded-for'];
   if(xff) return String(xff).split(',')[0].trim();
   return (req.socket && req.socket.remoteAddress) || 'unknown';
 }

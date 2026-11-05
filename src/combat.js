@@ -78,7 +78,7 @@ function updateProjectiles(dt, game){
       const pl=game.player;
       if(pl&&pl.alive && segCircleHit(x1,y1,p.x,p.y,pl.x,pl.y,pl.radius+p.radius)){
         pl.takeDamage(p.damage,p.element,"flesh",game,p.owner);
-        if(p.splash>0) splashDamage(game,p,null,pl);
+        if(p.splash>0) splashDamage(game,p,null);
         p.dead=true;
       }
     }
@@ -105,7 +105,9 @@ function hitEnemy(e, p, game){
 }
 
 // 破片伤害（仅榴弹战斗部）
-function splashDamage(game, p, hitEnemyObj, hitPlayer){
+// v0.21.9：删掉从未被读取的 hitPlayer 形参 —— 敌方榴弹只有直击伤害、溅射只波及直击目标以外的敌人（设计如此）；
+// 若日后要让敌方破片也伤玩家，在这里补玩家半径判定即可。
+function splashDamage(game, p, hitEnemyObj){
   const r=p.splash;
   const mult = (p.weapon && p.weapon.stats) ? (p.weapon.stats.splashDmgMul||1) : 1;
   if(hitEnemyObj){

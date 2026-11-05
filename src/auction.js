@@ -288,7 +288,7 @@ const Auction = {
       const st=d.state[id];
       if(!st || !(st.yourBid>0)) continue;
       const L=(d.pool||[]).find(x=>x.id===id);
-      if(!L){ stash.creds+=st.yourBid; money=true; n++; continue; }
+      if(!L){ stash.creds+=st.yourBid; money=true; n++; delete d.state[id]; continue; }
       if(st.outbidAt){
         stash.creds+=st.yourBid; money=true; n++;
         this.note(d,"竞价被超越",`${auctionItemInfo(L.kind,L.item).name} 被人抬到 ₽${priceText(st.outbidPrice||st.yourBid)}，出价已退回。`,"warn");
@@ -296,6 +296,8 @@ const Auction = {
         this.deposit(stash, L.kind, L.item); n++;
         this.note(d,"竞拍成功",`上期以 ₽${priceText(st.yourBid)} 拍下 ${auctionItemInfo(L.kind,L.item).name}，已放入仓库。`,"ok");
       }
+      // v0.21.9：处理完即删记录，防止同一出价被重复收尾
+      delete d.state[id];
     }
     for(const L of (Array.isArray(d.listings)?d.listings:[])){
       if(L && L.yourBid>0){
@@ -385,6 +387,8 @@ const Auction = {
           n++;
         }
         d.taken[L.id]=1;          // 拍下的货从本地下架，别被货池重新顶回来
+        // v0.21.9：同 buyout —— 清掉 state 出价记录，避免跨期二次入账
+        L.yourBid=0; delete d.state[L.id];
         changed=true; continue;
       }
       keep.push(L);
@@ -445,6 +449,8 @@ const Auction = {
     if(L.yourBid>0) stash.creds+=L.yourBid;          // 退还已冻结的出价
     this.deposit(stash, L.kind, L.item);
     d.taken[L.id]=1;                 // 本地下架：池子里下一件会顶上来（全网看到的仍是同一批）
+    // v0.21.9：必须清掉 state 里的出价记录 —— 否则跨期 _closeBucket 会把已成交的单再入账/再退一次款
+    L.yourBid=0; delete d.state[L.id];
     this.note(d, "一口价成交", `₽${priceText(L.buyout)} 拿下 ${auctionItemInfo(L.kind,L.item).name}，已放入仓库。`, "ok");
     RaidStash.save(stash);
     this.refill(d); this.save(d);
@@ -548,15 +554,12 @@ UI.raidAuction=function(opts){
 
   /* ----------------------------- 竞拍大厅 ----------------------------- */
   const isCore=(L)=> L && L.kind==="part" && L.item && L.item.slot==="core";
-  const aucMatch2=(L,f)=> f==="all" ? true
+  // v0.21.9：合并原先逐字重复的 aucMatch2 / aucMatch（仅差一个过滤值来源）
+  const aucMatch=(L,f)=> f==="all" ? true
     : f==="core"  ? isCore(L)
     : f==="gear"  ? (L.kind==="weapon"||L.kind==="armor"||L.kind==="helmet")
     :               (L.kind==="part"||L.kind==="material");
-  const aucMatch=(L)=> FILTER==="all" ? true
-    : FILTER==="core"  ? isCore(L)
-    : FILTER==="gear"  ? (L.kind==="weapon"||L.kind==="armor"||L.kind==="helmet")
-    :                    (L.kind==="part"||L.kind==="material");
-  const shownListings=d.listings.filter(L=>aucMatch(L));
+  const shownListings=d.listings.filter(L=>aucMatch(L,FILTER));
   const bidCards = shownListings.length ? shownListings.map(L=>{
     const info=auctionItemInfo(L.kind,L.item);
     const inc=Math.max(5, auctionRound(L.price*0.06));
@@ -626,7 +629,7 @@ UI.raidAuction=function(opts){
   const FILTERS=[{id:"all",name:"全部"},{id:"core",name:"改装模块"},{id:"gear",name:"装备"},{id:"mat",name:"配件 / 材料"}];
   const filterBar=`<div class="auc-filter">
     ${FILTERS.map(f=>{
-      const n=f.id==="all" ? d.listings.length : d.listings.filter(L=>aucMatch2(L,f.id)).length;
+      const n=f.id==="all" ? d.listings.length : d.listings.filter(L=>aucMatch(L,f.id)).length;
       return `<button class="btn small ${FILTER===f.id?'':'ghost'}" data-aucfilter="${f.id}">${f.name} <span class="auc-fcount">${n}</span></button>`;
     }).join("")}
   </div>`;
