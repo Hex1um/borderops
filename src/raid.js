@@ -3,7 +3,7 @@
  *
  * 参考《逃离塔科夫》玩法：
  *   · 硬核撤离射击：地图「海关流域」（工业区 + 北境密林 + 中央河谷 + 铁路枢纽），
- *     PMC 与 Scav 同场（本页用 1 名玩家 + 29 名 AI 模拟满员服务器）；河流可涉水缓行，桥面免减速
+ *     PMC 与 Scav 同场（本页用 1 名玩家 + 33 名 AI 模拟满员服务器：30 名普通 AI + 3 名 Boss）；河流可涉水缓行，桥面免减速
  *   · 开局可携带仓库里的装备，也可真空手进场（只带 1 卷绷带，进图翻箱捡枪）
  *   · 中弹会流血，需要绷带止血（桌面 H 键 / 移动端医疗键）
  *   · 撤离点条件化：铁路隧道每局随机开放、旧卡车常驻、雇车撤离费按带入装备估值浮动
@@ -1632,7 +1632,7 @@ const Raid = {
         }));
       }
 
-      // Boss：2 名精锐，掉落保底好枪 + 带词条配件，HUD/小地图高亮
+      // Boss：3 名精锐，掉落保底好枪 + 带词条配件，HUD 高亮
       // 塔科夫 Boss 名称：Reshala / Killa / Shturman。
       const bountyNames=["Reshala","Killa","Shturman"];
       const bountyRooms=["factory","village","dock","temple","depot"];
@@ -5947,24 +5947,109 @@ const RenderRaid = {
     }
   },
 
+  /* 2D 俯视角的手持武器平面模型（v0.19.3）
+   *   以前 2D 只在单位中心画一条「枪线」，看不出手里拿的是什么；这里按枪型画出
+   *   枪托 / 机匣 / 弹匣 / 枪管 / 瞄具，画在角色「右手」的位置并随朝向旋转。
+   *   空手（跑刀）画战术匕首 —— 跑刀流也能一眼认出来。
+   *   局部坐标：+x = 朝向，握把在原点，单位是世界像素，最后按 r/15 缩放。 */
+  handWeapon(ctx, o, r){
+    const k = r/15, ang = o.angle||0;
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    // 右手：身体右前方（屏幕 y 向下时，(-sin, cos) 就是角色自己的右手边）
+    ctx.save();
+    ctx.translate(o.x + ca*r*0.40 - sa*r*0.90, o.y + sa*r*0.40 + ca*r*0.90);
+    ctx.rotate(ang);
+    ctx.scale(k, k);
+    const dark = "#1d2228", mid = "#333a42", edge = "#0a0d10";
+    const g = o.gun;
+    if(!g){
+      /* 战术匕首 */
+      ctx.fillStyle = mid; ctx.strokeStyle = edge; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(3,-2.4); ctx.lineTo(23,-0.8); ctx.lineTo(25,0); ctx.lineTo(23,0.8); ctx.lineTo(3,2.4);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#93a0ac"; ctx.fillRect(4.5, 0.7, 17, 0.9);     // 刃口
+      ctx.fillStyle = dark;  ctx.fillRect(-1.6,-4.4, 3.4, 8.8);       // 护手
+      ctx.fillStyle = "#3b3f45"; ctx.fillRect(-8.6,-2.2, 7, 4.4);     // 握柄
+      ctx.fillStyle = "#12151a"; ctx.fillRect(-8.6,-2.2, 1.4, 4.4);
+      ctx.restore(); return;
+    }
+    const S = {
+      pistol:  { body:9,  bh:5.0, bar:4,  mag:0,  stock:0,  scope:0, mw:2.2 },
+      smg:     { body:15, bh:5.2, bar:6,  mag:7,  stock:0,  scope:0, mw:2.0 },
+      shotgun: { body:19, bh:5.4, bar:12, mag:0,  stock:6,  scope:0, mw:2.6 },
+      rifle:   { body:18, bh:5.4, bar:12, mag:8,  stock:8,  scope:1, mw:2.0 },
+      sniper:  { body:20, bh:5.2, bar:17, mag:5,  stock:9,  scope:1, mw:1.7 },
+      launcher:{ body:20, bh:7.0, bar:6,  mag:0,  stock:0,  scope:0, mw:3.4 },
+    }[g.type] || { body:15, bh:5.2, bar:8, mag:6, stock:5, scope:0, mw:2.0 };
+    const acc = raidGunColor(g);
+    const el = (g.element && g.element!=="none" && ELEMENTS[g.element]) ? ELEMENTS[g.element].color : null;
+    ctx.strokeStyle = edge; ctx.lineWidth = 1;
+    // 枪托（在握把之后）
+    if(S.stock){
+      ctx.fillStyle = dark;
+      ctx.beginPath();
+      ctx.moveTo(-1, -S.bh*0.45); ctx.lineTo(-1-S.stock, -S.bh*0.62);
+      ctx.lineTo(-1-S.stock, S.bh*0.62); ctx.lineTo(-1, S.bh*0.45);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // 机匣
+    ctx.fillStyle = mid;
+    ctx.fillRect(-1, -S.bh/2, S.body, S.bh);
+    ctx.strokeRect(-1, -S.bh/2, S.body, S.bh);
+    // 品质色装饰条（和物品栏、浮字同一个颜色体系）
+    ctx.fillStyle = acc; ctx.globalAlpha = 0.85;
+    ctx.fillRect(S.body*0.22, -S.bh/2+0.6, S.body*0.5, 1.1);
+    ctx.globalAlpha = 1;
+    // 弹匣
+    if(S.mag){
+      ctx.fillStyle = dark;
+      ctx.fillRect(S.body*0.30, S.bh/2, 3.2, S.mag);
+      ctx.strokeRect(S.body*0.30, S.bh/2, 3.2, S.mag);
+    }
+    // 枪管
+    ctx.fillStyle = "#2a3037";
+    ctx.fillRect(S.body-1, -S.mw/2, S.bar+1, S.mw);
+    ctx.strokeRect(S.body-1, -S.mw/2, S.bar+1, S.mw);
+    if(el){                                   // 元素枪：枪口一圈发光
+      ctx.fillStyle = el; ctx.globalAlpha = 0.9;
+      ctx.fillRect(S.body+S.bar-1.6, -S.mw/2-0.4, 1.8, S.mw+0.8);
+      ctx.globalAlpha = 1;
+    }
+    // 瞄具
+    if(S.scope && (g.parts||[]).some(p=>p.slot==="optic")){
+      ctx.fillStyle = "#141a20";
+      ctx.fillRect(S.body*0.34, -S.bh/2-2.1, 5.5, 2.1);
+      ctx.fillStyle = "#ffd23f";
+      ctx.fillRect(S.body*0.34+0.8, -S.bh/2-1.7, 1.1, 1.1);
+    }
+    ctx.restore();
+  },
+
   unit(ctx, o, game){
     const r=o.r;
     // v0.14.10：血条颜色 = 目标护甲类型（血肉红 / 护盾蓝 / T4+ 装甲黄）
     const at=raidArmorType(o), atCol=ARMOR_TYPE_COLOR[at]||ARMOR_TYPE_COLOR.flesh;
     // 阴影
     ctx.beginPath(); ctx.ellipse(o.x,o.y+r*0.5,r*0.95,r*0.5,0,0,6.2832); ctx.fillStyle="rgba(0,0,0,0.32)"; ctx.fill();
-    // 枪（随枪型长度 / 弹种颜色变化，瞄具配件额外描金点）
-    const GUN_LEN={pistol:r+10,smg:r+14,shotgun:r+18,rifle:r+20,sniper:r+30,launcher:r+16};
-    const g=o.gun; const gLen=(g&&GUN_LEN[g.type])||(r+14);
-    const gCol=(g&&g.element!=="none"&&ELEMENTS[g.element])?ELEMENTS[g.element].color:"#2a2f35";
-    const gx=Math.cos(o.angle), gy=Math.sin(o.angle);
-    ctx.lineCap="round";
-    ctx.strokeStyle="#16191e"; ctx.lineWidth=5.5;
-    ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(o.x+gx*gLen, o.y+gy*gLen); ctx.stroke();
-    ctx.strokeStyle=gCol; ctx.lineWidth=2.4;
-    ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(o.x+gx*gLen, o.y+gy*gLen); ctx.stroke();
-    if(g && (g.parts||[]).some(p=>p.slot==="optic")){
-      ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(o.x+gx*gLen*0.42, o.y+gy*gLen*0.42, 2.2,0,6.28); ctx.fill();
+    /* 玩家 / 队友：画真正的手持武器模型（枪型 / 品质色 / 元素枪口 / 瞄具，
+     * 空手则是战术匕首）；远处 AI 保留廉价的「枪线」，几十个单位不必每个都描一遍细节。 */
+    if(o.isPlayer || o.remote){
+      this.handWeapon(ctx, o, r);
+    } else {
+      // 枪（随枪型长度 / 弹种颜色变化，瞄具配件额外描金点）
+      const GUN_LEN={pistol:r+10,smg:r+14,shotgun:r+18,rifle:r+20,sniper:r+30,launcher:r+16};
+      const g=o.gun; const gLen=(g&&GUN_LEN[g.type])||(r+14);
+      const gCol=(g&&g.element!=="none"&&ELEMENTS[g.element])?ELEMENTS[g.element].color:"#2a2f35";
+      const gx=Math.cos(o.angle), gy=Math.sin(o.angle);
+      ctx.lineCap="round";
+      ctx.strokeStyle="#16191e"; ctx.lineWidth=5.5;
+      ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(o.x+gx*gLen, o.y+gy*gLen); ctx.stroke();
+      ctx.strokeStyle=gCol; ctx.lineWidth=2.4;
+      ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(o.x+gx*gLen, o.y+gy*gLen); ctx.stroke();
+      if(g && (g.parts||[]).some(p=>p.slot==="optic")){
+        ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(o.x+gx*gLen*0.42, o.y+gy*gLen*0.42, 2.2,0,6.28); ctx.fill();
+      }
     }
     // 身体
     ctx.beginPath(); ctx.arc(o.x,o.y,r,0,6.2832);
@@ -6243,7 +6328,7 @@ const RenderRaid = {
     let medY=mdy;
     if(!owned.length){
       ctx.fillStyle="rgba(205,175,175,0.72)";
-      ctx.fillText(Input.isTouch?"无医疗用品 · 摸箱点「★」":"无医疗用品 · 翻箱搜刮", mdx, mdy);
+      ctx.fillText(Input.isTouch?"无医疗用品 · 搜箱点「★」":"无医疗用品 · 翻箱搜刮", mdx, mdy);
     } else {
       const limit = mob ? (v.w-mdx-14) : Math.min(v.w-mdx-260, 620);
       let cx=mdx;
@@ -6714,7 +6799,7 @@ UI.raidSetup=function(){
       <details class="tarkov-intro">
         <summary>塔科夫模式 · 玩法说明（点此展开 / 折叠）</summary>
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
-          与 15 名 <b style="color:#e0b84a">PMC / Scav</b> 加 2 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">◆</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
+          与 30 名 <b style="color:#e0b84a">PMC / Scav</b> 加 3 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">◆</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
           <b style="color:#ffd23f">战利品 9 阶品质</b>：${raidTierLegend()}。箱子<b style="color:#ffd76a">绝大多数是原材料与配件</b>，整枪 / 护甲只是少数——想拿到好枪，要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料，名字与品质由它们决定）。任意品质都可能刷出，但<b style="color:#8fd0ff">携带装备总估值</b>会显著抬高高阶物资的权重。<br>
           <b style="color:#ff7a3c">开局 3 分钟后</b>全图开始缓慢刷入<b>带装备的增援</b>：有的<b style="color:#e0b84a">组队推进</b>，有的会<b style="color:#ff7a3c">封锁撤离点</b>（封锁者存活时无法读条撤离）。<b style="color:#8fe07a">付费撤离点永不被封锁</b>，实在被堵死就花钱雇车；全图同时最多 2 处被封锁。<br>
           <b style="color:#ff8a5a">AI 更像真人</b>：视野 <b>1000px</b>、枪声能传 <b>1200px</b>，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（Raider 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#c07bff">本局第一次击杀</b>必得 <b>1 枚 ◆ GP 币</b>（撤离才落袋）—— 想攒 GP 币就得真开打，绕开所有人只会两手空空。<br>

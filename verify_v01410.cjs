@@ -712,5 +712,30 @@ const feeShow = JSON.parse(G(`JSON.stringify((()=>{
 console.log('  撤离费表（裸装 / ₽3万 / ₽9万 / ₽30万）：');
 feeShow.forEach(r => console.log('    ' + r[0] + '  ' + r.slice(1).map(x => '₽'+x).join('  →  ')));
 
+console.log('\n=== 23. 3D 掩体 / 手电 / 2D 手持模型 / 文案（v0.19.3）===');
+check('3D 不再把掩体当墙体渲染', /\(wl\.kind \|\| "wall"\) !== "wall"/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 深度缓冲改为垂直深度', /this\._zbuf\[c\] = best \* Math\.cos\(a - yaw\)/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 手电按面投射（跟随视线）', /0\.22 \* cone \* fall/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 移除固定手电亮斑', /rgba\(255,236,182,0\.20\)/.test(fpSrc) ? 0 : 1, 1, 0.001);
+check('2D 有手持武器平面模型', /handWeapon\(ctx, o, r\)\{/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('2D 玩家改用武器模型', /if\(o\.isPlayer \|\| o\.remote\)\{/.test(raidSrc) &&
+  /this\.handWeapon\(ctx, o, r\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('空手画战术匕首', /战术匕首/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* 手持模型必须真的跑得通：空手 / 步枪带瞄具 / 狙击三种都画一遍 */
+let hwErr = '';
+try {
+  G(`(()=>{ const o={x:0,y:0,r:15,angle:0.7,gun:null,color:"#88a078",isPlayer:true,hp:100,maxHP:100,
+      armorType:0,armor:0,dr:0,freezeT:0,burnT:0,corrodeT:0,shockT:0,radT:0,kills:0};
+    RenderRaid.unit(__mockCtx, o, __mockGame);
+    o.gun={ type:"rifle", element:"fire", rarity:"blue", parts:[{slot:"optic"}] };
+    RenderRaid.unit(__mockCtx, o, __mockGame);
+    o.gun={ type:"sniper", element:"none", rarity:"purple", parts:[] };
+    RenderRaid.unit(__mockCtx, o, __mockGame);
+    return 1; })()`);
+} catch(e){ hwErr = e.message; }
+check('2D 手持模型三种状态均无异常', hwErr ? 0 : 1, 1, 0.001);
+if (hwErr) console.log('  handWeapon error:', hwErr);
+check('文案：同场 AI 数量与实际一致', /与 30 名 <b style="color:#e0b84a">PMC \/ Scav<\/b> 加 3 名/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

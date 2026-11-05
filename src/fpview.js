@@ -1,5 +1,6 @@
 /* =========================================================================
- * fpview.js — 第一人称视图渲染器（纯 Canvas 2D 光线投射，零依赖）
+ * fpview.js — 第一人称视图渲染器（纯 Canvas 2D 软件渲染，零依赖）
+ *   地面 = 2D 地物的真透视投影；墙体 = 按方块面光栅化 + 逐列深度缓冲
  *
  *   不做第二套游戏逻辑：直接读 Raid 已有的 walls / props / roomRects /
  *   yards / roads / forests / waterCircles / reservoirRect / bridges /
@@ -107,6 +108,11 @@ const FPView = {
     const TAU = Math.PI*2;
     for(let i=0;i<pool.length;i++){
       const wl = pool[i];
+      /* 掩体（灌木 / 岩石 / 木箱 / 油桶 / 沙袋 / 卡车…）同时登记在 walls 与 props 里：
+       * walls 那份只给 2D 碰撞与视线用，2D 渲染那边本来就 `kind!=="wall"` 跳过。
+       * 3D 若不过滤，它们会被当成 168 高的墙体画成一片灰板，而精灵贴片正好卡在板子里
+       * —— 玩家看到的就是「片状物品嵌在墙里」。这里跟 2D 一样只收真正的墙。 */
+      if((wl.kind || "wall") !== "wall") continue;
       // 站在墙里（出生点容差 / 贴墙滑行）时忽略这一面，否则整屏糊死
       if(p.x >= wl.x-0.5 && p.x <= wl.x+wl.w+0.5 && p.y >= wl.y-0.5 && p.y <= wl.y+wl.h+0.5) continue;
       const cx = wl.x + wl.w/2, cy = wl.y + wl.h/2;
@@ -159,7 +165,10 @@ const FPView = {
         if(tmin < best) best = tmin;
       }
 
-      this._zbuf[c] = best;
+      /* 存「沿视轴的垂直深度」而不是射线长度：
+       * t 沿射线量、精灵用垂直深度比，屏幕两侧 t 会系统性地大于真实深度，
+       * 于是贴在墙前的精灵在画面边缘会「穿」到墙后面去（看着像一片纸嵌进墙里）。 */
+      this._zbuf[c] = best * Math.cos(a - yaw);
     }
 
     return near;
@@ -381,6 +390,31 @@ const FPView = {
         ctx.stroke();
       }
     }
+
+    /* ---- 手电光束：打在墙上才算「跟着视角走」 ----
+     * 旧做法是屏幕正中一块固定的暖色渐变 —— 转身时世界在转、光斑不动，
+     * 看起来就像手电永远照着同一个方向。改成按面加色：离视点越近越亮、
+     * 越偏离视线中心越暗（锥半角与 2D _lightLayer 的 0.42rad 对齐），
+     * 光斑于是会随视线在墙面上扫过。 */
+    const REACH = this.LIGHT_REACH, halfW = pf.w*0.5, HALF = 0.64;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for(let i=valid.length-1; i>=0; i--){            // 近 → 远，加色与顺序无关
+      const f = valid[i];
+      if(f.dm > REACH) continue;
+      const mx = (f.ax+f.bx)*0.5, my = (f.ay+f.by)*0.5;
+      const lat = -(mx-P.x)*sa + (my-P.y)*ca;
+      const off = Math.abs((lat/f.dm)*proj) / halfW;
+      if(off > HALF) continue;
+      const cone = 1 - (off/HALF)*(off/HALF);
+      const fall = 1 - f.dm/REACH;
+      const a = 0.22 * cone * fall;
+      if(a < 0.012) continue;
+      if(!this._facePoly(ctx, f.ax, f.ay, f.bx, f.by, 0, f.top)) continue;
+      ctx.fillStyle = "rgba(255,224,160," + a.toFixed(3) + ")";
+      ctx.fill();
+    }
+    ctx.restore();
   },
 
   /* ===================== 地面层：与 2D scene() 同数据 · 同顺序 · 真透视 =====================
@@ -1130,12 +1164,14 @@ const FPView = {
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    // 2) 玩家手电：2D 是 560 射程 ±0.42rad 的暖色锥；第一人称等价于屏幕中下偏窄的暖色亮斑
-    const reach = Math.max(w, h) * 0.52;
-    const g = ctx.createRadialGradient(cx, h*0.60, Math.max(8, reach*0.06), cx, h*0.60, reach);
-    // 色值与 2D _lightLayer 手电锥完全一致（255,236,182 / 255,224,160），只压强度
-    g.addColorStop(0, "rgba(255,236,182,0.20)");
-    g.addColorStop(0.5, "rgba(255,224,160,0.075)");
+    /* 2) 地面回光：真正的光束由 _paintWalls 打在墙面上（跟着视线扫），
+     *    这里只留一层很淡的地面散射，避免脚下的地变成死黑。
+     *    强度压到 0.09 —— 高过这个值，屏幕正中那块固定亮斑又会盖过墙上的光束。 */
+    const reach = Math.max(w, h) * 0.46;
+    const g = ctx.createRadialGradient(cx, h*0.62, Math.max(8, reach*0.05), cx, h*0.62, reach);
+    // 色值与 2D _lightLayer 手电锥完全一致（255,236,182 / 255,224,160）
+    g.addColorStop(0, "rgba(255,236,182,0.09)");
+    g.addColorStop(0.5, "rgba(255,224,160,0.035)");
     g.addColorStop(1, "rgba(255,224,160,0)");
     ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
