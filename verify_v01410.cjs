@@ -895,5 +895,28 @@ check('生成的枪名不含厂商前缀', manHidden.leak.length, 0, 0.001);
 if (manHidden.leak.length) console.log('  仍带厂商:', manHidden.leak.join(' / '));
 check('旧名清洗函数存在', /function stripManufacturer\(name\)/.test(fs.readFileSync(path.join(SRC,'weapons.js'),'utf8')) ? 1 : 0, 1, 0.001);
 
+/* v0.20.1：默认零携带 —— 不指定就不带弹药，钥匙也默认一把不带 */
+const carryDefault = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  const mk=()=>{ R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}}; };
+  R.stash={ ammo:{ "ammo_mid_1":300, "ammo_light_1":200 } };
+  R.player={ isPlayer:true, gun:{ type:"rifle", mag:30, ammoMag:0, ammoRes:0, cal:"mid" }, secondary:null };
+  mk(); R._prepPlayerAmmo({});
+  const none={ inv:R._ammoTotal(), mag:R.player.gun.ammoMag, stash:R.stash.ammo["ammo_mid_1"] };
+  mk(); R.player.gun.ammoMag=0;
+  R._prepPlayerAmmo({ ammo:{ mid:{ id:"ammo_mid_1", n:60 } } });
+  const some={ inv:R._ammoTotal(), mag:R.player.gun.ammoMag, stash:R.stash.ammo["ammo_mid_1"],
+    light:R.stash.ammo["ammo_light_1"] };
+  return { none, some };
+})())`));
+check('默认不带弹药', carryDefault.none.inv === 0 && carryDefault.none.mag === 0 ? 1 : 0, 1, 0.001);
+check('默认不动仓库里的子弹', carryDefault.none.stash, 300, 0.001);
+check('指定携带时只带该口径', carryDefault.some.mag + carryDefault.some.inv === 60 ? 1 : 0, 1, 0.001);
+check('未选的口径一发不带', carryDefault.some.light, 200, 0.001);
+check('仓库按携带量扣减', carryDefault.some.stash, 240, 0.001);
+check('钥匙默认一把不带', /if\(!Array\.isArray\(UI\._raidKeys\)\) UI\._raidKeys=\[\];/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('开始突袭不再兜底全带钥匙', /UI\._raidKeys\.slice\(\):\[\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('大厅弹药默认 0 发', /: 0;\s*\n\s*UI\._raidAmmo\[cal\]=/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

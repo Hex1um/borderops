@@ -3634,11 +3634,9 @@ const Raid = {
         if(!w || !w.id) continue;
         take(w.id, w.n===undefined ? 9999 : w.n);
       }
-    } else {
-      /* 没指定就全带（受总发数上限约束，高级优先装走） */
-      const ids=Object.keys(stAmmo).sort((a,b)=>((ammoParseId(b)||{lv:0}).lv)-((ammoParseId(a)||{lv:0}).lv));
-      for(const id of ids) take(id, stAmmo[id]);
     }
+    /* v0.20.1：没指定（opts.ammo 缺省 / 为空）= 一发都不带。
+     * 之前「没指定就全带」会让玩家默认背满 720 发，与「弹药要自己负责」的设计相反。 */
     const p=this.player;
     if(!p) return;
     for(const gun of [p.gun, p.secondary]){
@@ -6998,9 +6996,10 @@ UI.raidSetup=function(){
   if(sel.h && !(stash.helmets||[]).some(h=>h.uid===sel.h)) sel.h=null;
   if(sel.s && !stash.shields.some(s=>s.uid===sel.s)) sel.s=null;
   if(!sel.w.length && !sel.a && !sel.h && !sel.s) UI._raidIns=false;
-  /* 钥匙串改为「可选携带」——默认全带（保持老行为），点卡片可逐把取下。
+  /* 钥匙串改为「可选携带」——v0.20.1 起默认一把不带，点卡片逐把勾选。
    * 带进图的钥匙死了就丢，留在仓库的绝对安全，玩家自己权衡。 */
-  if(!Array.isArray(UI._raidKeys)) UI._raidKeys=(stash.keys||[]).map(k=>k.uid);
+  /* v0.20.1：钥匙默认一把都不带（丢了就没了）；玩家想冒险再逐把勾选 */
+  if(!Array.isArray(UI._raidKeys)) UI._raidKeys=[];
   UI._raidKeys=UI._raidKeys.filter(uid=>(stash.keys||[]).some(k=>k.uid===uid));
 
   const wcards = stash.weapons.length ? stash.weapons.map(w=>{
@@ -7083,8 +7082,10 @@ UI.raidSetup=function(){
       </div>` };
     }
     const cap=Math.min(cur.n, RAID_AMMO_CAP);
-    const n=(sel && sel.id===cur.id) ? Math.min(sel.n|0, cap) : cap;
-    UI._raidAmmo[cal]={ id:cur.id, n };
+    /* v0.20.1：默认一发都不带（进图枪是空的，子弹要自己带或自己找）。
+     * 只有玩家点过数量按钮，才按他选的带。 */
+    const n=(sel && sel.id===cur.id) ? Math.max(0, Math.min(sel.n|0, cap)) : 0;
+    UI._raidAmmo[cal]={ id:cur.id, n, cap };
     const btns=[0, 60, 120, cap].filter((v,i,a)=>a.indexOf(v)===i)
       .map(v=>`<button class="btn ghost small" data-ammo="${cal}:${v}" style="padding:2px 7px;font-size:11px;${v===n?'border-color:#ffd36a;color:#ffd36a;':''}">${v===cap?'全带':v}</button>`).join("");
     return { cal, html:`<div class="ri" style="cursor:default;">
@@ -7099,6 +7100,8 @@ UI.raidSetup=function(){
   });
   const ammoCards=ammoRows.map(r=>r.html).filter(Boolean).join("")
     || `<div class="empty-hint">仓库没有弹药 · 去工坊合成或在军火超市购买</div>`;
+  const ammoCarried=Math.min(RAID_AMMO_CAP,
+    Object.keys(UI._raidAmmo).reduce((sum,k)=>sum+(UI._raidAmmo[k].n||0),0));
   const keyCards = keysAll.length ? keysAll.map(k=>{
     const on=keySet.has(k.uid);
     const lv=M.clamp(k.lv||1,1,5);
@@ -7221,7 +7224,7 @@ UI.raidSetup=function(){
         </div>
         <div class="raid-col">
           <h4 style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-            <span>弹药（携带 ${Object.keys(UI._raidAmmo).reduce((s,k)=>s+(UI._raidAmmo[k].n||0),0)}/${RAID_AMMO_CAP} 发）</span>
+            <span style="color:${ammoCarried>0?'inherit':'#ff9a8a'}">弹药（携带 ${ammoCarried}/${RAID_AMMO_CAP} 发）</span>
             <span style="display:flex;gap:6px;">
               <button class="btn ghost small" data-ammoall="1" style="padding:2px 8px;font-size:11px;">全带</button>
               <button class="btn ghost small" data-ammoall="0" style="padding:2px 8px;font-size:11px;">全不带</button>
@@ -7239,6 +7242,7 @@ UI.raidSetup=function(){
       </div>
 
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:10px;">
+        ${ammoCarried===0?`<div class="raid-tip" style="color:#ff9a8a;width:100%;">未携带弹药：进图后枪是空的，要先搜到 / 买到子弹才能开火（钥匙同样默认不带）</div>`:''}
         <div class="raid-tip">${sel.w.length===0&&!sel.a&&!sel.h&&!sel.s&&cashVal===0?'裸装进场：空手、无甲、无盔、无盾，只带 1 卷绷带 —— 进图翻箱捡枪，捡到即自动上手':`已选 ${sel.w.length} 把枪${sel.a?' + 护甲':''}${sel.h?' + 头盔':''}${sel.s?' + 护盾':''} · 装备 ₽${priceText(gearVal)}${cashVal>0?` + 现金 ₽${priceText(cashVal)}`:''} · 总价值 <b style="color:#ffd36a">₽${priceText(carryVal)}</b> · 局内 Q 循环换枪 / 1~4 直选，多出的枪放背包`}</div>
         <div class="row" style="justify-content:flex-end;">
           <button class="btn ghost" id="btn-raid-shop">军火超市</button>
@@ -7282,7 +7286,7 @@ UI.raidSetup=function(){
       const all=el.dataset.ammoall==="1";
       for(const cal of AMMO_CAL_LIST){
         const cur=UI._raidAmmo[cal]; if(!cur) continue;
-        cur.n = all ? RAID_AMMO_CAP : 0;
+        cur.n = all ? (cur.cap||0) : 0;
       }
       SFX.ui(); UI.raidSetup();
     };
@@ -7346,7 +7350,7 @@ UI.raidSetup=function(){
   });
   document.getElementById('btn-raid-start').onclick=()=>{
     SFX.ui();
-    const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():(stash.keys||[]).map(k=>k.uid);
+    const pickedKeys=Array.isArray(UI._raidKeys)?UI._raidKeys.slice():[];
     const ammoPick={};
     for(const cal of AMMO_CAL_LIST){
       const a=UI._raidAmmo && UI._raidAmmo[cal];
