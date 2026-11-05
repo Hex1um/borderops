@@ -91,12 +91,14 @@ function auctionItemInfo(kind, it){
       else { const d=BOOST_CORE_TYPES[it.boost]; meta=`改装模块 · 强化 · ${d?d.name:"强化"} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，提供属性增益"; }
       return { name:cname, color:it.color||"#8fd0ff", value:it.value||0, meta, stats };
     }
-    const col=(RARITY_BY_ID[it.rarity]||{color:"#cfd8e2"}).color;
+    /* v0.21.7：配件与枪械同一套显示分层 —— 精简只留槽位名，完整才给词缀名 / 品质 / iLv */
+    const col=partColor(it);
     const sn=GUN_SLOT_BY_ID[it.slot]?GUN_SLOT_BY_ID[it.slot].name:it.slot;
+    const qn=partQualityName(it);
     return {
-      name:it.name, color:col, value:partValue(it),
-      meta:`配件 · ${sn}槽位 · iLv ${it.ilvl||1} · ${(RARITY_BY_ID[it.rarity]||{name:"普通"}).name}`,
-      stats:partText(it),
+      name:partNameOf(it), color:col, value:partValue(it),
+      meta:`配件 · ${sn}槽位${qn?" · "+qn:""}${weaponQualityHidden()?"":` · iLv ${it.ilvl||1}`}`,
+      stats:weaponQualityHidden()? "" : partText(it),
     };
   }
   if(kind==="material"){

@@ -7,7 +7,7 @@
  *   · 开局可携带仓库里的装备，也可真空手进场（只带 1 卷绷带，进图翻箱捡枪）
  *   · 中弹会流血，需要绷带止血（桌面 H 键 / 移动端医疗键）
  *   · 撤离点条件化：铁路隧道每局随机开放、旧卡车常驻、雇车撤离费按带入装备估值浮动
- *   · 上锁保险箱分 I~V 级，须用同级钥匙开启（钥匙有使用次数，可买 / 可掉落，不可合成）
+ *   · 上锁保险箱分 I~V 级，须用同级钥匙开启（钥匙有使用次数，可买 / 可掉落 / 工坊 16 份材料合成）
  *   · 可在配装时为携带装备购买保险，阵亡后有几率被退回仓库
  *   · 只有撤离成功，身上的装备与战利品才写回仓库；阵亡或超时未撤离，全部丢失
  *   · 左上角实时击杀提示（Kill Feed）
@@ -361,16 +361,20 @@ const RAID_AMMO_STARTER = {     // 新档 / 旧档迁移时发的起步弹药（
  * 改为军工品质刻度和低饱和军规配色；
  *   regen（护甲自动回复）全部归零 —— 现实护甲耐久只能维修，不会待维修。
  * 护甲等级 T1~T9、枪械品级、部件品级、原材料品级全部共用此刻度。 */
+/* 护甲 / 头盔 / 盾的 9 阶刻度 —— 名字与颜色**必须和前 9 阶武器品质一一对齐**
+ * （config.js RARITIES 的注释里有完整 12 阶对照表 + 亮度单调性说明）。
+ * 以前这两张表各叫各的（这边「翻新 / 制式 / 军规…」、那边「民用 / 翻新 / 制式…」），
+ * 完整显示下同一档护甲和枪会显示两个不同名字 —— v0.21.7 统一。 */
 const RAID_TIERS = [
-  { id:"common",  name:"民用", color:"#cfc9bb", dr:0,     arm:0,    val:0,    regen:0, affix:0 },
-  { id:"uncommon",name:"翻新", color:"#93ad7c", dr:0.020, arm:0.15, val:0.40, regen:0, affix:1 },
-  { id:"magic",   name:"制式", color:"#7b9ab5", dr:0.040, arm:0.30, val:0.80, regen:0, affix:2 },
-  { id:"rare",    name:"军规", color:"#c1a85a", dr:0.062, arm:0.50, val:1.35, regen:0, affix:3 },
-  { id:"epic",    name:"精工", color:"#9c8fb5", dr:0.090, arm:0.75, val:2.20, regen:0, affix:4 },
-  { id:"legend",  name:"特种", color:"#c68b4c", dr:0.122, arm:1.10, val:3.50, regen:0, affix:5 },
-  { id:"ancient", name:"试验", color:"#79a9a2", dr:0.155, arm:1.60, val:5.20, regen:0, affix:6 },
-  { id:"myth",    name:"原型", color:"#b06a62", dr:0.190, arm:2.20, val:7.60, regen:0, affix:7 },
-  { id:"rainbow", name:"竞赛", color:"#c9b878", dr:0.225, arm:2.90, val:11.0, regen:0, affix:8 },
+  { id:"common",  name:"民用", color:"#867b61", dr:0,     arm:0,    val:0,    regen:0, affix:0 },
+  { id:"uncommon",name:"制式", color:"#4c9d2e", dr:0.020, arm:0.15, val:0.40, regen:0, affix:1 },
+  { id:"magic",   name:"军规", color:"#559edf", dr:0.040, arm:0.30, val:0.80, regen:0, affix:2 },
+  { id:"rare",    name:"精选", color:"#bc94e9", dr:0.062, arm:0.50, val:1.35, regen:0, affix:3 },
+  { id:"epic",    name:"精工", color:"#ef93d6", dr:0.090, arm:0.75, val:2.20, regen:0, affix:4 },
+  { id:"legend",  name:"特种", color:"#f5a8a2", dr:0.122, arm:1.10, val:3.50, regen:0, affix:5 },
+  { id:"ancient", name:"试验", color:"#f2bd54", dr:0.155, arm:1.60, val:5.20, regen:0, affix:6 },
+  { id:"myth",    name:"原型", color:"#b6de19", dr:0.190, arm:2.20, val:7.60, regen:0, affix:7 },
+  { id:"rainbow", name:"定型", color:"#76ebd7", dr:0.225, arm:2.90, val:11.0, regen:0, affix:8 },
 ];
 // 护甲稀有度数组（与 RAID_TIERS 一一对应，保留旧字段名以兼容 UI）
 const RAID_RARITY_NAME  = RAID_TIERS.map(t=>t.name);
@@ -776,10 +780,11 @@ function raidMakeKey(lv, uses){
     uses:Math.max(1, Math.round(uses||d.uses)), maxUses:d.uses, value:d.value,
     uid:"ky"+Math.floor(Math.random()*1e9).toString(36) };
 }
-/* 钥匙不再可合成 —— 只有两条获取路径：
+/* 钥匙的获取路径（v0.21.7 起第三条回来了）：
  *   ① 掉落：上锁保险箱（等级 i 的箱子最多掉 i+1 级的钥匙）与 Raider；
- *   ② 购买：材料商店 I~II（卢布）、黑市 III~V（GP 币）。
- * 由此钥匙成为真正的稀缺资源，开箱决策成本更高。 */
+ *   ② 购买：材料商店 I~II（卢布）、黑市 III~V（GP 币）；
+ *   ③ 合成：工坊合成表「保险箱钥匙」—— 16 份原材料，级别由投料品质决定（I~V）。
+ * 16 份料本身就是不小的成本，所以钥匙依然是稀缺资源，开箱前要算账。 */
 function raidRollBoxKey(boxLv){
   // 箱子等级 i → 掉落上限 i+1（V 级封顶），越接近上限越罕见
   const cap=M.clamp((boxLv|0)+1, 1, 5);
@@ -1048,6 +1053,17 @@ for(const cal of AMMO_CAL_LIST){
   });
 }
 
+/* v0.21.7：钥匙重新可以合成 —— 造价 16 份原材料，产出的级别由投料品质决定（I~V）。
+ * 钥匙仍然是稀缺资源：16 份料不是小数，够买半把枪了，所以「合成一把钥匙」永远是个取舍。 */
+RAID_RECIPES.push({
+  id:"r_key", name:"保险箱钥匙", kind:"key", tag:"钥匙", slots:16,
+  desc:`投入 16 份材料 → 1 把钥匙（I~V 级，级别由材料品质决定）· 越好的料出越高级的钥匙`,
+  make:(mats,q)=>{
+    const lv = M.clamp(1 + Math.round(q*0.62), 1, 5);
+    return raidMakeKey(lv);
+  },
+});
+
 /* v0.19.0：保证一把枪至少 1 条词缀；条数由 rollAffixCount 决定（大多数只有 1 条，
  * 少数 2 条及以上）。旧版强制「1 前缀 + 1 后缀」，导致每把枪都恰好 2 条，数量过于单一。 */
 function ensureGunAffixes(w){
@@ -1080,7 +1096,7 @@ function raidGunName(g){
 function partChip(pt){
   const col=(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color;
   const sn=GUN_SLOT_BY_ID[pt.slot]?GUN_SLOT_BY_ID[pt.slot].name:pt.slot;
-  return `<span class="part-chip" style="border-color:${col};color:${col}">${pt.name}<em>${partText(pt)}</em></span>`;
+  return `<span class="part-chip" style="border-color:${col};color:${col}">${partNameOf(pt)}<em>${partText(pt)}</em></span>`;
 }
 
 /* 共享的武器卡片渲染：物品栏与融合台结果卡用同一套，保证显示完全一致
@@ -5526,12 +5542,16 @@ const Raid = {
     }
     for(let i=0;i<R.inv.parts.length;i++){
       const pt=R.inv.parts[i]; any=true;
-      const col=(RARITY_BY_ID[pt.rarity]||{}).color||pt.color||"#dfe7f0";
-      /* v0.21.6：配件可以就地拆成原材料（改装模块是模块，不给拆） */
+      /* v0.21.7：与枪械同一套显示分层 —— 精简只留槽位名，完整才给词缀名 / 品质 / iLv。
+       * 效果行（partText）两种模式都保留：那是「属性」不是「词缀名」，和枪的伤害 / 弹匣一样必须可见，
+       * 否则两件「下挂」在精简模式下完全分不清。行宽只有一行，所以这里不再塞拆解产出（按钮上已有）。 */
+      const col=partColor(pt);
+      const qn=partQualityName(pt);
+      const slotName=pt.core?"改装模块":((GUN_SLOT_BY_ID[pt.slot]||{}).name||pt.slot||"配件");
       const sv = raidSalvageYield(pt);
-      const svTxt = sv ? " · 拆解→"+sv.map(x=>`${(RAID_MAT_BY_ID[x.id]||{}).name||x.id}×${x.n}`).join(" + ") : " · 改装模块不可拆";
-      line(pt.name, col, `${pt.core?"改装模块 · ":""}${pt.slot||""} · 估值 ${money(pt.value||partValue(pt))}${svTxt}`,
-        `parts:${i}`, null, null, null, sv?`parts:${i}`:null);
+      const eff = partText(pt) || slotName;
+      const meta = `${eff} · ${slotName}${qn?" · "+qn:""}${weaponQualityHidden()?"":` · iLv ${pt.ilvl||1}`} · 估值 ${money(pt.value||partValue(pt))}`;
+      line(partNameOf(pt), col, meta, `parts:${i}`, null, null, null, sv?`parts:${i}`:null);
     }
     for(let i=0;i<R.inv.materials.length;i++){
       const m=R.inv.materials[i]; any=true;
@@ -5624,7 +5644,7 @@ const Raid = {
       names.push(base.name+"×"+g.n);
     }
     this._invDirty=true;
-    this._pick(p.x, p.y-34, "拆解 "+pt.name+" → "+names.join(" + "), "#8fe07a");
+    this._pick(p.x, p.y-34, "拆解 "+partNameOf(pt)+" → "+names.join(" + "), "#8fe07a");
     SFX.pickup();
     return true;
   },
@@ -7449,7 +7469,7 @@ UI.raidSetup=function(){
       <div class="ri-meta">${RAID_LOCK_NAME[lv]} · 可开 ${k.uses}/${k.maxUses||k.uses} 次 · 估值 ₽${priceTextShort(k.value||0)}</div>
       <div class="ri-val" style="color:${on?'#8fe07a':'#8b95a5'}">${on?'✓ 装进钥匙串':'○ 留在仓库'}</div>
     </div>`;
-  }).join('') : `<div class="empty-hint">仓库没有钥匙 · 只能开箱掉落，或在材料商店 / 黑市购买（不可合成）</div>`;
+  }).join('') : `<div class="empty-hint">仓库没有钥匙 · 开箱掉落 / 材料商店 / 黑市购买，或在工坊用 16 份原材料合成</div>`;
 
   // 配装总价值 = 装备估值 + 带入卢布 + GP 币折算（撤离费 / 保费仍只按装备估值）
   const gearVal=sel.w.reduce((s,uid)=>{
@@ -7495,7 +7515,7 @@ UI.raidSetup=function(){
           之后按延迟重新起盾。护盾由电池组 / 充能模块 / 延时继电器 / 承载框架 4 个配件组成，
           带前后缀与独特加成，可工坊合成、融合升阶、箱子和 Raider 掉落、军火超市购买。<br>
           <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与 GP 币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">120%（±40%）</b> 收你的货，远高于背包直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#c07bff">◆ GP 币</b>，出售高稀有度成品枪与高级改装模块。<br>
-          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 橙装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。<b style="color:#ff9a3a">钥匙无法合成</b>，只有两条路：<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V GP 币；Raider 身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
+          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 橙装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。钥匙还能在<b style="color:#8fd0ff">工坊合成表</b>用 <b style="color:#ffd76a">16 份原材料</b>做一把（投料品质决定 I~V 级，越好的料出越高级的钥匙）；另外两条路是<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V GP 币；Raider 身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
           <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · GP 币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
           <b style="color:#8fe07a">可互动设施</b>：<b>监狱 / 小镇 / 大坝</b>里有医疗站（回 45 血并止血）、弹药柜（补满备弹）、警报器（拉响把 AI 引过去，撤离前调虎离山）与<b style="color:#8fd0ff">泄洪闸</b>——闸门一开，水库放空，水底露出 <b style="color:#ffd23f">IV 级 + III 级保险箱</b>各一口，代价是巨响会招来一票人。<br>
           <b style="color:#62c8ff">河流与桥</b>：河道可<b>缓慢涉水</b>通过（速度只剩 45%），泡在水里超过 4.5 秒开始<b style="color:#ff9a8a">失温扣血</b>且越拖越疼——桥面（8 座，含 3 座带双黄线的大桥）完全免减速，赶路还是走桥。<b style="color:#ffd76a">背包满时</b>捡到的多余物资不会消失，会<b>掉在脚下变成发光的小包裹</b>，腾出空间后按 E 还能捡回来；<b style="color:#ff8a5a">Tab 物品栏</b>里每件战利品都有 <b>✕ 丢弃</b> 按钮，丢掉的同样落在脚下，随时能回头捡。<br>
@@ -7750,7 +7770,7 @@ UI.raidResult=function(res){
       }
       return g.map(s=>`<span style="color:${s.m.color||'#dfe7f0'}">${s.m.name}(原材料)${s.n>1?' ×'+s.n:''}</span>`);
     };
-    for(const pt of (res.looted.parts||[])) list.push(`<span style="color:${colOf(pt)}">${pt.name}(配件)</span>`);
+    for(const pt of (res.looted.parts||[])) list.push(`<span style="color:${colOf(pt)}">${partNameOf(pt)}(配件)</span>`);
     for(const h of agg(res.looted.materials)) list.push(h);
     itemsHtml = list.length ? list.join(" · ") : `<span style="color:var(--muted)">空手而归</span>`;
   } else {
@@ -7761,7 +7781,7 @@ UI.raidResult=function(res){
     if(res.lost.shield) lost.push(`<span style="color:${shieldColor(res.lost.shield)}">${res.lost.shield.name}(护盾)</span>`);
     for(const w of (res.lost.lootW||[])) lost.push(`<span style="color:${colOf(w)}">${gunNameOf(w)}(物品栏)</span>`);
     for(const h of (res.lost.lootH||[])) lost.push(`<span style="color:${colOf(h)}">${h.name}(物品栏)</span>`);
-    for(const pt of (res.lost.lootP||[])) lost.push(`<span style="color:${colOf(pt)}">${pt.name}(配件)</span>`);
+    for(const pt of (res.lost.lootP||[])) lost.push(`<span style="color:${colOf(pt)}">${partNameOf(pt)}(配件)</span>`);
     { const g=[]; for(const m of (res.lost.lootM||[])){
         const s=g.find(x=>x.id===m.id); if(s) s.n++; else g.push({ id:m.id, m, n:1 });
       }
@@ -7931,12 +7951,16 @@ UI.raidShop=function(opts){
     UI._raidShopParts=arr;
   }
   const pCards=UI._raidShopParts.map((pt,i)=>{
-    const price=raidSuperPrice(partValue(pt), pt.uid), can=stash.creds>=price, col=(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color;
+    const price=raidSuperPrice(partValue(pt), pt.uid), can=stash.creds>=price, col=partColor(pt);
     const slotName=GUN_SLOT_BY_ID[pt.slot]?GUN_SLOT_BY_ID[pt.slot].name:pt.slot;
+    const qn=partQualityName(pt);
+    /* 效果行（partText）两种模式都留着 —— 那是属性不是词缀名，和枪的伤害 / 弹匣一个层级；
+     * 精简模式只是不显示品质名与词缀名，不然同槽位的几张卡会长得一模一样。 */
+    const statLine=partText(pt);
     return `<div class="shop-item" style="border-left-color:${col}">
-      <div class="si-name" style="color:${col}">${pt.name}</div>
-      <div class="si-meta">配件 · ${slotName}槽位</div>
-      <div class="si-stats">${partText(pt)}</div>
+      <div class="si-name" style="color:${col}">${partNameOf(pt)}</div>
+      <div class="si-meta">配件 · ${slotName}槽位${qn?" · "+qn:""}</div>
+      ${statLine?`<div class="si-stats">${statLine}</div>`:""}
       <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${price}</span>
         <button class="btn" data-buy="part:${i}" ${can?'':'disabled'}>购买</button></div>
     </div>`;
@@ -8392,9 +8416,10 @@ UI.raidWorkshop=function(opts){
 
   const partCards = stash.parts.slice(0,60).map(pt=>{
     const on=UI._wsParts.includes(pt.uid);
-    const col=(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color;
+    const col=partColor(pt);
+    const qn=partQualityName(pt);
     return `<div class="shop-item ${on?'sel':''}" data-wpart="${pt.uid}" style="border-left-color:${col};cursor:pointer;${on?('box-shadow:inset 0 0 0 2px '+col+';'):''}">
-      <div class="si-name" style="color:${col};font-size:12px;">${pt.name}</div>
+      <div class="si-name" style="color:${col};font-size:12px;">${partNameOf(pt)}${qn?`<span style="opacity:.75;font-size:11px;"> · ${qn}</span>`:""}</div>
       <div class="si-meta">${partText(pt)}</div>
     </div>`;
   }).join('') || `<div class="empty-hint">没有配件 · 箱子里到处都是</div>`;
@@ -8444,7 +8469,7 @@ UI.raidWorkshop=function(opts){
       <div class="subtitle">WORKSHOP · 材料合成 / 用机匣与部件组装枪械</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
-        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块与钥匙都不再能合成</b>：改装模块只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买；钥匙同样只能箱内掉落或商店购买。<b>弹药</b>在「弹药」页单独合成：轻弹 1 份 / 中弹 2 份 / 重弹 4 份 / 榴弹 8 份材料，每次出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定${weaponQualityHidden()?"（当前精简显示，品质与前后缀不显示）":""}。</div>
+        <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块仍然不能合成</b>：只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买。钥匙可以在这里合成：<b style="color:#ffd76a">16 份原材料</b>做一把，级别由投料品质决定（I~V）。<b>弹药</b>在「弹药」页单独合成：轻弹 1 份 / 中弹 2 份 / 重弹 4 份 / 榴弹 8 份材料，每次出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定${weaponQualityHidden()?"（当前精简显示，品质与前后缀不显示）":""}。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-ws-back">${opts.from==='title'?'返回主菜单':'前往配装大厅'}</button>
       </div>
@@ -8548,6 +8573,10 @@ UI.raidWorkshop=function(opts){
       else if(r.kind==="ammo"){
         stash.ammo=stash.ammo||{};
         stash.ammo[out.id]=(stash.ammo[out.id]||0)+(out.n||RAID_AMMO_STACK);
+      }
+      else if(r.kind==="key"){
+        stash.keys=stash.keys||[];
+        stash.keys.push(out);
       }
       UI._craft.sel=[];
       RaidStash.save(stash); SFX.pickup();
@@ -8750,10 +8779,10 @@ UI.raidFieldShop=function(key){
     }).join("");
     body += sh.stock.parts.map((pt,i)=>{
       const can=money>=(pt.shopPrice||0);
-      const col=(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color;
+      const col=partColor(pt);
       return `<div class="si">
-        <div class="si-name" style="color:${col}">${pt.name||(pt.core?"改装模块":pt.slot_name||"配件")}</div>
-        <div class="si-stats">配件 · ${(pt.affixes||[]).map(a=>a.nm).join(" · ")||"—"}</div>
+        <div class="si-name" style="color:${col}">${partNameOf(pt)||(pt.core?"改装模块":pt.slot_name||"配件")}</div>
+        <div class="si-stats">配件${partQualityName(pt)?" · "+partQualityName(pt):""}${weaponQualityHidden()?"":" · "+((pt.affixes||[]).map(a=>a.nm).join(" · ")||"—")}</div>
         <div class="si-buy"><span class="si-price ${can?"":"cant"}">₽ ${priceTextShort(pt.shopPrice||0)}</span>
           <button class="btn ghost" data-fbuy="cashpart:${sid}:${i}" ${can?"":"disabled"}>购买</button></div>
       </div>`;
@@ -8792,7 +8821,7 @@ UI.raidFieldShop=function(key){
     for(const a of (R.inv.armors||[])) add("a", a, a.name, ARMOR_TIER_COLOR[a.tier]||"#dfe7f0", "护甲", a.value||0);
     for(const h of (R.inv.helmets||[])) add("h", h, h.name, ARMOR_TIER_COLOR[h.tier]||"#dfe7f0", "头盔", h.value||0);
     for(const s of (R.inv.shields||[])) add("s", s, s.name, shieldColor(s), "护盾", s.value||0);
-    for(const pt of (R.inv.parts||[])) add("p", pt, pt.name||(pt.core?"改装模块":pt.slot_name||"配件"),
+    for(const pt of (R.inv.parts||[])) add("p", pt, partNameOf(pt)||(pt.core?"改装模块":pt.slot_name||"配件"),
       (RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color, pt.core?"改装模块":"配件",
       (pt.slot==="core"?pt.value:partValue(pt))||0);
     for(const m of (R.inv.materials||[])) add("m", m, m.name, m.color||"#dfe7f0", "原材料", m.value||0);
@@ -8878,7 +8907,7 @@ UI.raidFieldShop=function(key){
       if(R.creds<(pt.shopPrice||0)) return;
       R.creds-=pt.shopPrice;
       R.inv.parts.push(pt); shop.stock.parts.splice(idx,1);
-      R._float(R.player.x, R.player.y-40, "购入 "+(pt.name||"配件"), "#c9a13a");
+      R._float(R.player.x, R.player.y-40, "购入 "+(partNameOf(pt)||"配件"), "#c9a13a");
       SFX.ui(); UI.raidFieldShop(sid);
     } else if(pay==="cashmed"){
       const md=shop.stock.meds[idx]; if(!md) return;
@@ -9368,17 +9397,18 @@ UI.raidStash=function(opts){
     : `<div class="empty-hint">仓库暂无护盾 · 突袭掉落 / 工坊合成 / 融合 / 军火超市购买</div>`;
 
   const pCards = stash.parts.length ? stash.parts.map((pt,i)=>{
-    const col=(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color;
+    const col=partColor(pt);
     const sn=GUN_SLOT_BY_ID[pt.slot]?GUN_SLOT_BY_ID[pt.slot].name:pt.slot;
+    const qn=partQualityName(pt);
     const pv=partValue(pt);
     /* v0.21.6：配件可拆成原材料（先拆料，再拿料开工） */
     const sv=raidSalvageYield(pt);
     const svTxt=sv?`<div class="si-stats" style="color:#8fe07a;opacity:.85">拆解可得 ${sv.map(x=>`${(RAID_MAT_BY_ID[x.id]||{}).name||x.id}×${x.n}`).join(" + ")}</div>`
                   :`<div class="si-stats" style="opacity:.55">改装模块 · 不可拆解</div>`;
     return `<div class="shop-item" style="border-left-color:${col}">
-      <div class="si-name" style="color:${col}">${pt.name}</div>
-      <div class="si-meta">配件 · ${sn}槽位 · iLv ${pt.ilvl||1}</div>
-      <div class="si-stats">${partText(pt)}</div>
+      <div class="si-name" style="color:${col}">${partNameOf(pt)}${qn?`<span style="font-size:11px;opacity:.85"> · ${qn}</span>`:""}</div>
+      <div class="si-meta">配件 · ${sn}槽位${weaponQualityHidden()?"":` · iLv ${pt.ilvl||1}`}</div>
+      ${weaponQualityHidden()?"":`<div class="si-stats">${partText(pt)}</div>`}
       ${svTxt}
       <div class="si-buy"><span class="si-price">₽ ${priceTextShort(pv*0.6)}</span>
         <button class="btn ghost" data-sell="p:${i}">售卖</button>
@@ -9451,7 +9481,7 @@ UI.raidStash=function(opts){
         names.push(base.name+"×"+g.n);
       }
       RaidStash.save(st); SFX.pickup();
-      UI.toast && UI.toast(`已拆解 ${pt.name} · 获得 ${names.join(" + ")}`);
+      UI.toast && UI.toast(`已拆解 ${partNameOf(pt)} · 获得 ${names.join(" + ")}`);
       UI.raidStash(opts);
     };
   });

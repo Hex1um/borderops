@@ -1291,5 +1291,112 @@ check('局内拆解：配件消失、材料入库', salvageRun.ok && salvageRun.
 check('局内物品栏有「拆解」按钮', /data-salvage="\$\{salvage\}"/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('仓库配件也能拆解', /data-partsalvage/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+console.log('\n=== 28. 配件显示分层 + 钥匙合成（v0.21.7）===');
+const partView = JSON.parse(G(`JSON.stringify((()=>{
+  const prev=CFG.display;
+  const pt={ kind:'part', slot:'underbarrel', name:'·快拆卡榫', shortName:'下挂', ilvl:22, rarity:'blue',
+             value:900, mods:[{stat:'accPct',value:12}], affixes:[] };
+  const core={ kind:'part', slot:'core', name:'膛压组件 [III]', core:'chaos', lv:3, ilvl:22, rarity:'orange', value:900 };
+  CFG.display="compact";
+  const c={ name:partNameOf(pt), q:partQualityName(pt), col:partColor(pt),
+            coreName:partNameOf(core), coreQ:partQualityName(core) };
+  CFG.display="full";
+  const f={ name:partNameOf(pt), q:partQualityName(pt), col:partColor(pt) };
+  CFG.display=prev;
+  return { c, f };
+})())`));
+check('精简：配件只显示槽位名', partView.c.name === '下挂' ? 1 : 0, 1, 0.001);
+check('精简：配件不显示品质名', partView.c.q === '' ? 1 : 0, 1, 0.001);
+check('精简：配件用中性色', partView.c.col === '#cfcabb' ? 1 : 0, 1, 0.001);
+check('精简：改装模块仍保留模块名（[III] 不是品质）',
+  partView.c.coreName.indexOf('膛压组件') === 0 && partView.c.coreQ === '' ? 1 : 0, 1, 0.001);
+check('完整：配件显示词缀名', partView.f.name === '·快拆卡榫' ? 1 : 0, 1, 0.001);
+check('完整：配件显示品质名', partView.f.q === G('RARITY_BY_ID').blue.name ? 1 : 0, 1, 0.001);
+check('完整：配件恢复品质色', partView.f.col === G('RARITY_BY_ID').blue.color ? 1 : 0, 1, 0.001);
+check('配件卡片不再直接打印 pt.name',
+  raidSrc.indexOf('si-name" style="color:${col}">${pt.name}') < 0 ? 1 : 0, 1, 0.001);
+check('物品栏配件行走 partNameOf', /line\(partNameOf\(pt\), col, meta/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+const keyRec = JSON.parse(G(`JSON.stringify((()=>{
+  const r=RAID_RECIPES.find(x=>x.kind==="key")||null;
+  if(!r) return { has:false };
+  const mk=(q)=>r.make([], q);
+  /* 投料品质 q 是 0~8 的档次（raidCraftQTier），不是 0~1 */
+  const lvs=[0,2,4,6,8].map(q=>mk(q).lv);
+  return { has:true, id:r.id, slots:r.slots, lvs, kind:mk(0.5).kind, uses:mk(0.5).uses };
+})())`));
+check('工坊有钥匙配方', keyRec.has ? 1 : 0, 1, 0.001);
+check('钥匙造价 = 16 份原料', keyRec.slots, 16, 0.001);
+check('钥匙产出是 key 类型', keyRec.kind === 'key' ? 1 : 0, 1, 0.001);
+check('钥匙级别随投料品质 1→5', keyRec.lvs[0] === 1 && keyRec.lvs[4] === 5 &&
+  keyRec.lvs.every((v,i)=>i===0||v>=keyRec.lvs[i-1]) ? 1 : 0, 1, 0.001);
+check('合成的钥匙会进仓库钥匙串', /else if\(r\.kind===\"key\"\)\{[\s\S]{0,80}stash\.keys\.push/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('文案不再说「钥匙无法合成」', /钥匙无法合成/.test(raidSrc) ? 0 : 1, 1, 0.001);
+
+console.log('\n=== 29. 品质阶梯：名字有辨识度 + 颜色亮度严格递增（v0.21.7）===');
+function _lum(hex){
+  const c=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255)
+    .map(v=>v<=0.04045 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4));
+  return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];
+}
+function _hue(hex){
+  const [r,g,b]=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+  if(d<1e-6) return 0;
+  let h;
+  if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4;
+  h*=60; return h<0?h+360:h;
+}
+const tiers = JSON.parse(G(`JSON.stringify(RARITIES.map(r=>({id:r.id,name:r.name,color:r.color,mult:r.mult})))`));
+check('品质共 12 阶', tiers.length, 12, 0.001);
+check('品质名不重复', tiers.length - new Set(tiers.map(t=>t.name)).size, 0, 0.001);
+let lintOk = true, hueOk = true, lintPrev = -1, minHue = 999;
+for(let i=0;i<tiers.length;i++){
+  const L=_lum(tiers[i].color);
+  if(L<=lintPrev) lintOk=false;
+  lintPrev=L;
+  if(i){
+    let dh=Math.abs(_hue(tiers[i].color)-_hue(tiers[i-1].color));
+    if(dh>180) dh=360-dh;
+    if(dh<30) hueOk=false;
+    if(dh<minHue) minHue=dh;
+  }
+}
+check('颜色亮度严格递增（越高档越亮）', lintOk ? 1 : 0, 1, 0.001);
+check('相邻两阶色相至少差 30°（一眼分得开）', hueOk ? 1 : 0, 1, 0.001);
+/* Lab 色差（CIE76）：ΔE >= 20 才算「一眼分得开」，这条比色相角更接近人眼 */
+function _lab(hex){
+  const lin=v=>{ v/=255; return v<=0.04045 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
+  const [r,g,b]=[1,3,5].map(i=>lin(parseInt(hex.slice(i,i+2),16)));
+  const X=(r*0.4124+g*0.3576+b*0.1805)/0.95047, Y=r*0.2126+g*0.7152+b*0.0722, Z=(r*0.0193+g*0.1192+b*0.9505)/1.08883;
+  const f=t=>t>0.008856 ? Math.cbrt(t) : 7.787*t+16/116;
+  const fx=f(X), fy=f(Y), fz=f(Z);
+  return [116*fy-16, 500*(fx-fy), 200*(fy-fz)];
+}
+let minDE = 999;
+for(let i=1;i<tiers.length;i++){
+  const a=_lab(tiers[i-1].color), b=_lab(tiers[i].color);
+  const d=Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+  if(d<minDE) minDE=d;
+}
+check('相邻两阶 Lab 色差 ΔE ≥ 20', minDE>=20 ? 1 : 0, 1, 0.001);
+console.log('  ' + tiers.map(t=>t.name+' '+t.color+' L'+_lum(t.color).toFixed(2)).join('  '));
+console.log('  最小相邻色差 ΔE='+minDE.toFixed(1));
+let multOk = true;
+for(let i=1;i<tiers.length;i++) if(tiers[i].mult < tiers[i-1].mult) multOk=false;
+check('品质倍率不随档位回退', multOk ? 1 : 0, 1, 0.001);
+const tierNames9 = JSON.parse(G(`JSON.stringify(RAID_TIERS.map(t=>[t.name,t.color]))`));
+check('护甲 9 阶与武器前 9 阶同名同色', tierNames9.every((v,i)=>v[0]===tiers[i].name && v[1]===tiers[i].color) ? 1 : 0, 1, 0.001);
+const legend = JSON.parse(G(`JSON.stringify((()=>{
+  const prev=CFG.display; CFG.display="full";
+  const t=raidTierLegend();
+  CFG.display=prev;
+  return t;
+})())`));
+const legendPlain = legend.replace(/<[^>]*>/g,'');
+check('完整模式图例按「从低到高」顺序列出',
+  legendPlain.indexOf(tierNames9[0][0])>=0 &&
+  legendPlain.indexOf(tierNames9[8][0]) > legendPlain.indexOf(tierNames9[0][0]) ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

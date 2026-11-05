@@ -239,6 +239,28 @@ function partsAsAffixes(parts){
 function partText(p){
   return (p.mods||[]).map(m=>affixText(m)).join(" · ");
 }
+/* ----------------------------- 配件显示（v0.21.7） -----------------------------
+ * 与枪械同一套「精简 / 完整」分层：
+ *   精简（默认）：只留槽位名（枪管 / 瞄具 / 下挂…），不显示品质名、不谈词缀、统一中性色
+ *   完整：显示词缀名 + 品质名 + 品质色 + iLv
+ * 词缀本身（mods / affixes）照旧生效，只是显示层不给看。 */
+function partNameOf(pt){
+  if(!pt) return "";
+  if(!weaponQualityHidden()) return pt.name || "";
+  if(pt.core) return pt.name || "改装模块";      // 改装模块的 [III] 是模块等级，不是品质
+  return pt.shortName || (GUN_SLOT_BY_ID[pt.slot] && GUN_SLOT_BY_ID[pt.slot].name) || pt.name || "";
+}
+function partQualityName(pt){
+  if(!pt || pt.core || weaponQualityHidden()) return "";
+  const R = RARITY_BY_ID[pt.rarity] || RARITIES[0];
+  return R.name;
+}
+function partColor(pt){
+  if(!pt) return "#cfcabb";
+  if(weaponQualityHidden()) return "#cfcabb";
+  if(pt.core) return pt.color || "#8fb0c8";
+  return (RARITY_BY_ID[pt.rarity] || { color:"#cfcabb" }).color;
+}
 // 配件估值
 function partValue(p){
   if(!p) return 0;
