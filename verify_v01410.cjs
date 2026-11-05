@@ -947,5 +947,77 @@ check('已经带弹就不投放', starter.fed.n, 0, 0.001);
 check('HUD 无弹时标红告警', /const dry=magN<=0 && backN<=0/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('回收超市可以卖弹药', /key==="am"/.test(raidSrc) && /弹药 · "\+d\.spec/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+/* v0.21.0：支援物资（按现金判定）/ 护盾即穿 / 弹药回收价 / 弹级单调 */
+const support = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  const mk=(cash)=>{ R.grounds=[]; R.cashIn=cash; R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+    R.carried={weapons:[]}; R.floats=[];
+    R.player={ isPlayer:true, maxShield:0, gun:null, secondary:null }; };
+  R._spawnSafePoint=()=>({x:5,y:5});
+  R._feed=()=>{};
+  mk(199); R._dropSupportCache(0,0); const low=R.grounds.length;
+  mk(200); R._dropSupportCache(0,0);
+  const d=(R.grounds[0]&&R.grounds[0].drops)||[];
+  const kinds={}; for(const it of d) kinds[it.kind]=(kinds[it.kind]||0)+1;
+  const ammoLv=d.filter(it=>it.kind==="ammo").map(it=>it.lv);
+  const gunRar=d.filter(it=>it.kind==="weapon").map(it=>it.rarity);
+  const tier={ armor:(d.find(it=>it.kind==="armor")||{}).tier, helmet:(d.find(it=>it.kind==="helmet")||{}).tier };
+  return { low, n:R.grounds.length, kinds, ammoLv, gunRar, tier };
+})())`));
+check('现金不足 200 不投放支援物资', support.low, 0, 0.001);
+check('现金够 200 就投放', support.n, 1, 0.001);
+check('支援物资含 2 把枪', support.kinds.weapon, 2, 0.001);
+check('支援枪是最低品级', support.gunRar.every(r=>r==="white") ? 1 : 0, 1, 0.001);
+check('支援弹药是 T2', support.ammoLv.length > 0 && support.ammoLv.every(l=>l===2) ? 1 : 0, 1, 0.001);
+check('支援含护盾 / 护甲 / 头盔', (support.kinds.shield===1 && support.kinds.armor===1 && support.kinds.helmet===1) ? 1 : 0, 1, 0.001);
+check('支援装备都是 T1', support.tier.armor === 1 && support.tier.helmet === 1 ? 1 : 0, 1, 0.001);
+check('支援含医疗物资', (support.kinds.med||0) >= 2 ? 1 : 0, 1, 0.001);
+
+/* 护盾：捡到即穿戴；已有护盾则进背包 */
+const shieldWear = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Raid;
+  R.floats=[]; R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
+  R.player={ isPlayer:true, x:0, y:0, maxShield:0, shield:0 };
+  const sh=raidMakeShield(1,0);
+  R._collect(sh, 0, 0);
+  const a={ max:R.player.maxShield, rate:R.player.shieldRate, perks:(R.player.shieldPerks||[]).length, bag:R.inv.shields.length };
+  const sh2=raidMakeShield(2,1);
+  R._collect(sh2, 0, 0);
+  const b={ max:R.player.maxShield, bag:R.inv.shields.length };
+  return { a, b };
+})())`));
+check('拾取护盾直接穿戴', shieldWear.a.max > 0 && shieldWear.a.bag === 0 ? 1 : 0, 1, 0.001);
+check('穿戴后充能参数生效', shieldWear.a.rate > 0 && shieldWear.a.perks > 0 ? 1 : 0, 1, 0.001);
+check('已有护盾时新盾进背包', shieldWear.b.bag === 1 ? 1 : 0, 1, 0.001);
+
+/* 平衡：弹药回收价必须低于局内买价（否则材料店买 / 回收超市卖 = 无风险套利） */
+const noArb = JSON.parse(G(`JSON.stringify((()=>{
+  const out=[];
+  for(const cal of AMMO_CAL_LIST){
+    for(const lv of [1,2,3,4,5]){
+      const d=ammoDef(cal, lv), v=d.value*RAID_AMMO_STACK;
+      out.push({ cal, lv, shop:raidShopPrice(v, d.id), sell:raidAmmoSellPrice(v) });
+    }
+  }
+  return out;
+})())`));
+check('弹药回收价低于局内买价', noArb.every(r=>r.sell < r.shop) ? 1 : 0, 1, 0.001);
+if (noArb.some(r=>r.sell >= r.shop))
+  console.log('  可套利:', noArb.filter(r=>r.sell>=r.shop).map(r=>r.cal+'T'+r.lv).join(' '));
+
+/* 平衡：弹级对三类目标都必须单调变强 */
+const mono = JSON.parse(G(`JSON.stringify((()=>{
+  const at=["flesh","shield","armor"], out={};
+  for(const t of at) out[t]=AMMO_GRADES.map(g=>+(elemMult(g.elem,t)*g.power).toFixed(3));
+  return out;
+})())`));
+for(const t of ["flesh","shield","armor"]){
+  check('弹级对 '+({flesh:"无防护",shield:"护盾",armor:"插板"}[t])+' 单调变强',
+    mono[t].every((v,i)=>i===0||v>=mono[t][i-1]) ? 1 : 0, 1, 0.001);
+}
+console.log('  弹级倍率 无防护 '+mono.flesh.join(' → '));
+console.log('  弹级倍率 护盾   '+mono.shield.join(' → '));
+console.log('  弹级倍率 插板   '+mono.armor.join(' → '));
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

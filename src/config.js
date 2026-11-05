@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.20.3",
+  version: "0.21.0",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -62,7 +62,7 @@ const ELEMENTS = AMMO_TYPES;
  * 顺序即正态轴：改顺序前先确认 pen 仍然升序。 */
 const AMMO_POOL_BY_PEN = ["corrosive","cryo","fire","radiation","shock"];
 
-/* ============================ 弹药物品（v0.20.3） ============================
+/* ============================ 弹药物品（v0.21.0） ============================
  * 子弹从「枪上的计数器」变成背包里的独立物品（可堆叠，按发计数）：
  *   4 个弹族 × 5 个级别 = 20 种
  *
@@ -87,12 +87,20 @@ const AMMO_CALS = {
 const AMMO_CAL_LIST = ["light","mid","heavy","grenade"];
 
 /* 5 个级别：name 级别名 / elem 终点效应 / power 整体威力 / dotK 持续效果折减 / value 基准估值（每发）*/
+/* power 梯度（v0.21.0 平衡重算）：
+ * T1 是扩张弹，对裸目标天然最强（mult.flesh 1.55）；若 power 只涨 6%，T2 对无甲
+ * 反而比 T1 弱（1.15×1.06=1.22 < 1.55）——「升级弹药」就变成了降级。
+ * 这组值是用真实 mult 反解出来的，保证 T1→T5 对「无防护 / 护盾 / 插板」三轴都单调：
+ *   无防护 1.55 → 1.55 → 1.72 → 1.73 → 1.74 （对裸目标基本持平，不会变弱）
+ *   护盾   1.10 → 1.28 → 1.29 → 1.73 → 2.51
+ *   插板   0.42 → 1.05 → 1.14 → 2.15 → 2.80 （高弹级专治护甲，6.7 倍差距）
+ * 改 power 前请先用 verify 的「弹级对 X 单调变强」三条断言验一遍。 */
 const AMMO_GRADES = [
   { lv:1, name:"民用", elem:"corrosive", power:1.00, dotK:1.00, value:2   },
-  { lv:2, name:"制式", elem:"cryo",      power:1.06, dotK:1.00, value:5   },
-  { lv:3, name:"军规", elem:"fire",      power:1.12, dotK:0.60, value:13  },
-  { lv:4, name:"精工", elem:"radiation", power:1.20, dotK:0.45, value:38  },
-  { lv:5, name:"特种", elem:"shock",     power:1.30, dotK:0.35, value:105 },
+  { lv:2, name:"制式", elem:"cryo",      power:1.35, dotK:1.00, value:5   },
+  { lv:3, name:"军规", elem:"fire",      power:1.43, dotK:0.60, value:13  },
+  { lv:4, name:"精工", elem:"radiation", power:1.65, dotK:0.45, value:38  },
+  { lv:5, name:"特种", elem:"shock",     power:1.93, dotK:0.35, value:105 },
 ];
 const AMMO_GRADE_BY_LV = {};
 for(const g of AMMO_GRADES) AMMO_GRADE_BY_LV[g.lv]=g;

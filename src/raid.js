@@ -350,6 +350,7 @@ const RAID_INV_CAP = { weapons:6, armors:4, helmets:4, shields:3, parts:16, mate
  * 枪上只记「装填的是哪一种」（loaded）与弹匣内发数（ammoMag），不再有凭空的 ammoRes。 */
 const RAID_AMMO_CAP = 720;      // 局内可携带的总发数（跨口径合计）
 const RAID_AMMO_STACK = 30;     // 一条货 / 一次拾取 = 30 发
+const RAID_SUPPORT_CASH = 200;  // 带走这么多「卢布现金」进场 → 出生点投放支援物资（按现金，不看配装估值）
 const RAID_AMMO_STARTER = {     // 新档 / 旧档迁移时发的起步弹药（全是民用级）
   ammo_light_1: 120, ammo_mid_1: 150, ammo_heavy_1: 60, ammo_grenade_1: 12,
 };
@@ -686,6 +687,12 @@ function raidShopPrice(value, key){             // 局内商店售价
 }
 function raidFieldSellPrice(value, key){        // 回收超市收购
   return raidEconRound((value||0)*(RAID_FIELD_SELL_RATE + raidEconJitter(key, RAID_FIELD_SELL_JITTER)));
+}
+/* 弹药回收价（v0.21.0）：子弹是消耗品，回收价必须低于局内买价，否则就是无限套利
+ * —— 材料店 0.8× 买、回收超市 1.2× 卖，一条 T1 中弹净赚 ₽35，白嫖无风险。
+ *   · 局内买 0.80× → 回收 0.55×（仍高于背包直售 0.50×，鼓励跑一趟摊位） */
+function raidAmmoSellPrice(value){
+  return raidEconRound((value||0)*0.55);
 }
 function raidBagSellPrice(value){               // 背包 / 仓库直售
   return raidEconRound((value||0)*RAID_VENDOR_RATE);
@@ -1542,6 +1549,7 @@ const Raid = {
     // v0.20.0：把仓库里的子弹搬进本局并给枪上膛（必须在 player 建好之后）
     this._prepPlayerAmmo(opts);
     this._dropStarterCache(px, py);
+    this._dropSupportCache(px, py);
     if(typeof RaidStash!=="undefined" && RaidStash.save) RaidStash.save(this.stash);
 
     // AI：补满服务器 —— 只有房主（或单机）生成 AI；客户端等房主快照
@@ -3619,6 +3627,23 @@ const Raid = {
       d ? (d.name+" 打空了 · 去搜刮或买弹药") : "没有子弹 · 去搜刮或买弹药", "#ff8a5a");
   },
 
+  /* 把一件护盾装备穿到玩家身上（含独特加成解析） */
+  _wearShield(it){
+    const p=this.player;
+    if(!p || !it) return false;
+    const s=ensureShield(it);
+    p.shieldGear=s;
+    p.maxShield=s.capacity||0;
+    p.shield=p.maxShield;
+    p.shieldRate=s.rate||0;
+    p.shieldDelay=s.delay||0;
+    p.shieldInvulnBase=s.invuln||0;
+    p.shieldPerks=(s.perks||[]).slice();
+    p.shieldTimer=0; p.shieldInvuln=0;
+    p.shieldAbsorbMul=p.shieldPerks.indexOf("emitter")>=0 ? 1.08 : 1;
+    return true;
+  },
+
   /* 出生点旁的起始补给：**只在手上这把枪一发子弹都没有时**才投放，
    * 免得「默认零携带」把裸装玩家直接锁死成走不动的靶子。
    * 不是白送进背包 —— 要走到旁边按 E 搜（0.3 秒），带弹进场的玩家不会看到它。 */
@@ -3636,6 +3661,42 @@ const Raid = {
     this.grounds.push({ x:spot.x, y:spot.y, tier:0, ground:true, searched:false,
       drops:[ammo, raidMakeMed("bandage")], cash:0, starter:true });
     this._starterCache=true;
+  },
+
+  /* 带够现金的「支援物资」（v0.21.0）：
+   * 判定的是**带进局的卢布现金**（opts.cash），不是配装估值 —— 愿意把钱带进图，
+   * 就等于把身家押在这一局上，系统给一套最基础的货兜底：
+   * 2 把白枪 + 每条一把 T2 制式弹 + T1 护盾 / 护甲 / 头盔 + 绷带与止血针各一。
+   * 和起始补给一样，要走到旁边按 E 搜（0.3 秒）才进包。 */
+  _dropSupportCache(x, y){
+    if((this.cashIn||0) < RAID_SUPPORT_CASH) return;
+    if(!this.grounds) this.grounds=[];
+    const spot=this._spawnSafePoint(x-92, y+64, 18);
+    const drops=[];
+    const cals=[];
+    for(let i=0;i<2;i++){
+      const g=blGunGen(8, { type: i ? "smg" : "rifle", rarity:"white" });
+      g.kind="weapon"; g.uid=this._uid();
+      drops.push(g);
+      const cal=ammoCalOfType(g.type);
+      if(cals.indexOf(cal)<0){
+        cals.push(cal);
+        const a=ammoDef(cal, 2);          // T2 制式
+        a.n=RAID_AMMO_STACK;
+        drops.push(a);
+      }
+    }
+    drops.push(raidMakeShield(1, 0));      // T1 民用护盾
+    drops.push(raidMakeArmor(1, 0));       // T1 护甲
+    drops.push(raidMakeHelmet(1, 0));      // T1 头盔
+    for(const id of ["bandage","hemo"]){
+      const m=raidMakeMed(id);
+      if(m) drops.push(m);
+    }
+    this.grounds.push({ x:spot.x, y:spot.y, tier:0, ground:true, searched:false,
+      drops, cash:0, support:true });
+    this._supportDropped=true;
+    this._feed("支援", "携带 ₽"+this.cashIn+" 进场 · 出生点已投放支援物资", "", false, "info");
   },
 
   /* 进场装填：按配装大厅的选择把子弹搬进本局，给手上的枪上膛 */
@@ -4862,6 +4923,13 @@ const Raid = {
       return true;
     }
     if(item.kind==="shield"){
+      /* v0.21.0：身上没护盾就直接穿上（省一次开物品栏点「拿在手上」），
+       * 已经有盾了才进背包 —— 免得捡到个更差的把好的顶掉。 */
+      if(this.player && !(this.player.maxShield>0) && this._wearShield(item)){
+        this._float(px, py, "已穿戴 "+item.name, shieldColor(item));
+        SFX.pickup();
+        return true;
+      }
       if(!this.inv.shields) this.inv.shields=[];
       if(this._invPush(this.inv.shields, "shields", item)){
         this._float(px, py, "+"+item.name, shieldColor(item)); SFX.pickup(); return true;
@@ -8437,7 +8505,7 @@ UI.raidFieldShop=function(key){
       const d=ammoDefFromId(id); if(!d) continue;
       const base=d.value*n;
       rows.push({ key:"am", uid:id, name:d.name+" ×"+n, col:d.color,
-        note:"弹药 · "+d.spec, base, val:raidFieldSellPrice(base, id), n });
+        note:"弹药 · "+d.spec, base, val:raidAmmoSellPrice(base), n });
     }
     body = rows.length ? rows.map((r,i)=>`
       <div class="si">
@@ -8564,7 +8632,7 @@ UI.raidFieldShop=function(key){
       const n=R._ammoTake(row.uid, row.n||0);
       if(n<=0) return;
       const d=ammoDefFromId(row.uid);
-      const g2=Math.max(1, Math.round(raidFieldSellPrice(d.value*n, row.uid)/10)*10);
+      const g2=Math.max(1, Math.round(raidAmmoSellPrice(d.value*n)/10)*10);
       R.creds+=g2;
       R._float(R.player.x, R.player.y-40, "卖 "+n+" 发 · +₽"+g2, "#8fe07a");
       SFX.ui(); UI.raidFieldShop(sid);
