@@ -457,6 +457,26 @@ function raidIndoorAt(x,y){
   }
   return false;
 }
+/* 点 → 所在封闭房间（不在任何房间里返回 null）。
+ * v0.25.0：室内容器的可见性要按「同一个房间」判定，而不只是「在不在室内」——
+ * 站在 A 屋不该看到 B 屋里的箱子，那同样是把室内当成了无遮挡的靶场。 */
+function raidRoomAt(x,y){
+  if(!(raidBiomeAt(x,y)&RAID_BIOME_ROOM)) return null;
+  for(const rm of RAID_ROOMS){
+    if(!rm.open && x>rm.x && x<rm.x+rm.w && y>rm.y && y<rm.y+rm.h) return rm;
+  }
+  return null;
+}
+/* 圆形装饰的形状判定：长条形的（长宽比过大）不画成椭圆。
+ * v0.25.0 需求：「长条形的装饰就用长方形而不要椭圆」——
+ * 长椭圆在斜看 / 低分辨率下就是一块两端发尖的怪东西，反而比矩形更不自然；
+ * 碰撞体本来就是 AABB 矩形，渲染跟着矩形走，视觉与「走不过去」的判断一致。
+ * 返回 true 表示可以按椭圆画（近似各向同性），false 表示必须画矩形。 */
+function raidRoundShape(w,h,lim){
+  const a=Math.max(1, w||0), b=Math.max(1, h||0);
+  const ratio=Math.max(a,b)/Math.min(a,b);
+  return ratio<=(lim||1.7);
+}
 /* 3×3 行政区危险度（与 raid-core.js 的 CW=W/3 / CH=H/3 分区一致）。
    越靠东部铁路 / 西南监狱越危险；穿越大图才该有掉落回报。 */
 const RAID_ZONE_DANGER = [
@@ -547,6 +567,32 @@ const RAID_FLASH_FAN = [
   { widen:1.16, alpha:0.20, rays:40 },
   { widen:1.34, alpha:0.08, rays:32 },
 ];
+
+/* ==================== v0.25.0：其他 AI / 玩家手电 ====================
+ * 需求：「其他 ai 和玩家的手电也要显示」。
+ *
+ * 以前只有本地玩家的手电有光锥 —— 黑夜里的 AI 完全不发光，玩家只能靠
+ * 血条 / 名字去猜他在哪，等于把「夜战」变成了「热成像外挂」。
+ * 现在每个活着的 op 都打一束自己的光锥，玩家能靠光柱判断敌人方位。
+ *
+ * 三条约束：
+ *   1. 不能比本地手电亮 —— 否则自己的光被抢戏，画面主体错乱。
+ *      所以 op 光锥用的是独立的、明显更低的三档 alpha。
+ *   2. 不能拖帧 —— op 数量最多十几个，每个都跑 96 条射线做遮挡会掉帧。
+ *      op 只用两层羽化、射线数砍到 52 / 22，够用且轮廓仍然贴着墙。
+ *   3. 远处淡出 —— 1200px 外整束光 alpha 归零，不然整张地图都在闪。
+ */
+const RAID_FLASH_OP = {
+  cone2d:   0.26,   // 2D 光锥中心 alpha（约为本地 0.48 的 54%）
+  cone2dMid:0.10,   // 2D 光锥半程 alpha
+  fan:[
+    { widen:1.00, alpha:0.74, rays:52 },
+    { widen:1.18, alpha:0.26, rays:22 },
+  ],
+  fadeNear:620,     // 这个距离内满亮
+  fadeFar:1200,     // 这个距离外完全不可见
+  maxOps:8,         // 单帧最多绘制几束（按距离排序后取最近的）
+};
 
 /* ==================== v0.23.0：8 个核心 POI ====================
  * 不新建房间簇 —— RAID_ROOMS 里已经有 8 组天然成簇的地点，直接把簇升级成 POI：
@@ -1336,8 +1382,8 @@ const RAID_RECIPES = [
   { id:"r_helmet", name:"战术头盔", kind:"helmet", tag:"装备", slots:9,
     desc:"产出与材料同档的头盔（品质在档位内浮动）",
     make:(mats,q)=>raidMakeHelmet(M.clamp(q+1,1,9), M.clamp(q,0,8)) },
-  { id:"r_shield", name:"护盾发生器", kind:"shield", tag:"装备", slots:12,
-    desc:"产出与材料同档的护盾 · 4 个配件 + 前后缀 + 独特加成",
+  { id:"r_shield", name:"护盾发生器", kind:"shield", tag:"装备", slots:32,
+    desc:"投入 32 份材料 → 与材料同档的护盾 · 4 个配件 + 前后缀 + 独特加成",
     make:(mats,q)=>raidMakeShield(M.clamp(q+1,1,9), M.clamp(q,0,8)) },
 ];
 // 底材按枪型定投料量——枪越大结构越复杂，要的材料越多
@@ -1679,6 +1725,15 @@ class RaidOperator {
     this.shieldTimer=0;                 // 受击后需等待的充能延迟余量
     this.shieldInvuln=0;                // 破盾无敌余量
     this.shieldInvulnBase=o.shieldInvulnBase||0;
+    /* v0.25.0：Ti 级护盾在一局内最多「破盾无敌」2^i 次（i = 护盾底材等级）。
+       T1→2 次、T3→8 次、T5→32 次、T9→512 次。
+       用配额而不是砍时长：无敌时长本身就是这件装备的价值，砍时长效用会一起塌；
+       限制次数则让 T1 是「两次保命」、T9 是「整局都在闪」，强度曲线仍然单调上升。 */
+    this.shieldTier=o.shieldTier||0;
+    this.shieldInvulnMax=Math.max(0, o.shieldInvulnMax!==undefined
+      ? (o.shieldInvulnMax|0)
+      : (this.shieldTier ? Math.pow(2, M.clamp(Math.round(this.shieldTier),1,9)) : 0));
+    this.shieldInvulnLeft=this.shieldInvulnMax;
     this.shieldAbsorbMul=_sp.has("emitter")?1.08:1;   // 定向泄能：护盾吸伤 +8%
     // 头盔：独立耐久池，只吸收「头部命中」的那部分伤害
     this.helmetArmor=o.helmetArmor||0; this.maxHelmetArmor=this.helmetArmor;

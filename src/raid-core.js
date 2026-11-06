@@ -242,6 +242,8 @@ const Raid = {
       shieldRate: this.carried.shield?this.carried.shield.rate:0,
       shieldDelay: this.carried.shield?this.carried.shield.delay:0,
       shieldInvulnBase: this.carried.shield?this.carried.shield.invuln:0,
+      /* v0.25.0：Ti 护盾的破盾无敌有局内次数上限 = 2^T（见 RaidOperator 构造） */
+      shieldTier: this.carried.shield?(this.carried.shield.tier||0):0,
       shieldPerks: this.carried.shield?(this.carried.shield.perks||[]).slice():[],
     });
 
@@ -381,6 +383,11 @@ const Raid = {
           speed, hp, color:isPMC?colors[i%4]:colors[4+(i%5)],
           gun, armor, dr, armorTier, helmetArmor, helmetDr, helmetTier,
           shield: shieldVal,
+          /* v0.25.0：AI 的护盾同样吃 2^i 次上限 —— 护盾底材等级按护甲等级取（上限 T3），
+             否则玩家造出高阶盾、AI 却是无限无敌，规则不一致。
+             AI 的 shieldInvulnBase 本来就是 0（破盾不给无敌），所以这里只是把配额
+             记账接上，不额外给它们加无敌时间。 */
+          shieldTier: shieldVal>0 ? M.clamp(armorTier||1,1,3) : 0,
           smart, creds, lootLimit,
         }));
       }
@@ -1371,9 +1378,13 @@ const Raid = {
   _pushProp(t,x,y){
     /* round 只服务于**光线遮挡**（_rayLight 走椭圆解析求交，见 raid-core3.js）。
      * 移动 / 子弹 / AI 寻路仍然把这个 p 当 AABB 矩形用，形状判定不能扩散到那些地方：
-     * 一旦改成圆形，AI 绕障与联机两端的碰撞手感都会跟着变，而收益只是几个空角。 */
+     * 一旦改成圆形，AI 绕障与联机两端的碰撞手感都会跟着变，而收益只是几个空角。
+     * v0.25.0：长条形的（长宽比 > 1.7）一律不标 round —— 椭圆的直边会让光锥
+     * 沿着一条不存在的弧线收边，与渲染出的矩形对不上。 */
     const p={ x:x, y:y, w:t.w, h:t.h, kind:t.kind, sight:t.sight!==false,
-      soft:!t.sight, round:!!RAID_ROUND_KINDS[t.kind], fill:t.fill, edge:t.edge };
+      soft:!t.sight,
+      round:!!RAID_ROUND_KINDS[t.kind] && (typeof raidRoundShape==="function" ? raidRoundShape(t.w,t.h) : true),
+      fill:t.fill, edge:t.edge };
     this.props.push(p);
     this.walls.push(p);
     return p;

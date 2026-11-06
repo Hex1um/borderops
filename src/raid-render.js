@@ -39,14 +39,18 @@ const RenderRaid = {
   /* 户外掩体绘制：按类型区分轮廓，避免整张图全是“灰色方块” */
   prop(ctx,p){
     const k=p.kind, x=p.x, y=p.y, w=p.w, h=p.h;
-    if(k==="bush"||k==="rock"||k==="tree"||k==="scrap"){
+    /* v0.25.0：长条形（长宽比 > 1.7）的装饰改画长方形。
+     * 椭圆投影只有在近似各向同性时才像「一丛草 / 一块石头」；拉长之后
+     * 两端收尖，反而比矩形更假，而且和「整块走不过去」的碰撞体对不上。 */
+    const roundOK = (typeof raidRoundShape==="function") ? raidRoundShape(w,h) : (k==="bush"||k==="rock"||k==="tree"||k==="scrap");
+    if((k==="bush"||k==="rock"||k==="tree"||k==="scrap") && roundOK){
       // 圆形 / 不规则物用椭圆投影，否则地上会出现一个方块状黑斑
       ctx.fillStyle="rgba(0,0,0,0.24)";
       ctx.beginPath(); ctx.ellipse(x+w/2+5, y+h/2+7, w*0.46, h*0.40, 0, 0, 6.2832); ctx.fill();
     } else {
       ctx.fillStyle="rgba(0,0,0,0.30)"; ctx.fillRect(x+4,y+6,w,h);
     }
-    if(k==="bush"){
+    if(k==="bush" && roundOK){
       const cx=x+w/2, cy=y+h/2;
       ctx.fillStyle="rgba(28,46,26,0.95)";
       ctx.beginPath(); ctx.ellipse(cx,cy,w*0.5,h*0.46,0,0,6.2832); ctx.fill();
@@ -55,6 +59,13 @@ const RenderRaid = {
       ctx.beginPath(); ctx.ellipse(cx+w*0.16,cy+h*0.08,w*0.30,h*0.30,-0.3,0,6.2832); ctx.fill();
       ctx.fillStyle="rgba(120,170,110,0.16)";
       ctx.beginPath(); ctx.ellipse(cx-w*0.06,cy-h*0.20,w*0.20,h*0.16,0,0,6.2832); ctx.fill();
+      return;
+    }
+    if(k==="bush"){
+      // 长条形灌木：矩形底 + 内缩亮面，保持「灌木」的层次但不出现尖角
+      ctx.fillStyle="rgba(28,46,26,0.95)"; ctx.fillRect(x,y,w,h);
+      ctx.fillStyle=p.fill; ctx.fillRect(x+w*0.06,y+h*0.10,w*0.88,h*0.80);
+      ctx.fillStyle="rgba(120,170,110,0.16)"; ctx.fillRect(x+w*0.14,y+h*0.18,w*0.40,h*0.30);
       return;
     }
     if(k==="rock"){
@@ -304,7 +315,7 @@ const RenderRaid = {
     return fan;
   },
 
-  /* 光照层：探照灯（静态）+ 玩家手电（动态），暖色加色叠加 */
+  /* 光照层：探照灯（静态）+ 玩家手电（动态）+ 其他 AI / 玩家手电（v0.25.0） */
   _lightLayer(ctx, game, cam, vw, vh){
     const R=Raid;
     ctx.save();
@@ -323,30 +334,62 @@ const RenderRaid = {
         ctx.closePath(); ctx.fill();
       }
     }
-    const p=R.player;
-    if(p){
-      const ang=p.angle||0, reach=560, half=0.42;
-      /* v0.23.0：室内手电增益。室内压暗只压环境光，手电光锥反而按 indoor 提亮，
-         形成「屋子越黑、手电越亮」的对比；reach 保持 560 不变（加射程 = 光穿墙）。 */
-      const fh=raidFlashGain(R.indoor);
-      const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,reach);
-      g.addColorStop(0,"rgba(255,236,182,"+(RAID_FLASH.cone2d*fh).toFixed(3)+")");
-      g.addColorStop(0.5,"rgba(255,224,160,"+(RAID_FLASH.cone2dMid*fh).toFixed(3)+")");
+    /* 单束光锥：径向渐变 + 多层角度羽化扇形（各层各自按遮挡裁剪）。
+       本地玩家和 op 共用这一段 —— 这样「光锥长什么样」只有一份实现，
+       不会出现「自己的手电贴墙、别人的手电穿墙」这种两套规则。
+       参数：起点 / 朝向 / 射程 / 半角 / 中心 alpha / 半程 alpha / 增益 / 羽化层表 */
+    const beam=(x,y,ang,reach,half,a0,a1,fh,layers)=>{
+      const g=ctx.createRadialGradient(x,y,0,x,y,reach);
+      g.addColorStop(0,"rgba(255,236,182,"+(a0*fh).toFixed(3)+")");
+      g.addColorStop(0.5,"rgba(255,224,160,"+(a1*fh).toFixed(3)+")");
       g.addColorStop(1,"rgba(255,224,160,0)");
       ctx.fillStyle=g;
-      /* 扇形按遮挡裁剪：每层各自用精确射线求最近遮挡距离，再连成可见轮廓。
-       * v0.23.3 角度羽化：从单层改成 RAID_FLASH_FAN 三层。只创建一个径向渐变
-       * （色值与径向衰减不变），靠 globalAlpha 叠出软边；三层权重和为 1，
-       * 所以主扇形内部亮度不变，只是两侧不再是笔直的硬边。
-       * 射线数 96/40/32 递减，外层只管柔边，总开销比单层只多约一倍。 */
-      for(const L of RAID_FLASH_FAN){
-        const fan=this._lightFan(p.x, p.y, ang-half*L.widen, ang+half*L.widen, reach, L.rays);
+      for(const L of layers){
+        const fan=this._lightFan(x, y, ang-half*L.widen, ang+half*L.widen, reach, L.rays);
         ctx.globalAlpha=L.alpha;
-        ctx.beginPath(); ctx.moveTo(p.x, p.y);
+        ctx.beginPath(); ctx.moveTo(x, y);
         for(let i=0;i<fan.length;i+=2) ctx.lineTo(fan[i], fan[i+1]);
         ctx.closePath(); ctx.fill();
       }
       ctx.globalAlpha=1;
+    };
+    const p=R.player;
+    if(p){
+      /* v0.23.0：室内手电增益。室内压暗只压环境光，手电光锥反而按 indoor 提亮，
+         形成「屋子越黑、手电越亮」的对比；reach 保持 560 不变（加射程 = 光穿墙）。 */
+      beam(p.x, p.y, p.angle||0, 560, 0.42,
+           RAID_FLASH.cone2d, RAID_FLASH.cone2dMid, raidFlashGain(R.indoor), RAID_FLASH_FAN);
+    }
+    /* v0.25.0：其他 AI / 远端玩家的手电。
+     * 以前只有本地玩家发光 —— 黑夜里的敌人完全不显形，等于把夜战变成热成像。
+     * 现在每个活着的 op 打一束自己的光锥：亮度是本地的 ~54%（不抢戏）、
+     * 羽化层数与射线数更少（不拖帧）、按距离淡出（不把整张图点成圣诞树）。
+     * 每个 op 的室内增益按它**自己**的坐标算，站在屋里的敌人手电会更亮。 */
+    const ops=R.ops;
+    if(ops && ops.length){
+      const list=[];
+      for(const o of ops){
+        if(o===p || o.isPlayer) continue;
+        if(o.alive===false || (o.hp!==undefined && o.hp<=0)) continue;
+        if(o.flash===false) continue;                       // 预留：AI 主动关灯
+        const d=M.dist(o.x, o.y, cam.x+vw/2, cam.y+vh/2);
+        if(d>RAID_FLASH_OP.fadeFar) continue;
+        list.push({o,d});
+      }
+      if(list.length){
+        list.sort((a,b)=>a.d-b.d);                          // 近的先画，远的自然被压暗
+        const n=Math.min(list.length, RAID_FLASH_OP.maxOps);
+        const span=RAID_FLASH_OP.fadeFar-RAID_FLASH_OP.fadeNear;
+        for(let i=0;i<n;i++){
+          const o=list[i].o, d=list[i].d;
+          const k=span>0 ? M.clamp((RAID_FLASH_OP.fadeFar-d)/span, 0, 1) : 1;
+          if(k<=0.02) continue;
+          const ind=(typeof raidIndoorAt==="function" && raidIndoorAt(o.x,o.y)) ? 1 : 0;
+          beam(o.x, o.y, o.angle||0, 560, 0.42,
+               RAID_FLASH_OP.cone2d, RAID_FLASH_OP.cone2dMid,
+               raidFlashGain(ind)*k, RAID_FLASH_OP.fan);
+        }
+      }
     }
     ctx.restore();
   },
@@ -436,7 +479,12 @@ const RenderRaid = {
         ctx.fillStyle="rgba(46,86,104,0.55)";
         for(let i=0;i<9;i++){
           const wx=rx0+80+((i*157)%(rx1-rx0-160)), wy=ry1-80-((i*211)%260);
-          ctx.beginPath(); ctx.ellipse(wx, wy, 58+((i*37)%46), 20, 0.4, 0, 6.2832); ctx.fill();
+          /* v0.25.0：残水洼是典型的长条形装饰 —— 长宽比 3~5 的椭圆两端会收成尖角，
+             看着像一道裂缝而不是积水。改成同尺寸的旋转矩形（角度 0.4 保持不变）。 */
+          const hw=58+((i*37)%46), hh=20;
+          ctx.save(); ctx.translate(wx,wy); ctx.rotate(0.4);
+          ctx.fillRect(-hw,-hh,hw*2,hh*2);
+          ctx.restore();
         }
       }
     }
@@ -778,8 +826,18 @@ const RenderRaid = {
     }
 
     // 补给箱
+    /* v0.25.0「屋内的箱子在屋外不要显示，进去了才显示」：
+       以前箱子是全场透显的，玩家在屋外就能把房间里的箱子数完，等于隔着墙透视。
+       现在按「是否和玩家处于同一个封闭房间」过滤：室外箱永远可见（本来就在天上），
+       室内箱只有玩家进了同一个房间才画。房间归属按容器坐标算一次并缓存在 _room 上
+       （容器是静态的，坐标不会变；动态产生的尸体 / 空投走同一套惰性计算）。 */
+    const pRoom = (R.player && typeof raidRoomAt==="function") ? raidRoomAt(R.player.x, R.player.y) : null;
     for(const c of R.containers){
       if(c.x>cam.x+vw+80||c.x<cam.x-80||c.y>cam.y+vh+80||c.y<cam.y-80) continue;
+      if(typeof raidRoomAt==="function"){
+        if(!("_room" in c)) c._room=raidRoomAt(c.x, c.y);
+        if(c._room && c._room!==pRoom) continue;
+      }
       const s=13;
       if(c.body){
         // 尸体：暗红色

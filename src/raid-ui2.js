@@ -165,8 +165,14 @@ UI.raidFieldShop=function(key){
       add("w", w, gunNameOf(w), raidGunColor(w), on?"手持/副手中 · 需先换下":"枪械", w.value||0);
       if(on) rows[rows.length-1].on=true;
     }
-    for(const a of (R.inv.armors||[])) add("a", a, a.name, ARMOR_TIER_COLOR[a.tier]||"#dfe7f0", "护甲", a.value||0);
-    for(const h of (R.inv.helmets||[])) add("h", h, h.name, ARMOR_TIER_COLOR[h.tier]||"#dfe7f0", "头盔", h.value||0);
+    /* v0.25.0：局内回收超市的护甲 / 头盔也改用 9 阶品质色（与仓库卡片一致） */
+    const armorCol=(it)=>{
+      const r=it.rarity;
+      return (typeof r==="number" && RAID_RARITY_COLOR[r]) ? RAID_RARITY_COLOR[r]
+        : (ARMOR_TIER_COLOR[it.tier]||"#dfe7f0");
+    };
+    for(const a of (R.inv.armors||[])) add("a", a, a.name, armorCol(a), "护甲", a.value||0);
+    for(const h of (R.inv.helmets||[])) add("h", h, h.name, armorCol(h), "头盔", h.value||0);
     for(const s of (R.inv.shields||[])) add("s", s, s.name, shieldColor(s), "护盾", s.value||0);
     for(const pt of (R.inv.parts||[])) add("p", pt, partNameOf(pt)||(pt.core?"改装模块":pt.slot_name||"配件"),
       (RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color, pt.core?"改装模块":"配件",
@@ -585,24 +591,32 @@ UI.raidFusion=function(opts){
   let preview='<div class="hint">至少选择 2 件物品。第一件决定产物类型（枪 / 甲 / 盔 / 配件）。</div>';
   if(items.length>=2){
     const n=items.length;
+    /* v0.25.0：预览改成「保底 ~ 上限 + 成功率」。
+       旧预览直接把「必定升 1~2 阶」印在屏幕上，改成概率制后那样就是骗人；
+       现在的口径：保底 = 投料里的最高品质，上限 = 全成功时的品质，中间给成功率。 */
+    const upChance=raidFuseUpChance(n);
+    const pct=Math.round(upChance*100);
     if(main && (main.kind==="weapon"||main.dmg!==undefined)){
       const mr=Math.max(...items.map(it=>Math.max(0,RARITIES.findIndex(r=>r.id===(it.rarity||"white")))));
-      const boost=1+(n>=3?1:0)+(n>=4?1:0);
-      const tr=RARITIES[Math.min(RARITIES.length-1,mr+boost)];
+      const tr=RARITIES[Math.min(RARITIES.length-1,mr+2)];
       preview=`<div class="hint" style="color:#8fd0ff;">
-        产物：<b>${tr.name}</b> ${kindName(main)} · 词条约 <b>${Math.min(10,3+n-1)}</b> 条 · 改装 <b>${Math.max(0,...items.map(x=>x.mayhem||0))}~+1</b> · 配件品质各升 1 档</div>`;
+        产物：<b style="color:${RARITIES[mr].color}">${RARITIES[mr].name}</b> ~ <b style="color:${tr.color}">${tr.name}</b> ${kindName(main)}
+        · 升阶成功率 <b>${pct}%</b>（4 件以上另有 18% 再升 1 阶）
+        · 词条约 <b>${Math.min(10,3+n-1)}</b> 条 · 改装 <b>${Math.max(0,...items.map(x=>x.mayhem||0))}~+1</b> · 配件品质各升 1 档</div>`;
     } else if(main && main.kind==="shield"){
       const mt=Math.max(...items.map(x=>x.tier||1));
       const mr=Math.max(...items.map(x=>qOf(x)));
-      const pfT=Math.min(9,mt+(n>=3?1:0)), pfR=Math.min(8,mr+1+(n>=3?1:0));
+      const pfT=Math.min(9,mt+1), pfR=Math.min(8,mr+2);
       preview=`<div class="hint" style="color:#8fd0ff;">
-        产物：<b>T${pfT} 护盾</b> · 品阶 <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b> · 四配件与前后缀按新表重掷</div>`;
+        产物：<b>T${mt}~T${pfT} 护盾</b> · 品阶 <b style="color:${RAID_RARITY_COLOR[mr]}">${RAID_RARITY_NAME[mr]}</b> ~ <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b>
+        · 升阶成功率 <b>${pct}%</b> · 四配件与前后缀按新表重掷</div>`;
     } else if(main && (main.kind==="armor"||main.kind==="helmet")){
       const mt=Math.max(...items.map(x=>x.tier||1));
       const mr=Math.max(...items.map(x=>x.rarity|0));
-      const pfT=Math.min(9,mt+(n>=3?1:0)), pfR=Math.min(8,mr+1+(n>=3?1:0));
+      const pfT=Math.min(9,mt+1), pfR=Math.min(8,mr+2);
       preview=`<div class="hint" style="color:#8fd0ff;">
-        产物：<b>T${pfT} ${main.kind==="helmet"?"头盔":"护甲"}</b> · 品阶 <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b> · 按新表满耐久生成</div>`;
+        产物：<b>T${mt}~T${pfT} ${main.kind==="helmet"?"头盔":"护甲"}</b> · 品阶 <b style="color:${RAID_RARITY_COLOR[mr]}">${RAID_RARITY_NAME[mr]}</b> ~ <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b>
+        · 升阶成功率 <b>${pct}%</b> · 按新表满耐久生成</div>`;
     } else if(main && (main.slot==="core"||main.core)){
       const same=items.filter(i=>(i.slot==="core"||i.core)&&i.core===main.core&&i.lv===main.lv&&(i.elem||"")===(main.elem||"")&&(i.boost||"")===(main.boost||""));
       const ok=same.length>=2 && main.lv<RAID_CORE_MAX;
@@ -613,7 +627,7 @@ UI.raidFusion=function(opts){
         产物：<b>${ok?upName+" ["+RAID_ROMAN[main.lv+1]+"]":"无法升阶（需 2 个同阶同型改装模块，且未满 V 级）"}</b></div>`;
     } else {
       preview=`<div class="hint" style="color:#8fd0ff;">
-        产物：<b>高品质配件</b> · 品质提升 1~2 档 · 词条按新品质重掷</div>`;
+        产物：<b>高品质配件</b> · 品质提升概率 <b>${pct}%</b>（4 件以上有 18% 再升 1 档） · 词条按新品质重掷</div>`;
     }
   }
 

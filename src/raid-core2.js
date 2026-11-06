@@ -373,17 +373,30 @@ Object.assign(Raid, {
     /* v0.22.2：保险箱同样吃所在行政区的静态危险度；x/y 省略时退回玩家位置（单测兼容）。 */
     const px = (typeof x==="number") ? x : (this.player?this.player.x:RAID_MAP_W/2);
     const py = (typeof y==="number") ? y : (this.player?this.player.y:RAID_MAP_H/2);
-    const luck=Math.min(0.95, raidLuckAt(this, px, py) + L*0.10);
-    // 装备品质保底（T0~T5）：V 级军火箱直接 T5 起步，基本只出特种档以上
-    const floorT=[0,0,1,2,3,5][L];
+    /* v0.25.0（需求「高等级箱子物品变好」）：
+       1) 每级运气加成 0.10 → 0.13，L5 满箱的 luck 直接顶到上限附近；
+       2) 品质保底抬一档：[0,0,1,2,3,5] → [0,0,1,2,4,6] ——
+          III 级起有保底，IV 级开始基本只出精选以上，V 级军火箱直接保底试验档；
+       3) 新增 L4 专用权重：整枪 / 甲 / 盔的比例向 L5 靠拢，
+          不再和 I 级箱共用同一条「34% 出枪」的曲线。 */
+    const luck=Math.min(0.98, raidLuckAt(this, px, py) + L*0.13);
+    // 装备品质保底（T0~T6）：V 级军火箱直接 T6 起步
+    const floorT=[0,0,1,2,4,6][L];
     const r=RNG.f();
-    // V 级：整枪 / 改装模块权重显著上调，材料让路（开一次就够本）
     if(L>=5){
-      if(r<0.46) return this._rollGunLoot("pmc", luck+0.10, floorT);
-      if(r<0.60) return raidMakeArmor(M.clamp(raidRollArmorTier(luck+0.08), 1+floorT, 9));
-      if(r<0.72) return raidMakeHelmet(M.clamp(raidRollArmorTier(luck+0.06), 1+floorT, 9));
-      if(r<0.92) return raidRollCore(luck+0.20);
+      if(r<0.48) return this._rollGunLoot("pmc", luck+0.10, floorT);
+      if(r<0.62) return raidMakeArmor(M.clamp(raidRollArmorTier(luck+0.08), 1+floorT, 9));
+      if(r<0.74) return raidMakeHelmet(M.clamp(raidRollArmorTier(luck+0.06), 1+floorT, 9));
+      if(r<0.93) return raidRollCore(luck+0.20);
       return this._rollPartGear("pmc", luck+0.06, floorT);
+    }
+    if(L>=4){
+      if(r<0.40) return this._rollGunLoot("pmc", luck, floorT);
+      if(r<0.55) return raidMakeArmor(M.clamp(raidRollArmorTier(luck), 1+floorT, 9));
+      if(r<0.68) return raidMakeHelmet(M.clamp(raidRollArmorTier(luck*0.95), 1+floorT, 9));
+      if(r<0.86) return raidRollCore(luck+0.10);
+      if(r<0.96) return this._rollPartGear("pmc", luck, floorT);
+      return this._rollMaterial(luck);
     }
     if(r<0.34) return this._rollGunLoot("pmc", luck, floorT);
     if(r<0.48) return raidMakeArmor(M.clamp(raidRollArmorTier(luck), 1+floorT, 9));
@@ -937,6 +950,23 @@ Object.assign(Raid, {
       d ? (d.name+" 打空了 · 去搜刮或买弹药") : "没有子弹 · 去搜刮或买弹药", "#ff8a5a");
   },
 
+  /* v0.25.0：破盾无敌配额（一局内每件护盾各自 2^i 次，i = 底材等级）
+   * 返回 { max, used, left }。max=0 表示这件装备没有等级信息（旧存档 / 远端影子），
+   * 这种对象退回旧行为：不限次数，避免老存档的盾突然变成「一次性的」。 */
+  _shieldQuota(s){
+    if(!this._ivUsed) this._ivUsed={};
+    const tier=M.clamp(Math.round((s&&s.tier)||0),0,9);
+    const max=tier>0 ? Math.pow(2,tier) : 0;
+    const uid=(s&&s.uid)||"anon";
+    const used=this._ivUsed[uid]||0;
+    return { max:max, used:used, left:Math.max(0, max-used) };
+  },
+  _shieldQuotaUse(s){
+    if(!this._ivUsed) this._ivUsed={};
+    const uid=(s&&s.uid)||"anon";
+    this._ivUsed[uid]=(this._ivUsed[uid]||0)+1;
+  },
+
   /* 把一件护盾装备穿到玩家身上（含独特加成解析） */
   _wearShield(it){
     const p=this.player;
@@ -958,6 +988,14 @@ Object.assign(Raid, {
     p.shieldRate=s.rate||0;
     p.shieldDelay=s.delay||0;
     p.shieldInvulnBase=s.invuln||0;
+    /* v0.25.0：Ti 护盾的破盾无敌在一局内最多 2^i 次（T1→2、T3→8、T9→512）。
+       记账按「护盾 uid」走而不是按「当前戴着的盾」走：同一件盾拆下来再戴上
+       不会刷新次数，否则玩家只要反复切盾就能把配额当无限用。
+       账本 _ivUsed 挂在本局 Raid 实例上，一局结束自然消失。 */
+    p.shieldTier=s.tier||0;
+    const q=this._shieldQuota(s);
+    p.shieldInvulnMax=q.max;
+    p.shieldInvulnLeft=q.left;
     p.shieldPerks=(s.perks||[]).slice();
     p.shieldTimer=0; p.shieldInvuln=0;
     p.shieldAbsorbMul=p.shieldPerks.indexOf("emitter")>=0 ? 1.08 : 1;
@@ -983,10 +1021,11 @@ Object.assign(Raid, {
     this._starterCache=true;
   },
 
-  /* 支付 ₽512 购买的「初始装备包」（v0.21.2）：
-   * 旧版是「带够 ₽200 现金进场就白送」，等于带钱反而更强 —— 现在改成明码标价：
-   * 配装大厅勾选「初始装备包」，进场时从**带入的卢布现金**里扣 ₽512，出生点投放
-   * 2 把白枪 + 每条一把 T2 制式弹 + T1 护盾 / 护甲 / 头盔 + 绷带与止血针各一。
+  /* 支付 ₽512 购买的「初始装备包」（v0.21.2 引入，v0.25.0 大幅削弱）：
+   * 旧版是「带够 ₽200 现金进场就白送」，等于带钱反而更强 —— 后来改成明码标价，
+   * 配装大厅勾选后进场时从带入现金里扣 ₽512，出生点投放一套起步装备。
+   * v0.25.0 起：2 把枪大概率是手枪（82%）、**不再投放护盾**、弹药降为民用 I 级，
+   * 只保留 T1 护甲 / T1 头盔与各一绷带止血针。
    * 和起始补给一样，要走到旁边按 E 搜（0.3 秒）才进包。 */
   _dropSupportCache(x, y){
     if(!this.supportPaid) return;
@@ -994,21 +1033,29 @@ Object.assign(Raid, {
     const spot=this._spawnSafePoint(x-92, y+64, 18);
     const drops=[];
     const cals=[];
+    /* v0.25.0：₽512「初始装备包」强度大幅下调。
+     * 旧版是 2 把白枪（步枪 + SMG）+ T1 护盾 + T1 甲 + T1 盔 + T2 制式弹 ——
+     * 花 512 就能绕过「裸装进场」的核心压力，还白捡一层这版本最强的防护。
+     * 现在：两把枪 82% 是手枪（其余 11% SMG / 7% 霰弹），不投护盾，弹药降为民用 I 级。
+     * 装备包回到它该有的定位：帮你活着走出第一步，而不是替你打完前十分钟。 */
+    const gunPool=[{weight:82,k:"pistol"},{weight:11,k:"smg"},{weight:7,k:"shotgun"}];
     for(let i=0;i<2;i++){
-      const g=blGunGen(8, { type: i ? "smg" : "rifle", rarity:"white" });
+      const gt=gunPool[RNG.weighted(gunPool)].k;
+      const g=blGunGen(6, { type:gt, rarity:"white" });
       g.kind="weapon"; g.uid=this._uid();
       drops.push(g);
       const cal=ammoCalOfType(g.type);
       if(cals.indexOf(cal)<0){
         cals.push(cal);
-        const a=ammoDef(cal, 2);          // T2 制式
+        const a=ammoDef(cal, 1);          // v0.25.0：T2 制式 → T1 民用
         a.n=RAID_AMMO_STACK;
         drops.push(a);
       }
     }
-    drops.push(raidMakeShield(1, 0));      // T1 民用护盾
     drops.push(raidMakeArmor(1, 0));       // T1 护甲
     drops.push(raidMakeHelmet(1, 0));      // T1 头盔
+    /* 不再投放护盾：护盾是本版最强的防护层，「花 512 就能拿到一层」会直接
+       抵消掉「攒钱买盾 / 攒材料造盾」的取舍。想要盾就自己搜、自己造、自己买。 */
     for(const id of ["bandage","hemo"]){
       const m=raidMakeMed(id);
       if(m) drops.push(m);

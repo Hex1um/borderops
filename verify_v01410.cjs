@@ -1012,8 +1012,10 @@ check('没付款不投放初始装备包', support.unpaid, 0, 0.001);
 check('付款后投放初始装备包', support.n, 1, 0.001);
 check('装备包含 2 把枪', support.kinds.weapon, 2, 0.001);
 check('装备包里的枪是最低品级', support.gunRar.every(r=>r==="white") ? 1 : 0, 1, 0.001);
-check('装备包弹药是 T2', support.ammoLv.length > 0 && support.ammoLv.every(l=>l===2) ? 1 : 0, 1, 0.001);
-check('装备包含护盾 / 护甲 / 头盔', (support.kinds.shield===1 && support.kinds.armor===1 && support.kinds.helmet===1) ? 1 : 0, 1, 0.001);
+/* v0.25.0：装备包被大幅削弱 —— 弹药降为民用 I 级、不再投放护盾。
+   锁这两条是为了防止「削弱」被后来的人悄悄改回去。 */
+check('装备包弹药降为民用 T1', support.ammoLv.length > 0 && support.ammoLv.every(l=>l===1) ? 1 : 0, 1, 0.001);
+check('装备包不再含护盾（护甲 / 头盔仍各 1）', (support.kinds.shield===undefined && support.kinds.armor===1 && support.kinds.helmet===1) ? 1 : 0, 1, 0.001);
 check('装备包护甲头盔都是 T1', support.tier.armor === 1 && support.tier.helmet === 1 ? 1 : 0, 1, 0.001);
 check('装备包含医疗物资', (support.kinds.med||0) >= 2 ? 1 : 0, 1, 0.001);
 
@@ -1738,7 +1740,9 @@ check('探照灯扇形在索引就绪后缓存', G(`(function(){
   return (has && !no)?1:0;
 })()`), 1, 0.001);
 check('2D 手电不再整块 arc 扇形', /arc\(p\.x,p\.y,reach, ang-half, ang\+half\)/.test(__rd2)?0:1, 1, 0.001);
-check('2D 手电复用单个径向渐变', (__rd2.match(/createRadialGradient\(p\.x,p\.y,0,p\.x,p\.y,reach\)/g)||[]).length===1?1:0, 1, 0.001);
+/* v0.25.0：光锥抽成 beam() 复用（本地玩家 + 其他 AI/玩家的手电共用一份实现），
+   所以径向渐变的入参从 p.x/p.y 变成形参 x/y —— 仍然只有一处创建，不许每层重复建。 */
+check('2D 手电复用单个径向渐变', (__rd2.match(/createRadialGradient\(x,y,0,x,y,reach\)/g)||[]).length===1?1:0, 1, 0.001);
 
 /* --- 3D：深度分带衰减 + 探照灯深度剔除 + 室内压暗 --- */
 check('3D 手电按墙面自身的深度衰减（不是整列取最近）', /const kWall = KFAR \+ \(1-KFAR\)\*Math\.max\(0, Math\.min\(1, \(LIGHT_REACH-d\)\/220\)\)/.test(__fp2)?1:0, 1, 0.001);
@@ -1783,9 +1787,11 @@ check('站在灌木里光束不被自己掐死', __rl.inside>=10?1:0, 1, 0.001);
 check('_rayLight 走 navCell（含 sight:false 的灌木/岩石）', /idx=this\.navCell/.test(raidSrc)?1:0, 1, 0.001);
 check('_rayLight 用精确 slab 求交（不是 13px 采样）', /if\(tmin>0\.5 && tmin<best\) best=tmin/.test(raidSrc)?1:0, 1, 0.001);
 check('灯光轮廓改用 _rayLight', /Raid\._rayLight\(x, y, dx, dy, reach\)/.test(__rd2)?1:0, 1, 0.001);
-/* v0.23.3：单层扇形改成三层角度羽化，主层仍是 96 条精确射线 */
+/* v0.23.3：单层扇形改成三层角度羽化，主层仍是 96 条精确射线。
+   v0.25.0：循环体抽进 beam()（layers 形参），默认仍传 RAID_FLASH_FAN。 */
 check('2D 手电主扇形 96 条射线 + 角度羽化层',
-  /for\(const L of RAID_FLASH_FAN\)/.test(__rd2) && /rays:96/.test(raidSrc) && /L\.widen/.test(__rd2)?1:0, 1, 0.001);
+  /for\(const L of layers\)/.test(__rd2) && /rays:96/.test(raidSrc)
+  && /L\.widen/.test(__rd2) && /RAID_FLASH_FAN\)/.test(__rd2)?1:0, 1, 0.001);
 check('手电基准亮度抽成 RAID_FLASH（v0.23.3：2D 0.48 / 3D 0.15）',
   /cone2d:\s*0\.48/.test(raidSrc) && /cone3d:\s*0\.15/.test(raidSrc)?1:0, 1, 0.001);
 check('2D / 3D 都走 raidFlashGain（不再写死 alpha）', /raidFlashGain\(R\.indoor\)/.test(__rd2) && /raidFlashGain\(ind\)/.test(__fp2)?1:0, 1, 0.001);
@@ -1874,9 +1880,10 @@ check('室内手电中心+热点 alpha 合计 0.68（v0.23.0 是 0.334，约 2 �
   G('RAID_FLASH.cone3d*raidFlashGain(1) + RAID_FLASH.hot'), 0.68, 0.002);
 check('3D 中心热点存在且半径按 reach 缩放', /RAID_FLASH\.hotR/.test(__fp2) ? 1 : 0, 1, 0.001);
 check('3D 亮核随 indoor 前移（0.5 - coreShift）', /0\.5 - RAID_FLASH\.coreShift\*ind/.test(__fp2) ? 1 : 0, 1, 0.001);
-/* 最要紧的一条：不许加射程 —— 加射程 = 光穿墙复活 */
+/* 最要紧的一条：不许加射程 —— 加射程 = 光穿墙复活。
+   v0.25.0：本地玩家改走 beam() 形参，射程仍是字面量 560、半角仍是 0.42。 */
 check('手电射程仍是 560（没借提亮偷偷加长）',
-  /reach=560, half=0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
+  /p\.angle\|\|0, 560, 0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
 check('2D / 3D 共用同一套手电参数', /RAID_FLASH/.test(__rd2) && /RAID_FLASH/.test(__fp2) ? 1 : 0, 1, 0.001);
 
 /* ==========================================================================
@@ -2112,7 +2119,7 @@ check('主层仍是 96 条精确射线（消锯齿能力不退化）', G('RAID_F
 check('羽化靠 globalAlpha 叠加且画完复位',
   /ctx\.globalAlpha=L\.alpha/.test(__rd2) && /ctx\.globalAlpha=1;/.test(__rd2) ? 1 : 0, 1, 0.001);
 check('每层仍各自做遮挡裁剪（羽化不把光穿回墙里）',
-  /this\._lightFan\(p\.x, p\.y, ang-half\*L\.widen/.test(__rd2) ? 1 : 0, 1, 0.001);
+  /this\._lightFan\(x, y, ang-half\*L\.widen/.test(__rd2) ? 1 : 0, 1, 0.001);
 
 /* --- ③ 室内再提亮约 2 倍，护栏一个不动 --- */
 check('室内增益 ×3.2', G('raidFlashGain(1)'), 3.2, 0.0001);
@@ -2125,7 +2132,7 @@ check('室内热点翻倍 0.10 → 0.20', G('RAID_FLASH.hot'), 0.20, 0.0001);
 check('3D 中心+热点合计 0.68（v0.23.0 是 0.334）',
   G('RAID_FLASH.cone3d*raidFlashGain(1)+RAID_FLASH.hot'), 0.68, 0.002);
 check('射程仍锁 560（没借提亮偷偷加长）',
-  /reach=560, half=0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
+  /p\.angle\|\|0, 560, 0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
 check('三个暖色 rgb 一个没动（色温不变）',
   /255,236,182/.test(__rd2) && /255,224,160/.test(__rd2) && /255,228,160/.test(__rd2) &&
   /255,236,182/.test(__fp2) && /255,224,160/.test(__fp2) ? 1 : 0, 1, 0.001);
@@ -2266,6 +2273,138 @@ check('_swapEquip 四类走各自穿戴链路',
   /this\._wearShield\(item\)/.test(raidSrc) && /this\._wearGear\(kind, item\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('长按只取这一件、其余留在原地',
   /drops\.splice\(i,1\)/.test(raidSrc) && /if\(!drops\.length\) c\.searched=true/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 44. 十项更新（v0.25.0）
+ * --------------------------------------------------------------------------
+ * 组内每条对应一条用户需求，锁「行为」而不是「实现细节」：
+ *   ① 其他 AI / 玩家的手电要显示（2D + 3D）
+ *   ② 屋内的箱子在屋外不显示
+ *   ③ 护甲 / 头盔改用 9 阶品质色，去掉「掉落可至…」
+ *   ④ 长条形装饰画矩形不画椭圆
+ *   ⑤ Ti 护盾破盾无敌一局最多 2^i 次
+ *   ⑥ 开局配装按估值从高到低排
+ *   ⑦ ₽512 装备包大幅削弱（大概率手枪 / 不给护盾）
+ *   ⑧ 护盾改 32 份材料合成
+ *   ⑨ 融合升阶概率调低
+ *   ⑩ 钥匙掉率调低 + 高等级箱子物品变好
+ * ========================================================================== */
+console.log('\n=== 44. 十项更新（v0.25.0） ===');
+
+/* --- ① 其他 AI / 玩家的手电 --- */
+check('op 手电参数独立且明显暗于本地（不抢戏）',
+  (G('RAID_FLASH_OP.cone2d < RAID_FLASH.cone2d') && G('RAID_FLASH_OP.cone2dMid < RAID_FLASH.cone2dMid')) ? 1 : 0, 1, 0.001);
+check('op 手电羽化层更省（射线数与层数都少于本地）',
+  G('RAID_FLASH_OP.fan.length < RAID_FLASH_FAN.length && RAID_FLASH_OP.fan[0].rays < RAID_FLASH_FAN[0].rays') ? 1 : 0, 1, 0.001);
+check('2D 遍历 ops 画手电且跳过自己与存活判假',
+  /for\(const o of ops\)/.test(__rd2) && /o===p \|\| o\.isPlayer/.test(__rd2) && /o\.alive===false/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('2D op 手电按自身坐标算室内增益（屋里更亮）',
+  /const ind=\(typeof raidIndoorAt==="function" && raidIndoorAt\(o\.x,o\.y\)\) \? 1 : 0/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('2D op 手电按距离淡出并限流',
+  G('RAID_FLASH_OP.fadeFar') > G('RAID_FLASH_OP.fadeNear') && /RAID_FLASH_OP\.maxOps/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('3D 也画 op 手电（光池 + 脚下余晖，带 z-buffer 遮挡）',
+  /const ops = \(R\.ops\|\|\[\]\)\.filter\(o=>o!==p/.test(__fp2) && /if\(zb\[c\] < d1 - 24\) continue;/.test(__fp2) ? 1 : 0, 1, 0.001);
+
+/* --- ② 屋内的箱子在屋外不显示 --- */
+check('raidRoomAt：室外返回 null / 室内返回房间对象',
+  G('raidRoomAt(5,5)') === null && G('(function(){var rm=RAID_ROOMS.find(r=>!r.open&&!r.extract);return raidRoomAt(rm.x+rm.w/2, rm.y+rm.h/2)===rm;})()') ? 1 : 0, 1, 0.001);
+check('2D 容器按「同一房间」过滤（不是「都在室内」）',
+  /if\(c\._room && c\._room!==pRoom\) continue;/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('3D 容器 / 地面堆共用同一套可见性判定',
+  /const roomVisible = \(c\)=>/.test(__fp2) && /if\(!roomVisible\(c\)\) continue;/.test(__fp2) && /if\(!roomVisible\(g\)\) continue;/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('房间归属惰性缓存（每帧不重复遍历房间表）',
+  /if\(!\("_room" in c\)\) c\._room=raidRoomAt\(c\.x, c\.y\);/.test(__rd2) ? 1 : 0, 1, 0.001);
+
+/* --- ③ 护甲 / 头盔品质色 + 去掉「掉落可至…」 --- */
+check('商店 / 结算 / 回收超市都不再出现「掉落可至」',
+  raidSrc.indexOf('掉落可至') < 0 ? 1 : 0, 1, 0.001);
+check('商店护甲头盔改用 9 阶品质色（RAID_RARITY_COLOR）',
+  /const col=RAID_RARITY_COLOR\[0\], tcol=ARMOR_TIER_COLOR\[t\];/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('结算 / 回收超市的护甲头盔色走品质色（带等级色兜底）',
+  /RAID_RARITY_COLOR\[r\]\) \? RAID_RARITY_COLOR\[r\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('商店卡片仍保留 T1~T9 的等级徽标（品质色统一后不至于九张卡一样）',
+  /const tierBadge=\(t,col\)=>/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ④ 长条形装饰画矩形 --- */
+check('raidRoundShape：近似各向同性 → 允许椭圆',
+  G('raidRoundShape(74,62)') === true ? 1 : 0, 1, 0.001);
+check('raidRoundShape：长条形（186×42）→ 必须矩形',
+  G('raidRoundShape(186,42)') === false ? 1 : 0, 1, 0.001);
+check('_pushProp 的 round 光遮挡标记也走同一判定',
+  /raidRoundShape\(t\.w,t\.h\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('2D / 3D 装饰绘制共用 raidRoundShape',
+  /raidRoundShape\(w,h\)/.test(__rd2) && /raidRoundShape\(q\.w\|\|1, q\.h\|\|1\)/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('残水洼长条椭圆改旋转矩形（不再有 58+…,20 的椭圆）',
+  /ellipse\(wx, wy, 58\+/.test(__rd2) ? 0 : 1, 1, 0.001);
+check('长条灌木有专用的矩形分支',
+  /if\(k==="bush" && roundOK\)/.test(__rd2) && /if\(!roundOK\)\{/.test(__fp2) ? 1 : 0, 1, 0.001);
+
+/* --- ⑤ Ti 护盾破盾无敌 2^i 次/局 --- */
+check('T1 护盾配额 2 次', G('(function(){var r=Object.create(Raid);r._ivUsed={};return r._shieldQuota({tier:1}).max;})()'), 2, 0.001);
+check('T5 护盾配额 32 次', G('(function(){var r=Object.create(Raid);r._ivUsed={};return r._shieldQuota({tier:5}).max;})()'), 32, 0.001);
+check('T9 护盾配额 512 次', G('(function(){var r=Object.create(Raid);r._ivUsed={};return r._shieldQuota({tier:9}).max;})()'), 512, 0.001);
+check('配额按护盾 uid 记账（拆下再戴上不刷新）',
+  G('(function(){var r=Object.create(Raid);r._ivUsed={};var s={uid:"x",tier:2};r._shieldQuotaUse(s);r._shieldQuotaUse(s);return r._shieldQuota(s).left;})()'), 2, 0.001);
+check('破盾时先查配额、用尽后不给无敌',
+  /const maxIv=target\.shieldInvulnMax\|0;/.test(raidSrc) && /无敌次数已用尽/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('浮动字 / 详情页写出剩余次数',
+  /余 "\+\(target\.shieldInvulnLeft\|0\)/.test(raidSrc) && /本局剩余 /.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('护盾描述写出「×N 次/局」',
+  /次\/局/.test(G('shieldLines(raidMakeShield(3,0)).join("|")')) ? 1 : 0, 1, 0.001);
+
+/* --- ⑥ 开局配装按估值降序 --- */
+check('配装页四类装备都按估值降序排列',
+  /const byValue=arr=>\(arr\|\|\[\]\)\.slice\(\)\.sort\(\(a,b\)=>\(b\.value\|\|0\)-\(a\.value\|\|0\)\);/.test(raidSrc) &&
+  /byValue\(stash\.weapons\)/.test(raidSrc) && /byValue\(stash\.armors\)/.test(raidSrc) &&
+  /byValue\(stash\.helmets\)/.test(raidSrc) && /byValue\(stash\.shields\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('排序不改 _raidSel（仍按 uid 选中）',
+  /sel\.w\.includes\(w\.uid\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑦ ₽512 装备包大幅削弱 --- */
+check('装备包两把枪 82% 是手枪',
+  /weight:82,k:"pistol"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('装备包不再调 raidMakeShield',
+  (function(){
+    const a=raidSrc.indexOf('_dropSupportCache(x, y){');
+    if(a<0) return 0;
+    const b=raidSrc.indexOf('_prepPlayerAmmo(opts){', a);
+    const body=raidSrc.slice(a, b>a?b:a+4000);
+    return body.indexOf('raidMakeShield')<0 ? 1 : 0;
+  })(), 1, 0.001);
+check('装备包枪械等级从 8 降到 6',
+  /blGunGen\(6, \{ type:gt, rarity:"white" \}\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('配装页文案同步（写明不含护盾 + 大概率手枪）',
+  /不含护盾/.test(raidSrc) && /大概率是手枪/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑧ 护盾 32 份材料 --- */
+check('护盾合成配方 32 槽',
+  G('RAID_RECIPES.find(r=>r.id==="r_shield").slots'), 32, 0.001);
+check('护盾配方说明写出 32 份',
+  /投入 32 份材料/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑨ 融合升阶概率调低 --- */
+check('2 件升阶成功率 38%', G('raidFuseUpChance(2)'), 0.38, 0.0001);
+check('5 件升阶成功率 80%（封顶，永不 100%）', G('raidFuseUpChance(5)'), 0.80, 0.0001);
+check('件数越多成功率越高（单调）',
+  G('(function(){var a=[2,3,4,5].map(raidFuseUpChance);return a.every((v,i)=>i===0||v>a[i-1]);})()') ? 1 : 0, 1, 0.001);
+check('四种产物都走概率升阶（不再是固定 +1/+2）',
+  (raidSrc.match(/raidFuseRollUp\(n\)/g)||[]).length >= 4 ? 1 : 0, 1, 0.001);
+check('预览不再写死「提升 1~2 档」，改为概率 + 区间',
+  /升阶成功率/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('融合失败不退化为降级（产物至少等于最高投料品质）',
+  /Math\.min\(RARITIES\.length-1, maxRar\+boost\)/.test(raidSrc) && /boost=raidFuseRollUp\(n\)\+raidFuseRollSecond\(n\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑩ 钥匙掉率调低 + 高等级箱子变好 --- */
+check('AI 身上钥匙掉率 20% → 10% / 7% → 3.5%',
+  /bot\.smart\?0\.10:0\.035/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('上锁箱内钥匙 34% → 18%', /if\(RNG\.chance\(0\.18\)\) this\._collect\(raidRollBoxKey\(lv\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('普通木箱钥匙 2.5% → 1.2%', /RNG\.chance\(0\.012\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('保险箱品质保底抬档 [0,0,1,2,4,6]',
+  /const floorT=\[0,0,1,2,4,6\]\[L\];/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('高等级箱件数上调（L2 起 +1 / L4 +1 / L5 +1）',
+  /const n=1\+\(lv>=2\?1:0\)\+\(lv>=4\?1:0\)\+\(lv>=5\?1:0\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('IV 级箱有独立权重（不再与 I 级共用 34% 出枪曲线）',
+  /if\(L>=4\)\{/.test(raidSrc) && /if\(r<0\.40\) return this\._rollGunLoot\("pmc", luck, floorT\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

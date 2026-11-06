@@ -45,7 +45,7 @@
 
 ```sh
 npm start          # 等价于 node server.js，默认 3000 端口
-npm run verify     # 无浏览器逻辑回归（43 组 / 781 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏）
+npm run verify     # 无浏览器逻辑回归（44 组 / 828 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏）
 npm run check      # 校验版本号三处同步 + 脚本缓存串（无需安装依赖）
 # 真实浏览器冒烟（需系统 Edge + Python playwright，先起服务）：
 PORT=3211 node server.js
@@ -60,7 +60,7 @@ python -m http.server 8132
 ## 技术约束（给后续维护者）
 
 1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载）。
-2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载（v0.22.0 共 29 个）：
+2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载（v0.25.0 共 30 个）：
    `sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`
    其中 `raid-core2` / `raid-core3` 用 `Object.assign(Raid, {` 续接主控对象，**顺序不可调换**；`lazy-legacy.js` 在 `CFG.onlyRaid=true` 时不请求 `world` / `endless` / `dust2` / `br` 四个旧模式脚本。
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
@@ -90,7 +90,7 @@ python -m http.server 8132
 | `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，781 项断言） |
+| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，828 项断言） |
 | `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（42 项断言）与只读机制体检 |
 | `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告 |
 

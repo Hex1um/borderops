@@ -282,7 +282,8 @@ function shieldLines(s){
     `容量 ${s.capacity}`,
     `充能 ${s.rate.toFixed(1)}/s`,
     `延迟 ${s.delay.toFixed(1)}s`,
-    `破盾无敌 ${s.invuln.toFixed(2)}s`,
+    /* v0.25.0：破盾无敌是**有次数的**——Ti 级护盾一局最多 2^i 次。 */
+    `破盾无敌 ${s.invuln.toFixed(2)}s ×${Math.pow(2, M.clamp(Math.round(s.tier||1),1,9))} 次/局`,
   ];
   const names=(s.perks||[]).map(k=>SHIELD_PERKS[k]?SHIELD_PERKS[k].name:k);
   if(names.length) out.push("加成："+names.join(" · "));

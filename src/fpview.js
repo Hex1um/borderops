@@ -923,10 +923,21 @@ const FPView = {
                 : (o.cls === "scav") ? "#c0705a" : "#88a078";
       add(o.x, o.y, "unit", o, 168, o.name||"", col);
     }
+    /* v0.25.0：室内容器（箱子 / 尸体 / 地面物品堆）只在玩家进入同一房间时可见。
+       与 2D raid-render 的容器循环共用同一套判定与 _room 缓存，两个视角不会出现
+       「2D 看得见、切 3D 就没了」的错位。 */
+    const pRoom = (typeof raidRoomAt==="function") ? raidRoomAt(p.x, p.y) : null;
+    const roomVisible = (c)=>{
+      if(!c || typeof raidRoomAt!=="function") return true;
+      if(!("_room" in c)) c._room=raidRoomAt(c.x, c.y);
+      return !c._room || c._room===pRoom;
+    };
     for(const c of (R.containers||[])){
+      if(!roomVisible(c)) continue;
       add(c.x, c.y, "box", c, 76, c.locked?"上锁箱":"物资箱", c.searched?"#5d5a50":"#a2895c");
     }
     for(const g of (R.grounds||[])){
+      if(!roomVisible(g)) continue;
       add(g.x, g.y, "ground", g, 34, "", "#e2c46a");
     }
     for(const s of (R.shops||[])){
@@ -1168,8 +1179,11 @@ const FPView = {
     const bwBase = (kw > 2) ? Math.min(kw, k*3.2) : k*0.95;
 
     // 统一投影（圆物用椭圆，方物用矩形）
+    /* v0.25.0：长条形（长宽比 > 1.7）不再画椭圆 —— 与 2D prop()、
+       _pushProp 的 round 标记同一条规则（raidRoundShape），三处判定必须一致。 */
+    const roundOK = (typeof raidRoundShape==="function") ? raidRoundShape(q.w||1, q.h||1) : true;
     ctx.fillStyle = "rgba(0,0,0,0.30)";
-    if(kind==="tree"||kind==="bush"||kind==="rock"){
+    if(roundOK && (kind==="tree"||kind==="bush"||kind==="rock")){
       ctx.beginPath(); ctx.ellipse(cx, foot, bwBase*0.5, k*0.055, 0, 0, 6.2832); ctx.fill();
     } else {
       ctx.fillRect(cx-bwBase/2, foot-k*0.05, bwBase, k*0.07);
@@ -1186,6 +1200,17 @@ const FPView = {
       ctx.fillStyle = "rgba(140,190,120,0.14)";
       ctx.beginPath(); ctx.ellipse(cx-bwBase*0.06, foot-k*0.88, bwBase*0.21, k*0.09, 0, 0, 6.2832); ctx.fill();
     } else if(kind === "bush"){
+      if(!roundOK){
+        /* v0.25.0：长条形灌木改画矩形堆叠（与 2D prop() 的长条分支同款），
+           三层内缩色块保留「一丛草」的层次，但不再出现两端收尖的弧形。 */
+        ctx.fillStyle = "rgba(28,46,26,0.95)";
+        ctx.fillRect(cx-bwBase*0.50, foot-k*0.58, bwBase, k*0.58);
+        ctx.fillStyle = fill;
+        ctx.fillRect(cx-bwBase*0.42, foot-k*0.52, bwBase*0.84, k*0.46);
+        ctx.fillStyle = "rgba(140,190,120,0.14)";
+        ctx.fillRect(cx-bwBase*0.34, foot-k*0.46, bwBase*0.38, k*0.20);
+        return;
+      }
       ctx.fillStyle = "rgba(28,46,26,0.95)";
       ctx.beginPath(); ctx.ellipse(cx, foot-k*0.34, bwBase*0.50, k*0.34, 0, 0, 6.2832); ctx.fill();
       ctx.fillStyle = fill;
@@ -1380,6 +1405,67 @@ const FPView = {
       lg.addColorStop(1, "rgba(255,210,140,0)");
       ctx.fillStyle = lg;
       ctx.beginPath(); ctx.arc(sx, sy, rr, 0, 6.2832); ctx.fill();
+    }
+
+    /* 4) v0.25.0：其他 AI / 远端玩家的手电。
+     * 与 2D _lightLayer 的 op 光锥同一套参数（RAID_FLASH_OP），但 3D 里没法复用
+     * 2D 的射线扇形 —— 这里是透视投影，光斑必须落在**它自己的前方地面**上。
+     * 做法：把 op 位置与它前方 170px 的点各投一次屏，在「前方那个点」上画一团
+     * 暖色椭圆光池，再在脚下补一小圈余晖。远淡近亮，和 2D 的距离衰减同源。
+     * 遮挡用同一张 z-buffer：光池中心那一列前面有近墙就直接不画（否则会透墙）。 */
+    {
+      const ops = (R.ops||[]).filter(o=>o!==p && !o.isPlayer && o.alive!==false
+        && (o.hp===undefined || o.hp>0) && o.flash!==false);
+      if(ops.length){
+        const LIGHT_REACH = 560;
+        const near = 700, far = 1300;             // 与 2D 的 620/1200 略放宽（3D 视野更远）
+        for(const o of ops){
+          const rx0 = o.x-p.x, ry0 = o.y-p.y;
+          const d0 = rx0*ca + ry0*sa;
+          if(d0 < 40 || d0 > far) continue;
+          const lat0 = -rx0*sa + ry0*ca;
+          const sx0 = w/2 + (lat0/d0)*proj;
+          const sy0 = horizon + (this.EYE_H/d0)*proj;      // 脚下（光源本体）
+          const a = o.angle||0;
+          /* 光池中心 = 朝向前方 40% 射程处（贴脸时 40% 已经够近，不会飘到天上） */
+          const fwd = Math.min(170, Math.max(70, LIGHT_REACH*0.30));
+          const rx1 = (o.x + Math.cos(a)*fwd) - p.x;
+          const ry1 = (o.y + Math.sin(a)*fwd) - p.y;
+          const d1 = rx1*ca + ry1*sa;
+          if(d1 < 20) continue;
+          const lat1 = -rx1*sa + ry1*ca;
+          const sx1 = w/2 + (lat1/d1)*proj;
+          const sy1 = horizon + (this.EYE_H/d1)*proj;
+          const rr = Math.max(14, (fwd*1.35/d1)*proj);
+          if(sx1+rr < 0 || sx1-rr > w) continue;
+          // 遮挡：光池中心那一列若有更近的墙，跳过（与探照灯同一条判定）
+          if(zb && zn > 0 && sx1 >= 0 && sx1 < w){
+            const c = Math.max(0, Math.min(zn-1, Math.floor(sx1/zstep)));
+            if(zb[c] < d1 - 24) continue;
+          }
+          const k = M.clamp((far-d0)/(far-near), 0, 1) * M.clamp((LIGHT_REACH-d1)/220, 0.15, 1);
+          if(k <= 0.02) continue;
+          const pool = ctx.createRadialGradient(sx1, sy1, 0, sx1, sy1, rr);
+          pool.addColorStop(0,   "rgba(255,234,178,"+(0.20*k).toFixed(4)+")");
+          pool.addColorStop(0.55,"rgba(255,222,158,"+(0.08*k).toFixed(4)+")");
+          pool.addColorStop(1,   "rgba(255,222,158,0)");
+          ctx.fillStyle = pool;
+          ctx.save();
+          // 贴地压扁：光池躺在地面上，不是一个正圆球
+          ctx.translate(sx1, sy1); ctx.scale(1, 0.55); ctx.translate(-sx1, -sy1);
+          ctx.beginPath(); ctx.arc(sx1, sy1, rr, 0, 6.2832); ctx.fill();
+          ctx.restore();
+          // 脚下余晖：让人一眼看出「这团光的源头站着一个人」
+          const gr = Math.max(8, (46/d0)*proj);
+          if(sx0+gr > 0 && sx0-gr < w){
+            const glow = ctx.createRadialGradient(sx0, sy0, 0, sx0, sy0, gr);
+            glow.addColorStop(0, "rgba(255,236,182,"+(0.16*k).toFixed(4)+")");
+            glow.addColorStop(1, "rgba(255,236,182,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(sx0, sy0, gr, 0, 6.2832); ctx.fill();
+          }
+        }
+      }
     }
     ctx.restore();
   },

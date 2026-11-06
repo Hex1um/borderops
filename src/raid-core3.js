@@ -317,10 +317,24 @@ Object.assign(Raid, {
       target.shield=Math.max(0,target.shield-sAbs/mul); d-=sAbs;
       if(sAbs>0 && target.isPlayer) this._float(target.x,target.y-52,"护盾 -"+Math.round(sAbs),"#7be3ff");
       if(target.shield<=0){
-        const iv=target.shieldInvulnBase||0;
+        /* v0.25.0：破盾无敌改成「局内配额制」—— Ti 级护盾最多 2^i 次（T1→2、T3→8、T9→512）。
+           配额用尽后护盾照常破，只是不再附赠无敌；浮动字直接写出剩余次数，
+           玩家才知道这件盾的保命额度什么时候会归零，而不是莫名其妙「无敌不生效了」。
+           maxIv=0 的对象（旧存档 / 远端影子）退回旧行为：不限次数。 */
+        const maxIv=target.shieldInvulnMax|0;
+        const left=maxIv>0 ? Math.max(0, target.shieldInvulnLeft|0) : 1;
+        const grant=left>0;
+        const iv=grant ? (target.shieldInvulnBase||0) : 0;
+        if(maxIv>0 && grant){
+          target.shieldInvulnLeft=left-1;
+          if(target.isPlayer && target.shieldGear) this._shieldQuotaUse(target.shieldGear);
+        }
         target.shieldInvuln=Math.max(target.shieldInvuln||0,iv);
-        this._float(target.x,target.y-70,iv>0?`护盾破裂 · 无敌 ${iv.toFixed(2)}s`:"护盾破裂","#4fd6ff");
-        if(target.isPlayer && iv>0) this._feed("防护",`护盾破裂 · ${iv.toFixed(2)}s 无敌`,"",false,"info");
+        const leftTxt=maxIv>0 ? ("（剩 "+(maxIv-(target.shieldInvulnLeft|0))+"/"+maxIv+" 已用 · 余 "+(target.shieldInvulnLeft|0)+"）") : "";
+        this._float(target.x,target.y-70,
+          iv>0 ? ("护盾破裂 · 无敌 "+iv.toFixed(2)+"s"+leftTxt) : "护盾破裂 · 无敌次数已用尽",
+          "#4fd6ff");
+        if(target.isPlayer && iv>0) this._feed("防护","护盾破裂 · "+iv.toFixed(2)+"s 无敌"+leftTxt,"",false,"info");
         if((target.shieldPerks||[]).includes("surge")) this._shieldSurge(target);
       }
     }
@@ -546,7 +560,10 @@ Object.assign(Raid, {
       }
     }
     // PMC 身上（尤其 Raider）可能揣着保险箱钥匙
-    if(RNG.chance(bot.smart?0.20:0.07)){
+    /* v0.25.0：钥匙掉率调低（需求「钥匙掉落概率调低」）—— 精锐 20% → 10%，普通 7% → 3.5%。
+       一局要打的 AI 有三十多个，原来光靠翻尸就能攒出一串钥匙，把「钥匙稀缺」
+       这条设计意图彻底抵消掉了。 */
+    if(RNG.chance(bot.smart?0.10:0.035)){
       const KLV=[{weight:52,lv:1},{weight:26,lv:2},{weight:14,lv:3},{weight:6,lv:4},{weight:2,lv:5}];
       drops.push(raidMakeKey(KLV[RNG.weighted(KLV)].lv));
     }
@@ -624,7 +641,9 @@ Object.assign(Raid, {
       } else if(c.locked){
         // 上锁保险箱：按 lockLv 决定件数与品质（等级越高装备越好），并稳定出卢布
         const lv=M.clamp(c.lockLv||1,1,5);
-        const n=1+(lv>=3?1:0)+(lv>=5?2:0);   // V 级军火箱 4 件
+        /* v0.25.0：「高等级箱子物品变好」—— 件数从「3 级 +1 / 5 级 +2」改成
+           「2 级起 +1 / 4 级再 +1 / 5 级再 +1」，即 L1=1、L2=2、L3=2、L4=3、L5=4。 */
+        const n=1+(lv>=2?1:0)+(lv>=4?1:0)+(lv>=5?1:0);
         for(let i=0;i<n;i++){
           const vit=this._rollVaultLoot(lv, c.x, c.y);
           this._collect(vit, c.x, c.y);
@@ -633,8 +652,11 @@ Object.assign(Raid, {
         const gain=RNG.ri(45,120)*lv;
         this.creds+=gain;
         this._float(c.x, c.y-46, "+"+gain+" 卢布", "#8fe07a");
-        // 箱内可能藏着钥匙 —— 等级上限 = 本箱等级 +1（V 级封顶），越高越罕见
-        if(RNG.chance(0.34)) this._collect(raidRollBoxKey(lv), c.x, c.y);
+        /* 箱内可能藏着钥匙 —— 等级上限 = 本箱等级 +1（V 级封顶），越高越罕见。
+           v0.25.0：钥匙掉落概率调低（需求「钥匙掉落概率调低」）：34% → 18%。
+           钥匙是「把上锁箱变成可选项」的硬门槛，34% 意味着开三个箱就有一把，
+           等于上锁箱的锁形同虚设。 */
+        if(RNG.chance(0.18)) this._collect(raidRollBoxKey(lv), c.x, c.y);
         if(RNG.chance(0.55)) this._collect(this._rollAmmo(0.35+lv*0.16), c.x, c.y);
       } else if(c.kind==="weapon"){
         // 武器箱也以原材料为主，整枪极少
@@ -681,7 +703,9 @@ Object.assign(Raid, {
       }
       // GP 币极稀有掉落（上锁军用箱 9%，普通箱 2%）
       // 保险箱等级越高，GP 币概率越高（V 级箱 26%）
-      if(!c.locked && RNG.chance(0.025)){
+      /* v0.25.0：普通木箱的钥匙掉率 2.5% → 1.2%（需求「钥匙掉落概率调低」）。
+         普通箱一局能搜几十个，2.5% 实际期望是每局一两把钥匙，比保险箱本身还多。 */
+      if(!c.locked && RNG.chance(0.012)){
         this._collect(raidRollBoxKey(0), c.x, c.y);   // 普通箱按 0 级算 → 最多只出 I 级钥匙
       }
       if(RNG.chance(c.locked ? (0.06+0.04*(c.lockLv||1)) : 0.02)){
@@ -1480,7 +1504,8 @@ Object.assign(Raid, {
     if(p.helmetTier) line("头盔 · "+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
       `T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`);
     if(p.maxShield>0) line("护盾 · "+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
-      `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`);
+      `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`
+        +((p.shieldInvulnMax|0)>0 ? (" · 本局剩余 "+(p.shieldInvulnLeft|0)+"/"+(p.shieldInvulnMax|0)+" 次") : ""));
     /* v0.24.0：负重反馈。减速是隐性的，玩家必须能在物品栏里看到「为什么跑不动」。 */
     const load=raidLoadOf(R);
     line("背包负重", load>0.6?"#ff8a5a":"#8fd0ff",

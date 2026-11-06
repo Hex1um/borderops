@@ -33,7 +33,12 @@ UI.raidSetup=function(){
   if(!Array.isArray(UI._raidKeys)) UI._raidKeys=[];
   UI._raidKeys=UI._raidKeys.filter(uid=>(stash.keys||[]).some(k=>k.uid===uid));
 
-  const wcards = stash.weapons.length ? stash.weapons.map(w=>{
+  /* v0.25.0：开局配装列表按估值从高到低排。
+   * 仓库里动辄几十把枪，原来按入库顺序排，越贵的越可能被压在列表底部 ——
+   * 玩家要翻很久才能找到「这局想带的那件」。排序只改展示顺序，不改 _raidSel（按 uid 存）。 */
+  const byValue=arr=>(arr||[]).slice().sort((a,b)=>(b.value||0)-(a.value||0));
+
+  const wcards = stash.weapons.length ? byValue(stash.weapons).map(w=>{
     const on=sel.w.includes(w.uid);
     const col=raidGunColor(w);
     const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:w.cat;
@@ -46,7 +51,7 @@ UI.raidSetup=function(){
     </div>`;
   }).join('') : `<div class="empty-hint">仓库暂无枪械 · 打一局搜到武器并撤离即可入库</div>`;
 
-  const acards = stash.armors.length ? stash.armors.map(a=>{
+  const acards = stash.armors.length ? byValue(stash.armors).map(a=>{
     const on=sel.a===a.uid;
     const rar=a.rarity|0;
     const col=RAID_RARITY_COLOR[rar];
@@ -58,7 +63,7 @@ UI.raidSetup=function(){
     </div>`;
   }).join('') : `<div class="empty-hint">没有护甲 · 去军火超市买 T1~T9</div>`;
 
-  const hcards = (stash.helmets||[]).length ? stash.helmets.map(h=>{
+  const hcards = (stash.helmets||[]).length ? byValue(stash.helmets).map(h=>{
     const on=sel.h===h.uid;
     const rar=h.rarity|0;
     const col=RAID_RARITY_COLOR[rar];
@@ -70,7 +75,7 @@ UI.raidSetup=function(){
     </div>`;
   }).join('') : `<div class="empty-hint">没有头盔 · 头盔可减免爆头伤害</div>`;
 
-  const scards = stash.shields.length ? stash.shields.map(s=>{
+  const scards = stash.shields.length ? byValue(stash.shields).map(s=>{
     const on=sel.s===s.uid, col=shieldColor(s);
     return `<div class="raid-item ${on?'sel':''}" data-s="${s.uid}">
       <div class="ri-name" style="color:${col}">${s.name}<span style="font-size:11px;opacity:.9"> · ${shieldGrade(qOf(s)).name}</span></div>
@@ -236,7 +241,8 @@ UI.raidSetup=function(){
         <div class="rc-hint">带进图的现金可以在局内商店 / 黑市直接花（黑市只收 GP 币）；<b style="color:#ff8a5a">阵亡即丢失</b>，撤离成功则连本局所得一起带回仓库。<br>
           卢布与 GP 币<b style="color:#8fd0ff">都计入配装总价值</b>（1 枚 ◈ GP 币按 <b>₽${priceText(RAID_TOKEN_RATE)}</b> 折算，仅用于估值显示，不可兑换）；撤离费与保费只按<b>装备</b>估值计算。<br>
           <b style="color:#8fd0ff">初始装备包</b>：勾选后进场即从带入的卢布现金里扣 <b>₽${RAID_SUPPORT_CASH}</b>，出生点投放
-          <b>2 把白装枪 + 对应口径 T2 制式弹 + T1 护盾 / 护甲 / 头盔 + 绷带与止血针</b>（走过去按 E 搜；钱不够买不了）。</div>
+          <b>2 把白装枪（大概率是手枪）+ 对应口径 T1 民用弹 + T1 护甲 / 头盔 + 绷带与止血针</b>，
+          <b style="color:#ff8a5a">不含护盾</b>（走过去按 E 搜；钱不够买不了）。</div>
       </div>
 
       <div class="raid-cols" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));">
@@ -422,7 +428,14 @@ UI.raidSetup=function(){
 
 UI.raidResult=function(res){
   const colOf=(it)=>{
-    if(it.kind==="armor"||it.kind==="helmet") return ARMOR_TIER_COLOR[it.tier]||raidGunColor(it);
+    /* v0.25.0：护甲 / 头盔改用 9 阶品质色 —— 与仓库 / 商店 / 配装一致。
+       旧代码取 ARMOR_TIER_COLOR（按防护等级的色表），同一件装备在结算页
+       和仓库里是两种颜色，玩家会以为结算页显示的是别的物品。 */
+    if(it.kind==="armor"||it.kind==="helmet"){
+      const r=it.rarity;
+      return (typeof r==="number" && RAID_RARITY_COLOR[r]) ? RAID_RARITY_COLOR[r]
+        : (ARMOR_TIER_COLOR[it.tier]||raidGunColor(it));
+    }
     return raidGunColor(it);
   };
   let itemsHtml="";
@@ -578,17 +591,25 @@ UI.raidShop=function(opts){
 
   // v0.21.3：护甲与头盔合并成一栏，用整行小标题分区
   const gridHead=t=>`<div style="grid-column:1/-1;font-size:13px;font-weight:800;color:#cfd8e2;margin:12px 0 2px;padding-left:8px;border-left:3px solid #8fd0ff;">${t}</div>`;
+  /* v0.25.0：护甲 / 头盔卡的**颜色改用 9 阶品质色**（RAID_RARITY_COLOR），
+   * 和仓库、配装、融合台统一。原来这里取的是 ARMOR_TIER_COLOR（按防护等级的旧色表），
+   * 于是同一件 T5 甲在商店是紫灰、在仓库是品质色 —— 两个页面的「绿蓝紫橙」对不上。
+   * 商店货架只卖民用底材，品质色自然都是「民用」，所以另外用一小块等级徽标
+   * （仍用等级色）把 T1~T9 区分开，避免九张卡长得一模一样。 */
   const armorHead=gridHead("护甲 T1~T9 · 减伤 / 护甲值");
   const helmetHead=gridHead("头盔 T1~T9 · 爆头减伤 / 耐久");
+  const tierBadge=(t,col)=>`<span style="display:inline-block;font-size:11px;font-weight:800;padding:0 5px;border-radius:3px;`+
+    `border:1px solid ${col};color:${col};margin-right:6px;">T${t}</span>`;
+  const shopQualNote=`本店仅售 <b style="color:${RAID_RARITY_COLOR[0]}">${RAID_RARITY_NAME[0]}</b> 底材 · 更高品质靠掉落 / 融合 / 工坊`;
 
   // 9 级护甲（仅售普通品质；稀有度靠掉落 / 融合）
   const aCards=RAID_ARMOR_TIERS.map(t=>{
-    const a=RAID_ARMORS[t], price=raidSuperPrice(a.value, "armor"+t), can=stash.creds>=price, col=ARMOR_TIER_COLOR[t];
-    const maxRar = Math.min(8, Math.max(0, t-1));
+    const a=RAID_ARMORS[t], price=raidSuperPrice(a.value, "armor"+t), can=stash.creds>=price;
+    const col=RAID_RARITY_COLOR[0], tcol=ARMOR_TIER_COLOR[t];
     const grade = t>=8?'重型防弹衣' : (t>=6?'插板背心' : (t>=3?'防弹背心':'软质背心'));
     return `<div class="shop-item" style="border-left-color:${col}">
-      <div class="si-name" style="color:${col}">${a.name}</div>
-      <div class="si-meta">T${t} ${grade} · ${t>=8?'最高防护级':(t>=6?'高防护级':'制式')} · 掉落可至 <b style="color:${RAID_RARITY_COLOR[maxRar]}">${RAID_RARITY_NAME[maxRar]}</b></div>
+      <div class="si-name" style="color:${col}">${tierBadge(t,tcol)}${a.name.replace(/^T\d+\s*/,"")}</div>
+      <div class="si-meta">${grade} · ${t>=8?'最高防护级':(t>=6?'高防护级':'制式')} · ${shopQualNote}</div>
       <div class="si-stats">减伤 ${Math.round(a.dr*100)}% · 护甲值 ${a.maxArmor}${t>=6?'<br><b style="color:#ff8a5a">重装：可硬吃整梭步枪弹</b>':''}</div>
       <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(price)}</span>
         <button class="btn" data-buy="armor:${t}" ${can?'':'disabled'}>购买</button></div>
@@ -597,12 +618,12 @@ UI.raidShop=function(opts){
 
   // 9 级头盔
   const hCards=RAID_ARMOR_TIERS.map(t=>{
-    const h=RAID_HELMETS[t], price=raidSuperPrice(h.value, "helmet"+t), can=stash.creds>=price, col=ARMOR_TIER_COLOR[t];
-    const maxRar = Math.min(8, Math.max(0, t-1));
+    const h=RAID_HELMETS[t], price=raidSuperPrice(h.value, "helmet"+t), can=stash.creds>=price;
+    const col=RAID_RARITY_COLOR[0], tcol=ARMOR_TIER_COLOR[t];
     const grade = t>=8?'全罩头盔' : (t>=6?'防弹头盔' : (t>=3?'战术头盔':'软质头套'));
     return `<div class="shop-item" style="border-left-color:${col}">
-      <div class="si-name" style="color:${col}">${h.name}</div>
-      <div class="si-meta">T${t} ${grade} · ${t>=8?'最高防护级':(t>=6?'高防护级':'制式')} · 掉落可至 <b style="color:${RAID_RARITY_COLOR[maxRar]}">${RAID_RARITY_NAME[maxRar]}</b></div>
+      <div class="si-name" style="color:${col}">${tierBadge(t,tcol)}${h.name.replace(/^T\d+\s*/,"")}</div>
+      <div class="si-meta">${grade} · ${t>=8?'最高防护级':(t>=6?'高防护级':'制式')} · ${shopQualNote}</div>
       <div class="si-stats">爆头减伤 ${Math.round(h.dr*100)}% · 耐久 ${h.maxArmor}</div>
       <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(price)}</span>
         <button class="btn" data-buy="helmet:${t}" ${can?'':'disabled'}>购买</button></div>
@@ -823,6 +844,23 @@ function forgeCost(op, gun){
 }
 
 /* ----------------------------- 融合台 ----------------------------- */
+/* v0.25.0：融合「升阶」改成概率制（需求：「融合模式升阶概率调低」）。
+ * 旧规则是投 2 件必 +1 阶、投 3 件再 +1 阶 —— 等于「融合 = 免费提品质」，
+ * 玩家把仓库里的垃圾两两丢进去就能稳定换出高品质，整条品质曲线被抹平。
+ * 现在的期望：
+ *   2 件 → 38% · 3 件 → 52% · 4 件 → 66% · 5 件 → 80%（封顶 80%）
+ *   4 件以上另有 18% 概率再多升 1 阶
+ * 失败**不是白干**：产物仍按投料里的最高品质生成（达不到预期但不会比最好的那件差），
+ * 只是不再额外跳档。成功率由件数决定，可预期、可算，不是纯运气。 */
+function raidFuseUpChance(n){
+  return M.clamp(0.38 + 0.14*((n|0)-2), 0.38, 0.80);
+}
+function raidFuseRollUp(n){
+  return RNG.chance(raidFuseUpChance(n)) ? 1 : 0;
+}
+function raidFuseRollSecond(n){
+  return (n>=4 && RNG.chance(0.18)) ? 1 : 0;
+}
 // 两件及以上同栏位物品熔成一件：品质、词条、改装等级有概率跃升
 function fuseCost(items){
   const v=items.reduce((sum,it)=>sum+(it.value||partValue(it)||0),0);
@@ -842,7 +880,7 @@ function fuseRaidItems(items){
   if(main.kind==="weapon" || main.dmg!==undefined){
     const ilvl=Math.max(10, ...items.map(i=>i.ilvl||10)) + n*2;
     const maxRar=Math.max(...items.map(rarIdx));
-    const boost=1 + (n>=3?1:0) + (n>=4?1:0);
+    const boost=raidFuseRollUp(n)+raidFuseRollSecond(n);
     const targetRar=RARITIES[Math.min(RARITIES.length-1, maxRar+boost)].id;
     const R=RARITY_BY_ID[targetRar];
 
@@ -897,9 +935,10 @@ function fuseRaidItems(items){
   if(main.kind==="shield"){
     const same=items.filter(i=>i.kind==="shield");
     const maxTier=Math.max(...same.map(i=>i.tier||1));
-    const tier=Math.min(9,maxTier+(n>=3 && RNG.chance(0.35)?1:0));
+    /* v0.25.0：底材升阶与品质升阶都改成概率（见 raidFuseUpChance） */
+    const tier=Math.min(9,maxTier+raidFuseRollUp(n));
     const maxR=Math.max(...same.map(i=>qOf(i)));
-    const rar=Math.min(8,maxR+1+(n>=3?1:0));
+    const rar=Math.min(8,maxR+raidFuseRollUp(n)+raidFuseRollSecond(n));
     return raidMakeShield(tier,rar);
   }
 
@@ -907,9 +946,9 @@ function fuseRaidItems(items){
   if(main.kind==="armor" || main.kind==="helmet"){
     const same=items.filter(i=>(i.kind===main.kind)||(main.kind==="armor"&&i.kind===undefined));
     const maxTier=Math.max(...same.map(i=>i.tier||1));
-    const tier=Math.min(9, maxTier + (n>=3 && RNG.chance(0.35)?1:0));
+    const tier=Math.min(9, maxTier + raidFuseRollUp(n));
     const maxR=Math.max(...same.map(i=>i.rarity|0));
-    const rar=Math.min(8, maxR + 1 + (n>=3?1:0));
+    const rar=Math.min(8, maxR + raidFuseRollUp(n) + raidFuseRollSecond(n));
     return main.kind==="helmet" ? raidMakeHelmet(tier,rar) : raidMakeArmor(tier,rar);
   }
 
@@ -917,7 +956,8 @@ function fuseRaidItems(items){
   const slot=main.slot || RNG.pick(GUN_SLOTS).id;
   const ilvl=Math.max(10,...items.map(i=>i.ilvl||10)) + n*2;
   const maxR=Math.max(...items.map(rarIdx));
-  const up=RARITIES[Math.min(RARITIES.length-1, maxR+1+(n>=3?1:0))].id;
+  /* v0.25.0：配件融合同样按概率升品质 */
+  const up=RARITIES[Math.min(RARITIES.length-1, maxR+raidFuseRollUp(n)+raidFuseRollSecond(n))].id;
   const pt=rollPart(slot, ilvl, up);
   pt.uid=mkUid("fp"); pt.kind="part";
   return pt;
