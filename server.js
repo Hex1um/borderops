@@ -644,5 +644,5 @@ if(require.main === module){
   process.on('unhandledRejection', e=>console.error('[reject]', e && e.stack || e));
 }
 
-// 暴露纯函数供 verify_v01410.cjs 做 sanitizeEvent 回归断言
+// 暴露纯函数供 verify.cjs 做 sanitizeEvent 回归断言
 module.exports = { text, num, sanitizeState, sanitizeAI, sanitizeEvent, CLIENT_EVENT_TYPES };

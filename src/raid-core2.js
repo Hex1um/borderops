@@ -527,6 +527,13 @@ Object.assign(Raid, {
     // 火箭弹：慢速飞行 + 命中/撞墙/超时爆炸
     for(let i=this.rockets.length-1;i>=0;i--){ if(this._updateRocket(this.rockets[i],dt)) this.rockets.splice(i,1); }
     for(let i=this.blasts.length-1;i>=0;i--){ const b=this.blasts[i]; b.life-=dt; if(b.life<=0) this.blasts.splice(i,1); }
+    /* v0.25.1：局内粒子 / 飘字 / 弹道 / 曳光同样加硬上限。
+       枪战一密集，`_float` 与 `_spark` 每帧能推几十条；寿命只有 0.3~0.9s，
+       正常情况下自净，但只要某一帧生成速率超过清理速率（霰弹 + 溅射 + 多人叠加），
+       数组就会持续膨胀，表现为「打久了越来越卡」。裁最老的一批不影响观感。 */
+    if(this.floats.length>420) this.floats.splice(0, this.floats.length-420);
+    if(this.particles.length>800) this.particles.splice(0, this.particles.length-800);
+    if(this.tracers && this.tracers.length>160) this.tracers.splice(0, this.tracers.length-160);
     for(let i=this.floats.length-1;i>=0;i--){ const f=this.floats[i]; f.y+=f.vy*dt; f.life-=dt; if(f.life<=0) this.floats.splice(i,1); }
     // v0.21.4：3D 拾取提示条老化（只在 3D 推送，2D 仍看世界坐标的 floats）
     for(let i=this.toasts.length-1;i>=0;i--){ const t=this.toasts[i]; t.life-=dt; if(t.life<=0) this.toasts.splice(i,1); }

@@ -4,7 +4,7 @@
  * 同时服务三处，规则只有一份：
  *   1) server.js（HTTP 轮询路径）   通过 require("./src/sanitize.js") 引入
  *   2) src/net.js（GitHub Pages 上的 WebRTC P2P 路径）  通过全局 Sanitize 调用
- *   3) verify_v01410.cjs（逻辑回归单测）              通过 require 直接调用纯函数
+ *   3) verify.cjs（逻辑回归单测）              通过 require 直接调用纯函数
  *
  * v0.22.0：补两处纵深防御
  *   - corpse 事件的掉落数组不再「任意对象直通背包」：逐项按 schema 裁剪，

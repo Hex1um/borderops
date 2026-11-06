@@ -5,6 +5,21 @@
  *   · 其他客户端只渲染 AI 影子，命中通过事件回传给房主结算
  *   · 玩家之间无友伤；物资、撤离、结算各自独立
  * ========================================================================= */
+/* v0.25.1：联机快照是**不可信输入**。
+ * 对面可能是旧版本客户端、传输被截断、或者有人手改包 —— 以前 `op.x=b.x` 直接赋值，
+ * 一个 "abc" / null / 缺字段就能把影子坐标写成 NaN：
+ *   · Math.hypot(x-...) 全是 NaN → 这颗子弹永远打不中它；
+ *   · 投到屏幕上是 NaN → 精灵不画，玩家以为它消失了，其实还在打你；
+ *   · NaN 还会顺着 op.x 传染给瞄准、统计与「最近敌人」选择。
+ * 数值一律走这里收口：非法值回默认，越界值钳到给定区间。
+ * 位置用世界尺寸兜（0..RAID_MAP_W/H），血量 / 护甲用 0..1e6，角度不钳（可以是负的）。 */
+function netNum(v, def, lo, hi){
+  const x=Number(v);
+  if(!Number.isFinite(x)) return Number.isFinite(def) ? def : 0;
+  if(lo!==undefined && hi!==undefined) return M.clamp(x, lo, hi);
+  return x;
+}
+
 const Net = {
   online:false,
   transport:"http",        // "http" = server.js 轮询；"p2p" = GitHub Pages WebRTC 直连
@@ -264,13 +279,15 @@ const Net = {
       pr.name=p.name; pr.host=!!p.host;
       const s=p.state;
       if(s && pr.op){
-        pr.op.tx=s.x; pr.op.ty=s.y; pr.op.ta=s.a;
-        if(!pr.init){ pr.op.x=s.x; pr.op.y=s.y; pr.op.angle=s.a; pr.init=true; }
-        pr.op.hp=s.hp; pr.op.maxHP=s.mhp||100;
+        /* v0.25.1：全部走 netNum —— 队友快照同样是不可信输入，见文件头 netNum 注释 */
+        const sx=netNum(s.x, pr.op.x, 0, RAID_MAP_W), sy=netNum(s.y, pr.op.y, 0, RAID_MAP_H);
+        pr.op.tx=sx; pr.op.ty=sy; pr.op.ta=netNum(s.a, pr.op.ta);
+        if(!pr.init){ pr.op.x=sx; pr.op.y=sy; pr.op.angle=pr.op.ta; pr.init=true; }
+        pr.op.hp=netNum(s.hp, 100, 0, 1e6); pr.op.maxHP=netNum(s.mhp, 100, 1, 1e6);
         pr.op.alive=!!s.alive;
-        pr.op.maxArmor=s.maxArmor||0; pr.op.armor=s.armor||0;
-        pr.op.armorTier=s.at||0;
-        pr.op.kills=s.kills||0;
+        pr.op.maxArmor=netNum(s.maxArmor, 0, 0, 1e6); pr.op.armor=netNum(s.armor, 0, 0, 1e6);
+        pr.op.armorTier=netNum(s.at, 0, 0, 9);
+        pr.op.kills=netNum(s.kills, 0, 0, 1e6);
         pr.op.ext=!!s.ext;   // v0.21.9：接收端原先漏读 ext，队友撤离状态同步是死链路
         pr.op.gun=s.gun?{ type:s.gun.t, element:s.gun.e, name:s.gun.n, parts:[] }:null;
         pr.op.name=p.name;
@@ -306,17 +323,25 @@ const Net = {
     const have=new Map();
     for(const o of R.ops){ if(!o.isPlayer && !o.remote) have.set(o.id,o); }
     for(const b of arr){
+      if(!b || typeof b!=="object") continue;          // v0.25.1：数组里混进 null 不得炸掉整帧
+      /* v0.25.1：影子 AI 的全部数值走 netNum 收口（不可信输入，见文件头注释） */
+      const bx=netNum(b.x, RAID_MAP_W/2, 0, RAID_MAP_W);
+      const by=netNum(b.y, RAID_MAP_H/2, 0, RAID_MAP_H);
+      const ba=netNum(b.a, 0);
       let op=have.get(b.i);
       if(!op){
         op={
           id:b.i, name:b.n||"PMC", cls:b.c||"pmc", smart:!!b.s, bounty:!!b.b,
-          isPlayer:false, ghost:true, x:b.x, y:b.y, tx:b.x, ty:b.y,
-          angle:b.a||0, ta:b.a||0, hp:b.hp, maxHP:b.mhp||100, alive:!!b.al,
-          armor:b.ar||0, maxArmor:b.mar||0,           armorTier:b.t||0,
-          freezeT:b.f||0,
-          burnT:b.bu||0, corrodeT:b.co||0, shockT:b.zk||0, radT:b.rd||0,
-          shield:b.sd||0, maxShield:b.sm||b.sd||0,
-          shieldInvuln:b.iv||0, shieldRate:0, shieldDelay:0,
+          isPlayer:false, ghost:true, x:bx, y:by, tx:bx, ty:by,
+          angle:ba, ta:ba, hp:netNum(b.hp, 100, 0, 1e6), maxHP:netNum(b.mhp, 100, 1, 1e6),
+          alive:!!b.al,
+          armor:netNum(b.ar, 0, 0, 1e6), maxArmor:netNum(b.mar, 0, 0, 1e6),
+          armorTier:netNum(b.t, 0, 0, 9),
+          freezeT:netNum(b.f, 0, 0, 60),
+          burnT:netNum(b.bu, 0, 0, 60), corrodeT:netNum(b.co, 0, 0, 60),
+          shockT:netNum(b.zk, 0, 0, 60), radT:netNum(b.rd, 0, 0, 60),
+          shield:netNum(b.sd, 0, 0, 1e6), maxShield:netNum(b.sm, netNum(b.sd, 0, 0, 1e6), 0, 1e6),
+          shieldInvuln:netNum(b.iv, 0, 0, 60), shieldRate:0, shieldDelay:0,
           shieldPerks:[], shieldAbsorbMul:1, shieldInvulnBase:0, shieldTimer:0,
           dr:0, helmetArmor:0, helmetDr:0,
           speed:0, r:b.b?16:13.5, color:b.b?"#ff5c5c":(b.c==="scav"?"#d08a4a":"#e06a4a"),
@@ -327,22 +352,23 @@ const Net = {
         };
         R.ops.push(op);
       }
-      op.tx=b.x; op.ty=b.y; op.ta=b.a||0;
-      if(op._noInit){ op.x=b.x; op.y=b.y; op.angle=b.a||0; op._noInit=false; }
-      op.hp=b.hp; op.maxHP=b.mhp||100; op.alive=!!b.al;
-      op.armor=b.ar||0; op.maxArmor=b.mar||0;
-      op.armorTier=b.t||0;
-      op.freezeT=b.f||0;   // 以房主快照为准，避免非房主侧重复递减
-      op.burnT=b.bu||0; op.corrodeT=b.co||0; op.shockT=b.zk||0; op.radT=b.rd||0;
-      op.shield=b.sd||0; op.maxShield=Math.max(op.maxShield||0,b.sm||0,op.shield);
-      op.shieldInvuln=b.iv||0;
+      op.tx=bx; op.ty=by; op.ta=ba;
+      if(op._noInit){ op.x=bx; op.y=by; op.angle=ba; op._noInit=false; }
+      op.hp=netNum(b.hp, 100, 0, 1e6); op.maxHP=netNum(b.mhp, 100, 1, 1e6); op.alive=!!b.al;
+      op.armor=netNum(b.ar, 0, 0, 1e6); op.maxArmor=netNum(b.mar, 0, 0, 1e6);
+      op.armorTier=netNum(b.t, 0, 0, 9);
+      op.freezeT=netNum(b.f, 0, 0, 60);   // 以房主快照为准，避免非房主侧重复递减
+      op.burnT=netNum(b.bu, 0, 0, 60); op.corrodeT=netNum(b.co, 0, 0, 60);
+      op.shockT=netNum(b.zk, 0, 0, 60); op.radT=netNum(b.rd, 0, 0, 60);
+      op.shield=netNum(b.sd, 0, 0, 1e6); op.maxShield=Math.max(op.maxShield||0, netNum(b.sm, 0, 0, 1e6), op.shield);
+      op.shieldInvuln=netNum(b.iv, 0, 0, 60);
       op.name=b.n||op.name;
       op.state=b.st||op.state;
       op.gun=b.g?{ type:b.g, element:b.e||"none", parts:[] }:null;
       op.smart=!!b.s; op.bounty=!!b.b;
     }
     // 快照里没有的（房主端删了/死了清场）→ 移除
-    const ids=new Set(arr.map(b=>b.i));
+    const ids=new Set(arr.filter(b=>b&&typeof b==="object").map(b=>b.i));
     for(const [id,op] of have){ if(!ids.has(id)){ const i=R.ops.indexOf(op); if(i>=0) R.ops.splice(i,1); } }
     // 影子插值
     const k=0.28;

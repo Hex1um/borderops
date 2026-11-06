@@ -1,9 +1,13 @@
 /* =========================================================================
- * verify_v01410.cjs — 逻辑回归（v0.14.10 ~ v0.16.0）
- * 按 index.html 顺序在 vm 中加载 22 个模块，直接调用 Raid._damage /
- * _tickElementStatus / _tickShield / _fire 等做真实结算，无需浏览器。
- * v0.16.0 起元素倍率改为「从 AMMO_TYPES 表动态取期望值」，不再写死旧数值；
- * 新增护盾装备的三数值 / 配件 / 前后缀 / 破盾无敌 / 独特加成 / 经济链路断言。
+ * verify.cjs — 逻辑回归（覆盖 v0.14.10 ~ v0.25.1 的全部契约）
+ *
+ * v0.25.1 改名：原名 `verify_v01410.cjs` 停在 v0.14.10，实际早就覆盖到 0.25
+ * （2400+ 行 / 828+ 条断言），每次都要解释「名字是旧的」—— 现在统一叫 verify.cjs，
+ * 与 `npm run verify`、CI 的 `node verify.cjs` 同名，不再有版本号漂移。
+ *
+ * 按 index.html 顺序在 vm 中加载全部模块（含懒加载的 4 个），直接调用
+ * Raid._damage / _tickElementStatus / _tickShield / _fire 等做真实结算，无需浏览器。
+ * 断言分 45 组，每组对应一个版本的交付内容；最后一组（45）是 v0.25.1 的运行期健壮性契约。
  * ========================================================================= */
 const fs = require('fs');
 const vm = require('vm');
@@ -2405,6 +2409,235 @@ check('高等级箱件数上调（L2 起 +1 / L4 +1 / L5 +1）',
   /const n=1\+\(lv>=2\?1:0\)\+\(lv>=4\?1:0\)\+\(lv>=5\?1:0\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('IV 级箱有独立权重（不再与 I 级共用 34% 出枪曲线）',
   /if\(L>=4\)\{/.test(raidSrc) && /if\(r<0\.40\) return this\._rollGunLoot\("pmc", luck, floorT\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 45. 运行期健壮性（v0.25.1）
+ * --------------------------------------------------------------------------
+ * 这一组锁的是「出错之后还能不能继续玩」，和 40 组的「契约不扩散」互补：
+ *   ① 主循环错误边界（异常不得永久冻结游戏）
+ *   ② dt / 尺寸 / 上下文的数值与状态兜底
+ *   ③ 粒子与运镜数组的硬上限（打久了不能越来越卡）
+ *   ④ 仓库单件损坏不得整档报废
+ *   ⑤ 诊断入口与 verify 自身的可寻址性
+ * ========================================================================== */
+console.log('\n=== 45. 运行期健壮性（v0.25.1） ===');
+const __main = fs.readFileSync(path.join(SRC, 'main.js'), 'utf8');
+const __render = fs.readFileSync(path.join(SRC, 'render.js'), 'utf8');
+
+/* main.js 平时不进 vm（文件末尾 `new Game()` 需要真实 DOM）。
+   这里把启动那两行切掉，只求拿到 class 本身 —— 这样才能真的把 _loop 跑起来，
+   而不是靠正则猜「有没有 try/catch」。 */
+const __bootCut = __main.indexOf('const game = new Game();');
+const __mainBody = __bootCut > 0 ? __main.slice(0, __bootCut) : __main;
+let __GameOk = false;
+try{
+  sandbox.Game = vm.runInContext(`(function(){${__mainBody}\nreturn Game;})()`, sandbox);
+  __GameOk = typeof sandbox.Game === 'function';
+}catch(e){
+  console.log('  LOAD FAIL main.js（仅 class）:', e.message);
+}
+check('main.js 的 Game 类可在沙箱内实例化（用于跑 _loop）', __GameOk ? 1 : 0, 1, 0.001);
+
+/* --- ① 主循环错误边界 --- */
+check('主循环用 try/catch 包住 update+render',
+  /_loop\(t\)\{[\s\S]{0,600}?\btry\{/.test(__main) ? 1 : 0, 1, 0.001);
+check('下一帧的 rAF 放在 finally 里（异常不得断掉循环）',
+  /finally\s*\{[\s\S]{0,160}requestAnimationFrame\(this\._loop\)/.test(__main) ? 1 : 0, 1, 0.001);
+check('连续出错熔断（120 帧 / 或 2 秒 30 帧，帧率无关）',
+  /this\._loopErr>120 \|\| \(this\._loopErr>=30 && now-this\._errSince>2000\)/.test(__main) &&
+  /this\._loopBroken=true/.test(__main) ? 1 : 0, 1, 0.001);
+check('成功一帧后连错误时间窗也清零',
+  /this\._errSince=0;/.test(__main) ? 1 : 0, 1, 0.001);
+check('熔断后仍继续排帧（不靠异常退出）',
+  /if\(!this\._loopBroken\)\{\s*[\s\S]{0,80}Render\.render/.test(__main) ? 1 : 0, 1, 0.001);
+check('全局 error / unhandledrejection 都有钩子',
+  /addEventListener\("error"/.test(__main) && /addEventListener\("unhandledrejection"/.test(__main) ? 1 : 0, 1, 0.001);
+check('错误环形缓冲上限 24（不无限增长）',
+  /if\(this\._errRing\.length>24\) this\._errRing\.shift\(\)/.test(__main) ? 1 : 0, 1, 0.001);
+check('同一错误不重复刷屏（相邻比对）',
+  /prev\.where!==rec\.where \|\| prev\.msg!==rec\.msg/.test(__main) ? 1 : 0, 1, 0.001);
+check('错误提示做 4 秒节流（不刷屏弹 toast）',
+  /now-this\._errToastAt>4000/.test(__main) ? 1 : 0, 1, 0.001);
+
+/* --- ①b 行为验证：update 抛错时循环仍排下一帧 --- */
+const loopProbe = G(`(function(){
+  var g=Object.create(Game.prototype);
+  g.state="playing"; g.mode="raid"; g.last=0;
+  g._errRing=[]; g._loopErr=0; g._loopErrTotal=0; g._loopBroken=false; g._errToastAt=0;
+  g.ctx=null; g.view=null;
+  g.updateHUD=function(){}; g.toast=function(){};
+  g.update=function(){ throw new Error("probe-boom"); };
+  var oldErr=console.error, logged=0;
+  console.error=function(){ logged++; };
+  var scheduled=0;
+  var oldRaf=requestAnimationFrame;
+  requestAnimationFrame=function(){ scheduled++; return 0; };
+  var threw=null;
+  try{ g._loop(16); }catch(e){ threw=String(e); }
+  requestAnimationFrame=oldRaf; console.error=oldErr;
+  return { threw:threw, scheduled:scheduled, logged:logged, errs:g._errRing.length,
+           msg:((g._errRing[0]||{}).msg||""), where:((g._errRing[0]||{}).where||"") };
+})()`);
+check('update 抛错时 _loop 本身不抛出（异常被边界吃掉）', loopProbe.threw === null ? 1 : 0, 1, 0.001);
+check('update 抛错后仍然排了下一帧（不冻结）', loopProbe.scheduled, 1, 0.001);
+check('异常被记进环形缓冲并带来源', (loopProbe.errs === 1 && /probe-boom/.test(loopProbe.msg) && /loop:raid\/playing/.test(loopProbe.where)) ? 1 : 0, 1, 0.001);
+check('异常照常进控制台（不静默吞掉）', loopProbe.logged >= 1 ? 1 : 0, 1, 0.001);
+
+/* --- ①c 行为验证：持续崩溃 → 熔断，且不再调用 Render --- */
+const breakProbe = G(`(function(){
+  var g=Object.create(Game.prototype);
+  g.state="playing"; g.mode="raid"; g.last=0;
+  g._errRing=[]; g._loopErr=0; g._loopErrTotal=0; g._loopBroken=false; g._errToastAt=0;
+  g.ctx=null; g.view=null;
+  g.updateHUD=function(){}; g.toast=function(){};
+  g.update=function(){ throw new Error("boom"); };
+  var oldErr=console.error; console.error=function(){};
+  var scheduled=0; var oldRaf=requestAnimationFrame;
+  requestAnimationFrame=function(){ scheduled++; return 0; };
+  for(var i=0;i<130;i++) g._loop(i*16);
+  requestAnimationFrame=oldRaf; console.error=oldErr;
+  return { broken:g._loopBroken, scheduled:scheduled, total:g._loopErrTotal };
+})()`);
+check('连续崩溃 130 帧后熔断', breakProbe.broken ? 1 : 0, 1, 0.001);
+check('熔断前后共排了 130 帧（一帧都没丢）', breakProbe.scheduled, 130, 0.001);
+check('累计错误计数在涨（可诊断）', breakProbe.total >= 120 ? 1 : 0, 1, 0.001);
+
+/* --- ② dt / 尺寸 / 上下文兜底 --- */
+check('dt 为负或 NaN 时退回 1/60',
+  /!Number\.isFinite\(dt\) \|\| dt<=0\) dt=1\/60/.test(__main) ? 1 : 0, 1, 0.001);
+const dtProbe = G(`(function(){
+  var g=Object.create(Game.prototype);
+  g.state="playing"; g.mode="raid"; g.last=1000;
+  g._errRing=[]; g._loopErr=0; g._loopErrTotal=0; g._loopBroken=true; g._errToastAt=0;
+  var seen=[];
+  g.update=function(dt){ seen.push(dt); };
+  g.updateHUD=function(){}; g.ctx=null; g.view=null;
+  var oldRaf=requestAnimationFrame; requestAnimationFrame=function(){ return 0; };
+  g._loop(500);
+  g._loop(NaN);
+  requestAnimationFrame=oldRaf;
+  return seen;
+})()`);
+check('时钟回拨（t<last）不产生负 dt', Math.abs(dtProbe[0] - 1/60) < 1e-9 ? 1 : 0, 1, 0.001);
+check('t 为 NaN 时 dt 仍是有限值', Number.isFinite(dtProbe[1]) && dtProbe[1] > 0 ? 1 : 0, 1, 0.001);
+
+check('resize 对 innerWidth/innerHeight 缺失做兜底',
+  /Number\.isFinite\(rawW\)/.test(__main) && /Number\.isFinite\(rawH\)/.test(__main) ? 1 : 0, 1, 0.001);
+const sizeProbe = G(`(function(){
+  var g=Object.create(Game.prototype);
+  g.canvas={ style:{} }; g.mode="raid";
+  g.resize();
+  return { w:g.view.w, h:g.view.h, zoom:g.zoom, dpr:g.view.dpr };
+})()`);
+check('拿不到窗口尺寸时 view 仍是正数（不是 0/NaN）',
+  sizeProbe.w > 0 && sizeProbe.h > 0 && sizeProbe.zoom > 0 && Number.isFinite(sizeProbe.zoom) ? 1 : 0, 1, 0.001);
+
+check('Render.render 守住 ctx 缺失与零尺寸',
+  /if\(!ctx \|\| !v\) return;/.test(__render) && /if\(!\(v\.w>0\) \|\| !\(v\.h>0\)\) return;/.test(__render) ? 1 : 0, 1, 0.001);
+check('setTransform 前先校验 dpr（不再传 NaN）',
+  /Number\.isFinite\(v\.dpr\) && v\.dpr>0/.test(__render) ? 1 : 0, 1, 0.001);
+
+/* --- ③ 粒子上限 --- */
+check('主循环粒子 / 飘字有硬上限（700 / 360）',
+  /const CAP=700/.test(__main) && /const CAP=360/.test(__main) ? 1 : 0, 1, 0.001);
+check('局内粒子 / 飘字 / 曳光也有上限（800 / 420 / 160）',
+  /this\.particles\.length>800/.test(raidSrc) && /this\.floats\.length>420/.test(raidSrc) &&
+  /this\.tracers\.length>160/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ④ 仓库逐件修复 --- */
+check('raidRepairList 存在且逐件 try/catch',
+  G('typeof raidRepairList') === 'function' && /catch\(e\)\{ bad\.push\(it\); \}/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const repairProbe = G(`(function(){
+  var a=raidRepairList([{a:1}, null, {b:2}, 5, "x"], function(it){ return it; });
+  var b=raidRepairList([{ok:1},{boom:1}], function(it){ if(it.boom) throw new Error("x"); return it; });
+  var c=raidRepairList(null, function(it){ return it; });
+  return { listA:a.list.length, badA:a.bad, listB:b.list.length, badB:b.bad, listC:c.list.length };
+})()`);
+check('坏件（null / 非对象）被丢弃、好件保留', repairProbe.listA === 2 && repairProbe.badA === 3 ? 1 : 0, 1, 0.001);
+check('单件迁移抛错只丢那一件', repairProbe.listB === 1 && repairProbe.badB === 1 ? 1 : 0, 1, 0.001);
+check('非数组输入不抛错（退回空表）', repairProbe.listC === 0 ? 1 : 0, 1, 0.001);
+
+const stashProbe = G(`(function(){
+  var oldGet=Store.getJSON;
+  Store.getJSON=function(){
+    return { gunVer:3, creds:100, tokens:0, bandages:1, ammo:{}, parts:[], materials:[], receivers:[],
+      weapons:[{ uid:"w1", type:"rifle", rarity:"white", parts:[], affixes:[], dmg:10, mag:5, rpm:100,
+                 range:100, reserve:10, value:10 }],
+      armors:[null, { kind:"armor", tier:3, rarity:1 }],
+      helmets:[{ kind:"helmet", tier:2 }],
+      shields:[null],
+      keys:[null, { lv:2 }] };
+  };
+  var s;
+  try{ s=RaidStash.load(); }
+  finally{ Store.getJSON=oldGet; }
+  return { armors:s.armors.length, helmets:s.helmets.length, shields:s.shields.length,
+           keys:s.keys.length, weapons:s.weapons.length, creds:s.creds };
+})()`);
+check('脏档里的一件 null 护甲不再让整档重建',
+  stashProbe.armors === 1 && stashProbe.weapons === 1 && stashProbe.creds === 100 ? 1 : 0, 1, 0.001);
+check('脏档里的 null 头盔 / 护盾 / 钥匙都不影响其余资产',
+  stashProbe.helmets === 1 && stashProbe.shields === 0 && stashProbe.keys === 1 && stashProbe.creds === 100 ? 1 : 0, 1, 0.001);
+
+/* --- ⑤ 诊断入口 + verify 自身可寻址 --- */
+check('Game 暴露 diagnostics()（控制台可一键取错误快照）',
+  /diagnostics\(\)\{/.test(__main) && /loopBroken:this\._loopBroken/.test(__main) ? 1 : 0, 1, 0.001);
+const __pkg = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8');
+const __ci  = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+check('package.json 的 verify 脚本指向 verify.cjs',
+  /"verify":\s*"node verify\.cjs"/.test(__pkg) ? 1 : 0, 1, 0.001);
+check('CI 跑 verify.cjs',
+  /node verify\.cjs/.test(__ci) ? 1 : 0, 1, 0.001);
+check('旧文件名 verify_v01410.cjs 已不存在（不再有版本号漂移）',
+  fs.existsSync(path.join(ROOT, 'verify_v01410.cjs')) ? 0 : 1, 1, 0.001);
+
+/* --- ⑥ 联机快照（不可信输入）的数值收口 --- */
+check('netNum 对非法值回默认',
+  G('netNum("abc",7)') === 7 && G('netNum(NaN,1)') === 1 && G('netNum(undefined,3)') === 3 ? 1 : 0, 1, 0.001);
+check('netNum 对越界值钳制', G('netNum(999,0,0,10)'), 10, 0.001);
+check('netNum 不动负角度（角度不是 0..N 的量）', G('netNum(-5,0)'), -5, 0.001);
+check('netNum 接受数字字符串', G('netNum("42",0)'), 42, 0.001);
+check('影子 AI 与队友快照的位置 / 血量 / 护甲全走 netNum',
+  (raidSrc + '\n' + fs.readFileSync(path.join(SRC,'net.js'),'utf8')).match(/netNum\(/g).length >= 20 ? 1 : 0, 1, 0.001);
+const ghostProbe = G(`(function(){
+  var R={ ops:[{isPlayer:true,id:"you"}] };
+  var old=Net.raid; Net.raid=R;
+  var threw=null;
+  try{
+    Net._applyAI([ null, { i:"g1", x:"abc", y:null, a:"zz", hp:NaN, al:1, n:"X" } ]);
+  }catch(e){ threw=String(e); }
+  var o=null;
+  for(var i=0;i<R.ops.length;i++) if(R.ops[i].id==="g1") o=R.ops[i];
+  Net.raid=old;
+  return { threw:threw, ok:!!o,
+           x:o&&o.x, y:o&&o.y, hp:o&&o.hp, angle:o&&o.angle,
+           finite: !!(o && Number.isFinite(o.x) && Number.isFinite(o.y)
+                      && Number.isFinite(o.hp) && Number.isFinite(o.angle)) };
+})()`);
+check('脏快照（null 条目 + 非数字坐标）不抛错、不产生 NaN 影子',
+  ghostProbe.threw === null && ghostProbe.ok && ghostProbe.finite && ghostProbe.hp === 100 ? 1 : 0, 1, 0.001);
+
+/* --- ⑦ 伤害入口守卫（全游戏最热的函数） --- */
+const softT = ()=>mkTarget({ hp:100, maxHP:100, armor:0, maxArmor:0, helmetArmor:0, maxHelmetArmor:0 });
+const tNaN = softT();
+const nanThrew = (()=>{ try{ Raid._damage(tNaN, NaN, null, null, {}); return false; }catch(e){ return true; } })();
+check('NaN 伤害被丢弃（不写坏血量）',
+  (!nanThrew && Number.isFinite(tNaN.hp) && tNaN.hp === 100) ? 1 : 0, 1, 0.001);
+const tInf = softT();
+const infThrew = (()=>{ try{ Raid._damage(tInf, Infinity, null, null, {}); return false; }catch(e){ return true; } })();
+check('Infinity 伤害被丢弃（一发秒全场只可能来自坏数据）',
+  (!infThrew && Number.isFinite(tInf.hp) && tInf.hp === 100) ? 1 : 0, 1, 0.001);
+const nullThrew = (()=>{ try{ Raid._damage(null, 10, null, null, {}); Raid._damage(undefined, 10, null, null, {}); return false; }catch(e){ return true; } })();
+check('空目标不抛错（每帧调用点不再被一个 null 打断）', nullThrew ? 0 : 1, 1, 0.001);
+const tNeg = softT();
+Raid._damage(tNeg, -50, null, null, {});
+/* 注意：结算链路里有「每发至少 1 点」的下限（Math.max(1,…)），所以负伤害钳到 0 之后
+   仍会照常走完流程打出 1 点 —— 这里锁的是「不会变成治疗」，不是「一点不掉」。 */
+check('负伤害不会变成治疗（钳到 0，最多按最小 1 点结算）',
+  Number.isFinite(tNeg.hp) && tNeg.hp <= 100 && tNeg.hp >= 99 ? 1 : 0, 1, 0.001);
+const tPos = softT();
+const dealt = (()=>{ const h0=tPos.hp; Raid._damage(tPos, 10, { isPlayer:true, x:0, y:0, name:"T" }, gun("none"), phys); return h0-tPos.hp; })();
+check('正常伤害链路未被守卫误伤（10 点仍照常结算）', dealt > 0 ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

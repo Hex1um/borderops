@@ -205,6 +205,14 @@ Object.assign(Raid, {
   /* opts.chain = 由辐射连锁触发的二次伤害，不再继续连锁，避免无限递归 */
   _damage(target, dmg, attacker, gun, opts){
     opts=opts||{};
+    /* v0.25.1：入口守卫。这是全游戏调用最频繁的函数，一次空目标就会每帧抛一次；
+       一次 NaN / Infinity 伤害则更阴险 —— `target.hp=Math.max(0, hp-NaN)` 得到 NaN，
+       之后「血条空、`hp<=0` 恒假、目标永远打不死」，而且 NaN 会顺着飘字与统计扩散。
+       非法伤害直接丢弃（Infinity 同理：一发秒全场的「伤害」只可能来自坏数据）。 */
+    if(!target || typeof target!=="object") return;
+    dmg=Number(dmg);
+    if(!Number.isFinite(dmg)) return;
+    if(dmg<0) dmg=0;
     if(!target.alive) return;
     /* v0.16.0：破盾无敌期间完全免伤（飘字节流，连发不刷屏） */
     if((target.shieldInvuln||0)>0){

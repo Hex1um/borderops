@@ -19,7 +19,16 @@ class Game {
     this.hud=document.getElementById('hud');
     this._toastTimer=null;
     this.last=performance.now();
+    /* v0.25.1：运行期错误边界的状态。
+       环形缓冲只留最近 24 条，供「诊断」按钮 / 控制台取用，不无限增长。 */
+    this._errRing=[];          // [{t, where, msg}]
+    this._loopErr=0;           // 连续出错帧数（成功一帧就清零）
+    this._loopErrTotal=0;      // 累计出错帧数（熔断后仍会计数）
+    this._loopBroken=false;    // 连续出错超过阈值 → 停止渲染，交给提示层
+    this._errSince=0;          // 连续出错的起始时间戳（熔断用的时间窗）
+    this._errToastAt=0;        // 上一条错误提示的时间，用于节流
     this.resize();
+    this._installErrorHook();
     window.addEventListener('resize',()=>this.resize());
     Input.init(this);
     UI.init(this);
@@ -29,8 +38,13 @@ class Game {
   }
 
   resize(){
-    const dpr=Math.min(window.devicePixelRatio||1,2);
-    const w=window.innerWidth, h=window.innerHeight;
+    /* v0.25.1：窗口尺寸取不到（隐藏 iframe / 最小化 / 某些嵌入环境会返回 0 或 NaN）时
+       不能把 0 写进 canvas 与 zoom —— zoom 会变成 NaN，整屏坐标全变 NaN，
+       表现出来就是「一进游戏全黑且再也画不出来」。这里统一兜到 ≥1。 */
+    const dpr=Math.min(Math.max(Number(window.devicePixelRatio)||1, 1), 2);
+    const rawW=Number(window.innerWidth), rawH=Number(window.innerHeight);
+    const w=Math.max(1, Math.round(Number.isFinite(rawW)?rawW:0));
+    const h=Math.max(1, Math.round(Number.isFinite(rawH)?rawH:0));
     this.canvas.width=Math.round(w*dpr); this.canvas.height=Math.round(h*dpr);
     this.canvas.style.width=w+'px'; this.canvas.style.height=h+'px';
     this.view={w,h,dpr};
@@ -336,20 +350,98 @@ class Game {
     UI.title();
   }
 
+  /* ----------------------------- 运行期错误边界 -----------------------------
+   * v0.25.1：以前 `_loop` 是裸的 —— update / render 里任何一次抛错（某个实体字段
+   * 变成 undefined、某个 canvas 渐变拿到 NaN、联机快照里少一个字段…）都会让
+   * 这一帧的 `requestAnimationFrame` 永远排在异常之后没机会执行：
+   *   **画面停住、输入无响应、控制台只有一条红字，玩家只能自己刷新。**
+   *
+   * 现在三道保险：
+   *   1. 每帧 try/catch，**下一帧的 rAF 放在 finally 里**，任何异常都不能断掉循环；
+   *   2. 连续出错 ≤8 帧时静默降级（只记日志），偶发一帧抖动不弹提示；
+   *   3. 连续出错 >120 帧 → 判定持续崩溃，停止渲染并留一条可读提示，
+   *      而不是让浏览器每秒抛 60 次异常把主线程烧满。
+   * 全局 error / unhandledrejection 也收进同一个环形缓冲，白屏时至少有据可查。 */
+  _installErrorHook(){
+    if(typeof window==="undefined" || this._errHookInstalled) return;
+    this._errHookInstalled=true;
+    const record=(where, err)=>{
+      const msg=(err && (err.stack||err.message)) || String(err);
+      this._recordError(where, msg);
+    };
+    window.addEventListener("error", (ev)=>{
+      // 资源加载失败（img/script 404）没有 ev.error，单独标一下来源
+      record("window.error", ev && (ev.error || (ev.target && ev.target.src) || ev.message));
+    });
+    window.addEventListener("unhandledrejection", (ev)=>{
+      record("unhandledrejection", ev && ev.reason);
+    });
+  }
+
+  _recordError(where, msg){
+    const rec={ t:Date.now(), where:String(where||"?"), msg:String(msg||"").slice(0,600) };
+    this._errRing.push(rec);
+    if(this._errRing.length>24) this._errRing.shift();
+    // 控制台照常打（开发者要能看见），但同一个 where+msg 不重复刷屏
+    const prev=this._errRing[this._errRing.length-2];
+    if(!prev || prev.where!==rec.where || prev.msg!==rec.msg)
+      console.error("[borderops]", where, msg);
+    // 普通玩家看到的是可执行的一句话，不是堆栈
+    const now=Date.now();
+    if(now-this._errToastAt>4000){
+      this._errToastAt=now;
+      try{ this.toast("运行出错，已自动恢复（详情见控制台）"); }catch(e){ /* toast 自身失败不得递归 */ }
+    }
+    return rec;
+  }
+
+  /* 给控制台 / 自动化探针用的诊断快照 */
+  diagnostics(){
+    return {
+      loopBroken:this._loopBroken, loopErr:this._loopErr, loopErrTotal:this._loopErrTotal,
+      errors:this._errRing.slice(),
+    };
+  }
+
   /* ----------------------------- 主循环 ----------------------------- */
   _loop(t){
+    /* dt 兜底：负值（时钟回拨 / 标签页恢复）与 NaN 都退回 1/60，
+       否则物理会被倒放或整场变 NaN。上限 0.05 保持不变（防卡顿穿墙）。 */
     let dt=(t-this.last)/1000; this.last=t;
+    if(!Number.isFinite(dt) || dt<=0) dt=1/60;
     if(dt>0.05) dt=0.05;
-    // 联机结算后（阵亡 / 撤离）仍要继续跑：房主要给队友模拟 AI，自己转观战
-    if(this.state==="playing" || (this.mode==="raid" && typeof Raid!=="undefined" && Raid.active)) this.update(dt);
-    else {
-      const a=Input.consume();
-      if(this.state==="paused"&&a.pause) this.resume();
-      else if(this.state==="dustbuy"&&a.pause) this.closeBuy();
+    try{
+      // 联机结算后（阵亡 / 撤离）仍要继续跑：房主要给队友模拟 AI，自己转观战
+      if(this.state==="playing" || (this.mode==="raid" && typeof Raid!=="undefined" && Raid.active)) this.update(dt);
+      else {
+        const a=Input.consume();
+        if(this.state==="paused"&&a.pause) this.resume();
+        else if(this.state==="dustbuy"&&a.pause) this.closeBuy();
+      }
+      if(!this._loopBroken){
+        Render.render(this);
+        this.updateHUD();
+      }
+      this._loopErr=0;                       // 这一帧完整跑完 → 连续计数清零
+      this._errSince=0;                      // 连续出错的起始时间也清零
+    }catch(e){
+      const now=Date.now();
+      if(!this._errSince) this._errSince=now;
+      this._loopErr++;
+      this._loopErrTotal++;
+      this._recordError("loop:"+this.mode+"/"+this.state, e);
+      /* 熔断条件两条取或，因为**帧率不是常数**：
+       *   · 连续 120 帧 —— 60fps 下约 2 秒，低端机/后台标签页也能在有限帧内兜住；
+       *   · 连续 2 秒且至少 30 帧 —— 30fps 或更低的机器上，光靠帧数要等 4 秒以上。
+       * 满足后停止渲染并留提示 + 诊断入口，而不是让浏览器每秒抛几十次异常把主线程烧满。 */
+      if(!this._loopBroken && (this._loopErr>120 || (this._loopErr>=30 && now-this._errSince>2000))){
+        this._loopBroken=true;
+        try{ this.toast("渲染已停止：连续出错，请刷新页面（F5）"); }catch(e2){ /* 同上，不得递归 */ }
+      }
+    }finally{
+      // 关键：无论如何都要排下一帧，否则一次异常就永久冻结
+      requestAnimationFrame(this._loop);
     }
-    Render.render(this);
-    this.updateHUD();
-    requestAnimationFrame(this._loop);
   }
 
   update(dt){
@@ -442,13 +534,20 @@ class Game {
     this.camera.x=M.lerp(this.camera.x,tx,0.12); this.camera.y=M.lerp(this.camera.y,ty,0.12);
   }
 
+  /* v0.25.1：粒子上限。所有生成点分散在 main / br / raid 几个模块里，
+     逐个加判断容易漏；在**唯一的收敛点**（每帧更新前）裁掉最老的那批最省事，
+     也不会改变任何表现 —— 满屏 700 个 3px 粒子早就看不清了。 */
   _updateParticles(dt){
+    const CAP=700;
+    if(this.particles.length>CAP) this.particles.splice(0, this.particles.length-CAP);
     for(let i=this.particles.length-1;i>=0;i--){
       const pt=this.particles[i]; pt.x+=pt.vx*dt; pt.y+=pt.vy*dt; pt.vx*=0.92; pt.vy*=0.92; pt.life-=dt;
       if(pt.life<=0) this.particles.splice(i,1);
     }
   }
   _updateFloats(dt){
+    const CAP=360;
+    if(this.floats.length>CAP) this.floats.splice(0, this.floats.length-CAP);
     for(let i=this.floats.length-1;i>=0;i--){
       const f=this.floats[i]; f.y+=f.vy*dt; f.life-=dt;
       if(f.life<=0) this.floats.splice(i,1);

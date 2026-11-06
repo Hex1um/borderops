@@ -18,13 +18,13 @@ jobs:
         with:
           node-version: '20'
 
-      # check_version.js / verify_v01410.cjs 只依赖 Node 内置模块（fs/vm/path/crypto），
+      # check_version.js / verify.cjs 只依赖 Node 内置模块（fs/vm/path/crypto），
       # 仓库零 npm 依赖，因此这里刻意不跑 npm install —— CI 与本地完全一致。
       - name: 版本一致性门禁
         run: node check_version.js
 
       - name: 逻辑回归断言
-        run: node verify_v01410.cjs
+        run: node verify.cjs
 
       - name: 全量语法检查
         run: |

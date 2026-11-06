@@ -1,12 +1,12 @@
 {
   "name": "border-ops",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "private": true,
   "description": "边境行动 · BORDER OPS — 拟真俯视角撤离射击，含合作联机房间",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "verify": "node verify_v01410.cjs",
+    "verify": "node verify.cjs",
     "check": "node check_version.js",
     "bench:fps": "node tools/fps_bench.cjs"
   },

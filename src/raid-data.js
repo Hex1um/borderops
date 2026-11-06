@@ -1610,6 +1610,25 @@ function ensureArmorTier(a){
   return a;
 }
 
+/* v0.25.1：仓库逐件修复工具。
+ * 旧实现是 `d.armors=(d.armors||[]).map(ensureArmorTier)` —— 只要数组里有一件结构异常
+ * （null / 缺字段 / 类型写错 / 手改过存档），map 抛错就会落到外层 catch → seed() 重建新档，
+ * **玩家几十件资产一次全没**，而且界面上看不出发生了什么。
+ * 现在改成逐件兜：坏的那件丢掉并计数留痕，其余照常保留。
+ * 返回 { list, bad }，调用方汇总后打一条 warn —— 静默吞掉坏件同样不可接受。 */
+function raidRepairList(arr, fn){
+  const out=[], bad=[];
+  const src=Array.isArray(arr)?arr:[];
+  for(const it of src){
+    if(!it || typeof it!=="object"){ bad.push(it); continue; }
+    try{
+      const v=fn(it);
+      if(v && typeof v==="object") out.push(v); else bad.push(it);
+    }catch(e){ bad.push(it); }
+  }
+  return { list:out, bad:bad.length };
+}
+
 const RaidStash = {
   KEY:"raid_stash_v2",
   load(){
@@ -1638,11 +1657,21 @@ const RaidStash = {
         /* v0.21.1：不再改写旧档枪名（改了就回不去）。只清掉缓存的精简名，
          * 让 gunNameOf() 按当前「精简 / 完整」设置重新推导。 */
         for(const w of (d.weapons||[])){ if(w) delete w.short; }
-        // 护甲 / 头盔：无论档位版本，一律按当前数值表校正
-        d.armors=(d.armors||[]).map(ensureArmorTier);
-        d.helmets=(d.helmets||[]).map(ensureArmorTier);
-        // v0.16.0：老档没有护盾栏 → 补空数组；已有护盾走字段迁移
-        d.shields=(d.shields||[]).map(ensureShield);
+        /* v0.25.1：护甲 / 头盔 / 护盾改成**逐件**迁移（坏件丢弃 + 计数），
+           不再让单件异常把整档打到 seed()。 */
+        const dropped=[];
+        const fix=(name, arr, fn)=>{
+          const r=raidRepairList(arr, fn);
+          if(r.bad) dropped.push(name+"×"+r.bad);
+          return r.list;
+        };
+        d.weapons  = fix("weapons",  d.weapons,  w=>w);
+        d.armors   = fix("armors",   d.armors,   ensureArmorTier);
+        d.helmets  = fix("helmets",  d.helmets,  ensureArmorTier);
+        d.shields  = fix("shields",  d.shields,  ensureShield);
+        d.parts    = fix("parts",    d.parts,    p=>p);
+        d.materials= fix("materials",d.materials,m=>m);
+        d.receivers= fix("receivers",d.receivers,r=>r);
         if(!d.armors) d.armors=[];
         if(!d.helmets) d.helmets=[];
         if(!d.shields) d.shields=[];
@@ -1680,7 +1709,17 @@ const RaidStash = {
           if(w && !w.cal) w.cal=ammoCalOfType(w.type);
         }
         if(!Array.isArray(d.keys)) d.keys=[];      // 钥匙（5 级）
+        d.keys = fix("keys", d.keys, (k)=>{
+          /* v0.25.1：钥匙也是逐件修 —— 旧实现直接在 for 里读 k.uses，
+             数组里混进一个 null 就整档报废。 */
+          const def=raidKeyDef(M.clamp(Math.round(M.num(k.lv,1,1,5)),1,5));
+          const uses=M.num(k.uses, def.uses, 1);
+          return Object.assign(k, { lv:M.clamp(Math.round(M.num(k.lv,1,1,5)),1,5),
+                                    uses:uses, maxUses:M.num(k.maxUses, def.uses, uses) });
+        });
         for(const k of d.keys){ if(!k.uses) k.uses=raidKeyDef(k.lv).uses; if(!k.maxUses) k.maxUses=raidKeyDef(k.lv).uses; }
+        /* 坏件全部汇总成一条日志：玩家资产少了几件要能查得到原因 */
+        if(dropped.length) console.warn("[RaidStash] 已丢弃无法修复的物品：" + dropped.join("、"));
         return d;
         }
     }catch(e){

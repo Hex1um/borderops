@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（781 条断言 / 43 组）
+npm run verify       # 无浏览器依赖的逻辑回归（875 条断言 / 45 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -419,6 +419,7 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
 - **本地存储只能走 `Store`（v0.23.1）**：`src/store.js` 是 localStorage 的**唯一**访问通道，业务代码里直连会被 verify 组 40 扫源码红灯。`Store.get` / `getJSON` 永不抛错；坏数据隔离到 `<key>.__bad` 保留现场（`Store.quarantineKeys()` 列出、`Store.dropQuarantine()` 清理）。localStorage 不可用时（隐私模式 / 沙箱 iframe）自动降级到内存：本局可玩，刷新即丢。**新增存储键要同步 `Save.exportKeys()` 白名单**，否则存档码不会把它带走。
 - **不许写裸 `catch(e){}`（v0.23.1）**：要么用 `warnOnce(tag, err)` 留痕（自带去重，适合可能每帧失败的热路径），要么在 catch 体内写明「为什么可以忽略」。verify 组 40 会把空的 catch 体逐个数出来。
+- **主循环不许裸奔（v0.25.1）**：`Game._loop` 用 try/catch 包住 update+render，**下一帧的 rAF 必须写在 finally 里** —— 写在 try 末尾的话，任何一次异常都会让循环永久停摆（画面冻结、输入无响应，只能刷新）。连续出错按「120 帧或 2 秒 30 帧」两条取或熔断（帧率不是常数），熔断后停止渲染并提示 F5，同时在 `game.diagnostics()` 里留下最近 24 条错误；联机快照一律走 `netNum()` 收口，不许直接把 `b.x` / `s.hp` 这类网络值赋给实体字段。verify 组 45 会实例化 `Game` 真的把 `_loop` 跑一遍来锁这些行为。
 - **NaN 不许进入状态（v0.23.1）**：`M.clamp` 已对 NaN / 非有限值兜底，读档与网络输入用 `M.num(v, def, min, max)` 归一。判断数值可用一律 `Number.isFinite`，**不要**用 `typeof x === "number"` —— NaN 和 Infinity 都能过。
 - **颜色统一走 `parseHex()`（v0.23.1）**：`rgba()` / `hexLighten()` 对非法输入回落白色。不要再自己 `parseInt(substring(...), 16)`：那会产出 `rgba(NaN,NaN,NaN,a)`，浏览器会**整条声明丢弃**，表现为「这块 UI 直接透明」，极难定位。
 - **随机工具的边界与公式（v0.23.1）**：`RNG.pick` 空数组返回 `undefined`、`RNG.weighted` 空集返回 `-1`、`fr/ri` 容忍反向区间。但**抽样公式本身不许改**（`ri` 与旧版逐字一致）—— 拍卖期号货池与 POI 掉落靠固定种子重放，改公式等于全服换货。

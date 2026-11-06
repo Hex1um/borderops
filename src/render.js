@@ -40,7 +40,13 @@ const Render = {
 
   render(game){
     const ctx=game.ctx, v=game.view;
-    ctx.setTransform(v.dpr,0,0,v.dpr,0,0);
+    /* v0.25.1：入口守住三件事 —— ctx 不存在（canvas 被替换 / 上下文创建失败）、
+       尺寸为 0（隐藏 iframe / 首个 resize 之前）、dpr 非法。
+       这些情况以前会让 setTransform(NaN,...) 把整屏画成空白，且每帧都抛错。 */
+    if(!ctx || !v) return;
+    const dpr=(Number.isFinite(v.dpr) && v.dpr>0) ? v.dpr : 1;
+    if(!(v.w>0) || !(v.h>0)) return;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,v.w,v.h);
     ctx.fillStyle="#0b0906"; ctx.fillRect(0,0,v.w,v.h);
     if(game.mode==="dust2"){ RenderDust.render(ctx,game); return; }

@@ -1,5 +1,67 @@
 # Changelog
 
+## v0.25.1 — 2026-11-06
+
+本批只有一个目的：**出错之后游戏不能变成「画面还在、人已经死了」**，外加把 `verify` 的正名。
+
+### ① `verify_v01410.cjs` → `verify.cjs`
+
+文件名停在 v0.14.10，实际早就覆盖到 0.25（2400+ 行 / 875 条断言），每次都要解释「名字是旧的」。
+现在与 `npm run verify`、CI 的 `node verify.cjs` 同名。同步改了 `package.json`、
+`.github/workflows/ci.yml`、`README.md`、`server.js`、`src/sanitize.js` 的注释。
+CHANGELOG 里的历史记录保留旧名（那是当时的事实）。
+
+### ② 主循环错误边界（本轮最重要）
+
+旧 `_loop` 是裸的：`update` / `render` / `updateHUD` 里任何一次抛错，都会让这一帧末尾的
+`requestAnimationFrame` 根本没机会执行 —— **画面停住、输入无响应、控制台只有一条红字，玩家只能自己刷新。**
+
+- 每帧 `try/catch`，**下一帧的 rAF 移进 `finally`**，异常不可能断掉循环；
+- 连续出错熔断：`>120 帧` 或 `≥30 帧且持续 >2 秒`（两条取或，因为帧率不是常数）。
+  熔断后停止渲染并提示「请刷新（F5）」，避免每秒抛 60 次异常把主线程烧满；
+- 错误进 24 条环形缓冲，同一个 `where+msg` 不重复刷屏，toast 4 秒节流；
+- 全局 `error` / `unhandledrejection` 收进同一个缓冲；
+- 新增 `game.diagnostics()` 返回 `{ loopBroken, loopErr, loopErrTotal, errors[] }`。
+
+实测：注入 3 帧异常 → 循环照常跑（帧计数继续增长）、错误被记录、不熔断；
+持续崩溃 4.5 秒 → 熔断且不再渲染，刷新后自愈。
+
+### ③ 数值 / 状态兜底
+
+| 位置 | 旧行为 | 新行为 |
+|---|---|---|
+| `_loop` 的 dt | 时钟回拨时 dt 为负（物理倒放）；NaN 传染全场 | 负值 / NaN 退回 1/60 |
+| `resize` | `innerWidth` 拿不到 → canvas 0×0、zoom NaN、整屏画不出来 | 尺寸钳到 ≥1，zoom 恒有限 |
+| `Render.render` | ctx 缺失或尺寸为 0 时 `setTransform(NaN)` 每帧抛错 | 入口直接 return，dpr 先校验 |
+| `Raid._damage` | 空目标抛错；**NaN 伤害把 `hp` 写成 NaN**（血条空、`hp<=0` 恒假、目标永远打不死） | 空目标 / 非有限伤害直接丢弃，负伤害钳 0 |
+| 粒子 / 飘字 / 曳光 | 无上限，密集交火时数组持续膨胀 | 主循环 700 / 360；局内 800 / 420 / 160（裁最老的一批） |
+
+### ④ 联机快照（不可信输入）收口
+
+影子 AI 与队友快照以前是 `op.x = b.x` 直接赋值。对面一个 `"abc"` / `null` 就能把影子坐标写成 NaN：
+`Math.hypot(x-...)` 全是 NaN → 子弹永远打不中它；屏幕上是 NaN → 精灵不画（玩家以为它消失了，其实还在打你）。
+新增 `netNum(v, def, lo, hi)`：非法值回默认，越界钳区间，角度不钳（可以是负的）；
+`_applyAI` / `_applyPeers` 里 20 多处赋值全部改走它，快照数组里的 `null` 条目直接跳过。
+
+### ⑤ 仓库单件损坏不再整档报废
+
+旧实现 `d.armors=(d.armors||[]).map(ensureArmorTier)`：数组里只要有一件结构异常，
+`map` 抛错 → 外层 catch → `seed()` 重建新档 → **玩家几十件资产一次全没**，界面上还看不出发生了什么。
+
+新增 `raidRepairList(arr, fn)` 逐件修复：坏件丢弃并计数，其余照常保留，最后汇总一条
+`[RaidStash] 已丢弃无法修复的物品：armors×1、keys×1` 留痕。已覆盖 weapons / armors / helmets /
+shields / parts / materials / receivers / keys。
+
+实测：往仓库塞 `null` 护甲 + `null` 头盔 + `null` 钥匙，其余资产与 ₽1234 现金全部保住。
+
+### 验证
+
+- `npm run check` 7/7（0.25.1 三处同步）
+- `npm run verify` **875 passed / 0 failed**（新增第 45 组 47 条：主循环边界 / dt / 尺寸 / 渲染入口 /
+  粒子上限 / 逐件修复 / netNum / 伤害守卫 / verify 自身可寻址）
+- 浏览器实机探针 **19/19**：注入异常后循环继续、持续崩溃后熔断、刷新自愈、脏档保留资产、
+  脏快照不产生 NaN 影子、进图 44 ops 无异常、0 个 404
+
 ## v0.25.0 — 2026-11-06
 
 本批按用户 10 条反馈一次做完：**别人的手电 / 室内容器不透视 / 品质色统一 / 长条装饰画矩形 /
