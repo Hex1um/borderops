@@ -1247,11 +1247,14 @@ Object.assign(Raid, {
   _los(x1,y1,x2,y2){ return !this._rayWall(x1,y1,x2,y2); },
 
   /* v0.22.3：手电专用射线。
-     和 _rayWall 的两点不同：
+     和 _rayWall 的三点不同：
        1) 走 navCell（**全部**碰撞体），所以灌木 / 岩石 / 废料堆也挡光 —— 视线可以穿过
           灌木（sight:false），但手电的光不该穿过去。
        2) 逐格 DDA + 精确 slab 求交，返回精确距离而不是 13px 采样的近似值。采样误差
           是「光照边缘毛刺 / 锯齿」的来源：40 条射线各自差十几像素，拼出来的轮廓就是花边。
+       3) v0.23.3：round=true 的圆形装饰改走**椭圆解析求交**。矩形 slab 会让 96 条射线的
+          落点全贴着 AABB 的四条直边，拼出来就是玩家看到的「手电是个笔直三角形」；
+          椭圆求交后光锥绕着物体轮廓收，圆形岩石的空角也不再投出方形阴影。
      代价：格宽 256，560px 的光程只穿 2~3 格，比原来的 43 次采样更省。 */
   _rayLight(x1,y1,dx,dy,maxLen){
     const CS=this.navCS, cols=this.navCols, rows=this.navRows, idx=this.navCell;
@@ -1273,6 +1276,26 @@ Object.assign(Raid, {
       if(arr){
         for(let i=0;i<arr.length;i++){
           const w=arr[i];
+          /* 圆形装饰：椭圆解析求交。
+           * 把射线 P(t)=(x1+t·ux, y1+t·uy) 代入 ((x-ex)/a)²+((y-ey)/b)²=1，
+           * 得到 A·t²+B·t+C=0。ux/uy 已单位化，除以半轴只改变方向系数，
+           * t 依然是真实距离，可直接和 best 比较。
+           * 取近根；近根 ≤0 说明起点就在椭圆里（玩家站在灌木中），按原矩形
+           * 语义不掐光 —— 否则一进灌木手电会整片熄灭。 */
+          if(w.round){
+            const ax=(w.w||0)*0.5, by=(w.h||0)*0.5;
+            if(ax<1e-6 || by<1e-6) continue;
+            const ox=(x1-(w.x+ax))/ax, oy=(y1-(w.y+by))/by;
+            const dx=ux/ax, dy=uy/by;
+            const A=dx*dx+dy*dy;
+            if(A<1e-12) continue;
+            const B=2*(ox*dx+oy*dy), C=ox*ox+oy*oy-1;
+            const disc=B*B-4*A*C;
+            if(disc<0) continue;                 // 射线擦不到这个椭圆
+            const tHit=(-B-Math.sqrt(disc))/(2*A);
+            if(tHit>0.5 && tHit<best) best=tHit;
+            continue;
+          }
           let tmin=0, tmax=best;
           if(adx){ if(x1<w.x||x1>w.x+w.w) continue; }
           else {

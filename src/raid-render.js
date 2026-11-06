@@ -28,13 +28,11 @@ const RenderRaid = {
     vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(14,20,32,0.42)");
     ctx.fillStyle=vg; ctx.fillRect(0,0,v.w,v.h);
     ctx.fillStyle="rgba(28,40,58,0.06)"; ctx.fillRect(0,0,v.w,v.h);
-    /* v0.22.2：2D 的进屋亮度渐变（3D 在 FPView._lighting 里单独处理，强度更大）。
-       共用 Raid.indoor，切维度零状态迁移；只压一层纯深色，不动手电暖色。 */
-    const indoor=R.indoor||0;
-    if(indoor>0.01 && !(typeof ViewMode!=="undefined" && ViewMode.is3D())){
-      ctx.fillStyle="rgba(2,3,5,"+(0.52*indoor).toFixed(3)+")";
-      ctx.fillRect(0,0,v.w,v.h);
-    }
+    /* v0.23.3：室内压暗已移到 scene() 内、_lightLayer() **之前**。
+       原来这层 0.52 的暗色盖在世界层之后 —— 也就是盖在手电加色光斑之上，
+       把刚提上来的亮度又打了对折，所以「参数翻倍、画面几乎没变亮」。
+       3D 的 FPView._lighting 一直是「先压暗、后 lighter 打光」，2D 现在与它对齐。
+       共用 Raid.indoor，切维度零状态迁移。 */
     this.hud(ctx, game, v);
   },
 
@@ -328,12 +326,19 @@ const RenderRaid = {
       g.addColorStop(0.5,"rgba(255,224,160,"+(RAID_FLASH.cone2dMid*fh).toFixed(3)+")");
       g.addColorStop(1,"rgba(255,224,160,0)");
       ctx.fillStyle=g;
-      /* 手电扇形按遮挡裁剪：96 条精确射线各自求最近遮挡距离，再连成可见轮廓。
-         仍然只创建一个径向渐变，每帧 96 次射线测试（每次只穿 2~3 个网格）。 */
-      const fan=this._lightFan(p.x, p.y, ang-half, ang+half, reach, 96);
-      ctx.beginPath(); ctx.moveTo(p.x, p.y);
-      for(let i=0;i<fan.length;i+=2) ctx.lineTo(fan[i], fan[i+1]);
-      ctx.closePath(); ctx.fill();
+      /* 扇形按遮挡裁剪：每层各自用精确射线求最近遮挡距离，再连成可见轮廓。
+       * v0.23.3 角度羽化：从单层改成 RAID_FLASH_FAN 三层。只创建一个径向渐变
+       * （色值与径向衰减不变），靠 globalAlpha 叠出软边；三层权重和为 1，
+       * 所以主扇形内部亮度不变，只是两侧不再是笔直的硬边。
+       * 射线数 96/40/32 递减，外层只管柔边，总开销比单层只多约一倍。 */
+      for(const L of RAID_FLASH_FAN){
+        const fan=this._lightFan(p.x, p.y, ang-half*L.widen, ang+half*L.widen, reach, L.rays);
+        ctx.globalAlpha=L.alpha;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y);
+        for(let i=0;i<fan.length;i+=2) ctx.lineTo(fan[i], fan[i+1]);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.globalAlpha=1;
     }
     ctx.restore();
   },
@@ -578,6 +583,19 @@ const RenderRaid = {
       ctx.fillStyle="#272d31"; ctx.fillRect(w.x,w.y,w.w,w.h);
       ctx.fillStyle="rgba(170,195,205,0.16)"; ctx.fillRect(w.x,w.y,w.w,4);
       ctx.strokeStyle="#0b0e10"; ctx.lineWidth=2; ctx.strokeRect(w.x,w.y,w.w,w.h);
+    }
+
+    /* v0.23.3：室内压暗放在光照层**之前** —— 只压地物与环境，不压手电。
+       手电是紧随其后的加色（lighter）层，压它等于把提亮再打五折；
+       3D 的 _lighting 早就是这个顺序，这里对齐后两个维度的观感才一致。
+       用世界坐标覆盖当前可见区域即可（scene 的 ctx 已 scale/translate 到相机）。 */
+    const indoor=R.indoor||0;
+    if(indoor>0.01){
+      ctx.save();
+      ctx.globalCompositeOperation="source-over";
+      ctx.fillStyle="rgba(2,3,5,"+(0.52*indoor).toFixed(3)+")";
+      ctx.fillRect(cam.x, cam.y, vw, vh);
+      ctx.restore();
     }
 
     // 光照层（探照灯 + 玩家手电），暖色加色叠加，强化荒凉紧张氛围

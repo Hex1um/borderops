@@ -1782,8 +1782,11 @@ check('站在灌木里光束不被自己掐死', __rl.inside>=10?1:0, 1, 0.001);
 check('_rayLight 走 navCell（含 sight:false 的灌木/岩石）', /idx=this\.navCell/.test(raidSrc)?1:0, 1, 0.001);
 check('_rayLight 用精确 slab 求交（不是 13px 采样）', /if\(tmin>0\.5 && tmin<best\) best=tmin/.test(raidSrc)?1:0, 1, 0.001);
 check('灯光轮廓改用 _rayLight', /Raid\._rayLight\(x, y, dx, dy, reach\)/.test(__rd2)?1:0, 1, 0.001);
-check('2D 手电射线数提到 96（消锯齿）', /reach, 96\)/.test(__rd2)?1:0, 1, 0.001);
-check('手电基准亮度抽成 RAID_FLASH（2D 0.36 / 3D 0.12）', /cone2d:\s*0\.36/.test(raidSrc) && /cone3d:\s*0\.12/.test(raidSrc)?1:0, 1, 0.001);
+/* v0.23.3：单层扇形改成三层角度羽化，主层仍是 96 条精确射线 */
+check('2D 手电主扇形 96 条射线 + 角度羽化层',
+  /for\(const L of RAID_FLASH_FAN\)/.test(__rd2) && /rays:96/.test(raidSrc) && /L\.widen/.test(__rd2)?1:0, 1, 0.001);
+check('手电基准亮度抽成 RAID_FLASH（v0.23.3：2D 0.48 / 3D 0.15）',
+  /cone2d:\s*0\.48/.test(raidSrc) && /cone3d:\s*0\.15/.test(raidSrc)?1:0, 1, 0.001);
 check('2D / 3D 都走 raidFlashGain（不再写死 alpha）', /raidFlashGain\(R\.indoor\)/.test(__rd2) && /raidFlashGain\(ind\)/.test(__fp2)?1:0, 1, 0.001);
 check('手电色温未变（三处 rgb 都在）', /255,236,182/.test(__rd2) && /255,224,160/.test(__rd2) && /255,228,160/.test(__rd2)?1:0, 1, 0.001);
 
@@ -1864,10 +1867,10 @@ check('精英怪体型按原型给（不写死 13）', /this\.r=o\.r\|\|13;/.tes
 check('AI 上限为精英怪留了余量（maxOps 48）', /maxOps:48/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* --- ⑤ 室内手电提亮 --- */
-check('室内增益系数上限 1.95', G('raidFlashGain(1)'), 1.95, 0.0001);
+check('室内增益系数上限 3.2（v0.23.3 再提亮）', G('raidFlashGain(1)'), 3.2, 0.0001);
 check('室外增益保持 1.0', G('raidFlashGain(0)'), 1, 0.0001);
-check('室内手电亮约 2.8 倍（0.12*1.95 + 0.10 热点）',
-  G('RAID_FLASH.cone3d*raidFlashGain(1) + RAID_FLASH.hot'), 0.334, 0.002);
+check('室内手电中心+热点 alpha 合计 0.68（v0.23.0 是 0.334，约 2 倍）',
+  G('RAID_FLASH.cone3d*raidFlashGain(1) + RAID_FLASH.hot'), 0.68, 0.002);
 check('3D 中心热点存在且半径按 reach 缩放', /RAID_FLASH\.hotR/.test(__fp2) ? 1 : 0, 1, 0.001);
 check('3D 亮核随 indoor 前移（0.5 - coreShift）', /0\.5 - RAID_FLASH\.coreShift\*ind/.test(__fp2) ? 1 : 0, 1, 0.001);
 /* 最要紧的一条：不许加射程 —— 加射程 = 光穿墙复活 */
@@ -2048,6 +2051,100 @@ check('斜 45° 时介于两者之间',
 /* 方形斜看时投影会变宽，最多 √2 倍 —— 这是 AABB 支撑函数的正确行为，不是 bug */
 check('方形斜看投影最宽为 √2 倍（支撑函数的正确行为）',
   Math.abs(__kwOf(74, 74, Math.PI / 4, 400, 1000) / __kwOf(74, 74, 0, 400, 1000) - Math.SQRT2) < 0.01 ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 42. 圆形装饰光影 / 手电扇形羽化 / 室内再提亮（v0.23.3）
+ * ========================================================================== */
+console.log('\n=== 42. 圆形装饰光影 / 手电羽化 / 室内再提亮（v0.23.3）===');
+
+/* --- ① 形状分类只服务光线，移动 / 子弹 / AI 碰撞仍是 AABB --- */
+check('圆形装饰分类表恰好 4 类', G('Object.keys(RAID_ROUND_KINDS).length'), 4, 0.001);
+check('分类表内容正确（bush / rock / tree / scrap）',
+  G('["bush","rock","tree","scrap"].every(k=>RAID_ROUND_KINDS[k]===1)?1:0'), 1, 0.001);
+check('_pushProp 给碰撞体挂 round 标记',
+  /round:!!RAID_ROUND_KINDS\[t\.kind\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('碰撞体结构未变（仍是 x,y,w,h 的 AABB）',
+  /const p=\{ x:x, y:y, w:t\.w, h:t\.h, kind:t\.kind/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('_rayLight 有 round 分支且用解析判别式求交',
+  /if\(w\.round\)\{/.test(raidSrc) && /const disc=B\*B-4\*A\*C/.test(raidSrc) &&
+  /Math\.sqrt\(disc\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('椭圆求交只用于光线（渲染 / 移动 / 子弹代码不消费 round）',
+  /_nearWalls\(x,y,r\)/.test(raidSrc) && !/w\.round/.test(__rd2) ? 1 : 0, 1, 0.001);
+
+/* 同一块 200×200 的岩石，唯一差别是 round 标记：
+ * 射线贴着上边角 (y=10) 水平射入 —— 矩形在 x=100 就挡，内切圆要到 x≈156 才挡；
+ * 正穿中心 (y=100) 时两者都从 x=100 开始挡，说明改动没有挪动物体或缩小掩体。 */
+const __round = G(`(function(){
+  var oldC=Raid.navCS, oldCo=Raid.navCols, oldR=Raid.navRows, oldCell=Raid.navCell, oldW=Raid.walls;
+  Raid.navCS=100; Raid.navCols=8; Raid.navRows=4; Raid.walls=[];
+  var spec={x:100,y:0,w:200,h:200,kind:"rock",sight:true};
+  var rect=Object.assign({}, spec), oval=Object.assign({}, spec, {round:true});
+  var put=function(w){
+    Raid.navCell=new Array(32); Raid.walls=[w];
+    for(var gy=0;gy<=2;gy++) for(var gx=1;gx<=3;gx++){
+      var i=gy*8+gx; (Raid.navCell[i]||(Raid.navCell[i]=[])).push(w);
+    }
+  };
+  var ray=function(w, sy){ put(w); return Raid._rayLight(0, sy, 1, 0, 560); };
+  var out={
+    rectEdge:ray(rect,10), ovalEdge:ray(oval,10),
+    rectMid:ray(rect,100), ovalMid:ray(oval,100)
+  };
+  put(oval); out.inside=Raid._rayLight(200,100,1,0,560);
+  Raid.navCS=oldC; Raid.navCols=oldCo; Raid.navRows=oldR; Raid.navCell=oldCell; Raid.walls=oldW;
+  return out;
+})()`);
+check('矩形角落挡光（改前行为，x=100）', __round.rectEdge, 100, 0.5);
+check('椭圆让角落透光（x≈156，晚 56px 才挡）', __round.ovalEdge, 156.4, 1.5);
+check('角落透光量 > 50px（不是采样/舍入误差）',
+  __round.ovalEdge - __round.rectEdge > 50 ? 1 : 0, 1, 0.001);
+check('正穿中心时椭圆与矩形一致（掩体未被缩小）',
+  Math.abs(__round.ovalMid - __round.rectMid) < 0.01 ? 1 : 0, 1, 0.001);
+check('站在圆形装饰里手电不被自己掐死', __round.inside, 560, 0.5);
+
+/* --- ② 手电扇形角度羽化 --- */
+check('羽化层权重之和为 1（主扇形内部亮度不变）',
+  G('RAID_FLASH_FAN.reduce((s,l)=>s+l.alpha,0)'), 1, 0.0001);
+check('羽化层角度递增 / 权重与射线数递减',
+  G('RAID_FLASH_FAN.every((l,i,a)=>i===0||(l.widen>a[i-1].widen&&l.alpha<a[i-1].alpha&&l.rays<a[i-1].rays))?1:0'), 1, 0.001);
+check('主层仍是 96 条精确射线（消锯齿能力不退化）', G('RAID_FLASH_FAN[0].rays'), 96, 0.001);
+check('羽化靠 globalAlpha 叠加且画完复位',
+  /ctx\.globalAlpha=L\.alpha/.test(__rd2) && /ctx\.globalAlpha=1;/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('每层仍各自做遮挡裁剪（羽化不把光穿回墙里）',
+  /this\._lightFan\(p\.x, p\.y, ang-half\*L\.widen/.test(__rd2) ? 1 : 0, 1, 0.001);
+
+/* --- ③ 室内再提亮约 2 倍，护栏一个不动 --- */
+check('室内增益 ×3.2', G('raidFlashGain(1)'), 3.2, 0.0001);
+check('室外增益仍是 1.0（提亮只发生在室内）', G('raidFlashGain(0)'), 1, 0.0001);
+check('2D 半程 alpha 0.293 → 0.64（亮的是光斑面积）',
+  G('RAID_FLASH.cone2dMid*raidFlashGain(1)'), 0.64, 0.002);
+check('3D 半程 alpha 0.090 → 0.198',
+  G('RAID_FLASH.cone3dMid*raidFlashGain(1)'), 0.1984, 0.002);
+check('室内热点翻倍 0.10 → 0.20', G('RAID_FLASH.hot'), 0.20, 0.0001);
+check('3D 中心+热点合计 0.68（v0.23.0 是 0.334）',
+  G('RAID_FLASH.cone3d*raidFlashGain(1)+RAID_FLASH.hot'), 0.68, 0.002);
+check('射程仍锁 560（没借提亮偷偷加长）',
+  /reach=560, half=0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('三个暖色 rgb 一个没动（色温不变）',
+  /255,236,182/.test(__rd2) && /255,224,160/.test(__rd2) && /255,228,160/.test(__rd2) &&
+  /255,236,182/.test(__fp2) && /255,224,160/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('热点半径与亮核位移仍由 RAID_FLASH 驱动',
+  /reach\*RAID_FLASH\.hotR/.test(__fp2) && /0\.5 - RAID_FLASH\.coreShift\*ind/.test(__fp2) ? 1 : 0, 1, 0.001);
+
+/* --- ④ 图层顺序：室内压暗必须在手电之前（本轮最关键的修复） ---
+ * 原来 0.52 的暗层盖在 render() 末尾、也就是盖在 _lightLayer 的加色光斑之上，
+ * 把刚提亮的亮度又打对折 —— 「参数翻倍、画面几乎没变亮」的真因。
+ * 3D 的 _lighting 一直是先压暗后 lighter，2D 现在与它对齐。 */
+check('2D 室内压暗画在光照层之前（不压手电）',
+  __rd2.indexOf('0.52*indoor') >= 0 &&
+  __rd2.indexOf('0.52*indoor') < __rd2.indexOf('this._lightLayer(ctx, game, cam, vw, vh);') ? 1 : 0, 1, 0.001);
+check('压暗层已从 render() 移到 scene()',
+  __rd2.split('\n').slice(0, 40).join('\n').indexOf('0.52*indoor') < 0 ? 1 : 0, 1, 0.001);
+check('压暗用世界坐标覆盖可见区（scene 已有相机变换）',
+  /ctx\.fillRect\(cam\.x, cam\.y, vw, vh\)/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('压暗不污染加色模式（显式 source-over + save/restore）',
+  /ctx\.globalCompositeOperation="source-over"/.test(__rd2) &&
+  /ctx\.restore\(\);\s*\n\s*\}\s*\n\s*\n\s*\/\/ 光照层/.test(__rd2) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

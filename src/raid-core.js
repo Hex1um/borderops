@@ -1368,8 +1368,11 @@ const Raid = {
   },
 
   _pushProp(t,x,y){
+    /* round 只服务于**光线遮挡**（_rayLight 走椭圆解析求交，见 raid-core3.js）。
+     * 移动 / 子弹 / AI 寻路仍然把这个 p 当 AABB 矩形用，形状判定不能扩散到那些地方：
+     * 一旦改成圆形，AI 绕障与联机两端的碰撞手感都会跟着变，而收益只是几个空角。 */
     const p={ x:x, y:y, w:t.w, h:t.h, kind:t.kind, sight:t.sight!==false,
-      soft:!t.sight, fill:t.fill, edge:t.edge };
+      soft:!t.sight, round:!!RAID_ROUND_KINDS[t.kind], fill:t.fill, edge:t.edge };
     this.props.push(p);
     this.walls.push(p);
     return p;

@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（711 条断言 / 41 组）
+npm run verify       # 无浏览器依赖的逻辑回归（740 条断言 / 42 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -414,7 +414,7 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **零构建**：原生 HTML / CSS / JS 经典脚本，无 ES modules、无打包器。
 - **脚本顺序敏感**：`sanitize → config → util → store → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.23.1 共 30 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
 - **巨型文件拆分**：`src/raid.js`（9750 行）已拆为 7 个 `raid-*.js`（最大 1621 行）；verify 的 `RAID_PARTS` 会把分片拼回全文再做源码正则断言，新增分片记得同步 `index.html` / `check_version.js` / `README.md`。
-- **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。**v0.22.0 发布备注**：当时所用 OAuth 凭据缺 `workflow` scope，该文件尚未推送到远端（本地文件已就绪），需按 CHANGELOG 的「发布备注（CI 权限）」启用一次后才会在云端真正运行。
+- **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。**v0.23.2 起已启用**：本机 OAuth App 凭据缺 `workflow` scope（`git push` 会被服务端拒 `refusing to allow an OAuth App to create or update workflow`），最终由合作者在 GitHub 网页创建该文件绕过；首次运行 `conclusion: success`。**别用 `git add -A` 把 `.github/` 带进普通提交**（现在已在版本控制里，不再有此问题）。
 - **合并护栏**：v0.22.0 已并入合作者 v0.21.9 的 15 处 bug 修复（原 `raid.js` 的 8 组改动映射到 7 个 `raid-*.js` 分片）。verify 组 35 的 18 条断言会逐项锁定这些修复（撤离费组合扣款 / 终局事件保底 / 权重方向 / 价格单调 / 插板函数改名 / 限速 XFF 等），后续重构若误覆盖会直接红灯。
 - **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
 - **本地存储只能走 `Store`（v0.23.1）**：`src/store.js` 是 localStorage 的**唯一**访问通道，业务代码里直连会被 verify 组 40 扫源码红灯。`Store.get` / `getJSON` 永不抛错；坏数据隔离到 `<key>.__bad` 保留现场（`Store.quarantineKeys()` 列出、`Store.dropQuarantine()` 清理）。localStorage 不可用时（隐私模式 / 沙箱 iframe）自动降级到内存：本局可玩，刷新即丢。**新增存储键要同步 `Save.exportKeys()` 白名单**，否则存档码不会把它带走。
@@ -429,7 +429,10 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **地形判定必须纯函数（v0.22.2）**：`raidBiomeAt` / `raidIndoorAt` / `raidDangerAt` 只读坐标与静态表，**不许读 RNG、AI 数量或玩家状态**。联机掉落靠 seed 各端重放（`Net.sendLoot(index,kind)` 只同步「谁捡了第几件」），任何动态因子都会让两端算出不同结果。
   - v0.23.0 起 `raidLuckAt` 是**唯一例外**：它额外读局内时钟（`raidDuration - timer`），因为「晚开箱更值钱」必须随时间变化。允许的状态因此扩成「坐标 + 局内时钟」——时钟必须是所有端等速递减、与 HUD 同源的那一个（`timer`），**不能用 `elapsed`**（仅房主推进）。新增地形因子仍照 `raidBiomeAt` 那三个的写法。
 - **手电遮挡（v0.22.2）**：2D 走 `RenderRaid._lightFan()`（40 条射线 × `Raid._rayWall` 求最近墙面 → 连成可见轮廓 → 复用**一个**径向渐变），探照灯用 `_floodFan()` 缓存（`navCS` 未就绪时不写缓存）。3D 没有逐像素遮挡（合成本就只含可见面），走 `_lighting` 里 40 条竖直条带的 `globalAlpha` 衰减 + 探照灯按列深度剔除。**色值 `255,236,182` / `255,224,160` / `255,228,160` 不许动**（verify 色温断言锁着），也不许引入 `createLinearGradient`。verify 组 37 会用假 `_rayWall`（半程返回）验证扇形收缩到 276。
-- **室内暗化**：`Raid.indoor` 0..1 按 `dt*4.5` 指数逼近；房间地面固定 `#010203`，撤离区 `#25452f`；v0.22.3 起 2D 叠 `0.52*indoor`、3D 叠 `0.82*indoor`，3D 的压暗必须在 `lighter` 光池之前。
+- **室内暗化**：`Raid.indoor` 0..1 按 `dt*4.5` 指数逼近；房间地面固定 `#010203`，撤离区 `#25452f`；v0.22.3 起 2D 叠 `0.52*indoor`、3D 叠 `0.82*indoor`。**压暗必须在手电之前、不能盖住加色光斑**：3D 的 `_lighting` 一直在 `lighter` 光池之前，2D 原来错放在 `render()` 末尾（盖在 `_lightLayer` 之上），v0.23.3 已移到 `scene()` 内 `_lightLayer()` 之前，用世界坐标 `fillRect(cam.x,cam.y,vw,vh)` 铺。顺序反了会出现「参数翻倍、画面几乎没变亮」。verify 组 42 扫源码位置红灯。
+- **圆形装饰的 `round` 只服务光线（v0.23.3）**：`RAID_ROUND_KINDS` = bush / rock / tree / scrap，`_pushProp` 给碰撞体挂 `round` 标记，**只有 `_rayLight` 消费它**（改走椭圆解析求交）。移动 / 子弹 / AI 寻路仍是 AABB —— 想改玩法碰撞请另开一轮，别顺手让 `round` 扩散进 `_nearWalls` 或渲染层。矩形 slab 求交会让 96 条射线的落点全贴着矩形直边，那是「手电是个笔直三角形」的来源。
+- **手电扇形角度羽化（v0.23.3）**：2D 走 `RAID_FLASH_FAN` 三层同心扇形，**权重之和必须恒为 1**（主扇形内部亮度才不会被叠加抬高），外层角度更宽、射线数递减（96/40/32），每层仍各自做遮挡裁剪。改层数和权重时跑 verify 组 42。手电 `half` 仍是 0.42 rad 的扇形 —— 这是现有设计，羽化只软化角度边缘；被墙切出的直线阴影是物理正确的。要彻底去掉「三角感」得改成近全向光斑，属于独立的一轮。
+- **浏览器 A/B 必须同帧离屏（v0.23.3 踩坑）**：主 rAF 一直在跑，相机 lerp / 粒子 / HUD 动画会让「sleep 后取两帧」的像素 A/B 完全失效（实测出现过旧参数反而比新参数亮）。做法是复刻 `render()` 的世界层变换，手动调 `RenderRaid.scene()` 到离屏 canvas，两次之间只改参数；截图则把结果画到**独立 canvas 再挂到页面顶层**（主 canvas 每帧会被清空）。参考工作区根 `probe_v0233.js` / `pose_ab2d.js`。
 - **挡光统一走 `_rayLight`（v0.22.3）**：它是逐格 DDA + 精确 slab 求交，**读 `navCell`（全部碰撞体）**，所以灌木 / 岩石 / 废料堆这些 `sight:false` 的东西挡光但不挡视线；`_rayWall` 仍读 `losCell`（只看 `sight!==false`）。要给「光」加判定就用 `_rayLight`，要给「视线 / AI 索敌」加判定就用 `_rayWall`，别混。手电轮廓 96 条射线、探照灯 72 条（后者必须缓存 `f._fan`，`navCS` 未就绪时不写缓存）。
 - **3D 手电按墙面深度分三段（v0.22.3）**：64 条竖条带 × {墙顶以上: kFar 0.16 / 墙面: 按自身深度截止式衰减 / 墙脚以下: 1.0}。**不要退回「每列取最近墙深统一压一遍」**——那会让墙顶以上的天空和门口后面的远房间跟着满亮，看起来就是光穿墙。条带边界必须取整对齐且不重叠（加色模式下重叠会叠出亮缝 = 锯齿）。
 - **3D 墙面剔除的对比基准（v0.22.3 踩坑）**：判可见性时 `_zbuf[col]` 必须跟**这面墙在该列自身的深度**比（沿屏幕横坐标透视插值 `1/((1-u)/d1 + u/d2)`），不能跟面中点 `f.dm` 比 —— 斜着离开相机的长墙会把近端误判成"被挡住"而整面删掉，屏幕上直接破洞。工作区根的 `probe_cull.js` 会拿"剔除 vs 完全不剔除"两帧做像素差自检（`meanDiff` 应 < 3、差异像素 < 2%）。

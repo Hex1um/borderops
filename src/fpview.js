@@ -1303,9 +1303,10 @@ const FPView = {
      *  条带用 64 条（竖向），每条 3 段，总像素量仍≈一次全屏 fill。
      *  边界全部取整对齐、互不重叠 —— 加色模式下重叠会叠出一条亮缝，那正是「锯齿」的来源。 */
     const reach = Math.max(w, h) * 0.46;
-    /* v0.23.0：室内手电增益（与 2D 共用 RAID_FLASH 同一套参数，避免两边调不同步）。
-       室内满值时中心 alpha ×1.95、亮核位置由 0.50 前移到 0.40 —— 光柱更亮也更收束。
-       射程不含在内：reach 由屏幕尺寸决定，与 indoor 无关，挡住「加射程就穿墙」的路。 */
+    /* v0.23.0 引入 / v0.23.3 提到 ×3.2：室内手电增益与 2D 共用 RAID_FLASH 同一套参数，
+       避免两边调不同步。室内满值时中心 alpha ×3.2、亮核位置由 0.50 前移到 0.40
+       —— 光柱更亮也更收束。射程不含在内：reach 由屏幕尺寸决定，与 indoor 无关，
+       挡住「加射程就穿墙」的路。 */
     const ind = Math.max(0, Math.min(1, indoor));
     const fh = raidFlashGain(ind);
     const g = ctx.createRadialGradient(cx, h*0.62, Math.max(8, reach*0.05), cx, h*0.62, reach);
