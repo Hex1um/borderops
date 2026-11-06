@@ -406,17 +406,22 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（658 条断言）
+npm run verify       # 无浏览器依赖的逻辑回归（694 条断言 / 40 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
 
 - **零构建**：原生 HTML / CSS / JS 经典脚本，无 ES modules、无打包器。
-- **脚本顺序敏感**：`sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.22.0 共 29 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
+- **脚本顺序敏感**：`sanitize → config → util → store → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.23.1 共 30 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
 - **巨型文件拆分**：`src/raid.js`（9750 行）已拆为 7 个 `raid-*.js`（最大 1621 行）；verify 的 `RAID_PARTS` 会把分片拼回全文再做源码正则断言，新增分片记得同步 `index.html` / `check_version.js` / `README.md`。
 - **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。**v0.22.0 发布备注**：当时所用 OAuth 凭据缺 `workflow` scope，该文件尚未推送到远端（本地文件已就绪），需按 CHANGELOG 的「发布备注（CI 权限）」启用一次后才会在云端真正运行。
 - **合并护栏**：v0.22.0 已并入合作者 v0.21.9 的 15 处 bug 修复（原 `raid.js` 的 8 组改动映射到 7 个 `raid-*.js` 分片）。verify 组 35 的 18 条断言会逐项锁定这些修复（撤离费组合扣款 / 终局事件保底 / 权重方向 / 价格单调 / 插板函数改名 / 限速 XFF 等），后续重构若误覆盖会直接红灯。
 - **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
+- **本地存储只能走 `Store`（v0.23.1）**：`src/store.js` 是 localStorage 的**唯一**访问通道，业务代码里直连会被 verify 组 40 扫源码红灯。`Store.get` / `getJSON` 永不抛错；坏数据隔离到 `<key>.__bad` 保留现场（`Store.quarantineKeys()` 列出、`Store.dropQuarantine()` 清理）。localStorage 不可用时（隐私模式 / 沙箱 iframe）自动降级到内存：本局可玩，刷新即丢。**新增存储键要同步 `Save.exportKeys()` 白名单**，否则存档码不会把它带走。
+- **不许写裸 `catch(e){}`（v0.23.1）**：要么用 `warnOnce(tag, err)` 留痕（自带去重，适合可能每帧失败的热路径），要么在 catch 体内写明「为什么可以忽略」。verify 组 40 会把空的 catch 体逐个数出来。
+- **NaN 不许进入状态（v0.23.1）**：`M.clamp` 已对 NaN / 非有限值兜底，读档与网络输入用 `M.num(v, def, min, max)` 归一。判断数值可用一律 `Number.isFinite`，**不要**用 `typeof x === "number"` —— NaN 和 Infinity 都能过。
+- **颜色统一走 `parseHex()`（v0.23.1）**：`rgba()` / `hexLighten()` 对非法输入回落白色。不要再自己 `parseInt(substring(...), 16)`：那会产出 `rgba(NaN,NaN,NaN,a)`，浏览器会**整条声明丢弃**，表现为「这块 UI 直接透明」，极难定位。
+- **随机工具的边界与公式（v0.23.1）**：`RNG.pick` 空数组返回 `undefined`、`RNG.weighted` 空集返回 `-1`、`fr/ri` 容忍反向区间。但**抽样公式本身不许改**（`ri` 与旧版逐字一致）—— 拍卖期号货池与 POI 掉落靠固定种子重放，改公式等于全服换货。
 - **FPS 基线**：`npm run bench:fps` 本机实测参考区间 2D 46.9~53.1 fps、3D 29.7~35.3 fps（headless Chromium，120 帧；合并 v0.21.9 后复跑为 2D 53.1 / p95 22ms，3D 35.3 / p95 32.5ms）。改渲染热路径前后各跑一次对比。
   - **2026-11-06 起**：本机完整 chromium 的子进程被系统拒绝（`sandbox_win.cc` 0x5 拒绝访问），改用 `chrome-headless-shell`（CDP 接口一致，但绝对帧耗时更高）。这之后的数字只能与同期同浏览器的数字比：v0.22.2 实测 2D 21.8ms / 3D 46.2ms，同期 v0.22.1 基线为 2D 26.3ms / 3D 60.5ms；v0.22.3 为 2D 18.4ms / 3D 34.9ms。
   - **headless 的绝对值波动很大**（v0.23.0 连续两次 3D 42.8ms / 59.4ms），所以判断「有没有变慢」只能做**同会话 A/B**：v0.23.0 的 `probe_ab_fps.js` 实测 10 只精英怪 +0.8ms、室内手电热点 +0.4ms，合计约 +1.2ms。

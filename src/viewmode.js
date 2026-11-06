@@ -25,27 +25,28 @@ const ViewMode = {
   is3D(){ return this.mode === "3d"; },
 
   load(){
-    try{
-      const raw = localStorage.getItem(this.KEY);
-      if(!raw) return;
-      const s = JSON.parse(raw);
-      if(s && (s.mode === "2d" || s.mode === "3d")) this.mode = s.mode;
-      if(typeof s.sensitivity === "number") this.sensitivity = Math.max(0.3, Math.min(2.5, s.sensitivity));
-      if(typeof s.pointerLock === "boolean") this.pointerLock = s.pointerLock;
-      if(s.display === "compact" || s.display === "full") this.applyDisplay(s.display);
-      /* 旧的 pointerLock 语义是「点一下画面才锁」，默认关；v0.21.4 改成默认锁定，
-       * 所以旧存档里的 false 要一次性提上来 —— 之后再手动关掉就是用户自己的选择。 */
-      if(s.lockVer !== this.LOCK_VER){ this.pointerLock = true; this.save(); }
-    }catch(e){}
+    /* v0.23.1：走 Store 统一读写。视角设置是纯偏好，单个字段坏掉只丢那一个字段，
+       不整块作废 —— 所以这里不加 validate，逐字段校验在下面做。 */
+    const s = Store.getJSON(this.KEY, null,
+      v=>v && typeof v==="object" && !Array.isArray(v));
+    if(!s) return;
+    if(s.mode === "2d" || s.mode === "3d") this.mode = s.mode;
+    /* Number.isFinite 而不是 typeof === "number"：JSON 里能写出 NaN / null 这类值，
+       旧代码把 NaN 传进 Math.min 会得到 NaN，灵敏度一旦成 NaN 鼠标视角就整个失灵。 */
+    if(Number.isFinite(s.sensitivity)) this.sensitivity = Math.max(0.3, Math.min(2.5, s.sensitivity));
+    if(typeof s.pointerLock === "boolean") this.pointerLock = s.pointerLock;
+    if(s.display === "compact" || s.display === "full") this.applyDisplay(s.display);
+    /* 旧的 pointerLock 语义是「点一下画面才锁」，默认关；v0.21.4 改成默认锁定，
+     * 所以旧存档里的 false 要一次性提上来 —— 之后再手动关掉就是用户自己的选择。 */
+    if(s.lockVer !== this.LOCK_VER){ this.pointerLock = true; this.save(); }
   },
   save(){
-    try{
-      localStorage.setItem(this.KEY, JSON.stringify({
-        mode:this.mode, sensitivity:this.sensitivity, minimap:this.minimap, pointerLock:this.pointerLock,
-        lockVer:this.LOCK_VER,
-        display:(typeof CFG!=="undefined"?(CFG.display||"compact"):"compact"),
-      }));
-    }catch(e){}
+    /* 纯用户偏好，写失败无需补偿；Store 已限流告警并降级到内存 */
+    Store.setJSON(this.KEY, {
+      mode:this.mode, sensitivity:this.sensitivity, minimap:this.minimap, pointerLock:this.pointerLock,
+      lockVer:this.LOCK_VER,
+      display:(typeof CFG!=="undefined"?(CFG.display||"compact"):"compact"),
+    });
   },
 
   /* 显示密度：精简 / 完整（v0.21.1）
@@ -64,7 +65,7 @@ const ViewMode = {
       if(st){ for(const w of (st.weapons||[])) if(w) delete w.short; }
       const R = (typeof Raid!=="undefined") ? Raid : null;
       if(R && R.inv){ for(const w of (R.inv.weapons||[])) if(w) delete w.short; }
-    }catch(e){}
+    }catch(e){ /* 清缓存纯属优化：读档失败也只会让枪名晚一帧才更新，可忽略 */ }
     return m;
   },
 
@@ -83,7 +84,7 @@ const ViewMode = {
       try{
         const cv = document.getElementById("game");
         if(cv) { Input.mouse.sx = cv.clientWidth/2; Input.mouse.sy = cv.clientHeight/2 - 60; }
-      }catch(e){}
+      }catch(e){ /* 画布尚未挂载时拿不到尺寸，下一帧会重新居中，可忽略 */ }
     }
     this.mode = mode;
     this.save();
@@ -192,15 +193,17 @@ const ViewMode = {
     if(!cv || !cv.requestPointerLock) return;
     try{
       const r = cv.requestPointerLock();
+      /* 新版浏览器的 requestPointerLock 返回 Promise，用户按 ESC 或不满足
+         用户手势条件时会 reject —— 这是正常的“没锁上”，不是错误。 */
       if(r && typeof r.then === "function") r.then(()=>{}).catch(()=>{});
-    }catch(e){}
+    }catch(e){ /* 老浏览器同步抛错，同样只是没锁上 */ }
   },
 
   _releaseLock(){
     // 没锁着的时候不要把 _selfUnlock 留成 true，否则下一次真正的 ESC 会被忽略
     if(!document.pointerLockElement){ this._selfUnlock = false; return; }
     this._selfUnlock = true;
-    try{ document.exitPointerLock(); }catch(e){}
+    try{ document.exitPointerLock(); }catch(e){ /* 本来就没锁时部分浏览器会抛，忽略 */ }
   },
 
   _onLockChange(){
@@ -219,7 +222,7 @@ const ViewMode = {
         const overlayOpen = (typeof UI !== "undefined" && UI.overlay && !UI.overlay.classList.contains("hidden"));
         const G = (typeof game !== "undefined" && game) ? game : ((typeof window !== "undefined" && window.game) || null);
         if(R && R.active && !overlayOpen && G && typeof G.pause === "function"){
-          try{ G.pause(); }catch(e){}          // 走正规暂停：state="paused" + 弹暂停面板，战局计时停住
+          try{ G.pause(); }catch(e){ warnOnce("viewmode:pause", e); }   // 走正规暂停：state="paused" + 弹暂停面板，战局计时停住
         }
       }
     }

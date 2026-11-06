@@ -79,7 +79,10 @@ const Raid = {
       if(this.insured) st.creds=(st.creds||0)+(this.insuredVal||0);
       if(this.medsIn) st.meds=Object.assign({},this.medsIn);
       if(this.bandagesIn!==undefined) st.bandages=this.bandagesIn;
-      try{ RaidStash.save(st); }catch(e){}
+      /* 撤离结算落盘。这是本局最不能静默的一步：写失败等于玩家带出来的战利品
+         没进仓库。Store 层本身已不抛错，这里兜的是序列化之外的意外。 */
+      try{ RaidStash.save(st); }
+      catch(e){ console.error("[Raid] 撤离结算写入仓库失败，战利品可能丢失", e); }
     }
     this.carried={ weapons:[], armor:null, helmet:null, shield:null };
     this.cashIn=0; this.tokensIn=0; this.insured=false; this.insuredVal=0;

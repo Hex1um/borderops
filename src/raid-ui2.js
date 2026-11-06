@@ -893,7 +893,8 @@ UI.raidStash=function(opts){
  * 联机突袭 · 大厅
  *   创建 / 加入房间 → 等待房主开始 → 用同一 seed 进图
  * ========================================================================= */
-UI._onlineNick = (function(){ try{ return localStorage.getItem("raid_nick")||""; }catch(e){ return ""; } })();
+/* 昵称是纯本地偏好：读不到就留空（界面会自动回落到 PMC），不必告警 */
+UI._onlineNick = Store.get("raid_nick", "");
 UI._onlineMsg  = "";
 UI._onlineBusy = false;
 
@@ -945,7 +946,7 @@ UI._onlineEnter=function(){
     console.error(e);
     UI._onlineMsg="进入战区失败，装备已退回仓库";
     UI._onlineStop();
-    try{ Net.leave(true); }catch(e2){}
+    try{ Net.leave(true); }catch(e2){ warnOnce("ui:leave", e2); }
     game.toTitle();
     UI.raidSetup();
   }
@@ -1043,7 +1044,7 @@ UI.raidOnline=function(){
     const code=document.getElementById('online-code');
     const readNick=()=>{
       const v=(nick.value||"").trim().slice(0,16)||"PMC";
-      UI._onlineNick=v; try{ localStorage.setItem("raid_nick", v); }catch(e){}
+      UI._onlineNick=v; Store.set("raid_nick", v);
       return v;
     };
     const create=document.getElementById('online-create');

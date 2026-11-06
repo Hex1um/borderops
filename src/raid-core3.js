@@ -499,7 +499,10 @@ Object.assign(Raid, {
       const drops=this._dropFromBot(victim);
       // 联机：队友击杀的 AI，把尸体同步给所有人（否则队友看不到战利品）
       if(killer.netKiller && this.online && typeof Net!=="undefined" && Net.isHost && drops && drops.length){
-        try{ Net.sendCorpse(victim.x, victim.y, victim.name, drops.slice(0,6)); }catch(e){}
+        /* 尸体同步失败不阻断本地结算（本地已按同样掉落生成过一遍），
+           但联机时两端会看到不同的尸体 —— 留痕便于对账。 */
+        try{ Net.sendCorpse(victim.x, victim.y, victim.name, drops.slice(0,6)); }
+        catch(e){ warnOnce("raid:sendCorpse", e); }
       }
       if(!killer.netKiller) SFX.hit();
     } else if(killer){

@@ -1446,7 +1446,7 @@ function raidUniqueUid(prefix){
   try{
     if(typeof crypto!=="undefined" && typeof crypto.randomUUID==="function")
       return String(prefix||"")+crypto.randomUUID();
-  }catch(e){}
+  }catch(e){ /* 非安全上下文（http / 旧浏览器）没有 randomUUID，走下面的时间戳兜底 */ }
   return String(prefix||"")+Date.now().toString(36)+Math.random().toString(36).slice(2,9);
 }
 
@@ -1509,65 +1509,76 @@ const RaidStash = {
         ammo:Object.assign({}, RAID_AMMO_STARTER) };
     };
     try{
-      const r=localStorage.getItem(this.KEY);
-      if(r){
-        const d=JSON.parse(r);
-        if(d && d.weapons){
-          if(d.gunVer!==3){            // 旧档迁移：补配件 / 护甲分级
-            d.gunVer=3;
-            d.weapons=(d.weapons||[]).map(ensureGunParts);
-          }
-          /* v0.21.1：不再改写旧档枪名（改了就回不去）。只清掉缓存的精简名，
-           * 让 gunNameOf() 按当前「精简 / 完整」设置重新推导。 */
-          for(const w of (d.weapons||[])){ if(w) delete w.short; }
-          // 护甲 / 头盔：无论档位版本，一律按当前数值表校正
-          d.armors=(d.armors||[]).map(ensureArmorTier);
-          d.helmets=(d.helmets||[]).map(ensureArmorTier);
-          // v0.16.0：老档没有护盾栏 → 补空数组；已有护盾走字段迁移
-          d.shields=(d.shields||[]).map(ensureShield);
-          if(!d.armors) d.armors=[];
-          if(!d.helmets) d.helmets=[];
-          if(!d.shields) d.shields=[];
-          if(!d.parts) d.parts=[];
-          if(!d.materials) d.materials=[];
-          if(!d.cores) d.cores=[];
-          if(!d.receivers) d.receivers=[];
-          if(!d.meds) d.meds={hemo:0,medkit:0,stim:0,surgery:0};
-          // 旧独立改装模块库存 stash.cores → 并入配件池（slot:"core"）
-          if(d.cores && d.cores.length){
-            for(const c of d.cores){
-              const lv=c.lv||1;
-              d.parts.push({ uid:c.uid||("co"+Math.random().toString(36).slice(2)),
-                kind:"part", slot:"core", core:c.core, elem:c.elem, boost:c.boost, lv,
-                name:c.name||raidCoreName({core:c.core,elem:c.elem,boost:c.boost,lv}),
-                rarity:RAID_CORE_RARITY[lv-1]||"blue", value:c.value||raidCoreValue(c.core,lv),
-                color:c.color||raidCoreColor(c), ilvl:lv*8,
-                mods:raidCoreMods(c.core,c.elem||c.boost,lv), affixes:[] });
-            }
-            delete d.cores;
-          }
-          if(d.bandages===undefined) d.bandages=1;
-          if(d.creds===undefined) d.creds=800;
-          if(d.tokens===undefined) d.tokens=0;      // GP 币
-          /* v0.20.0：子弹变成独立物品 —— 旧档没有弹药栏就发一套民用弹，
-           * 旧枪身上残留的 loaded 一律作废（按约定统一回落到 T1 民用弹）。 */
-          if(!d.ammo || typeof d.ammo!=="object") d.ammo=Object.assign({}, RAID_AMMO_STARTER);
-          for(const k in d.ammo){ if(!ammoParseId(k) || !(d.ammo[k]>0)) delete d.ammo[k]; }
-          for(const w of (d.weapons||[])){
-            if(w && w.loaded && !ammoParseId(w.loaded)) delete w.loaded;
-            if(w && !w.cal) w.cal=ammoCalOfType(w.type);
-          }
-          if(!Array.isArray(d.keys)) d.keys=[];      // 钥匙（5 级）
-          for(const k of d.keys){ if(!k.uses) k.uses=raidKeyDef(k.lv).uses; if(!k.maxUses) k.maxUses=raidKeyDef(k.lv).uses; }
-          return d;
+      /* v0.23.1：读写统一走 Store。validate 挡掉「是合法 JSON 但不是仓库结构」的脏档
+         （早期版本可能存成数组 / 字符串 / 裸数字），坏档会被隔离到
+         raid_stash_v2.__bad 保留现场，而不是解析失败后静默换新档。 */
+      const d=Store.getJSON(this.KEY, null,
+        v=>v && typeof v==="object" && !Array.isArray(v) && Array.isArray(v.weapons));
+      if(d && d.weapons){
+        if(Number(d.gunVer)!==3){    // 旧档迁移：补配件 / 护甲分级（用 Number 兼容字符串版本号）
+          d.gunVer=3;
+          d.weapons=(d.weapons||[]).map(ensureGunParts);
         }
-      }
-    }catch(e){}
+        /* v0.21.1：不再改写旧档枪名（改了就回不去）。只清掉缓存的精简名，
+         * 让 gunNameOf() 按当前「精简 / 完整」设置重新推导。 */
+        for(const w of (d.weapons||[])){ if(w) delete w.short; }
+        // 护甲 / 头盔：无论档位版本，一律按当前数值表校正
+        d.armors=(d.armors||[]).map(ensureArmorTier);
+        d.helmets=(d.helmets||[]).map(ensureArmorTier);
+        // v0.16.0：老档没有护盾栏 → 补空数组；已有护盾走字段迁移
+        d.shields=(d.shields||[]).map(ensureShield);
+        if(!d.armors) d.armors=[];
+        if(!d.helmets) d.helmets=[];
+        if(!d.shields) d.shields=[];
+        if(!d.parts) d.parts=[];
+        if(!d.materials) d.materials=[];
+        if(!d.cores) d.cores=[];
+        if(!d.receivers) d.receivers=[];
+        if(!d.meds) d.meds={hemo:0,medkit:0,stim:0,surgery:0};
+        // 旧独立改装模块库存 stash.cores → 并入配件池（slot:"core"）
+        if(d.cores && d.cores.length){
+          for(const c of d.cores){
+            const lv=c.lv||1;
+            d.parts.push({ uid:c.uid||("co"+Math.random().toString(36).slice(2)),
+              kind:"part", slot:"core", core:c.core, elem:c.elem, boost:c.boost, lv,
+              name:c.name||raidCoreName({core:c.core,elem:c.elem,boost:c.boost,lv}),
+              rarity:RAID_CORE_RARITY[lv-1]||"blue", value:c.value||raidCoreValue(c.core,lv),
+              color:c.color||raidCoreColor(c), ilvl:lv*8,
+              mods:raidCoreMods(c.core,c.elem||c.boost,lv), affixes:[] });
+          }
+          delete d.cores;
+        }
+        /* v0.23.1：经济数值统一归一。旧代码只判 `=== undefined`，
+           所以字段被写成字符串 / NaN / 负数时会原样留下，
+           一路污染价格计算与界面（玩家看到 ₽NaN 且无法自行恢复）。
+           这里在读档入口收口：非法值回落到新档默认，负数抬到 0。 */
+        d.bandages = Math.floor(M.num(d.bandages, 1, 0));
+        d.creds    = Math.floor(M.num(d.creds, 800, 0));
+        d.tokens   = Math.floor(M.num(d.tokens, 0, 0));      // GP 币
+        /* v0.20.0：子弹变成独立物品 —— 旧档没有弹药栏就发一套民用弹，
+         * 旧枪身上残留的 loaded 一律作废（按约定统一回落到 T1 民用弹）。 */
+        if(!d.ammo || typeof d.ammo!=="object") d.ammo=Object.assign({}, RAID_AMMO_STARTER);
+        for(const k in d.ammo){ if(!ammoParseId(k) || !(d.ammo[k]>0)) delete d.ammo[k]; }
+        for(const w of (d.weapons||[])){
+          if(w && w.loaded && !ammoParseId(w.loaded)) delete w.loaded;
+          if(w && !w.cal) w.cal=ammoCalOfType(w.type);
+        }
+        if(!Array.isArray(d.keys)) d.keys=[];      // 钥匙（5 级）
+        for(const k of d.keys){ if(!k.uses) k.uses=raidKeyDef(k.lv).uses; if(!k.maxUses) k.maxUses=raidKeyDef(k.lv).uses; }
+        return d;
+        }
+    }catch(e){
+      /* 迁移过程本身出错（老档字段异常）时也要能进游戏：走下面 seed() 重建新档，
+         但先留下痕迹，便于事后从 __bad 副本里救回玩家资产。 */
+      console.warn("[RaidStash] 载入 / 迁移失败，已回退到新档", e);
+    }
     // 首次进游戏就把默认档落盘 —— 否则每次 load 都会重新生成一把
     // 带随机 uid 的钥匙，导致「钥匙勾选」状态在每次重渲染时被当成已失效而清空。
     const d=seed(); this.save(d); return d;
   },
-  save(d){ try{ localStorage.setItem(this.KEY, JSON.stringify(d)); return true; }catch(e){ return false; } },
+  /* 写失败（配额满 / 隐私模式）时不再静默：Store 会限流告警并降级到内存，
+     本局仍可正常游玩，只是刷新后会回到上一次成功落盘的进度。 */
+  save(d){ return Store.setJSON(this.KEY, d); },
 };
 
 /* ----------------------------- PMC / Scav ----------------------------- */

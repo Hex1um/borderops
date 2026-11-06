@@ -114,20 +114,20 @@ const NetP2P = {
       let done=false;
       const to=setTimeout(()=>{
         if(done) return; done=true;
-        try{ p.destroy(); }catch(e){}
+        try{ p.destroy(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ }
         reject(new Error("PeerJS 连接超时"));
       }, 12000);
       p.on("open", ()=>{ if(done) return; done=true; clearTimeout(to); resolve(p); });
       p.on("error", err=>{
         if(done) return; done=true; clearTimeout(to);
-        try{ p.destroy(); }catch(e){}
+        try{ p.destroy(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ }
         reject(err);
       });
     });
   },
 
   _send(conn, obj){
-    try{ if(conn && conn.open){ conn.send(obj); return true; } }catch(e){}
+    try{ if(conn && conn.open){ conn.send(obj); return true; } }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ }
     return false;
   },
   _broadcast(obj){
@@ -194,7 +194,7 @@ const NetP2P = {
             if(err && err.type==="unavailable-id") return;
             if(Net.online) Net._toast("联机连接异常：" + (err && err.type || "network"));
           });
-          peer.on("disconnected", ()=>{ try{ peer.reconnect(); }catch(e){} });
+          peer.on("disconnected", ()=>{ try{ peer.reconnect(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ } });
           Net.secret=this.host.get(this.selfId).secret;
           this._bindNet();
           Net.name=this.name;
@@ -215,7 +215,7 @@ const NetP2P = {
 
   _hostAccept(conn){
     let authed=false;
-    const guard=setTimeout(()=>{ if(!authed){ try{conn.close();}catch(e){} } }, 12000);
+    const guard=setTimeout(()=>{ if(!authed){ try{conn.close();}catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ } } }, 12000);
     conn.on("open", ()=>{ /* 等待 hello */ });
     conn.on("data", msg=>{
       if(msg && msg.t==="hello") authed=true;
@@ -232,7 +232,7 @@ const NetP2P = {
       case "hello": this._hostHello(conn,msg); break;
       case "sync":  if(conn._p2pId) this._hostSync(conn,msg); break;
       case "poll":  if(conn._p2pId) this._send(conn,{ t:"room", room:this._publicRoom(), seed:this.seed, started:this.started }); break;
-      case "bye":   try{ conn.close(); }catch(e){} this._hostDrop(conn); break;
+      case "bye":   try{ conn.close(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ } this._hostDrop(conn); break;
     }
   },
 
@@ -240,12 +240,12 @@ const NetP2P = {
     if(conn._p2pId) return;
     if(this.started){
       this._send(conn,{t:"error",msg:"这一局已经开始了"});
-      setTimeout(()=>{ try{conn.close();}catch(e){} },50);
+      setTimeout(()=>{ try{conn.close();}catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ } },50);
       return;
     }
     if(this.host.size>=4){
       this._send(conn,{t:"error",msg:"房间已满（最多 4 人）"});
-      setTimeout(()=>{ try{conn.close();}catch(e){} },50);
+      setTimeout(()=>{ try{conn.close();}catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ } },50);
       return;
     }
     let id=String(msg.peerId||"");
@@ -291,7 +291,11 @@ const NetP2P = {
         if(ev.type==="corpse" && data && typeof Sanitize!=="undefined")
           data=Object.assign({}, data, { d:Sanitize.corpseDrops(data.d) });
         // 先让房主本地结算（命中 AI / PvP 校验），再进入事件环转发给其他客户端。
-        try{ Net._handle({ from:p.id, type:ev.type, data }); }catch(e){}
+        /* 单条事件处理失败不能中断整条消息的转发（否则一条畸形事件会拖垮整帧同步），
+           但必须留痕：两端状态就是从这里开始分叉的，排查要知道是哪一类事件。
+           用 warnOnce 是因为它可能每条消息都触发，不能刷屏。 */
+        try{ Net._handle({ from:p.id, type:ev.type, data }); }
+        catch(e){ warnOnce("p2p:host.handle."+ev.type, e); }
         this._pushEvent(p.id, ev.type, data);
       }
     }
@@ -447,7 +451,9 @@ const NetP2P = {
       if(Array.isArray(msg.events)){
         for(const ev of msg.events){
           if(!ev || (ev.seq||0)<=Net.cursor) continue;
-          try{ Net._handle(ev); }catch(e){}
+          /* 客户端逐条重放房主事件：单条失败只跳过这一条，但要留痕 */
+          try{ Net._handle(ev); }
+          catch(e){ warnOnce("p2p:client.handle."+(ev&&ev.type), e); }
           Net.cursor=Math.max(Net.cursor,ev.seq||0);
         }
       }
@@ -485,9 +491,9 @@ const NetP2P = {
     this._joinResolve=null; this._joinReject=null;
     const peer=this.peer, conn=this.conn;
     const conns=[...this.host.values()].map(p=>p.conn).filter(Boolean);
-    try{ if(conn) conn.close(); }catch(e){}
-    for(const c of conns){ try{ c.close(); }catch(e){} }
-    try{ if(peer) peer.destroy(); }catch(e){}
+    try{ if(conn) conn.close(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ }
+    for(const c of conns){ try{ c.close(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ } }
+    try{ if(peer) peer.destroy(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ }
     this._resetLocal();
   },
 
@@ -501,8 +507,8 @@ const NetP2P = {
       const conns=[...this.host.values()].map(p=>p.conn).filter(Boolean);
       this._resetLocal();
       setTimeout(()=>{
-        for(const c of conns){ try{ c.close(); }catch(e){} }
-        try{ if(peer) peer.destroy(); }catch(e){}
+        for(const c of conns){ try{ c.close(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ } }
+        try{ if(peer) peer.destroy(); }catch(e){ /* 对端可能已断开：清理 / 发送失败不影响本端状态 */ }
       },150);
     } else {
       if(this.conn && this.conn.open) this._send(this.conn,{t:"bye"});

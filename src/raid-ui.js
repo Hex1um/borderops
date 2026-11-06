@@ -5,7 +5,12 @@
  * ========================================================================= */
 UI.raidSetup=function(){
   // 回大厅先结算拍卖行（到期的成交 / 退款 / 流拍退回）
-  if(typeof Auction!=="undefined"){ try{ Auction.settle(); }catch(e){} }
+  /* 拍卖结算失败不该挡住进大厅（否则玩家卡在加载页），
+     但它涉及钱和物品的退回，必须留痕而不是静默吞掉。 */
+  if(typeof Auction!=="undefined"){
+    try{ Auction.settle(); }
+    catch(e){ console.warn("[Auction] 进大厅结算失败，到期挂单可能未及时收尾", e); }
+  }
   const stash=RaidStash.load();
   const auc = (typeof Auction!=="undefined") ? Auction.counts() : { listings:0, mine:0 };
   if(!UI._raidSel) UI._raidSel={ w:[], a:null, h:null, s:null };

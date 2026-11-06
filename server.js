@@ -611,7 +611,10 @@ const server = http.createServer((req, res)=>{
     if(urlPath.startsWith('/api/')){
       handleApi(req, res, urlPath).catch(err=>{
         console.error('[api]', err && err.stack || err);
-        try{ json(req,res,{ok:false,msg:'server error'},500); }catch(e){}
+        /* 响应头可能已发出（流式响应走到一半报错），此时无法再改状态码；
+           原始错误已在上一行 console.error 记录，这里不再二次上报。 */
+        try{ json(req,res,{ok:false,msg:'server error'},500); }
+        catch(e){ /* 无法补发：响应已结束 */ }
       });
       return;
     }
@@ -619,12 +622,15 @@ const server = http.createServer((req, res)=>{
     serveStatic(req, res, req.url);
   }catch(err){
     console.error('[http]', err && err.stack || err);
-    try{ sendText(req,res,500,'server error'); }catch(e){}
+    try{ sendText(req,res,500,'server error'); }
+    catch(e){ /* 同上：响应已结束时写不进去，原始错误已记录 */ }
   }
 });
 
 server.on('clientError', (err, socket)=>{
-  try{ socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); }catch(e){}
+  /* 对端在解析阶段就 RST 时写入必然失败，属于正常网络竞态 */
+  try{ socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); }
+  catch(e){ /* socket 已不可写 */ }
 });
 
 /* v0.22.0：被 require 做单测时不启动监听（纯函数可测） */

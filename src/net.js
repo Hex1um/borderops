@@ -87,7 +87,10 @@ const Net = {
     const wasOnline=this.online;
     this.online=false; this.raid=null;
     if(this.code && this.peerId){
-      try{ await this._post("/api/leave", { code:this.code, peerId:this.peerId, secret:this.secret }); }catch(e){}
+      /* 通知服务端「我走了」：失败不影响本端清理（本地状态下面照样重置），
+         最坏结果是房间里留一个待超时的幽灵成员，所以只记一次日志。 */
+      try{ await this._post("/api/leave", { code:this.code, peerId:this.peerId, secret:this.secret }); }
+      catch(e){ warnOnce("net:leave", e); }
     }
     this.code=""; this.peerId=""; this.secret=""; this.isHost=false; this.seed=0;
     this.room=null; this.peers.clear(); this.started=false; this.cursor=0; this._hostNotified=false;

@@ -53,7 +53,7 @@ const UI = {
         if(!el) continue;
         if(m.t) el.scrollTop=m.t;
         if(m.l) el.scrollLeft=m.l;
-      }catch(e){}
+      }catch(e){ /* 面板重渲染后旧节点可能已移除，恢复滚动位置失败无需处理 */ }
     }
   },
   _pageKey(){
@@ -254,12 +254,20 @@ const UI = {
     if(exCopy) exCopy.onclick=()=>{
       SFX.ui();
       const t=document.getElementById('export-code');
-      const done=()=>this.game.toast("存档码已复制");
       if(!t) return;
+      /* 复制要区分成败：旧实现无论成功与否都提示「已复制」，
+         玩家以为拿到了存档码，实际剪贴板是空的，换浏览器才发现没救回来。 */
+      const okMsg   = ()=>this.game.toast("存档码已复制");
+      const failMsg = ()=>this.game.toast("浏览器拦截了自动复制，请手动全选复制");
+      const fallback = ()=>{
+        let ok=false;
+        try{ ok = document.execCommand('copy'); }catch(e){ ok = false; }  // 老浏览器可能连这个都没有
+        ok ? okMsg() : failMsg();
+      };
       t.select();
       if(navigator.clipboard && navigator.clipboard.writeText)
-        navigator.clipboard.writeText(this._exportCode||t.value).then(done,()=>{ try{document.execCommand('copy');}catch(e){} done(); });
-      else { try{document.execCommand('copy');}catch(e){} done(); }
+        navigator.clipboard.writeText(this._exportCode||t.value).then(okMsg, fallback);
+      else fallback();
     };
     const imBtn=document.getElementById('btn-import');
     if(imBtn) imBtn.onclick=()=>{

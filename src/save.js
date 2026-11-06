@@ -44,7 +44,18 @@ function _b64dec(s){
 
 const Save = {
   KEY:"borderlands_web_save_v1",
-  has(){ try{ return !!localStorage.getItem(this.KEY); }catch(e){ return false; } },
+
+  /* 数值字段归一表：字段名 → 非法值（null / 字符串乱码 / NaN）时的兜底。
+   * 为什么要专门做：NaN 在 JS 里会**传染** —— 经验值成 NaN 之后，等级、
+   * 技能点、结算奖金一路全变 NaN，玩家看到的是满屏 NaN 且无法自行恢复。
+   * 跨版本读档和历史手改档都可能产生这种值，所以在入口一次性收口。 */
+  NUM_FIELDS: {
+    level:1, xp:0, skillPoints:0, gold:0, eridium:0, souls:0, rebirths:0,
+    mayhem:0, mayhemUnlocked:0, mayhemCapBonus:0, zoneIndex:0, bestWave:0,
+    hp:100, shield:0,
+  },
+
+  has(){ return Store.has(this.KEY); },
 
   _packGear(p){
     return {
@@ -68,22 +79,65 @@ const Save = {
         mayhem:p.mayhem, mayhemUnlocked:p.mayhemUnlocked, mayhemCapBonus:p.mayhemCapBonus,
         zoneIndex:game.state==="victory" ? 0 : game.zoneIndex,
         bestWave: game.world && game.world.bestWave ? game.world.bestWave : 0,
-        weapons:p.weapons.map(w=>({name:w.name,type:w.type,manufacturer:w.manufacturer,element:w.element,rarity:w.rarity,
+        weapons:(p.weapons||[]).map(w=>({name:w.name,type:w.type,manufacturer:w.manufacturer,element:w.element,rarity:w.rarity,
           ilvl:w.ilvl,affixes:w.affixes,power:w.power,mayhem:w.mayhem||0,magSize:w.magSizeBase,mag:w.mag,stats:w.stats,parts:w.parts})),
         ...this._packGear(p),
       };
-      localStorage.setItem(this.KEY, JSON.stringify(data));
-      return true;
-    }catch(e){ console.warn("save failed",e); return false; }
+      return Store.setJSON(this.KEY, data);
+    }catch(e){ console.warn("[Save] 存档写入失败", e); return false; }
+  },
+
+  /* 读档后的逐字段修复。
+   * 原则：**能救就救，救不动的字段才回默认值**，绝不因为一个字段异常丢掉整档。
+   * 返回同一个对象（原地修补），方便调用方继续用。 */
+  _repair(d){
+    if(!d || typeof d !== "object" || Array.isArray(d)) return null;
+
+    // 1) 数值字段：先尝试转数字，转不出有限值才回落到默认
+    for(const k in this.NUM_FIELDS){
+      if(!(k in d)) continue;
+      const n = (typeof d[k] === "number") ? d[k] : Number(d[k]);
+      d[k] = Number.isFinite(n) ? n : this.NUM_FIELDS[k];
+    }
+
+    // 2) 容器字段：类型不对才重置（不存在就保持 undefined，交给业务层走默认）
+    for(const k of ["perm", "skills", "ammo"]){
+      const v = d[k];
+      if(v !== undefined && (!v || typeof v !== "object" || Array.isArray(v))) d[k] = {};
+    }
+    for(const k of ["shields", "relics"]){
+      if(d[k] !== undefined && !Array.isArray(d[k])) d[k] = [];
+    }
+
+    // 3) 武器：单条构造失败只跳过那一条，其余照常带进游戏
+    if(Array.isArray(d.weapons)){
+      const list = [];
+      for(const s of d.weapons){
+        if(!s || typeof s !== "object") continue;
+        try{
+          const w = new Weapon(s);
+          w.mag = s.mag;
+          list.push(w);
+        }catch(e){
+          console.warn("[Save] 跳过一条损坏的武器数据", s && s.name, e);
+        }
+      }
+      d.weapons = list;
+    } else if(d.weapons !== undefined){
+      console.warn("[Save] weapons 字段不是数组，已重置为空");
+      d.weapons = [];
+    }
+
+    return d;
   },
 
   load(){
-    try{
-      const raw=localStorage.getItem(this.KEY); if(!raw) return null;
-      const d=JSON.parse(raw);
-      if(d.weapons) d.weapons=d.weapons.map(s=>{ const w=new Weapon(s); w.mag=s.mag; return w; });
-      return d;
-    }catch(e){ console.warn("load failed",e); return null; }
+    /* 只挡「压根不是对象」的脏档；其余异常都交给 _repair 逐字段救。
+       解析失败 / 形状非法时 Store 会把原始串隔离到 borderlands_web_save_v1.__bad。 */
+    const d = Store.getJSON(this.KEY, null,
+      v => v && typeof v === "object" && !Array.isArray(v));
+    if(!d) return null;
+    return this._repair(d);
   },
 
   // 只取跨局进度（功勋 / 美元 / 永久升级 / 改装）——死亡重开与无尽模式复用
@@ -111,16 +165,17 @@ const Save = {
         mayhemUnlocked:p.mayhemUnlocked, mayhemCapBonus:p.mayhemCapBonus, mayhem:p.mayhem,
         bestWave: game.world && game.world.bestWave ? game.world.bestWave : 0,
       };
-      localStorage.setItem(this.KEY, JSON.stringify(data));
-      return true;
-    }catch(e){ console.warn("meta save failed",e); return false; }
+      return Store.setJSON(this.KEY, data);
+    }catch(e){ console.warn("[Save] 跨局进度写入失败", e); return false; }
   },
 
-  clear(){ try{ localStorage.removeItem(this.KEY); }catch(e){} },
+  clear(){ Store.remove(this.KEY); },
 
   // 彻底删除本机全部存档：战役进度 + 塔科夫仓库 + 拍卖行（含挂单与成交记录）
   clearAll(){
-    for(const k of this.exportKeys()){ try{ localStorage.removeItem(k); }catch(e){} }
+    /* 逐键删，单键失败不影响其余；同时清掉坏档隔离副本，避免残留占配额 */
+    for(const k of this.exportKeys()) Store.remove(k);
+    Store.dropQuarantine();
     return true;
   },
 
@@ -138,7 +193,7 @@ const Save = {
     try{
       const bag={ app:"borderops", v:2, ver:CFG.version, at:Date.now(), data:{} };
       for(const k of this.exportKeys()){
-        const raw=localStorage.getItem(k);
+        const raw=Store.get(k, null);
         if(raw!=null) bag.data[k]=raw;
       }
       // 全新存档无任何数据时不生成空码（否则复制到新浏览器会被「无可导入数据」拒绝）
@@ -159,7 +214,7 @@ const Save = {
       const keys=this.exportKeys(); let n=0;
       for(const k of Object.keys(bag.data)){
         if(keys.indexOf(k)<0) continue;                 // 只写白名单 key，拒绝注入任意 localStorage 键
-        localStorage.setItem(k, String(bag.data[k])); n++;
+        Store.set(k, String(bag.data[k])); n++;
       }
       return n ? { ok:true, msg:"已导入 "+n+" 项存档", count:n }
                : { ok:false, msg:"存档码里没有可导入的数据" };

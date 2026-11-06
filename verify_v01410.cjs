@@ -55,7 +55,7 @@ const raidModules = hasParts ? RAID_PARTS : ['raid'];
 const LAZY_PARTS = ['world', 'endless', 'dust2', 'br'];   // 生产环境按需加载，vm 里始终加载
 
 // 顺序与 index.html 的常驻脚本一致（main.js 会 new Game() 故跳过）
-const files = ['sanitize', 'config', 'util', 'weapons', 'items', 'shields', 'skills', 'player', 'enemies', 'combat',
+const files = ['sanitize', 'config', 'util', 'store', 'weapons', 'items', 'shields', 'skills', 'player', 'enemies', 'combat',
   ...LAZY_PARTS.slice(0, 3), 'shop', 'input', 'render', 'ui', 'viewmode', 'fpview',
   ...raidModules, 'net', 'net-p2p', 'auction', LAZY_PARTS[3], 'save'];
 let loaded = 0;
@@ -1874,6 +1874,116 @@ check('3D 亮核随 indoor 前移（0.5 - coreShift）', /0\.5 - RAID_FLASH\.cor
 check('手电射程仍是 560（没借提亮偷偷加长）',
   /reach=560, half=0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
 check('2D / 3D 共用同一套手电参数', /RAID_FLASH/.test(__rd2) && /RAID_FLASH/.test(__fp2) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 40. 工程健壮性：存储层 / 数值兜底 / 错误处理（v0.23.1）
+ * --------------------------------------------------------------------------
+ * 这一组锁的是「重构契约」而不是玩法数值：以后谁再把 localStorage 直连写回来、
+ * 谁再加一个裸 catch(e){} 把错误吞掉，这里就会红灯。
+ * ========================================================================== */
+console.log('\n=== 40. 工程健壮性：存储层 / 数值兜底 / 错误处理（v0.23.1） ===');
+const __html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+
+/* --- ① 存储层接入 --- */
+check('store.js 已接入且早于存档类模块',
+  (__html.indexOf('src/store.js') > 0 &&
+   __html.indexOf('src/store.js') < __html.indexOf('src/raid-data.js') &&
+   __html.indexOf('src/store.js') < __html.indexOf('src/auction.js')) ? 1 : 0, 1, 0.001);
+check('Store 暴露完整 API',
+  ['get', 'set', 'remove', 'getJSON', 'setJSON', 'has', 'quarantineKeys', 'dropQuarantine', 'info']
+    .every(k => G('typeof Store.' + k) === 'function') ? 1 : 0, 1, 0.001);
+
+/* --- ② 核心契约：业务模块不得直连 localStorage --- */
+/* 先剥掉块注释再判断，避免文档里提到 localStorage 就误报 */
+const __directLS = [];
+for (const f of fs.readdirSync(SRC).filter(n => n.endsWith('.js') && n !== 'store.js')) {
+  const code = fs.readFileSync(path.join(SRC, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  if (/localStorage\s*\./.test(code)) __directLS.push(f);
+}
+check('业务模块零直连 localStorage（只剩 store.js）', __directLS.length, 0, 0.001);
+
+/* --- ③ 核心契约：不得有裸 catch 吞错 --- */
+/* 只认「}catch(e){}」这种真正空的 catch 体；带注释说明或日志的都不算。
+   正则要求 catch 前面紧跟 '}'，正好避开文件头注释里出现的 catch(e){} 字样。 */
+const __bareCatch = [];
+for (const f of fs.readdirSync(SRC).filter(n => n.endsWith('.js'))) {
+  const m = fs.readFileSync(path.join(SRC, f), 'utf8').match(/\}\s*catch\s*\([^)]*\)\s*\{\s*\}/g);
+  if (m) __bareCatch.push(f + '×' + m.length);
+}
+check('无裸 catch(e){} 吞错（' + (__bareCatch.join(',') || '全部已标注') + '）', __bareCatch.length, 0, 0.001);
+
+/* --- ④ 数值兜底：NaN 不再传染 --- */
+check('M.clamp 对 NaN 返回有限值', G('Number.isFinite(M.clamp(NaN,0,100))') ? 1 : 0, 1, 0.001);
+check('M.clamp(NaN) 落回下限', G('M.clamp(NaN,7,100)'), 7, 0.001);
+check('M.clamp 正常钳制不受影响', G('M.clamp(500,0,100)'), 100, 0.001);
+check('M.clamp 接受数字字符串', G('M.clamp("42",0,100)'), 42, 0.001);
+check('M.num 非法值回默认', G('M.num("abc",9,0,10)'), 9, 0.001);
+check('M.num 超上限被钳制', G('M.num(999,0,0,10)'), 10, 0.001);
+check('M.num 数字字符串可解析', G('M.num("7",0,0,10)'), 7, 0.001);
+
+/* --- ⑤ 颜色工具：非法色值不再产出 rgba(NaN,...) --- */
+check('rgba 非法色值不产 NaN', /NaN/.test(G('rgba(undefined,0.5)')) ? 0 : 1, 1, 0.001);
+check('rgba 支持 #fff 缩写', G('rgba("#fff",0.5)') === 'rgba(255,255,255,0.5)' ? 1 : 0, 1, 0.001);
+check('rgba alpha 超界被钳制', G('rgba("#000",5)') === 'rgba(0,0,0,1)' ? 1 : 0, 1, 0.001);
+check('hexLighten 非法色值不产 NaN', /NaN/.test(G('hexLighten(null,0.5)')) ? 0 : 1, 1, 0.001);
+
+/* --- ⑥ 随机工具边界 --- */
+check('RNG.pick 空数组返回 undefined', G('RNG.pick([])===undefined') ? 1 : 0, 1, 0.001);
+check('RNG.pick 非数组返回 undefined', G('RNG.pick(null)===undefined') ? 1 : 0, 1, 0.001);
+check('RNG.weighted 空集返回 -1', G('RNG.weighted([])'), -1, 0.001);
+let __riBad = 0;
+for (let i = 0; i < 120; i++) { const v = G('RNG.ri(10,2)'); if (!(v >= 2 && v <= 10)) __riBad++; }
+check('RNG.ri 反向区间不越界（120 次抽样）', __riBad, 0, 0.001);
+
+/* --- ⑦ Store 行为（此时 sandbox.localStorage 已是可落地的 mock） --- */
+G('Store._resetForTest()');
+G('localStorage.removeItem("__t_store")');
+check('Store.get 缺失时返回默认值', G('Store.get("__t_store","def")') === 'def' ? 1 : 0, 1, 0.001);
+G('Store.set("__t_store","hello")');
+check('Store.set / get 往返一致', G('Store.get("__t_store","")') === 'hello' ? 1 : 0, 1, 0.001);
+G('Store.remove("__t_store")');
+check('Store.remove 后回到默认值', G('Store.get("__t_store","def")') === 'def' ? 1 : 0, 1, 0.001);
+
+G('localStorage.setItem("__t_bad","{not json")');
+check('Store.getJSON 解析失败不抛错、返回默认值', G('Store.getJSON("__t_bad",{ok:1}).ok'), 1, 0.001);
+check('坏档被隔离到 .__bad 保留现场',
+  G('localStorage.getItem("__t_bad.__bad")') === '{not json' ? 1 : 0, 1, 0.001);
+check('Store.quarantineKeys 能列出隔离副本',
+  G('Store.quarantineKeys().indexOf("__t_bad.__bad")') >= 0 ? 1 : 0, 1, 0.001);
+
+G('localStorage.setItem("__t_shape","[1,2,3]")');
+check('Store.getJSON 形状校验挡住数组',
+  G('Store.getJSON("__t_shape",null,function(v){return v&&typeof v==="object"&&!Array.isArray(v);})===null') ? 1 : 0, 1, 0.001);
+check('Store.setJSON 遇循环引用返回 false 且不抛错',
+  G('(function(){var o={};o.self=o;return Store.setJSON("__t_cyc",o);})()') === false ? 1 : 0, 1, 0.001);
+
+G('Store.dropQuarantine()');
+check('Store.dropQuarantine 清空隔离副本', G('Store.quarantineKeys().length'), 0, 0.001);
+G('localStorage.removeItem("__t_bad"); localStorage.removeItem("__t_shape");');
+
+/* --- ⑧ 存档修复：坏字段降级而不是整档丢弃 --- */
+check('Save._repair 修掉 NaN / 乱码数值',
+  G('(function(){var d=Save._repair({level:NaN,xp:"abc",gold:"250"});return d.level*1000+d.xp*100+d.gold;})()'),
+  1250, 0.001);
+check('Save._repair 把非数组 weapons 重置为空',
+  G('Save._repair({weapons:"oops"}).weapons.length'), 0, 0.001);
+check('Save._repair 跳过 null 武器项但保留其余',
+  G('(function(){var d=Save._repair({weapons:[{name:"a"},null]});return d.weapons.length;})()'),
+  1, 0.001);
+check('Save._repair 把非对象档判为无效', G('Save._repair([1,2,3])===null') ? 1 : 0, 1, 0.001);
+G('localStorage.setItem(Save.KEY,"123")');
+check('Save.load 对非对象档返回 null（不崩）', G('Save.load()===null') ? 1 : 0, 1, 0.001);
+G('localStorage.removeItem(Save.KEY); localStorage.removeItem(Save.KEY+"__bad")');
+
+/* --- ⑨ 仓库经济字段归一：字符串 / NaN 不能漏进价格计算 --- */
+const __stRaw = G('localStorage.getItem(RaidStash.KEY)');
+G('localStorage.setItem(RaidStash.KEY, JSON.stringify({weapons:[],gunVer:3,creds:"oops",tokens:null,bandages:-5}))');
+const __healed = JSON.parse(G('JSON.stringify(RaidStash.load())'));
+check('RaidStash 把非法 creds 归一为默认 800', __healed.creds, 800, 0.001);
+check('RaidStash 把 null tokens 归一为 0', __healed.tokens, 0, 0.001);
+check('RaidStash 把负 bandages 抬到 0', __healed.bandages, 0, 0.001);
+if (__stRaw === null) G('localStorage.removeItem(RaidStash.KEY)');
+else G('localStorage.setItem(RaidStash.KEY,' + JSON.stringify(__stRaw) + ')');
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

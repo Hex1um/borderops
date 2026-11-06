@@ -221,11 +221,10 @@ const Auction = {
   /* 本地只存三样：期号 / 确定性的货池 / 可变状态（出价、已买断的下架）
    * 货架本身（d.listings）每次从「期号 + 种子」重放出来，所以是全网一致的。 */
   _read(){
-    let d=null;
-    try{
-      const raw=localStorage.getItem(AUCTION_KEY);
-      if(raw){ d=JSON.parse(raw); if(!d || typeof d!=="object") d=null; }
-    }catch(e){ d=null; }
+    /* v0.23.1：统一走 Store。只挡「压根不是普通对象」的脏档（数组 / 数字 / 字符串），
+       字段级修补仍留在下面 —— 旧版本档缺字段是常态，不该被当成坏档隔离。 */
+    let d=Store.getJSON(AUCTION_KEY, null,
+      v=>v && typeof v==="object" && !Array.isArray(v));
     if(!d) d={};
     d.mine=Array.isArray(d.mine)?d.mine:[];
     d.mail=Array.isArray(d.mail)?d.mail:[];
@@ -310,18 +309,18 @@ const Auction = {
   },
 
   save(d){
-    try{
-      // 把货架上的可变字段写回 state（价格 / 出价 / 被抬价时间）
-      const st=d.state=d.state||{};
-      for(const L of (d.listings||[])){
-        st[L.id]={ price:L.price, bids:L.bids, yourBid:L.yourBid,
-                   outbidAt:L.outbidAt||0, outbidPrice:L.outbidPrice||0 };
-      }
-      localStorage.setItem(AUCTION_KEY, JSON.stringify({
-        bucket:d.bucket, pool:d.pool, state:st, taken:d.taken||{},
-        mine:d.mine||[], mail:d.mail||[], nextRefresh:d.nextRefresh||0,
-      }));
-    }catch(e){}
+    // 把货架上的可变字段写回 state（价格 / 出价 / 被抬价时间）
+    const st=d.state=d.state||{};
+    for(const L of (d.listings||[])){
+      st[L.id]={ price:L.price, bids:L.bids, yourBid:L.yourBid,
+                 outbidAt:L.outbidAt||0, outbidPrice:L.outbidPrice||0 };
+    }
+    /* 拍卖行是纯本地缓存：写失败不影响成交（成交已即时写进仓库），
+       所以不做重试，只在 Store 里限流告警一次。 */
+    Store.setJSON(AUCTION_KEY, {
+      bucket:d.bucket, pool:d.pool, state:st, taken:d.taken||{},
+      mine:d.mine||[], mail:d.mail||[], nextRefresh:d.nextRefresh||0,
+    });
   },
 
   refill(d){
