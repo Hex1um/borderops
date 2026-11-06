@@ -42,6 +42,7 @@ const Input = {
         case 'KeyR': this.act.reload=true; break;
         case 'Space': this.act.ability=true; break;
         case 'KeyE': this.act.interact=true; break;
+        // keys['KeyE'] / keys['Space'] 由下面的 keyup 清零，Raid 用它做长按判定
         case 'KeyH': this.act.med=true; break;
         case 'KeyF': this.act.melee=true; break;
         case 'KeyQ': this.act.switch=true; break;
@@ -126,7 +127,11 @@ const Input = {
     document.addEventListener('contextmenu',(e)=>e.preventDefault());
 
     // 星键：战役=职业技能；塔科夫=搜索/交互（与医疗键完全分开）
-    this._bindBtn('touch-ability', ()=>{ this.act.ability=true; });
+    /* v0.24.0：改成按住型 —— 短按仍是一次性 act.ability，长按由 useHeld 告诉 Raid。
+       useHeld 原本只给沙二下包用，两种模式不会同时运行，复用不冲突。 */
+    this._bindHold('touch-ability',
+      ()=>{ this.act.ability=true; this.useHeld=true; },
+      ()=>{ this.useHeld=false; });
     this._bindBtn('touch-switch',  ()=>{ this.act.switch=true; });
     // 加号键：只负责医疗（塔科夫=绷带/药品，大逃杀=医疗）
     this._bindBtn('touch-med',     ()=>{ this.act.med=true; });

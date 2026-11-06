@@ -673,6 +673,7 @@ const Raid = {
     this.shops=[];   // 局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
     this.gadgets=[]; // 可互动设施（医疗站 / 弹药箱 / 泄洪闸）
     this.grounds=[]; // 背包溢出后落在地上的物品堆（独立数组，不打乱联机用的箱子索引）
+    this._pickHold=null;  // v0.24.0：地面装备长按判定状态，跨局必须清空
     // 生态数据（供碰撞 / 渲染 / 小地图共用）
     this.waterCircles=[]; this.bridges=[]; this.forests=[]; this.rails=[]; this.railCars=[];
     const TH=16;

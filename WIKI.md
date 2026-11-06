@@ -54,9 +54,9 @@
 | 鼠标左键 / 开火键 | 射击 |
 | `Q` / `1`~`4` | 循环换枪 / 直选第 N 把 |
 
-- **手上没枪 = 跑刀**：空手移速 **+20%**（`RAID_BAREHAND_SPEED`），适合翻箱、跑图、贴脸绕人。
+- **双手都空 = 跑刀**：空手移速 **+50%**（`RAID_BAREHAND_SPEED`，v0.24.0 起；只看主手的旧判定已修），适合翻箱、跑图、贴脸绕人。
 - **放回背包**：物品栏（`Tab`）里主武器 / 副武器各有一个 **「放回背包」** 按钮 —— 枪留在物品栏里，
-  手上空出来吃那 20% 移速，`Q` 随时能拿回来（物品栏里没有这条枪时不允许放回，防止丢枪）。
+  手上空出来吃那 50% 移速，`Q` 随时能拿回来（物品栏里没有这条枪时不允许放回，防止丢枪）。
 
 ### 3.2 2D 俯视角（默认）
 
@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（740 条断言 / 42 组）
+npm run verify       # 无浏览器依赖的逻辑回归（781 条断言 / 43 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -448,3 +448,7 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **地面碰撞轮廓（v0.23.2）**：`_propFootprint()` 把碰撞矩形按透视投成地面梯形，是片状立面无法替代的 —— 绕到侧面只能看到薄端面，只有地面投影能同时表达长度与朝向。强度必须给足：`_lighting` 在精灵层之后用加色打光会把暗部提亮回去（实测 0.44 填充只剩 26 色阶差，等于没画）。按 `M.clamp(1-(depth-260)/420,0,1)` 衰减，否则远处满地白框。调试开关 `FPView._noFootprint`，A/B 用同会话双帧做像素差。
 - **空投的可感知性（v0.23.0）**：`CFG.raidMinimap` 默认 **false**，小地图上的标点等于没有。真正的指示器是 `hud()` 里的屏幕边缘箭头（2D 走相机投影、3D 走 `ViewMode.yaw` 差角），世界层只画光柱不写字 —— 两处都写文字会出现两条「空投」标签且位置对不上。
 - **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件；`raid-*.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。
+- **圆形装饰的方底与遮挡（v0.24.0）**：`RenderRaid.prop()` 里 `boxy = (k!=="tree" && k!=="scrap")` 那两行方底/描边**必须带条件** —— tree / scrap 的圆形形状画在后面的 `else-if` 链里，无条件画方底就会出现「圆套方」。光线遮挡现在有两处：`_rayLight`（手电，椭圆**解析求交**拿精确距离）与 `_rayWall`（AI 视线，`hit()` 里用归一化半径平方**内判定**、仍是 13px 采样）。**移动碰撞和子弹命中始终是 AABB**，别让 `w.round` 扩散到那里。verify 的沙箱把 `_rayWall` 桩成 `()=>null`（第 256 行），视线的数值验证只能放浏览器探针。
+- **负重是纯函数（v0.24.0）**：`raidLoadOf(R)` / `raidSpeedMul(R)` **只读 `inv`**，不许读 RNG / AI / `timer` —— 联机两端靠它算同一份减速。`RAID_LOAD_SHARE` 权重之和必须恒为 1（满载 load=1 → ×0.70）。故意不按物品 `value` 计价：孤品估值会是普通货的几十倍，捡一件就把移速打到底，但玩家并没有多背一吨东西。空手加成判定是 `(p.gun||p.secondary)?`，副手有枪不算空手。
+- **长短按拾取（v0.24.0）**：`_pickHold` 只对「未搜过且 `_groundEquipItem()` 有货」的容器生效；按住 `RAID_HOLD_EQUIP=0.45s` → `_equipFromGround` 只取一件，短按松手 → 原 `search` 读条整堆进背包。商店 / 设施 / 保险箱 / 空堆**不能**走进这条分支（保险箱 `drops` 未定义，天然被排除）。桌面长按读 `Input.keys['KeyE'|'Space']`，触摸读 `Input.useHeld`（★ 已改成 `_bindHold`）；`_start` 必须清 `_pickHold`，否则跨局残留。Q 循环传 `forceMain=true`，别让「填空手」把 Q 变成填副手。
+- **四类对比面板与溢出标记（v0.24.0）**：`_groundGunPanel` 是历史名，实际已泛化到 weapon / shield / armor / helmet；函数名和 `▲":worse?" ▼`、`better=!!cur && r.a>r.b`、M/k 估值格式都被 verify 锁着，改名要同步断言。调用点在 `if(c.ground)` **之外** —— 开箱后背包满留在原箱的那几件 `ground=false`，放进去就又没面板了。`spill:true` 只由 `_collect` 的溢出分支传，玩家主动丢弃 / 初始补给不带这个标记。局内「穿上护甲/头盔」走 `_wearGear`（此前只有带入的 `carried.armor/helmet` 生效），旧装备回背包、栏满落脚下。

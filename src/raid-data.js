@@ -869,9 +869,50 @@ function raidRollArmorTier(luck){
 /* 经济收紧：低阶材料估值大幅下调；进一步大幅压低低价值材料
  * （T0/T1/T2 再砍约 40~55%），高价值材料依旧稀有但捡一局卖不出好价钱。 */
 // 全部改为现实中能在仓库 / 军械所找到的物资，保留 id 以兼容旧存档与合成配方
-/* v0.21.6：跑刀（空手）移速加成 —— 手里没枪时脚步最轻，敢贴着人跑。
- * 这也是「捡到枪自动上门」的代价交换：有枪就慢一点，没枪就快一点。 */
-const RAID_BAREHAND_SPEED = 1.20;
+/* v0.21.6 引入 / v0.24.0 提到 +50%：跑刀（双手都空）移速加成。
+ * 手里没枪时脚步最轻，敢贴着人跑；与下面的负重减速形成取舍：
+ * 空手轻装最快，装满一背包重装备最慢。 */
+const RAID_BAREHAND_SPEED = 1.50;
+
+/* v0.24.0：地面装备「长按替换」阈值（秒）。短按松手仍走原搜索读条进背包；
+   按住满这个时长就直接把那一件装上 / 换上。0.45s 比普通误触长、比读条短，
+   不会和保险箱 1.6s+ 的开锁读条打架。 */
+const RAID_HOLD_EQUIP = 0.45;
+
+/* ==================== v0.24.0：背包负重 ====================
+ * 只由 inv 决定 —— 纯函数、不读 RNG / AI / 局内时钟，联机两端状态天然一致。
+ * 各栏按「占用率 × 该栏权重」求和，权重之和恰为 1 → 全栏装满时 load=1。
+ * 枪 / 护甲最压身，配件 / 材料最轻；弹药不占物品格但按发数单独折算。
+ * 故意不按物品 value 计价：估值随品质波动几十倍，会让「捡到一件孤品」
+ * 直接把移速打到底，而玩家并没有真的多背一吨东西。 */
+const RAID_LOAD_SHARE = {
+  weapons:0.24, armors:0.16, helmets:0.12, shields:0.12,
+  parts:0.08, materials:0.08, meds:0.08, receivers:0.06, keys:0.04,
+  ammo:0.02,
+};
+const RAID_LOAD_PENALTY = 0.30;   // 满载 -30% 移速
+
+function raidLoadOf(R){
+  const inv=(R && R.inv) || {};
+  let u=0;
+  for(const k in RAID_LOAD_SHARE){
+    const share=RAID_LOAD_SHARE[k];
+    if(k==="ammo"){
+      let total=0; const a=inv.ammo||{};
+      for(const id in a) total += Math.max(0, Number(a[id])||0);
+      u += share*M.clamp(total/RAID_AMMO_CAP,0,1);
+    } else {
+      const arr=inv[k]||[], cap=RAID_INV_CAP[k]||1;
+      u += share*M.clamp(arr.length/cap,0,1);
+    }
+  }
+  return M.clamp(u,0,1);
+}
+
+/* 满载 ×0.70、空包 ×1.00。下限由常量锁住，以后再加别的减速因子也不会把人钉在原地。 */
+function raidSpeedMul(R){
+  return 1 - RAID_LOAD_PENALTY*raidLoadOf(R);
+}
 
 /* ----------------------------- 配件拆解 → 原材料（v0.21.6） -----------------------------
  * 配件不再只是「卖钱」或「装枪」：拆掉能换回同族的原材料，材料再拿去工坊开工。

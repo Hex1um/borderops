@@ -39,8 +39,8 @@ const RenderRaid = {
   /* 户外掩体绘制：按类型区分轮廓，避免整张图全是“灰色方块” */
   prop(ctx,p){
     const k=p.kind, x=p.x, y=p.y, w=p.w, h=p.h;
-    if(k==="bush"||k==="rock"||k==="tree"){
-      // 圆形物用椭圆投影，否则地上会出现一个方块状黑斑
+    if(k==="bush"||k==="rock"||k==="tree"||k==="scrap"){
+      // 圆形 / 不规则物用椭圆投影，否则地上会出现一个方块状黑斑
       ctx.fillStyle="rgba(0,0,0,0.24)";
       ctx.beginPath(); ctx.ellipse(x+w/2+5, y+h/2+7, w*0.46, h*0.40, 0, 0, 6.2832); ctx.fill();
     } else {
@@ -75,8 +75,16 @@ const RenderRaid = {
       ctx.closePath(); ctx.fill();
       return;
     }
-    ctx.fillStyle=p.fill; ctx.fillRect(x,y,w,h);
-    ctx.strokeStyle=p.edge; ctx.lineWidth=2; ctx.strokeRect(x,y,w,h);
+    /* v0.24.0：圆形/不规则装饰不该有方形底。
+     * 原来这两行无条件执行，而 tree / scrap 的形状画在后面同一条 else-if 链里
+     * （151 / 145 行），于是「圆形树冠底下压着一个实心方块 + 一圈方形描边」——
+     * 就是玩家截图里的「圆套方」。bush / rock 因为提前 return 躲过，这两个没有。
+     * 3D 的 _propSprite 里 tree/scrap 是独立分支，本来就没有方底。 */
+    const boxy = (k!=="tree" && k!=="scrap");
+    if(boxy){
+      ctx.fillStyle=p.fill; ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle=p.edge; ctx.lineWidth=2; ctx.strokeRect(x,y,w,h);
+    }
     if(k==="container"){
       ctx.strokeStyle="rgba(0,0,0,0.16)"; ctx.lineWidth=1.5;
       ctx.beginPath();
@@ -1160,13 +1168,24 @@ const RenderRaid = {
     }
   },
 
-  /* v0.22.2：靠近地上的枪时展示枪械面板，并与手持枪逐项对比。
+  /* v0.22.2 引入 / v0.24.0 泛化：靠近地上的**任何装备**（枪 / 护盾 / 护甲 / 头盔）
+     都展示对比面板，与当前身上的同类装备逐项比较。函数名沿用历史名（verify 锁着）。
+     背包满溢出落地的装备也会进这个面板 —— 之前只认 weapon，掉件头盔等于什么提示都没有。
      画在 HUD 层（世界层之外），2D / 3D 都可见；位置跟随交互提示条，避开准星。 */
   _groundGunPanel(ctx, R, c, v, hintY){
     const drops=(c && c.drops)||[];
-    const g=drops.find(d=>d && d.kind==="weapon");
+    const GEAR=["weapon","shield","armor","helmet"];
+    // 武器优先（玩家最常换的就是枪），其次护盾 / 护甲 / 头盔
+    let g=null;
+    for(const k of GEAR){ g=drops.find(d=>d && d.kind===k); if(g) break; }
     if(!g) return;
-    const cur=R.player && R.player.gun;
+    const kind=g.kind, p=R.player||{}, carried=R.carried||{};
+    /* 当前装备：枪看主手，护盾看身上模块，护甲/头盔看 carried（带入的那件）。
+       裸装进场时 carried 为空但玩家仍可能被 AI 掉落/设施临时上了甲，用 tier 兜底。 */
+    const cur = kind==="weapon" ? (p.gun||null)
+      : kind==="shield" ? (p.shieldGear||null)
+      : kind==="armor"  ? (carried.armor || (p.armorTier?{maxArmor:p.maxArmor,dr:p.dr,tier:p.armorTier,value:0}:null))
+      : (carried.helmet || (p.helmetTier?{maxArmor:p.maxHelmetArmor,dr:p.helmetDr,tier:p.helmetTier,value:0}:null));
     /* 数值格式化：估值动辄七位数，直接拼数字既撑破面板也没法一眼比大小 */
     const fmt=(n,big)=>{
       n=Math.round(n||0);
@@ -1175,12 +1194,28 @@ const RenderRaid = {
       if(n>=10000) return "₽"+(n/1000).toFixed(1)+"k";
       return "₽"+n;
     };
-    const rows=[
+    const rows = kind==="weapon" ? [
       { k:"伤害", a:Math.round(g.dmg||0), b:cur?Math.round(cur.dmg||0):0 },
       { k:"弹匣", a:Math.round(g.mag||0), b:cur?Math.round(cur.mag||0):0 },
       { k:"射速", a:Math.round(g.rpm||0), b:cur?Math.round(cur.rpm||0):0 },
       { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
+    ] : kind==="shield" ? [
+      { k:"容量", a:Math.round(g.capacity||0), b:cur?Math.round(cur.capacity||0):0 },
+      { k:"充能/s", a:Math.round(g.rate||0), b:cur?Math.round(cur.rate||0):0 },
+      { k:"延迟s", a:Math.round(g.delay||0), b:cur?Math.round(cur.delay||0):0 },
+      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
+    ] : [
+      { k:"耐久", a:Math.round(g.maxArmor||0), b:cur?Math.round(cur.maxArmor||0):0 },
+      { k:"减伤%", a:Math.round((g.dr||0)*100), b:cur?Math.round((cur.dr||0)*100):0 },
+      { k:"品阶", a:Math.round(g.tier||0), b:cur?Math.round(cur.tier||0):0 },
+      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
     ];
+    const title = kind==="weapon" ? (gunNameOf(g)||"地上枪械")
+      : kind==="shield" ? (g.name||"地上护盾")
+      : kind==="armor" ? (g.name||"地上护甲") : (g.name||"地上头盔");
+    const tint = kind==="weapon" ? raidGunColor(g)
+      : kind==="shield" ? shieldColor(g)
+      : (RAID_RARITY_COLOR[g.rarity|0]||"#dfe7f0");
     const W=276, H=34+rows.length*20+10;
     const x=Math.max(8, Math.min(v.w-W-8, v.w/2+28));
     const y=Math.max(8, Math.min(v.h-H-8, hintY-H-16));
@@ -1189,14 +1224,22 @@ const RenderRaid = {
     ctx.strokeStyle="rgba(120,150,180,0.45)"; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,W-1,H-1);
     ctx.textAlign="left";
     ctx.font="bold 12px system-ui,sans-serif";
-    ctx.fillStyle=raidGunColor(g);
-    ctx.fillText(String(gunNameOf(g)||"地上枪械").slice(0,18), x+10, y+18);
+    ctx.fillStyle=tint;
+    ctx.fillText(String(title).slice(0,18), x+10, y+18);
+    /* 溢出标记：让玩家知道「这几件是我背包塞不下才留在这的」 */
+    if(c.spill){
+      ctx.textAlign="right"; ctx.fillStyle="#ff8a5a";
+      ctx.font="10px system-ui,sans-serif"; ctx.fillText("背包溢出", x+W-10, y+18);
+      ctx.textAlign="left";
+    }
     ctx.font="10px system-ui,sans-serif"; ctx.fillStyle="rgba(180,195,210,0.75)";
-    ctx.fillText(cur?"左：地上 / 右：手持":"手持为空 · 直接拾取", x+10, y+32);
+    ctx.fillText(cur
+      ? (kind==="weapon"?"左：地上 / 右：手持":"左：地上 / 右：已穿戴")
+      : (kind==="weapon"?"手持为空 · 直接拾取":"当前未装备 · 可直接穿戴"), x+10, y+32);
     ctx.font="11px system-ui,sans-serif";
     for(let i=0;i<rows.length;i++){
       const r=rows[i], ry=y+50+i*20;
-      // 手上没枪时不做对比，免得每一行都亮成「提升」
+      // 身上没同类装备时不做对比，免得每一行都亮成「提升」
       const better=!!cur && r.a>r.b, worse=!!cur && r.a<r.b;
       ctx.fillStyle="rgba(200,212,224,0.85)"; ctx.fillText(r.k, x+10, ry);
       ctx.fillStyle=better?"#8fe07a":worse?"#ff8a5a":"#dfe7f0";
@@ -1465,10 +1508,15 @@ const RenderRaid = {
           used&&!cdLeft?"#8a9aac":col, 14);
       } else if(it && it.kind==="container"){
         const c=it.ref;
+        /* v0.24.0：只要这堆里有装备就显示对比面板，不局限于 ground 堆。
+           开箱后因背包满留在原箱的几件（c.drops=rest、ground=false）旧版被排除，
+           玩家走回来完全看不到对比 —— 正是本次要修的。面板内部找不到装备会直接 return。 */
+        this._groundGunPanel(ctx, R, c, v, mob?v.h*0.6:(v.h-150)-18);
         if(c.ground){
           const n=(c.drops||[]).length;
-          hintAt(Input.isTouch?`点「★」拾取地面物资 ×${n}`:`按 E 拾取地面物资 ×${n}`, "#ffe08a");
-          this._groundGunPanel(ctx, R, c, v, mob?v.h*0.6:(v.h-150)-18);
+          const tail=R._groundEquipItem(c)
+            ? (Input.isTouch?" · 长按 ★ 替换手上":" · 按住 E 替换手上") : "";
+          hintAt((Input.isTouch?`点「★」拾取地面物资 ×${n}`:`按 E 拾取地面物资 ×${n}`)+tail, "#ffe08a");
         } else if(c.locked && !c.searched){
           const lv=M.clamp(c.lockLv||1,1,5);
           const has=R._hasKeyFor(lv);
@@ -1477,7 +1525,9 @@ const RenderRaid = {
             : `保险箱 · ${RAID_LOCK_NAME[lv]} · 缺「${raidKeyDef(lv).name}」（商店有售 / 箱内掉落）`,
             has?"#8fe07a":"#ff8a5a");
         } else if(!c.searched){
-          hintAt(Input.isTouch?"点「★」搜索补给 · 点「+」包扎":"按 E 搜索补给 · H 包扎", "#ffe08a");
+          const tail=R._groundEquipItem(c)
+            ? (Input.isTouch?" · 长按 ★ 替换":" · 按住 E 替换") : "";
+          hintAt((Input.isTouch?"点「★」搜索补给 · 点「+」包扎":"按 E 搜索补给 · H 包扎")+tail, "#ffe08a");
         }
       }
     }

@@ -1264,8 +1264,9 @@ check('箱子里的枪自带 30 发匹配口径弹药', gunAmmo.add, 30, 0.001);
 check('随枪弹药按枪的口径发（步枪=中弹）', gunAmmo.cal && gunAmmo.cal.cal === 'mid' ? 1 : 0, 1, 0.001);
 check('开箱出枪时调用 _giveGunAmmo', (raidSrc.match(/_giveGunAmmo\(/g)||[]).length>=4 ? 1 : 0, 1, 0.001);
 
-check('跑刀移速加成 = +20%', G('RAID_BAREHAND_SPEED'), 1.20, 0.001);
-check('移速计算乘上空手加成', /\*\(p\.gun\?1:RAID_BAREHAND_SPEED\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('跑刀移速加成 = +50%（v0.24.0）', G('RAID_BAREHAND_SPEED'), 1.50, 0.001);
+check('移速计算乘上空手加成（双手都空才算）',
+  /\(\(p\.gun\|\|p\.secondary\)\?1:RAID_BAREHAND_SPEED\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 const salvage = JSON.parse(G(`JSON.stringify((()=>{
   const out={};
@@ -2145,6 +2146,126 @@ check('压暗用世界坐标覆盖可见区（scene 已有相机变换）',
 check('压暗不污染加色模式（显式 source-over + save/restore）',
   /ctx\.globalCompositeOperation="source-over"/.test(__rd2) &&
   /ctx\.restore\(\);\s*\n\s*\}\s*\n\s*\n\s*\/\/ 光照层/.test(__rd2) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 43. 模型 / 负重 / 装备槽 / 对比面板 / 长短按（v0.24.0）
+ * ========================================================================== */
+console.log('\n=== 43. 模型 / 负重 / 装备槽 / 对比面板 / 长短按（v0.24.0）===');
+const __inp = fs.readFileSync(path.join(SRC, 'input.js'), 'utf8');
+
+/* --- ① 圆形模型：树 / 废料不再套方底，视线也按椭圆 --- */
+check('圆形物跳过方形底与描边',
+  /const boxy = \(k!=="tree" && k!=="scrap"\)/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('scrap 改用椭圆投影',
+  /k==="bush"\|\|k==="rock"\|\|k==="tree"\|\|k==="scrap"/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('tree / scrap 的形状分支仍保留',
+  /else if\(k==="tree"\)/.test(__rd2) && /else if\(k==="scrap"\)/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('_rayWall 有椭圆形状判定',
+  /const hit=\(w,px,py\)=>/.test(raidSrc) && /ux\*ux\+uy\*uy<=1/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('_rayWall 两处判定都走 hit()（含无索引兜底）',
+  /if\(w\.sight!==false && hit\(w,px,py\)\)/.test(raidSrc) &&
+  /if\(hit\(w,px,py\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('椭圆判定用归一化半径平方（不是 AABB）',
+  /const ux=\(px-\(w\.x\+a\)\)\/a, uy=\(py-\(w\.y\+b\)\)\/b/.test(raidSrc) &&
+  /ux\*ux\+uy\*uy<=1/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* 注意：verify 的沙箱在第 256 行把 Raid._rayWall 桩成 ()=>null（供其他组隔离视线依赖），
+   所以这里不做 vm 数值测试 —— 真实数值由浏览器探针 probe_v0240.js 覆盖：
+   200×200 岩石，矩形命中 x=103.2、椭圆命中 x=167.7（角落晚 64.5px 才挡视线）。 */
+
+/* --- ② 负重与空手 --- */
+check('负重权重之和恰为 1',
+  Math.abs(G('Object.keys(RAID_LOAD_SHARE).reduce((s,k)=>s+RAID_LOAD_SHARE[k],0)') - 1) < 1e-9 ? 1 : 0, 1, 0.001);
+check('满载减速 30%', G('RAID_LOAD_PENALTY'), 0.30, 0.0001);
+const __load = JSON.parse(G(`JSON.stringify((()=>{
+  const R={inv:{weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],receivers:[],keys:[],ammo:{}}};
+  const e=raidLoadOf(R), em=raidSpeedMul(R);
+  for(const k in RAID_INV_CAP) R.inv[k]=new Array(RAID_INV_CAP[k]).fill(0);
+  R.inv.ammo={x:RAID_AMMO_CAP};
+  const f=raidLoadOf(R), fm=raidSpeedMul(R);
+  return {e:e,em:em,f:f,fm:fm};
+})())`));
+check('空包负载 0 / 移速 ×1.00', __load.e === 0 && __load.em === 1 ? 1 : 0, 1, 0.001);
+check('全栏装满负载 1', __load.f, 1, 0.0001);
+check('满载移速 ×0.70', __load.fm, 0.70, 0.0001);
+check('移速公式乘上负重', /\*raidSpeedMul\(this\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('物品栏显示负重反馈', /背包负重/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('收枪文案用动态加成（不再写死 +20%）',
+  /Math\.round\(\(RAID_BAREHAND_SPEED-1\)\*100\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ③ 背包取枪优先填空手 --- */
+check('_equipGun 有填空手分支',
+  /else if\(!p\.gun\)\{ p\.gun=g; \}/.test(raidSrc) &&
+  /else if\(!p\.secondary\)\{ p\.secondary=g; \}/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('Q 循环用 forceMain 保持换枪语义',
+  /this\._equipGun\(this\._rtGun\(bag\[0\]\), true\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const __slot = JSON.parse(G(`JSON.stringify((()=>{
+  const A=generateWeapon(10,{type:"rifle"}), B=generateWeapon(10,{type:"smg"}), C=generateWeapon(10,{type:"sniper"});
+  const fake={ player:{gun:A,secondary:null,reloadT:0,fireCd:0,x:0,y:0}, _pick:()=>{} };
+  Raid._equipGun.call(fake,B);
+  const fill={ main:fake.player.gun===A, sec:fake.player.secondary===B };
+  fake.player.gun=A; fake.player.secondary=null;
+  Raid._equipGun.call(fake,C,true);
+  const force={ main:fake.player.gun===C, sec:fake.player.secondary===null };
+  return {fill:fill,force:force};
+})())`));
+check('主手有枪副手空 → 填副手、不动主手',
+  __slot.fill.main && __slot.fill.sec ? 1 : 0, 1, 0.001);
+check('forceMain → 仍替换主手', __slot.force.main && __slot.force.sec ? 1 : 0, 1, 0.001);
+
+/* --- ④ 对比面板泛化到四类 + 溢出掉落 --- */
+check('面板覆盖 weapon/shield/armor/helmet',
+  /const GEAR=\["weapon","shield","armor","helmet"\]/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('面板读 carried 的护甲与头盔',
+  /carried\.armor/.test(__rd2) && /carried\.helmet/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('护盾对比行（容量/充能/延迟）',
+  /k:"容量"/.test(__rd2) && /k:"充能\/s"/.test(__rd2) && /k:"延迟s"/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('防具对比行（耐久/减伤/品阶）',
+  /k:"耐久"/.test(__rd2) && /k:"减伤%"/.test(__rd2) && /k:"品阶"/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('面板保留 ▲▼ 与空手提示（旧断言不回归）',
+  /better=!!cur && r\.a>r\.b/.test(__rd2) && /手持为空 · 直接拾取/.test(__rd2) &&
+  /▲":worse\?" ▼/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('溢出堆标出「背包溢出」',
+  /c\.spill/.test(__rd2) && /背包溢出/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('面板调用点在 ground 分支之外（开箱残留也能看）',
+  __rd2.indexOf('this._groundGunPanel(ctx, R, c, v,') < __rd2.indexOf('if(c.ground){') ? 1 : 0, 1, 0.001);
+check('_dropGround 支持 spill 标记',
+  /_dropGround\(item, x, y, mark\)/.test(raidSrc) &&
+  /this\._dropGround\(item, x, y, "spill"\)/.test(raidSrc) &&
+  /if\(mark==="spill"\) pile\.spill=true/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑤ 短按进背包 / 长按 0.45s 替换 --- */
+check('长按阈值 0.45 秒', G('RAID_HOLD_EQUIP'), 0.45, 0.0001);
+check('长按按 dt 累积', /h\.t\+=dt/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('满阈值才替换且只执行一次',
+  /h\.t>=RAID_HOLD_EQUIP/.test(raidSrc) && /h\.done=true/.test(raidSrc) &&
+  /this\._equipFromGround\(h\.c, h\.item\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('短按松手仍走原搜索读条',
+  /if\(!h\.done && !this\.search && !h\.c\.searched\)\{ this\.search=\{ c:h\.c, t:0 \}/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('只对含装备的堆启用长按',
+  /it\.kind==="container" && !it\.ref\.searched && this\._groundEquipItem\(it\.ref\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('走远 / 开商店时取消长按',
+  /M\.dist\(p\.x,p\.y,h\.c\.x,h\.c\.y\)>86 \|\| this\.shopOpen/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('跨局清空长按状态', /this\._pickHold=null;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('桌面读 E/Space、触摸读 useHeld',
+  /Input\.keys\['KeyE'\] \|\| Input\.keys\['Space'\]/.test(raidSrc) &&
+  /Input\.isTouch && Input\.useHeld/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('触摸★改为按住型按钮',
+  /_bindHold\('touch-ability'/.test(__inp) && /this\.useHeld=true/.test(__inp) ? 1 : 0, 1, 0.001);
+check('HUD 写出长短按提示',
+  /长按 ★ 替换手上/.test(__rd2) && /按住 E 替换手上/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('_groundEquipItem 顺序与面板一致',
+  /for\(const k of \["weapon","shield","armor","helmet"\]\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('_wearGear 支持护甲与头盔',
+  /_wearGear\(kind, it\)/.test(raidSrc) && /p\.armorTier=it\.tier\|\|0/.test(raidSrc) &&
+  /p\.maxHelmetArmor=cap/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('旧装备满栏时落地而非凭空消失',
+  /this\._dropGround\(old, p\.x, p\.y, "spill"\)/.test(raidSrc) &&
+  /arr\.length<RAID_INV_CAP\.shields/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('_swapEquip 四类走各自穿戴链路',
+  /_swapEquip\(item\)/.test(raidSrc) && /_equipGun\(g, true\)/.test(raidSrc) &&
+  /this\._wearShield\(item\)/.test(raidSrc) && /this\._wearGear\(kind, item\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('长按只取这一件、其余留在原地',
+  /drops\.splice\(i,1\)/.test(raidSrc) && /if\(!drops\.length\) c\.searched=true/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

@@ -694,25 +694,28 @@ Object.assign(Raid, {
   },
 
   /* 背包满时溢出的物品不再凭空消失 —— 落在脚下形成「地面物品堆」，
-   * 腾出空间后走回来按 E 就能捡。同类物品就近合并成堆，单堆最多 8 件。 */
-  _dropGround(item, x, y){
+   * 腾出空间后走回来按 E 就能捡。同类物品就近合并成堆，单堆最多 8 件。
+   * v0.24.0：mark==="spill" 表示「背包塞不下才掉的」，与玩家主动丢弃 /
+   * 初始补给区分开 —— 面板右上角会标出来，玩家才知道这几件是自己的。 */
+  _dropGround(item, x, y, mark){
     const bx=x!==undefined?x:this.player.x, by=y!==undefined?y:this.player.y;
     if(!this.grounds) this.grounds=[];
     let pile=this.grounds.find(c=>!c.searched
       && (c.drops||[]).length<8 && M.dist(c.x,c.y,bx,by)<70);
-    if(pile){ pile.drops.push(item); return pile; }
+    if(pile){ pile.drops.push(item); if(mark==="spill") pile.spill=true; return pile; }
     // 堆数达上限时只并入「仍未搜刮且未满」的堆，绝不写进已搜刮堆
     // （原实现固定取 grounds[0]，若该堆 searched=true 则物品永久丢失）
     const open=this.grounds.filter(c=>!c.searched && (c.drops||[]).length<8);
     if(open.length>=60){
       let best=open[0];
       for(const c of open) if((c.drops||[]).length<(best.drops||[]).length) best=c;
-      best.drops.push(item); return best;
+      best.drops.push(item); if(mark==="spill") best.spill=true; return best;
     }
     const a=RNG.fr(0,6.2832), r=RNG.fr(36,54);
     pile={ x:M.clamp(bx+Math.cos(a)*r, 40, RAID_MAP_W-40),
            y:M.clamp(by+Math.sin(a)*r, 40, RAID_MAP_H-40),
            tier:0, ground:true, searched:false, drops:[item], cash:0 };
+    if(mark==="spill") pile.spill=true;
     this.grounds.push(pile);
     return pile;
   },
@@ -745,11 +748,91 @@ Object.assign(Raid, {
     return it;
   },
 
+  /* ==================== v0.24.0：地面装备「长按替换」 ====================
+   * 短按走 _collect（整堆进背包）；长按只取**这一件**直接装上 / 换上，
+   * 被换下的旧装备回背包，背包满了就落脚下（带 spill 标记）。
+   * 选取顺序与 _groundGunPanel 一致：武器 → 护盾 → 护甲 → 头盔。 */
+
+  _groundEquipItem(c){
+    const drops=(c && c.drops)||[];
+    for(const k of ["weapon","shield","armor","helmet"]){
+      const it=drops.find(d=>d && d.kind===k);
+      if(it) return it;
+    }
+    return null;
+  },
+
+  /* 局内穿上护甲 / 头盔。此前局内只有「进背包」，没有穿戴链路 ——
+     防具只有带入的 carried.armor / carried.helmet 才会真的生效。 */
+  _wearGear(kind, it){
+    const p=this.player;
+    if(!p || !it || (kind!=="armor" && kind!=="helmet")) return false;
+    if(!this.carried) this.carried={weapons:[],armor:null,helmet:null,shield:null};
+    const old=this.carried[kind];
+    if(old && old!==it){
+      const key=kind==="armor"?"armors":"helmets";
+      const arr=(this.inv[key]=this.inv[key]||[]);
+      if(arr.length<RAID_INV_CAP[key]) arr.push(old);
+      else this._dropGround(old, p.x, p.y, "spill");
+    }
+    this.carried[kind]=it;
+    const cap=it.maxArmor||0;
+    if(kind==="armor"){
+      p.armorTier=it.tier||0; p.dr=it.dr||0;
+      p.maxArmor=cap; p.armor=cap; p.armorRegen=it.armorRegen||0;
+      p.armorBroken=cap<=0;
+    } else {
+      p.helmetTier=it.tier||0; p.helmetDr=it.dr||0;
+      p.maxHelmetArmor=cap; p.helmetArmor=cap;
+    }
+    return true;
+  },
+
+  /* 把一件地上装备直接装到身上。枪走 _equipGun(forceMain)，护盾走 _wearShield，
+     护甲/头盔走 _wearGear；旧装备的回收由各自链路负责。 */
+  _swapEquip(item){
+    const p=this.player;
+    if(!p || !item) return false;
+    const kind=item.kind;
+    if(kind==="weapon"){
+      if((this.inv.weapons||[]).indexOf(item)<0){
+        if(this.inv.weapons.length>=RAID_INV_CAP.weapons){
+          this._pick(p.x,p.y-34,"武器栏已满 · 先腾出空间","#ff8a5a"); return false;
+        }
+        this.inv.weapons.push(item);       // _stowGun / _gunBag 依赖物品栏里有这条
+      }
+      const g=this._rtGun(item);
+      if(!g) return false;
+      g.ammoMag=g.mag; g.ammoRes=Math.max(0,g.ammoRes|0);
+      this._equipGun(g, true);            // 长按 = 明确换到主手
+      return true;
+    }
+    if(kind==="shield") return !!this._wearShield(item);
+    if(kind==="armor"||kind==="helmet") return !!this._wearGear(kind, item);
+    return false;
+  },
+
+  _equipFromGround(c, item){
+    const drops=(c && c.drops)||[];
+    const i=drops.indexOf(item);
+    if(i<0 || !this.player) return false;
+    if(!this._swapEquip(item)) return false;
+    drops.splice(i,1);
+    if(!drops.length) c.searched=true;
+    this._invDirty=true;
+    const nm = item.kind==="weapon" ? gunNameOf(item) : (item.name||"装备");
+    const col = item.kind==="shield" ? shieldColor(item)
+              : item.kind==="weapon" ? raidGunColor(item) : "#8fe07a";
+    this._pick(this.player.x, this.player.y-34, "已装备 "+nm, col);
+    SFX.pickup();
+    return true;
+  },
+
   _collect(item, x, y, fromGround){
     this._invDirty=true;   // 物品栏开着时拾取会即时刷新
     const px=x!==undefined?x:this.player.x, py=(y!==undefined?y:this.player.y)-24;
     const spill=(label)=>{
-      if(!fromGround) this._dropGround(item, x, y);
+      if(!fromGround) this._dropGround(item, x, y, "spill");
       this._pick(px, py, fromGround ? label+"已满 · 先腾出空间"
                                      : label+"已满 · 物品掉在脚下", "#ff8a5a");
       return false;
@@ -1224,12 +1307,24 @@ Object.assign(Raid, {
     const dx=x2-x1, dy=y2-y1; const len=Math.hypot(dx,dy);
     if(len<1) return null;
     const steps=Math.ceil(len/13);
+    /* v0.24.0：圆形装饰按椭圆内判定，不再用 AABB —— 树的四个空角不该挡视线。
+       与 _rayLight 的 round 分支同源（共用 w.round 标记）；13px 采样结构保留，
+       这里只换形状判定，不改算法、不动移动 / 子弹碰撞，联机手感不变。 */
+    const hit=(w,px,py)=>{
+      if(w.round){
+        const a=(w.w||0)*0.5, b=(w.h||0)*0.5;
+        if(a<1e-6||b<1e-6) return false;
+        const ux=(px-(w.x+a))/a, uy=(py-(w.y+b))/b;
+        return ux*ux+uy*uy<=1;
+      }
+      return px>=w.x&&px<=w.x+w.w&&py>=w.y&&py<=w.y+w.h;
+    };
     const CS=this.navCS, cols=this.navCols, rows=this.navRows;
     for(let i=1;i<=steps;i++){
       const t=i/steps, px=x1+dx*t, py=y1+dy*t;
       if(!CS){   // 索引未建立时的兜底
         for(const w of this.walls){
-          if(w.sight!==false && px>=w.x&&px<=w.x+w.w&&py>=w.y&&py<=w.y+w.h) return {x:px,y:py,t};
+          if(w.sight!==false && hit(w,px,py)) return {x:px,y:py,t};
         }
         continue;
       }
@@ -1239,7 +1334,7 @@ Object.assign(Raid, {
       if(!arr) continue;
       for(let k=0;k<arr.length;k++){
         const w=arr[k];
-        if(px>=w.x&&px<=w.x+w.w&&py>=w.y&&py<=w.y+w.h) return {x:px,y:py,t};
+        if(hit(w,px,py)) return {x:px,y:py,t};
       }
     }
     return null;
@@ -1252,9 +1347,10 @@ Object.assign(Raid, {
           灌木（sight:false），但手电的光不该穿过去。
        2) 逐格 DDA + 精确 slab 求交，返回精确距离而不是 13px 采样的近似值。采样误差
           是「光照边缘毛刺 / 锯齿」的来源：40 条射线各自差十几像素，拼出来的轮廓就是花边。
-       3) v0.23.3：round=true 的圆形装饰改走**椭圆解析求交**。矩形 slab 会让 96 条射线的
-          落点全贴着 AABB 的四条直边，拼出来就是玩家看到的「手电是个笔直三角形」；
-          椭圆求交后光锥绕着物体轮廓收，圆形岩石的空角也不再投出方形阴影。
+       3) v0.24.0 起两者都认 `w.round`，但做法不同：_rayWall 是 13px 采样 + 椭圆内判定
+          （够 AI 视线用），这里必须是**椭圆解析求交**拿到精确距离 —— 96 条射线要连成
+          一条连续光锥边界，采样误差会让轮廓变成花边；矩形 slab 则让落点全贴着 AABB
+          直边，拼出来就是玩家看到的「手电是个笔直三角形」。
      代价：格宽 256，560px 的光程只穿 2~3 格，比原来的 43 次采样更省。 */
   _rayLight(x1,y1,dx,dy,maxLen){
     const CS=this.navCS, cols=this.navCols, rows=this.navRows, idx=this.navCell;
@@ -1372,7 +1468,8 @@ Object.assign(Raid, {
 
     /* 装备中（不可丢，防止误操作把手上的枪/盔甲扔掉） */
     sec("装备中","撤离成功才带回仓库");
-    line("主武器 · "+(p.gun?gunNameOf(p.gun):"空手（跑刀 +20% 移速）"), p.gun?raidGunColor(p.gun):"#8b95a5",
+    line("主武器 · "+(p.gun?gunNameOf(p.gun):
+      "空手（跑刀 +"+Math.round((RAID_BAREHAND_SPEED-1)*100)+"% 移速）"), p.gun?raidGunColor(p.gun):"#8b95a5",
       p.gun?`${p.gun.ammoMag}/${p.gun.mag} 发 · 背包 ${p.gun.ammoRes} · ${p.gun.loaded?(ammoDefFromId(p.gun.loaded)||{}).short||"?" : "未装填"}`
            :"按 Q 从背包取枪", null, null, null, p.gun?"main":null);
     if(p.secondary) line("副武器 · "+gunNameOf(p.secondary), raidGunColor(p.secondary),
@@ -1384,6 +1481,11 @@ Object.assign(Raid, {
       `T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`);
     if(p.maxShield>0) line("护盾 · "+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
       `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`);
+    /* v0.24.0：负重反馈。减速是隐性的，玩家必须能在物品栏里看到「为什么跑不动」。 */
+    const load=raidLoadOf(R);
+    line("背包负重", load>0.6?"#ff8a5a":"#8fd0ff",
+      Math.round(load*100)+"% · 移速 ×"+raidSpeedMul(R).toFixed(2)+
+      " · 满载 -"+Math.round(RAID_LOAD_PENALTY*100)+"%");
     line("卢布", "#8fe07a", "₽ "+priceText(R.creds)+" · 撤离后结算进仓库");
     if((R.tokens||0)>0) line("GP 币", "#ffd23f", "◈ "+R.tokens+" · 撤离才落袋");
 

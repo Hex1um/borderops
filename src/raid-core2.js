@@ -661,18 +661,25 @@ Object.assign(Raid, {
     // 商店开着时摇杆被藏起来，关店后把残留方向清掉，免得一关店人就自己往前跑
     if(typeof Input!=="undefined" && Input.resetStick) Input.resetStick();
   },
-  // 把手上的枪与目标枪交换；被换下的枪自动留在物品栏（= 放进背包）
-  _equipGun(g){
+  /* 把手上的枪与目标枪交换；被换下的枪自动留在物品栏（= 放进背包）。
+   * v0.24.0：从背包取枪时优先填**空的那只手**，不要动已经端着的枪。
+   * 之前的 else 分支一律 p.gun=g —— 主手有枪、副手空着时也会把主手顶掉，
+   * 玩家在物品栏点一把枪反而丢掉了手上的主力武器。
+   * forceMain 只给 Q 循环用：Q 的语义是「换到主手」，不能变成填空手。 */
+  _equipGun(g, forceMain){
     const p=this.player;
     if(!g || g===p.gun) return;
     const old=p.gun;
     if(g===p.secondary){ p.secondary=old||null; p.gun=g; }
-    else { p.gun=g; }   // 背包枪：手上的旧枪条目仍在 inv.weapons 里，等于收回背包
+    else if(forceMain){ p.gun=g; }
+    else if(!p.gun){ p.gun=g; }
+    else if(!p.secondary){ p.secondary=g; }
+    else { p.gun=g; }   // 双手都满：替换主手，旧枪条目仍在 inv.weapons 里 = 回背包
     p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
-    this._pick(p.x, p.y-34, "手持 "+gunNameOf(g), raidGunColor(g));
+    this._pick(p.x, p.y-34, (p.secondary===g?"副手 ":"手持 ")+gunNameOf(g), raidGunColor(g));
   },
   /* v0.21.6：把手上的枪放回背包（物品栏里每把枪都有「放回背包」按钮）。
-   * 空手会拿到 +20% 移速（RAID_BAREHAND_SPEED），跑刀 / 谈判 / 翻箱时很有用。
+   * 空手会拿到 +50% 移速（RAID_BAREHAND_SPEED），跑刀 / 谈判 / 翻箱时很有用。
    * which = "main" | "secondary"。枪本身一直在 inv.weapons 里，这里只是解绑手部引用，
    * 所以放回之后 Q / 1~4 随时能再拿起来。 */
   _stowGun(which){
@@ -686,16 +693,18 @@ Object.assign(Raid, {
     if(sec) p.secondary=null; else p.gun=null;
     p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
     this._invDirty=true;
-    this._pick(p.x, p.y-34, sec?"副手收进背包":"收进背包 · 空手（+20% 移速）", "#8fd0ff");
+    this._pick(p.x, p.y-34, sec?"副手收进背包":
+      "收进背包 · 空手（+"+Math.round((RAID_BAREHAND_SPEED-1)*100)+"% 移速）", "#8fd0ff");
     SFX.ui();
     return true;
   },
 
-  // Q / 切枪：优先从背包取下一把；背包空则与副手互换；只剩一把则收枪入包（空手跑更快）
+  // Q / 切枪：优先从背包取下一把（强制到主手，保持「换枪」语义）；
+  // 背包空则与副手互换；只剩一把则收枪入包（空手跑更快）
   _cycleGun(){
     const p=this.player; if(!p) return;
     const bag=this._gunBag();
-    if(bag.length){ this._equipGun(this._rtGun(bag[0])); return; }
+    if(bag.length){ this._equipGun(this._rtGun(bag[0]), true); return; }
     if(p.gun && p.secondary){
       const t=p.gun; p.gun=p.secondary; p.secondary=t;
       p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
@@ -756,8 +765,11 @@ Object.assign(Raid, {
     /* 3D：视角朝向即开火方向，覆盖 2D 下由鼠标世界坐标反算的角度 */
     if(typeof ViewMode!=="undefined" && ViewMode.is3D()) p.angle=ViewMode.yaw;
 
-    // 移动（强心针：8 秒内 +25% 移速；空手跑刀：+20% 移速）
-    const sp=p.speed*(p.reloadT>0?0.7:1)*(this.stimT>0?1.25:1)*(p.gun?1:RAID_BAREHAND_SPEED);
+    /* 移动：强心针 +25% / 双手都空 +50% / 背包越满越慢（满载 -30%）。
+       空手判定必须是「双手都空」—— 副手还端着枪时只空主手不该白拿加成。
+       raidSpeedMul 只读 inv，是纯函数，联机两端算出来的减速一致。 */
+    const sp=p.speed*(p.reloadT>0?0.7:1)*(this.stimT>0?1.25:1)
+      *((p.gun||p.secondary)?1:RAID_BAREHAND_SPEED)*raidSpeedMul(this);
     this._moveOp(p, mx*sp*dt, my*sp*dt);
     p.vx=mx*sp; p.vy=my*sp;
 
@@ -789,9 +801,32 @@ Object.assign(Raid, {
     if(act.med && this.medT<=0 && this._useBestMed()){ SFX.ui(); bandaging=true; }
 
     // 搜索补给（手机端「★」搜索键 / 桌面 E；「+」键只负责医疗，两键互不干扰）
+    /* v0.24.0：地面装备堆的长按判定。
+     *   E / Space / 触摸★ 按住满 RAID_HOLD_EQUIP → 直接把那一件装上或换上；
+     *   短按松手 → 仍走原来的搜索读条，整堆进背包。
+     * 只对「未搜过且堆里有装备」生效，开箱 / 商店 / 设施 / 空堆完全不变。
+     * 桌面读 keys['KeyE'|'Space']，触摸读 useHeld —— 都是 down 置位 / up 清零。 */
+    const eDown = !!(Input.keys && (Input.keys['KeyE'] || Input.keys['Space']))
+               || !!(Input.isTouch && Input.useHeld);
+    if(this._pickHold){
+      const h=this._pickHold;
+      if(M.dist(p.x,p.y,h.c.x,h.c.y)>86 || this.shopOpen){ this._pickHold=null; }
+      else if(eDown){
+        h.t+=dt;
+        if(!h.done && h.t>=RAID_HOLD_EQUIP){
+          h.done=true;
+          this._equipFromGround(h.c, h.item);
+        }
+      } else {
+        this._pickHold=null;
+        if(!h.done && !this.search && !h.c.searched){ this.search={ c:h.c, t:0 }; SFX.ui(); }
+      }
+    }
     if((act.interact || act.ability) && !bandaging && !this.search && !this.shopOpen){
       const it=this._interactTarget();
-      if(it && it.kind==="shop"){ this._openShop(it.ref); }
+      if(it && it.kind==="container" && !it.ref.searched && this._groundEquipItem(it.ref)){
+        this._pickHold={ c:it.ref, item:this._groundEquipItem(it.ref), t:0, done:false };
+      } else if(it && it.kind==="shop"){ this._openShop(it.ref); }
       else if(it && it.kind==="gadget"){ this._useGadget(it.ref); }
       else if(it && it.kind==="container"){
         const c=it.ref;
@@ -909,8 +944,12 @@ Object.assign(Raid, {
     const s=ensureShield(it);
     // v0.21.9：自动穿戴的护盾必须记入 carried，否则撤离入库 / 阵亡保险只看 carried.shield，它会凭空消失
     if(this.carried){
-      if(this.carried.shield && this.carried.shield!==s)
-        (this.inv.shields=this.inv.shields||[]).push(this.carried.shield);
+      if(this.carried.shield && this.carried.shield!==s){
+        const arr=(this.inv.shields=this.inv.shields||[]);
+        /* v0.24.0：旧盾回背包也要走容量检查，装不下就落脚下（与溢出掉落一致） */
+        if(arr.length<RAID_INV_CAP.shields) arr.push(this.carried.shield);
+        else this._dropGround(this.carried.shield, p.x, p.y, "spill");
+      }
       this.carried.shield=s;
     }
     p.shieldGear=s;
