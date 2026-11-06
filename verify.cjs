@@ -1291,7 +1291,11 @@ const salvage = JSON.parse(G(`JSON.stringify((()=>{
   return out;
 })())`));
 check('配件可拆出原材料', Array.isArray(salvage.barrel) && salvage.barrel.length>0 ? 1 : 0, 1, 0.001);
-check('枪管拆金属 / 瞄具拆电子', /steel|alloy|scrap/.test(salvage.barrel[0].id) && /copper|circuit|coil/.test(salvage.optic[0].id) ? 1 : 0, 1, 0.001);
+/* v0.26.0：材料扩充到每阶 3 种后，改用「材料 tag 语义」判定而不是硬编码 id 白名单，
+   否则每加一种材料都要回来改一次断言。 */
+check('枪管拆金属 / 瞄具拆电子',
+  G('(RAID_MAT_BY_ID["'+salvage.barrel[0].id+'"]||{}).tag') === "金属" &&
+  G('(RAID_MAT_BY_ID["'+salvage.optic[0].id+'"]||{}).tag') === "电子" ? 1 : 0, 1, 0.001);
 check('改装模块不可拆解', salvage.core === null ? 1 : 0, 1, 0.001);
 check('高档配件拆出更高档材料', salvage.hiTier > salvage.loTier ? 1 : 0, 1, 0.001);
 
@@ -2309,15 +2313,18 @@ check('2D op 手电按距离淡出并限流',
 check('3D 也画 op 手电（光池 + 脚下余晖，带 z-buffer 遮挡）',
   /const ops = \(R\.ops\|\|\[\]\)\.filter\(o=>o!==p/.test(__fp2) && /if\(zb\[c\] < d1 - 24\) continue;/.test(__fp2) ? 1 : 0, 1, 0.001);
 
-/* --- ② 屋内的箱子在屋外不显示 --- */
-check('raidRoomAt：室外返回 null / 室内返回房间对象',
-  G('raidRoomAt(5,5)') === null && G('(function(){var rm=RAID_ROOMS.find(r=>!r.open&&!r.extract);return raidRoomAt(rm.x+rm.w/2, rm.y+rm.h/2)===rm;})()') ? 1 : 0, 1, 0.001);
-check('2D 容器按「同一房间」过滤（不是「都在室内」）',
-  /if\(c\._room && c\._room!==pRoom\) continue;/.test(__rd2) ? 1 : 0, 1, 0.001);
+/* --- ② v0.26.0：用户要求删除「进屋才看到」的旧规则，改为统一的手电 / 近身可见性 --- */
+check('raidRoomAt 函数仍在（地形判定用），但不再用于容器可见性',
+  G('raidRoomAt(5,5)') === null && G('(function(){var rm=RAID_ROOMS.find(r=>!r.open&&!r.extract);return raidRoomAt(rm.x+rm.w/2, rm.y+rm.h/2)===rm;})()')
+  && !/c\._room!==pRoom/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('2D 容器走 raidContainerVisible（不再按房间过滤）',
+  /if\(!raidContainerVisible\(R,c\)\) continue;/.test(__rd2) &&
+  !/const pRoom =/.test(__rd2) ? 1 : 0, 1, 0.001);
 check('3D 容器 / 地面堆共用同一套可见性判定',
-  /const roomVisible = \(c\)=>/.test(__fp2) && /if\(!roomVisible\(c\)\) continue;/.test(__fp2) && /if\(!roomVisible\(g\)\) continue;/.test(__fp2) ? 1 : 0, 1, 0.001);
-check('房间归属惰性缓存（每帧不重复遍历房间表）',
-  /if\(!\("_room" in c\)\) c\._room=raidRoomAt\(c\.x, c\.y\);/.test(__rd2) ? 1 : 0, 1, 0.001);
+  /if\(!raidContainerVisible\(R,c\)\) continue;/.test(__fp2) &&
+  /if\(!raidContainerVisible\(R,g\)\) continue;/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('2D 地面堆也走同一套判定',
+  /if\(!raidContainerVisible\(R,g\)\) continue;/.test(__rd2) ? 1 : 0, 1, 0.001);
 
 /* --- ③ 护甲 / 头盔品质色 + 去掉「掉落可至…」 --- */
 check('商店 / 结算 / 回收超市都不再出现「掉落可至」',
@@ -2638,6 +2645,168 @@ check('负伤害不会变成治疗（钳到 0，最多按最小 1 点结算）',
 const tPos = softT();
 const dealt = (()=>{ const h0=tPos.hp; Raid._damage(tPos, 10, { isPlayer:true, x:0, y:0, name:"T" }, gun("none"), phys); return h0-tPos.hp; })();
 check('正常伤害链路未被守卫误伤（10 点仍照常结算）', dealt > 0 ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 46. 光照视野 / 黑市 5~8 / 防具穿戴 / 钥匙折旧 / 扩散 / 材料（v0.26.0）
+ * ========================================================================== */
+console.log('\n=== 46. 光照视野 / 黑市 5~8 / 防具穿戴 / 钥匙折旧 / 扩散 / 材料（v0.26.0）===');
+
+/* --- ① 统一光照判定 --- */
+check('RAID_LIT 常量（半角 / 射程 / 近身 / 受击窗口）',
+  G('RAID_LIT.half')===0.42 && G('RAID_LIT.reach')===560 &&
+  G('RAID_LIT.nearBox')===110 && G('RAID_LIT.hitByTime')===3.0 ? 1 : 0, 1, 0.001);
+const __litGeo = JSON.parse(G(`JSON.stringify((()=>{
+  const R={navCS:null};   // 无索引 → 跳过遮挡，纯角度 / 距离
+  const blocked={navCS:100,_rayLight:function(){return 100;}};
+  return {
+    front:raidBeamLit(R,0,0,0, 300,0, 0.42,560),
+    back: raidBeamLit(R,0,0,0,-300,0, 0.42,560),
+    side: raidBeamLit(R,0,0,0, 0,300, 0.42,560),
+    far:  raidBeamLit(R,0,0,0, 600,0, 0.42,560),
+    wall: raidBeamLit(blocked,0,0,0, 300,0, 0.42,560)
+  };
+})())`));
+check('手电正前方照得到', __litGeo.front===true ? 1 : 0, 1, 0.001);
+check('背后 / 侧面 / 超出射程都照不到',
+  !__litGeo.back && !__litGeo.side && !__litGeo.far ? 1 : 0, 1, 0.001);
+check('建筑遮挡让光停在墙前（不透视）', __litGeo.wall===false ? 1 : 0, 1, 0.001);
+check('遮挡统一走 _rayLight（不是另写建筑判定）',
+  /R\._rayLight\(ox,oy,dx\/d,dy\/d,reach\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const __vis = JSON.parse(G(`JSON.stringify((()=>{
+  /* 沙箱里 ViewMode 可能是 3D stub，会把朝向换成 yaw；临时强制 2D 用 p.angle */
+  let old=null;
+  if(typeof ViewMode!=="undefined"){ old=ViewMode.is3D; ViewMode.is3D=function(){return false;}; }
+  const R={player:{x:0,y:0,angle:0},navCS:null};
+  const out={ahead:raidPlayerLit(R,300,0), behind:raidPlayerLit(R,-300,0),
+          near:raidContainerVisible(R,{x:80,y:0}), dark:raidContainerVisible(R,{x:600,y:0}),
+          ai:raidAiLit(R,{x:0,y:0,angle:0,cls:"scav"},300,0)};
+  if(old) ViewMode.is3D=old;
+  return out;
+})())`));
+check('玩家手电：前方可见 / 背后不可见', __vis.ahead===true && __vis.behind===false ? 1 : 0, 1, 0.001);
+check('箱子：近身可见 / 远处黑暗不可见', __vis.near===true && __vis.dark===false ? 1 : 0, 1, 0.001);
+check('AI 用自己的手电判定', __vis.ai===true ? 1 : 0, 1, 0.001);
+check('AI 视野接入 raidAiLit（两处）',
+  (raidSrc.match(/raidAiLit\(this,b,/g)||[]).length>=2 ? 1 : 0, 1, 0.001);
+check('AI 索敌保留 _los（光和子弹都不穿墙）',
+  /if\(!locked && !raidAiLit\(this,b,o\.x,o\.y\)\) return;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('玩家自瞄只认玩家光锥', /o&&o\.isPlayer\) \? raidPlayerLit\(this,x,y\) : raidAiLit/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('容器交互也走可见性（看不见就摸不到）',
+  (raidSrc.match(/if\(!raidContainerVisible\(this,c\)\) continue;/g)||[]).length>=2 ? 1 : 0, 1, 0.001);
+check('「进屋才看到」旧规则已彻底移除',
+  !/c\._room!==pRoom/.test(raidSrc) && !/const roomVisible/.test(__fp2) &&
+  !/const pRoom =/.test(__rd2) ? 1 : 0, 1, 0.001);
+
+/* --- ② 受击 3 秒锁定 --- */
+const __hit = JSON.parse(G(`JSON.stringify((()=>{
+  const t={}, a={x:1,y:1,alive:true};
+  raidHitLock(t,a);
+  return {ref:t.hitByRef===a, win:(t.hitByT||0)>M.now(), locked:raidHitLocked(t,a), other:raidHitLocked(t,{})};
+})())`));
+check('受击记录攻击者与 3 秒窗口', __hit.ref && __hit.win && __hit.locked && !__hit.other ? 1 : 0, 1, 0.001);
+check('_damage 挂上 raidHitLock（玩家与 AI 共用）',
+  /raidHitLock\(target, attacker\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('自瞄受击例外但仍要 _los',
+  /hb && hb\.alive && \(o\.hitByT\|\|0\)>M\.now\(\)/.test(raidSrc) &&
+  /this\._los\(o\.x,o\.y,hb\.x,hb\.y\)\) return hb;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 受击目标优先级最高（-4000）', /locked \? -4000/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ③ 黑市只卖 5~8 档（枪 / 盾 / 甲 / 盔） --- */
+check('黑市档位表为 [5,6,7,8]', /const TIERS=\[5,6,7,8\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('黑市枪走 black 强化', /this\._shopGun\(t, undefined, true\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('_shopGun 的 black 分支：+8 ilvl / 伤害 ×1.18 / 估值 ×1.25',
+  /\(black\?8:0\)/.test(raidSrc) && /w\.dmg=Math\.round\(\(w\.dmg\|\|0\)\*1\.18\)/.test(raidSrc) &&
+  /w\.value=Math\.round\(\(w\.value\|\|0\)\*1\.25\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('货架新增 gears 品类', /gears:\[\]/.test(raidSrc) && /out\.gears\.push\(it\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const __black = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Object.create(Raid); R._uid=function(){return "probe"+Math.random();};
+  const st=R._shopStock("black");
+  return {guns:st.guns.length, gear:st.gears.length,
+          qTiers:st.guns.map(g=>g.qTier),
+          kinds:[...new Set(st.gears.map(g=>g.kind))].sort(),
+          tiers:[...new Set(st.gears.map(g=>g.tier))].sort((a,b)=>a-b),
+          allBlack:st.guns.every(g=>g.black===true)};
+})())`));
+check('黑市 4 把枪，档位恰为 5/6/7/8',
+  __black.guns===4 && __black.qTiers.join(",")==="5,6,7,8" ? 1 : 0, 1, 0.001);
+check('黑市 12 件防具，护甲/头盔/护盾各 4 档',
+  __black.gear===12 && __black.kinds.join(",")==="armor,helmet,shield" ? 1 : 0, 1, 0.001);
+check('防具档位同为 5~8', __black.tiers.join(",")==="5,6,7,8" ? 1 : 0, 1, 0.001);
+check('黑市枪都带 black 强化标记', __black.allBlack===true ? 1 : 0, 1, 0.001);
+check('商店 UI 渲染 gears 区块', /sh\.stock\.gears/.test(raidSrc) && /gearCard\(g,"token",i\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('GP 币购买链路支持 tokengear',
+  /pay==="tokengears"/.test(raidSrc) || /pay==="tokengear"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('购买时按 kind 分栏并做容量检查',
+  /g\.kind==="shield" \? "shields" : g\.kind==="helmet" \? "helmets" : "armors"/.test(raidSrc) &&
+  /arr\.length>=RAID_INV_CAP\[key\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ④ 防具「穿戴中 ↔ 放入背包」 --- */
+check('装备中区标 [穿戴中] 且能给三类防具放回背包',
+  /\[穿戴中\] 护甲/.test(raidSrc) && /\[穿戴中\] 头盔/.test(raidSrc) && /\[穿戴中\] 护盾/.test(raidSrc) &&
+  /null, null, null, "armor"\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('背包区标 [背包] 且三类都能穿上',
+  /\[背包\] /.test(raidSrc) && /`armors:\$\{i\}`, `armors:\$\{i\}`/.test(raidSrc) &&
+  /`shields:\$\{i\}`, `shields:\$\{i\}`/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('data-equip 按类型分派', /else this\._invEquipGear\(type, idx\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('data-stow 按类型分派', /this\._stowGear\(w\) : this\._stowGun\(w\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const __stow = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Object.create(Raid);
+  R.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],receivers:[],keys:[],ammo:{}};
+  R.carried={weapons:[],armor:{kind:"armor",name:"测试甲",tier:5,maxArmor:100,dr:0.4},helmet:null,shield:null};
+  R.player={x:0,y:0,armorTier:5,armor:100,maxArmor:100,dr:0.4,armorRegen:0,armorBroken:false,
+            helmetTier:0,helmetDr:0,maxHelmetArmor:0,helmetArmor:0,maxShield:0,shield:0,shieldGear:null};
+  R._pick=function(){};
+  const ok=R._stowGear("armor");
+  /* 必须在「穿上」之前快照，否则读到的是重新装备后的状态 */
+  const s1={ok:ok,bag:R.inv.armors.length,tier:R.player.armorTier};
+  const back=R._invEquipGear("armors",0);
+  return {ok:s1.ok,bag:s1.bag,tier:s1.tier,
+          back:back,bag2:R.inv.armors.length,tier2:R.player.armorTier,
+          worn:R.carried.armor&&R.carried.armor.name};
+})())`));
+check('卸下：进背包、玩家字段清空', __stow.ok && __stow.bag===1 && __stow.tier===0 ? 1 : 0, 1, 0.001);
+check('穿上：从背包取出、重新生效', __stow.back && __stow.bag2===0 && __stow.tier2===5 &&
+  __stow.worn==="测试甲" ? 1 : 0, 1, 0.001);
+
+/* --- ⑤ 钥匙价值随耐久折旧 --- */
+const __key = JSON.parse(G(`JSON.stringify((()=>{
+  const k=raidMakeKey(3);
+  const full=k.value, max=k.maxUses;
+  k.uses=Math.max(1,Math.floor(max/2)); raidKeyRefresh(k); const half=k.value;
+  k.uses=1; raidKeyRefresh(k); const low=k.value;
+  return {full:full,half:half,low:low,max:max};
+})())`));
+check('钥匙满耐久按基准估值', __key.full>0 ? 1 : 0, 1, 0.001);
+check('剩余次数越少价值越低（full > half > low）',
+  __key.full > __key.half && __key.half > __key.low && __key.low>0 ? 1 : 0, 1, 0.001);
+check('开锁后刷新价值（次数机制不变）',
+  /k\.uses=\(k\.uses\|\|1\)-1;\s*\n\s*raidKeyRefresh\(k\);/.test(raidSrc) &&
+  /if\(k\.uses<=0\)\{/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('物品栏钥匙显示折旧后估值', /money\(raidKeyValue\(k\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑥ 静止收束散布 --- */
+check('静止散布系数 0.65', G('RAID_STILL_SPREAD'), 0.65, 0.0001);
+check('只在 mv<0.05 时生效，移动中不变',
+  /mv<0\.05 \? RAID_STILL_SPREAD : 1/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑦ 材料：低阶更废料 + 每阶 3 种 --- */
+const __mats = JSON.parse(G(`JSON.stringify((()=>{
+  const per={}; for(const m of RAID_MATERIALS) per[m.tier]=(per[m.tier]||0)+1;
+  return {n:RAID_MATERIALS.length, per:per,
+          scrap:RAID_MAT_BY_ID.scrap.name, cloth:RAID_MAT_BY_ID.cloth.name,
+          steel:RAID_MAT_BY_ID.steel.name, alloy:RAID_MAT_BY_ID.alloy.name,
+          bolt:RAID_MAT_BY_ID.bolt.name, laser:RAID_MAT_BY_ID.laser.name};
+})())`));
+check('材料由 18 种扩到 27 种（每阶 3 种）',
+  __mats.n===27 && Object.keys(__mats.per).length===9 &&
+  Object.keys(__mats.per).every(k=>__mats.per[k]===3) ? 1 : 0, 1, 0.001);
+check('低阶名称改得更废料',
+  __mats.scrap==="锈铁片" && __mats.cloth==="脏布条" &&
+  __mats.steel==="普通钢板" && __mats.alloy==="回收铝片" ? 1 : 0, 1, 0.001);
+check('新材料 id 稳定可用（旧螺丝 / 激光晶体）',
+  __mats.bolt==="旧螺丝" && __mats.laser==="激光晶体" ? 1 : 0, 1, 0.001);
+check('拆解族按 tier 递增（新料不破坏高档产出）',
+  G('(()=>{for(const f in SALVAGE_FAMILY){let p=-1;for(const id of SALVAGE_FAMILY[f]){const m=RAID_MAT_BY_ID[id];if(!m||m.tier<p)return false;p=m.tier;}}return true;})()') ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

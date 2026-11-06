@@ -594,6 +594,74 @@ const RAID_FLASH_OP = {
   maxOps:8,         // 单帧最多绘制几束（按距离排序后取最近的）
 };
 
+/* ==================== v0.26.0：光照可见性 ====================
+ * 规则由用户指定：「谁的手电照到，谁才看得见」——
+ *   AI 视野 = AI **自己**的手电（v0.25.0 已给 AI 画出光锥，这里让它真的有作用）；
+ *   玩家自瞄 / 容器可见 = **玩家**的手电；
+ *   被击中后 3 秒是例外（raidHitLocked），直接锁定攻击者但仍受 _los 遮挡。
+ *
+ * 遮挡统一走 Raid._rayLight：它读 navCell（墙 / 掩体 / 灌木全在里面）并返回精确
+ * 距离，所以「隔墙看不见」是几何事实，不需要再写第二套建筑判定。
+ * 全部只读坐标 / 朝向 / 静态表，不读 RNG、不读局内时钟 —— 联机两端一致。
+ */
+/* v0.26.0：静止（几乎没移动）时收束射击散布；移动时原样不动。 */
+const RAID_STILL_SPREAD = 0.65;
+
+const RAID_LIT = {
+  half:      0.42,   // 与 2D beam / 3D 手电锥半角一致
+  widen:     1.34,   // 最外层羽化，判定边界与画面亮斑外缘对齐
+  reach:     560,    // 与手电 reach 一致，绝不加长（加长 = 光穿墙）
+  aiReachCap:560,    // AI 手电不比玩家照得远
+  aiHalf:    0.55,   // AI 略宽一点，免得夜里全瞎
+  nearBox:   110,    // 箱子「就在身边」半径（交互半径 78 之外留余量）
+  hitByTime: 3.0,    // 受击后锁定攻击者 3 秒
+};
+
+/* (x,y) 是否落在 (ox,oy) 朝 ang 的那束手电里。 */
+function raidBeamLit(R, ox, oy, ang, x, y, half, reach){
+  const dx=x-ox, dy=y-oy, d=Math.hypot(dx,dy);
+  if(d>reach || d<1) return false;
+  if(Math.abs(M.normAngle(Math.atan2(dy,dx)-ang))>half) return false;
+  if(R && typeof R._rayLight==="function" && R.navCS!=null){
+    const hit=R._rayLight(ox,oy,dx/d,dy/d,reach);
+    if(hit < d-8) return false;        // 光被墙挡在目标之前 → 在阴影里
+  }
+  return true;
+}
+/* 玩家的「看得到」朝向：2D 用 p.angle，3D 用 ViewMode.yaw（开火方向同源）。 */
+function raidPlayerAimAngle(R){
+  if(typeof ViewMode!=="undefined" && ViewMode.is3D && ViewMode.is3D())
+    return ViewMode.yaw||0;
+  return (R && R.player && R.player.angle)||0;
+}
+function raidPlayerLit(R, x, y){
+  const p=R&&R.player; if(!p) return false;
+  return raidBeamLit(R,p.x,p.y,raidPlayerAimAngle(R),x,y,
+                     RAID_LIT.half*RAID_LIT.widen,RAID_LIT.reach);
+}
+function raidAiLit(R, b, x, y){
+  if(!b) return false;
+  const sense=(typeof raidAISense==="function")?raidAISense(b):null;
+  const reach=Math.min(RAID_LIT.aiReachCap, sense?sense.sight:520);
+  return raidBeamLit(R,b.x,b.y,b.angle||0,x,y,RAID_LIT.aiHalf,reach);
+}
+function raidContainerVisible(R, c){
+  if(!c) return false;
+  const p=R&&R.player; if(!p) return true;
+  if(M.dist(p.x,p.y,c.x,c.y)<=RAID_LIT.nearBox) return true;
+  return raidPlayerLit(R,c.x,c.y);
+}
+/* 受击锁定用 M.now()（performance.now()/1000）做本地 3 秒窗口：
+   不进联机快照、不参与任何结算，两端不会因此分叉。 */
+function raidHitLock(target, attacker){
+  if(!target || !attacker || attacker===target || attacker.ghost) return;
+  target.hitByRef=attacker;
+  target.hitByT=M.now()+RAID_LIT.hitByTime;
+}
+function raidHitLocked(target, who){
+  return !!(target && who && target.hitByRef===who && (target.hitByT||0)>M.now());
+}
+
 /* ==================== v0.23.0：8 个核心 POI ====================
  * 不新建房间簇 —— RAID_ROOMS 里已经有 8 组天然成簇的地点，直接把簇升级成 POI：
  *   区域内给品质加成（luck）+ 容器类型偏向（kinds）+ 专属精英怪（elite）
@@ -964,11 +1032,13 @@ function raidSpeedMul(R){
  * 配件不再只是「卖钱」或「装枪」：拆掉能换回同族的原材料，材料再拿去工坊开工。
  * 产出按槽位归属的材料族（金属 / 电子 / 化工 / 织物）与配件档次折算，
  * 高档配件拆出高档料 —— 拆一堆垃圾配件不会凭空变出航空铝坯。 */
+/* ⚠ 每个族必须按材料 tier **递增**排列：raidSalvageMat 取「最后一个不超过目标档」的
+   id，顺序乱了就会让高档配件拆出低档料。新增材料一律插到对应档位的位置。 */
 const SALVAGE_FAMILY = {
-  metal:  ["scrap","steel","alloy","stariron"],   // T0 / T1 / T2 / T6
-  elec:   ["copper","circuit","coil"],            // T1 / T3 / T5
-  chem:   ["rubber","polymer","eridium"],         // T2 / T3 / T5
-  textile:["cloth","fiber"],                      // T0 / T4
+  metal:  ["scrap","bolt","steel","alloy","stariron","fastener","rareearth"],
+  elec:   ["copper","circuit","solder","coil"],
+  chem:   ["rubber","foam","polymer","carbon","eridium","propellant"],
+  textile:["cloth","fiber"],
 };
 const SALVAGE_BY_SLOT = {
   barrel:["metal","metal"], mag:["chem","metal"], optic:["elec","elec"],
@@ -1004,25 +1074,36 @@ function raidSalvageYield(pt){
   return out;
 }
 
+/* v0.26.0：低阶名称改得更「废料」，高阶保持军工/精密感；每阶由 2 种扩到 3 种。
+   id 是存档/配方/拆解的稳定键，只改 name 与新增条目，绝不改已有 id。 */
 const RAID_MATERIALS = [
-  { id:"scrap",    name:"废金属",     tier:0, value:7,    tag:"金属" },
-  { id:"cloth",    name:"破布",       tier:0, value:5,    tag:"织物" },
-  { id:"steel",    name:"特种钢",     tier:1, value:20,   tag:"金属" },
-  { id:"copper",   name:"铜线",       tier:1, value:16,   tag:"电子" },
-  { id:"alloy",    name:"钛合金板",   tier:2, value:70,   tag:"金属" },
-  { id:"rubber",   name:"合成橡胶",   tier:2, value:60,   tag:"化工" },
-  { id:"circuit",  name:"军用电路板", tier:3, value:400,  tag:"电子" },
-  { id:"polymer",  name:"聚合物",     tier:3, value:340,  tag:"化工" },
-  { id:"fiber",    name:"芳纶纤维",   tier:4, value:1050, tag:"织物" },
-  { id:"magnet",   name:"伺服电机",   tier:4, value:1180, tag:"电子" },
-  { id:"eridium",  name:"发射药",     tier:5, value:2600, tag:"化工" },
-  { id:"coil",     name:"火控线缆",   tier:5, value:3000, tag:"电子" },
-  { id:"stariron", name:"航空铝坯",   tier:6, value:6500, tag:"金属" },
-  { id:"antibat",  name:"锂电组",     tier:6, value:7300, tag:"电子" },
-  { id:"void",     name:"复合陶瓷板", tier:7, value:16000,tag:"金属" },
-  { id:"mythshard",name:"精密轴承",   tier:7, value:18000,tag:"金属" },
-  { id:"singul",   name:"光学测距模块",tier:8, value:46000,tag:"光学" },
-  { id:"prism",    name:"镀膜镜片组", tier:8, value:53000,tag:"光学" },
+  { id:"scrap",    name:"锈铁片",       tier:0, value:7,    tag:"金属" },
+  { id:"cloth",    name:"脏布条",       tier:0, value:5,    tag:"织物" },
+  { id:"bolt",     name:"旧螺丝",       tier:0, value:6,    tag:"金属" },
+  { id:"steel",    name:"普通钢板",     tier:1, value:20,   tag:"金属" },
+  { id:"copper",   name:"废铜线",       tier:1, value:16,   tag:"电子" },
+  { id:"glass",    name:"碎玻璃",       tier:1, value:12,   tag:"光学" },
+  { id:"alloy",    name:"回收铝片",     tier:2, value:70,   tag:"金属" },
+  { id:"rubber",   name:"旧胶皮",       tier:2, value:60,   tag:"化工" },
+  { id:"foam",     name:"破海绵",       tier:2, value:52,   tag:"织物" },
+  { id:"circuit",  name:"拆机电路板",   tier:3, value:400,  tag:"电子" },
+  { id:"polymer",  name:"回收塑料粒",   tier:3, value:340,  tag:"化工" },
+  { id:"solder",   name:"废焊锡",       tier:3, value:360,  tag:"电子" },
+  { id:"fiber",    name:"芳纶纤维",     tier:4, value:1050, tag:"织物" },
+  { id:"magnet",   name:"伺服电机",     tier:4, value:1180, tag:"电子" },
+  { id:"carbon",   name:"碳纤维布",     tier:4, value:1100, tag:"织物" },
+  { id:"eridium",  name:"发射药",       tier:5, value:2600, tag:"化工" },
+  { id:"coil",     name:"火控线缆",     tier:5, value:3000, tag:"电子" },
+  { id:"propellant",name:"高纯推进剂",  tier:5, value:2800, tag:"化工" },
+  { id:"stariron", name:"航空铝坯",     tier:6, value:6500, tag:"金属" },
+  { id:"antibat",  name:"锂电组",       tier:6, value:7300, tag:"电子" },
+  { id:"fastener", name:"钛合金紧固件", tier:6, value:6900, tag:"金属" },
+  { id:"void",     name:"复合陶瓷板",   tier:7, value:16000,tag:"金属" },
+  { id:"mythshard",name:"精密轴承",     tier:7, value:18000,tag:"金属" },
+  { id:"rareearth",name:"稀土磁体",     tier:7, value:17000,tag:"电子" },
+  { id:"singul",   name:"光学测距模块", tier:8, value:46000,tag:"光学" },
+  { id:"prism",    name:"镀膜镜片组",   tier:8, value:53000,tag:"光学" },
+  { id:"laser",    name:"激光晶体",     tier:8, value:49000,tag:"光学" },
 ];
 const RAID_MAT_BY_ID = {};
 for(const m of RAID_MATERIALS) RAID_MAT_BY_ID[m.id]=m;
@@ -1129,11 +1210,26 @@ function raidTokenWorth(n){ return Math.max(0, Math.round((n||0)*RAID_TOKEN_RATE
 
 const RAID_LOCK_NAME = ["", "I 级", "II 级", "III 级", "IV 级", "V 级"];
 function raidKeyDef(lv){ return RAID_KEYS[M.clamp(Math.round(lv||1),1,5)-1]; }
+/* v0.26.0：次数机制不变（开一次扣一次、用尽报废），但价值随剩余次数逐渐下降：
+   满耐久按基准估值，报废前仍留 30% 残值。所有涉及 value 的地方（UI / 结算 / 售卖）
+   因此自动反映磨损，不需要各自再算一遍。 */
+function raidKeyValue(k){
+  if(!k) return 0;
+  const d=raidKeyDef(k.lv||1)||{};
+  const base=d.value||k.value||0;
+  const max=Math.max(1,k.maxUses||k.uses||1);
+  const u=M.clamp((k.uses||0)/max,0,1);
+  return Math.max(1,Math.round(base*(0.30+0.70*u)));
+}
+function raidKeyRefresh(k){
+  if(k && k.kind==="key") k.value=raidKeyValue(k);
+  return k;
+}
 function raidMakeKey(lv, uses){
   const d=raidKeyDef(lv);
-  return { kind:"key", id:"key"+d.lv, lv:d.lv, name:d.name, color:d.color,
+  return raidKeyRefresh({ kind:"key", id:"key"+d.lv, lv:d.lv, name:d.name, color:d.color,
     uses:Math.max(1, Math.round(uses||d.uses)), maxUses:d.uses, value:d.value,
-    uid:"ky"+Math.floor(Math.random()*1e9).toString(36) };
+    uid:"ky"+Math.floor(Math.random()*1e9).toString(36) });
 }
 /* 钥匙的获取路径（v0.21.7 起第三条回来了）：
  *   ① 掉落：上锁保险箱（等级 i 的箱子最多掉 i+1 级的钥匙）与 Raider；

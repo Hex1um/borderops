@@ -923,21 +923,14 @@ const FPView = {
                 : (o.cls === "scav") ? "#c0705a" : "#88a078";
       add(o.x, o.y, "unit", o, 168, o.name||"", col);
     }
-    /* v0.25.0：室内容器（箱子 / 尸体 / 地面物品堆）只在玩家进入同一房间时可见。
-       与 2D raid-render 的容器循环共用同一套判定与 _room 缓存，两个视角不会出现
-       「2D 看得见、切 3D 就没了」的错位。 */
-    const pRoom = (typeof raidRoomAt==="function") ? raidRoomAt(p.x, p.y) : null;
-    const roomVisible = (c)=>{
-      if(!c || typeof raidRoomAt!=="function") return true;
-      if(!("_room" in c)) c._room=raidRoomAt(c.x, c.y);
-      return !c._room || c._room===pRoom;
-    };
+    /* v0.26.0：容器可见性统一走 raidContainerVisible（玩家手电 / 近身），
+       与 2D raid-render 共用同一套判定；v0.25.0 的「同房间才可见」过滤已删除。 */
     for(const c of (R.containers||[])){
-      if(!roomVisible(c)) continue;
+      if(!raidContainerVisible(R,c)) continue;
       add(c.x, c.y, "box", c, 76, c.locked?"上锁箱":"物资箱", c.searched?"#5d5a50":"#a2895c");
     }
     for(const g of (R.grounds||[])){
-      if(!roomVisible(g)) continue;
+      if(!raidContainerVisible(R,g)) continue;
       add(g.x, g.y, "ground", g, 34, "", "#e2c46a");
     }
     for(const s of (R.shops||[])){

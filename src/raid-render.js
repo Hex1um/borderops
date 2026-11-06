@@ -791,6 +791,7 @@ const RenderRaid = {
     // 地面物品堆（背包满时溢出落地，腾出空间后可回来捡）
     if(R.grounds){
       for(const g of R.grounds){
+        if(!raidContainerVisible(R,g)) continue;   // v0.26.0：与箱子同一套光照可见性
         if(g.searched) continue;
         if(g.x>cam.x+vw+60||g.x<cam.x-60||g.y>cam.y+vh+60||g.y<cam.y-60) continue;
         const n=(g.drops||[]).length;
@@ -826,18 +827,13 @@ const RenderRaid = {
     }
 
     // 补给箱
-    /* v0.25.0「屋内的箱子在屋外不要显示，进去了才显示」：
-       以前箱子是全场透显的，玩家在屋外就能把房间里的箱子数完，等于隔着墙透视。
-       现在按「是否和玩家处于同一个封闭房间」过滤：室外箱永远可见（本来就在天上），
-       室内箱只有玩家进了同一个房间才画。房间归属按容器坐标算一次并缓存在 _room 上
-       （容器是静态的，坐标不会变；动态产生的尸体 / 空投走同一套惰性计算）。 */
-    const pRoom = (R.player && typeof raidRoomAt==="function") ? raidRoomAt(R.player.x, R.player.y) : null;
+    /* v0.26.0：删掉 v0.25.0 的「进屋才看到」房间过滤（玩家明确要求移除）。
+       现在统一按「玩家手电照到 或 就在身边」判定：远处黑暗里的箱子不再透显，
+       但也不再因为隔着一堵房间墙就必须进屋才看得见。判定放在 raidContainerVisible，
+       2D 渲染 / 3D 精灵 / E 交互共用一份，切视角不会错位。 */
     for(const c of R.containers){
       if(c.x>cam.x+vw+80||c.x<cam.x-80||c.y>cam.y+vh+80||c.y<cam.y-80) continue;
-      if(typeof raidRoomAt==="function"){
-        if(!("_room" in c)) c._room=raidRoomAt(c.x, c.y);
-        if(c._room && c._room!==pRoom) continue;
-      }
+      if(!raidContainerVisible(R,c)) continue;
       const s=13;
       if(c.body){
         // 尸体：暗红色

@@ -41,18 +41,25 @@ Object.assign(Raid, {
     }
     return best||{x,y};
   },
-  _shopGun(rarTier, type){
+  _shopGun(rarTier, type, black){
     const cfgId=RAID_TIER_TO_RARITY[rarTier]||"white";
     const hi=rarTier>=4?(rarTier-3)*3:0;
-    const ilvl=rarTier*3 + hi + 12 + RNG.ri(0,4);
+    /* v0.26.0：黑市货额外 +8 ilvl、伤害 ×1.18、估值 ×1.25，
+       打 black 标记便于 UI / 结算识别。普通枪店不受影响。 */
+    const ilvl=rarTier*3 + hi + 12 + RNG.ri(0,4) + (black?8:0);
     const w=blGunGen(ilvl,{ type:type||RNG.pick(RAID_GUN_TYPES), rarity:cfgId });
     ensureGunAffixes(w);
+    if(black){
+      w.dmg=Math.round((w.dmg||0)*1.18);
+      w.value=Math.round((w.value||0)*1.25);
+      w.black=true;
+    }
     w.uid=this._uid(); w.kind="weapon";
     w.qTier=rarTier; w.qName=RAID_TIERS[rarTier].name; w.qColor=RAID_TIERS[rarTier].color;
     return w;
   },
   _shopStock(kind){
-    const out={ guns:[], parts:[], mats:[], meds:[], keys:[], ammo:[] };
+    const out={ guns:[], parts:[], mats:[], meds:[], keys:[], ammo:[], gears:[] };
     /* 一条子弹（30 发）：价格按「单发估值 × 30」走局内 0.8× 折扣 */
     const pack=(cal, lv, payKind)=>{
       const d=ammoDef(cal, lv);
@@ -108,11 +115,27 @@ Object.assign(Raid, {
       out.keys=[raidMakeKey(1), raidMakeKey(2)];
       for(const k of out.keys) k.shopPrice=raidShopPrice(raidKeyDef(k.lv).value, "key"+k.lv);
     } else if(kind==="black"){
-      const tokenPrice={ 6:26, 7:48, 8:86 };
-      for(const t of [6,7,8]){
-        const g=this._shopGun(t);
+      /* v0.26.0：黑市只卖等级高于 4 的装备，即 5~8 四档；
+         枪 / 护盾 / 护甲 / 头盔是同一批档位，全部 GP 币结算。 */
+      const tokenPrice={ 5:18, 6:26, 7:48, 8:86 };
+      const TIERS=[5,6,7,8];
+      for(const t of TIERS){
+        const g=this._shopGun(t, undefined, true);
         g.tokenPrice=tokenPrice[t]||60;
         out.guns.push(g);
+      }
+      /* 高品阶防护装备：t 同时作为防护等级与品质档，5~8 各一件。
+         价格略低于同档枪，强度按档位直接拉满（T5~T8 甲 / T5~T8 盾）。 */
+      for(const t of TIERS){
+        const base=tokenPrice[t]||60;
+        const mk=(it, mul)=>{
+          it.tokenPrice=Math.max(6,Math.round(base*mul));
+          it.qTier=t; it.qName=RAID_TIERS[t].name; it.qColor=RAID_TIERS[t].color;
+          out.gears.push(it);
+        };
+        mk(raidMakeArmor(t,t), 0.78);
+        mk(raidMakeHelmet(t,t), 0.66);
+        mk(raidMakeShield(t,t), 0.84);
       }
       /* v0.20.0：黑市卖高级弹（T4 / T5），GP 币结算 —— 高级弹只能从这里或 V 级箱稳定拿到 */
       for(const cal of ["light","mid","heavy"]){ out.ammo.push(pack(cal, 4, "token"), pack(cal, 5, "token")); }
@@ -360,6 +383,7 @@ Object.assign(Raid, {
     const k=this._bestKeyFor(lv);
     if(!k) return null;
     k.uses=(k.uses||1)-1;
+    raidKeyRefresh(k);   // v0.26.0：耐久下降 → 估值同步折旧（次数机制不变）
     if(k.uses<=0){
       const i=this.inv.keys.indexOf(k);
       if(i>=0) this.inv.keys.splice(i,1);
@@ -1220,7 +1244,12 @@ Object.assign(Raid, {
         const dd=M.dist(b.x,b.y,o.x,o.y);
         // 视距按 Scav / PMC / Boss 分级；玩家在近身范围内仍强行抢目标
         const sight = sense.sight;
-        const pri = (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;   // 玩家近身时强行抢目标
+        /* v0.26.0：AI 只在**自己手电**照到的地方能发现目标；受击 3 秒内例外，
+           且例外目标自带最高优先级（打我的人优先）。_los 依旧保留，光和子弹都不穿墙。 */
+        const locked = raidHitLocked(b,o);
+        if(!locked && !raidAiLit(this,b,o.x,o.y)) return;
+        const pri = locked ? -4000
+                  : (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;
         if((dd+pri)<d && dd<sight && this._los(b.x,b.y,o.x,o.y)){ d=dd; tgt=o; }
       };
       _consider(p);
@@ -1230,7 +1259,8 @@ Object.assign(Raid, {
       /* 索敌分级：Scav 视距短、反应慢、忘得快；PMC 更警觉；Boss 几乎即时锁定。
        * _detectT 累积「持续看见」的时间，视线中断会快速衰减；已警觉的 AI 重新发现目标时不再重复反应延迟。 */
       const grace = this.spawnGrace>0 && (tgt.isPlayer || tgt.remote);
-      const seenNow = tgt.alive && d<sense.sight && !grace && this._los(b.x,b.y,tgt.x,tgt.y);
+      const seenNow = tgt.alive && d<sense.sight && !grace && this._los(b.x,b.y,tgt.x,tgt.y)
+        && (raidHitLocked(b,tgt) || raidAiLit(this,b,tgt.x,tgt.y));
       b._detectT = seenNow ? (b._detectT||0)+dt : Math.max(0,(b._detectT||0)-dt*1.5);
       const canSee = seenNow && (b._detectT>=sense.react || !!b.lastSeen);
       if(canSee) b.lastSeen={ x:tgt.x, y:tgt.y, t:sense.memory };   // 记住最后位置，丢失视线也不马上忘

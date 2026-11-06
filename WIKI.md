@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（875 条断言 / 45 组）
+npm run verify       # 无浏览器依赖的逻辑回归（919 条断言 / 46 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -453,3 +453,9 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **负重是纯函数（v0.24.0）**：`raidLoadOf(R)` / `raidSpeedMul(R)` **只读 `inv`**，不许读 RNG / AI / `timer` —— 联机两端靠它算同一份减速。`RAID_LOAD_SHARE` 权重之和必须恒为 1（满载 load=1 → ×0.70）。故意不按物品 `value` 计价：孤品估值会是普通货的几十倍，捡一件就把移速打到底，但玩家并没有多背一吨东西。空手加成判定是 `(p.gun||p.secondary)?`，副手有枪不算空手。
 - **长短按拾取（v0.24.0）**：`_pickHold` 只对「未搜过且 `_groundEquipItem()` 有货」的容器生效；按住 `RAID_HOLD_EQUIP=0.45s` → `_equipFromGround` 只取一件，短按松手 → 原 `search` 读条整堆进背包。商店 / 设施 / 保险箱 / 空堆**不能**走进这条分支（保险箱 `drops` 未定义，天然被排除）。桌面长按读 `Input.keys['KeyE'|'Space']`，触摸读 `Input.useHeld`（★ 已改成 `_bindHold`）；`_start` 必须清 `_pickHold`，否则跨局残留。Q 循环传 `forceMain=true`，别让「填空手」把 Q 变成填副手。
 - **四类对比面板与溢出标记（v0.24.0）**：`_groundGunPanel` 是历史名，实际已泛化到 weapon / shield / armor / helmet；函数名和 `▲":worse?" ▼`、`better=!!cur && r.a>r.b`、M/k 估值格式都被 verify 锁着，改名要同步断言。调用点在 `if(c.ground)` **之外** —— 开箱后背包满留在原箱的那几件 `ground=false`，放进去就又没面板了。`spill:true` 只由 `_collect` 的溢出分支传，玩家主动丢弃 / 初始补给不带这个标记。局内「穿上护甲/头盔」走 `_wearGear`（此前只有带入的 `carried.armor/helmet` 生效），旧装备回背包、栏满落脚下。
+- **光照即视野（v0.26.0）**：AI 视野 / 玩家自瞄 / 容器可见**全部**走 `raidBeamLit` → `raidPlayerLit` / `raidAiLit` / `raidContainerVisible` 这一套，别在别处另写角度距离判定。遮挡必须用 `Raid._rayLight`（`navCell` 含全部碰撞体、精确距离），`_rayWall` 是 AI 视线/子弹用的（`losCell`、13px 采样），**别混**。`reach` 锁 560，加长就会穿墙。v0.25.0 的「同房间才可见」`raidRoomAt` 容器过滤已按用户要求删除，函数本身保留给地形判定；`raidContainerVisible` 的「近身 ≤110」必须 ≥ 交互半径 78，否则会出现看得见却摸不到。
+- **受击锁定用时间戳不用计时器（v0.26.0）**：`raidHitLock` 写 `hitByRef` + `hitByT = M.now()+3`，`raidHitLocked` 每次判 `M.now()`，不需要每帧递减、不进联机快照。窗口内绕过光照条件但**必须保留 `_los`**，否则隔墙互射。
+- **黑市只卖 5~8 档（v0.26.0）**：`_shopStock("black")` 的 `TIERS=[5,6,7,8]` 是硬约定；枪走 `_shopGun(t, undefined, true)`（黑市专属 `+8 ilvl` / `dmg×1.18` / `value×1.25` / `black` 标记，普通枪店不能带这个参数）。`out.gears` 是新增品类（护甲/头盔/护盾，t 同时当 tier 和 rarity），UI 的 `tokengear` 购买分支按 `kind` 分栏到 `inv.armors/helmets/shields`；新增品类时记得同步 `out` 初始结构、卡片渲染和购买分支三处。
+- **防具穿戴切换（v0.26.0）**：`_stowGear(which)` 卸下时必须把 `_wearShield` / `_wearGear` 写过的**所有**玩家字段清干净（`maxShield` / `shieldTier` / `shieldInvulnMax` / `armorTier` / `maxHelmetArmor` …），漏一个就会出现「卸下了还在生效」。`_invEquipGear` 先 `splice` 腾格再 `_swapEquip`，失败要还原；`data-equip` / `data-stow` 都按 `type` 分派，别再退化成只认数组下标。
+- **钥匙折旧 / 静止扩散 / 材料族（v0.26.0）**：钥匙**次数机制不变**，只有 `value` 随 `uses/maxUses` 折旧（`raidKeyRefresh`，报废前留 30% 残值），别把它改成百分比耐久。`RAID_STILL_SPREAD=0.65` 只在 `mv<0.05` 生效。材料表 `RAID_MATERIALS` 的 **id 是存档键，一个都不许改**，只改 `name` / 加条目；`SALVAGE_FAMILY` 每个族必须按 `tier` **递增**排列 —— `raidSalvageMat` 取「最后一个不超过目标档」的 id，顺序乱了高档配件会拆出低档料（verify 组 46 有专门断言）。
+- **git 隧道故障时的同步方式（v0.26.0 踩坑）**：Watt Toolkit 可能把 `github.com` / `api.github.com` 反代挂掉（`git fetch` 报 `CONNECT tunnel failed, response 502`、curl 返回 000），但 **`codeload.github.com` 与 `hex1um.github.io` 常常仍然可用**。此时用 `curl -k https://codeload.github.com/Hex1um/borderops/tar.gz/refs/heads/main` 拉完整归档覆盖工作区（保留 `.git`、只删远端已移除的 tracked 文件），并从 Pages 的 `CHANGELOG.md` 读更新说明。注意 Git Bash 的 `/tmp` = `%TEMP%`。**代码能同步，但 push 仍需隧道恢复**；恢复后先 `git fetch` → `git reset --soft origin/main`（保留工作区）→ 只提交本次改动 → `git push`，绝不强推。

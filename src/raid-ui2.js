@@ -70,6 +70,26 @@ UI.raidFieldShop=function(key){
     </div>`;
   };
 
+  /* v0.26.0：黑市高品阶防护装备（护盾 / 护甲 / 头盔），与枪同为 5~8 档 */
+  const gearCard=(g, payKind, idx)=>{
+    const price = payKind==="token" ? (g.tokenPrice||0) : (g.shopPrice||0);
+    const can = payKind==="token" ? tokens>=price : money>=price;
+    const kindName = g.kind==="shield" ? "护盾" : g.kind==="helmet" ? "头盔" : "护甲";
+    const qn = (RAID_TIERS[g.qTier]&&RAID_TIERS[g.qTier].name)||("T"+g.tier);
+    const stat = g.kind==="shield"
+      ? `容量 ${g.capacity||0} · 充能 ${g.rate||0}/s · 延迟 ${g.delay||0}s`
+      : `耐久 ${g.maxArmor||0} · 减伤 ${Math.round((g.dr||0)*100)}% · T${g.tier}`;
+    const col = g.qColor || (g.kind==="shield"?"#4fd6ff":"#ffd23f");
+    return `<div class="si">
+      <div class="si-name" style="color:${col}">${g.name} <span style="font-size:11px;opacity:.7">[${kindName} · ${qn}]</span></div>
+      <div class="si-stats">${stat} · 估值 ₽${priceTextShort(g.value||0)}</div>
+      <div class="si-buy">
+        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◈":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
+        <button class="btn ghost" data-fbuy="${payKind==="token"?"tokengear":"cashgear"}:${sid}:${idx}" ${can?"":"disabled"}>兑换</button>
+      </div>
+    </div>`;
+  };
+
   let body="";
   if(kind==="gun"||kind==="black"){
     const payKind = kind==="black" ? "token" : "cash";
@@ -89,6 +109,9 @@ UI.raidFieldShop=function(key){
           </div>`;
         }).join("")
         : "";
+      const gears=sh.stock.gears||[];
+      if(gears.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◈ 高品阶防护装备 · 5~8 档（GP 币兑换）</div>` +
+        gears.map((g,i)=>gearCard(g,"token",i)).join("");
       const bkeys=sh.stock.keys||[];
       if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◈ 高级钥匙（GP 币兑换 · 开同级及以下保险箱）</div>` +
         bkeys.map((k,i)=>keyCard(k,"token",i)).join("");
@@ -277,6 +300,20 @@ UI.raidFieldShop=function(key){
       R.tokens-=c.tokenPrice;
       R.inv.parts.push(c); shop.stock.parts.splice(idx,1);
       R._float(R.player.x, R.player.y-40, "兑换 "+(c.name||"改装模块"), c.color||"#c07bff");
+      SFX.ui(); UI.raidFieldShop(sid);
+    } else if(pay==="tokengear" || pay==="cashgear"){
+      const g=(shop.stock.gears||[])[idx]; if(!g) return;
+      const key = g.kind==="shield" ? "shields" : g.kind==="helmet" ? "helmets" : "armors";
+      const arr=R.inv[key]=R.inv[key]||[];
+      if(arr.length>=RAID_INV_CAP[key]){ capMsg("背包"+(g.kind==="shield"?"护盾":g.kind==="helmet"?"头盔":"护甲")+"栏已满"); return; }
+      const tok=pay==="tokengear";
+      const price=tok?(g.tokenPrice||10):(g.shopPrice||0);
+      if(tok){ if(R.tokens<price) return; R.tokens-=price; }
+      else { if(R.creds<price) return; R.creds-=price; }
+      shop.stock.gears.splice(idx,1);
+      arr.push(g);
+      R._invDirty=true;
+      R._float(R.player.x, R.player.y-40, "兑换 "+g.name, g.qColor||"#ffd23f");
       SFX.ui(); UI.raidFieldShop(sid);
     } else if(pay==="cashammo" || pay==="tokenammo"){
       const a=(shop.stock.ammo||[])[idx]; if(!a) return;

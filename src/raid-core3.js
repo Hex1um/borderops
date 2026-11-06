@@ -63,11 +63,18 @@ Object.assign(Raid, {
   },
 
   _nearestFoe(o, range){
+    /* v0.26.0：只自瞄「自己手电照到」的敌人；被击中 3 秒内例外，直接锁定攻击者。
+       玩家用玩家光锥、AI 用自己的（与 AI 视野对称）；两种情况都保留 _los（打不穿墙）。 */
+    const hb=o&&o.hitByRef;
+    if(hb && hb.alive && (o.hitByT||0)>M.now()
+       && M.dist2(o.x,o.y,hb.x,hb.y)<range*range
+       && this._los(o.x,o.y,hb.x,hb.y)) return hb;
+    const lit=(x,y)=> (o&&o.isPlayer) ? raidPlayerLit(this,x,y) : raidAiLit(this,o,x,y);
     let best=null, bd=range*range;
     for(const e of this.ops){
       if(e===o||!e.alive) continue;
       const dd=M.dist2(o.x,o.y,e.x,e.y);
-      if(dd<bd && this._los(o.x,o.y,e.x,e.y)){ bd=dd; best=e; }
+      if(dd<bd && lit(e.x,e.y) && this._los(o.x,o.y,e.x,e.y)){ bd=dd; best=e; }
     }
     return best;
   },
@@ -76,12 +83,14 @@ Object.assign(Raid, {
     let best=null, bd=range*range;
     for(const c of this.containers){
       if(c.searched) continue;
+      if(!raidContainerVisible(this,c)) continue;   // v0.26.0：光外 / 远处的箱子摸不到
       const dd=M.dist2(x,y,c.x,c.y);
       if(dd<bd){ bd=dd; best=c; }
     }
     // 地面物品堆同样可以按 E 拾取
     for(const c of (this.grounds||[])){
       if(c.searched) continue;
+      if(!raidContainerVisible(this,c)) continue;
       const dd=M.dist2(x,y,c.x,c.y);
       if(dd<bd){ bd=dd; best=c; }
     }
@@ -151,7 +160,8 @@ Object.assign(Raid, {
     const moveMul = moveSpreadMul(sh.gun.cat, mv);
     const baseSpread = sh.gun.spread * (sh.isPlayer?1.0:2.0) * 2.3;   // AI 命中率上调（6.24x → 4.6x）
     for(let k=0;k<pellets;k++){
-      let spread = baseSpread * moveMul;
+      /* v0.26.0：站定不动时收束散布（移动中完全不变），蹲点/架枪更准。 */
+      let spread = baseSpread * moveMul * (mv<0.05 ? RAID_STILL_SPREAD : 1);
       if(mv>0.05 && !isSMG(sh.gun.cat)) spread = Math.min(spread, Math.max(baseSpread*1.35, moveSpreadCap(sh.gun.cat)));
       const a = angle + (Math.random()-0.5)*spread*2;
       const range = sh.gun.range;
@@ -385,6 +395,9 @@ Object.assign(Raid, {
       if(elem==="radiation" && !opts.chain && dmg>0) this._chainRadiation(target,dmg,attacker,gun);
       return;
     }
+    /* v0.26.0：受击后 3 秒内，自瞄 / 索敌直接锁定攻击者（仍受 _los 遮挡）。
+       玩家与 AI 共用；窗口只存在本地，不进联机快照。 */
+    raidHitLock(target, attacker);
     target.hp-=d;
 
     if(target.isPlayer){
@@ -842,6 +855,59 @@ Object.assign(Raid, {
     if(kind==="shield") return !!this._wearShield(item);
     if(kind==="armor"||kind==="helmet") return !!this._wearGear(kind, item);
     return false;
+  },
+
+  /* v0.26.0：物品栏里「穿戴中 ↔ 放入背包」的防具切换。
+     枪早就有「拿在手上 / 放回背包」，护盾 / 护甲 / 头盔此前只能自动穿上、
+     既不能卸下也分不清当前生效的是哪一件。这里与 _swapEquip / _wearGear 复用同一套
+     旧装备回收规则（栏满落脚下），不另写一份。 */
+  _invEquipGear(type, idx){
+    const arr=this.inv[type];
+    if(!arr || !arr[idx]) return false;
+    const it=arr[idx];
+    arr.splice(idx,1);                         // 先腾格，旧装备才回得来
+    const ok=this._swapEquip(it);
+    if(!ok){ arr.splice(idx,0,it); return false; }
+    this._invDirty=false;
+    if(this.player) this._pick(this.player.x, this.player.y-34, "已穿戴 "+it.name, "#8fe07a");
+    SFX.ui();
+    return true;
+  },
+
+  _stowGear(which){
+    const p=this.player; if(!p) return false;
+    const isSh=which==="shield";
+    const carried=this.carried||(this.carried={weapons:[],armor:null,helmet:null,shield:null});
+    const old=isSh ? (carried.shield||p.shieldGear||null) : (carried[which]||null);
+    if(!old){
+      this._pick(p.x,p.y-34,"没有穿戴中的"+(isSh?"护盾":which==="helmet"?"头盔":"护甲"),"#ff8a5a");
+      return false;
+    }
+    const key=isSh?"shields":which==="helmet"?"helmets":"armors";
+    const arr=(this.inv[key]=this.inv[key]||[]);
+    if(arr.length>=RAID_INV_CAP[key]){
+      this._pick(p.x,p.y-34,key+"栏已满 · 先腾出空间","#ff8a5a"); return false;
+    }
+    arr.push(old);
+    if(isSh){
+      carried.shield=null;
+      p.shieldGear=null; p.maxShield=0; p.shield=0;
+      p.shieldRate=0; p.shieldDelay=0; p.shieldInvulnBase=0;
+      p.shieldPerks=[]; p.shieldTimer=0; p.shieldInvuln=0;
+      p.shieldAbsorbMul=1; p.shieldTier=0;
+      p.shieldInvulnMax=0; p.shieldInvulnLeft=0;
+    } else if(which==="helmet"){
+      carried.helmet=null;
+      p.helmetTier=0; p.helmetDr=0; p.maxHelmetArmor=0; p.helmetArmor=0;
+    } else {
+      carried.armor=null;
+      p.armorTier=0; p.dr=0; p.maxArmor=0; p.armor=0;
+      p.armorRegen=0; p.armorBroken=false;
+    }
+    this._invDirty=false;
+    this._pick(p.x,p.y-34,"放回背包 · "+old.name,"#8fd0ff");
+    SFX.ui();
+    return true;
   },
 
   _equipFromGround(c, item){
@@ -1507,13 +1573,17 @@ Object.assign(Raid, {
     if(p.secondary) line("副武器 · "+gunNameOf(p.secondary), raidGunColor(p.secondary),
       `${p.secondary.ammoMag}/${p.secondary.mag} 发 · 背包 ${p.secondary.ammoRes} · ${p.secondary.loaded?(ammoDefFromId(p.secondary.loaded)||{}).short||"?" : "未装填"}`,
       null, null, null, "secondary");
-    if(p.armorTier) line("护甲 · "+RAID_ARMORS[p.armorTier].name, ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0",
-      `T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?(' · 硬质插板（HP ×'+elemMult('corrosive','armor').toFixed(2)+'）'):' · 已击穿（无防护）'):''}`);
-    if(p.helmetTier) line("头盔 · "+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
-      `T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`);
-    if(p.maxShield>0) line("护盾 · "+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
+    /* v0.26.0：三类防具也能「放回背包」，与枪的 stow 按钮一致；名称前缀明确区分穿戴中。 */
+    if(p.armorTier) line("[穿戴中] 护甲 · "+RAID_ARMORS[p.armorTier].name, ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0",
+      `T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?(' · 硬质插板（HP ×'+elemMult('corrosive','armor').toFixed(2)+'）'):' · 已击穿（无防护）'):''}`,
+      null, null, null, "armor");
+    if(p.helmetTier) line("[穿戴中] 头盔 · "+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
+      `T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`,
+      null, null, null, "helmet");
+    if(p.maxShield>0) line("[穿戴中] 护盾 · "+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
       `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`
-        +((p.shieldInvulnMax|0)>0 ? (" · 本局剩余 "+(p.shieldInvulnLeft|0)+"/"+(p.shieldInvulnMax|0)+" 次") : ""));
+        +((p.shieldInvulnMax|0)>0 ? (" · 本局剩余 "+(p.shieldInvulnLeft|0)+"/"+(p.shieldInvulnMax|0)+" 次") : ""),
+      null, null, null, "shield");
     /* v0.24.0：负重反馈。减速是隐性的，玩家必须能在物品栏里看到「为什么跑不动」。 */
     const load=raidLoadOf(R);
     line("背包负重", load>0.6?"#ff8a5a":"#8fd0ff",
@@ -1562,18 +1632,18 @@ Object.assign(Raid, {
     }
     for(let i=0;i<R.inv.armors.length;i++){
       const a=R.inv.armors[i]; any=true;
-      line(a.name, RAID_RARITY_COLOR[a.rarity|0]||"#dfe7f0",
-        `T${a.tier} · ${RAID_RARITY_NAME[a.rarity|0]||""} · 耐久 ${a.maxArmor} · ${money(a.value)}`, `armors:${i}`);
+      line("[背包] "+a.name, RAID_RARITY_COLOR[a.rarity|0]||"#dfe7f0",
+        `T${a.tier} · ${RAID_RARITY_NAME[a.rarity|0]||""} · 耐久 ${a.maxArmor} · ${money(a.value)}`, `armors:${i}`, `armors:${i}`);
     }
     for(let i=0;i<R.inv.helmets.length;i++){
       const h=R.inv.helmets[i]; any=true;
-      line(h.name, RAID_RARITY_COLOR[h.rarity|0]||"#dfe7f0",
-        `T${h.tier} · ${RAID_RARITY_NAME[h.rarity|0]||""} · 耐久 ${h.maxArmor} · ${money(h.value)}`, `helmets:${i}`);
+      line("[背包] "+h.name, RAID_RARITY_COLOR[h.rarity|0]||"#dfe7f0",
+        `T${h.tier} · ${RAID_RARITY_NAME[h.rarity|0]||""} · 耐久 ${h.maxArmor} · ${money(h.value)}`, `helmets:${i}`, `helmets:${i}`);
     }
     for(let i=0;i<(R.inv.shields||[]).length;i++){
       const s=R.inv.shields[i]; any=true;
-      line(s.name, shieldColor(s),
-        `T${s.tier} 护盾 · ${shieldLines(s).slice(0,3).join(" · ")} · ${money(s.value)}`, `shields:${i}`);
+      line("[背包] "+s.name, shieldColor(s),
+        `T${s.tier} 护盾 · ${shieldLines(s).slice(0,3).join(" · ")} · ${money(s.value)}`, `shields:${i}`, `shields:${i}`);
     }
     for(let i=0;i<R.inv.parts.length;i++){
       const pt=R.inv.parts[i]; any=true;
@@ -1599,7 +1669,7 @@ Object.assign(Raid, {
     for(let i=0;i<(R.inv.keys||[]).length;i++){
       const k=R.inv.keys[i]; any=true;
       line(k.name, k.color||"#ffd23f",
-        `${RAID_LOCK_NAME[M.clamp(k.lv||1,1,5)]} · 剩 ${k.uses}/${k.maxUses||k.uses} 次 · ${money(k.value)}`, `keys:${i}`);
+        `${RAID_LOCK_NAME[M.clamp(k.lv||1,1,5)]} · 剩 ${k.uses}/${k.maxUses||k.uses} 次 · 估值 ${money(raidKeyValue(k))}（按耐久折旧）`, `keys:${i}`);
     }
     for(let i=0;i<R.inv.meds.length;i++){
       const m=R.inv.meds[i]; any=true;
@@ -1620,8 +1690,10 @@ Object.assign(Raid, {
     el.querySelectorAll('[data-equip]').forEach(btn=>{
       btn.onclick=(e)=>{
         e.preventDefault(); e.stopPropagation();
-        const idx=parseInt(String(btn.dataset.equip).split(":")[1],10)||0;
-        this._invEquip(idx);
+        const [type,idxS]=String(btn.dataset.equip).split(":");
+        const idx=parseInt(idxS,10)||0;
+        if(type==="weapons") this._invEquip(idx);
+        else this._invEquipGear(type, idx);
       };
     });
     el.querySelectorAll('[data-drop]').forEach(btn=>{
@@ -1642,7 +1714,10 @@ Object.assign(Raid, {
     el.querySelectorAll('[data-stow]').forEach(btn=>{
       btn.onclick=(e)=>{
         e.preventDefault(); e.stopPropagation();
-        if(this._stowGun(btn.dataset.stow)){ this._invDirty=false; this._invRender(); }
+        const w=btn.dataset.stow;
+        /* v0.26.0：防具走 _stowGear，主副手仍走 _stowGun */
+        const ok=(w==="armor"||w==="helmet"||w==="shield") ? this._stowGear(w) : this._stowGun(w);
+        if(ok){ this._invDirty=false; this._invRender(); }
       };
     });
     /* v0.21.6：配件拆解 → 原材料 */
