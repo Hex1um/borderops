@@ -941,8 +941,12 @@ const FPView = {
     for(const f of (R.floodlights||[])){
       add(f.x, f.y, "light", f, 150, "", "#ffe4a0");
     }
-    // 掩体：与 2D 相同的种类，按种类给不同高度与外观
+    /* 掩体：与 2D 相同的种类，按种类给不同高度与外观。
+       kind==="wall" 的模板会被 _pushProp 同时塞进 props 与 walls —— 墙已经由 _paintWalls
+       按面渲染过了，这里再画一张 billboard 就会变成「一张灰片插在墙里」。
+       与 2D 那边 `kind!=="wall"` 跳过的处理保持一致。 */
     for(const q of (R.props||[])){
+      if((q.kind || "wall") === "wall") continue;
       add(q.x+q.w/2, q.y+q.h/2, "prop", q, this._propHeight(q), "", q.fill||"#6e6552");
     }
 
@@ -957,15 +961,29 @@ const FPView = {
       const lateral = -rx*sa + ry*ca;
       const sx = w/2 + (lateral/depth)*proj;
       const size = (s.hh/depth)*proj;
-      if(sx + size < -40 || sx - size > w+40) continue;
-      projList.push({s, depth, sx, size, footY: horizon + (this.EYE_H/depth)*proj});
+      /* v0.23.2：掩体的横向宽度不再从高度推。
+         旧写法宽度 = 高度 × 固定系数，与碰撞矩形 q.w/q.h 完全无关，于是
+         沙袋墙(134×38) 被画成 59 宽的小方块、隔离栏(206×38) 画成 81 ——
+         玩家看着能侧身过去，实际撞上一整道墙；卡车反过来被画大近 3 倍。
+         现在取碰撞矩形在**相机右向量**上的支撑半径，斜看自动变窄、横竖朝向自动区分。
+         相机右向量 = (-sa, ca)，故支撑半径 = |sa|·w/2 + |ca|·h/2。 */
+      let kw = 0;
+      if(s.kind === "prop" && s.obj){
+        const q = s.obj;
+        const halfR = Math.abs(sa)*(q.w||40)*0.5 + Math.abs(ca)*(q.h||40)*0.5;
+        kw = (halfR*2/depth)*proj;
+      }
+      // 横向剔除要按宽度而不是高度判断，否则长条掩体在画面边缘会被提前丢掉
+      const halfSpan = Math.max(size, kw*0.5);
+      if(sx + halfSpan < -40 || sx - halfSpan > w+40) continue;
+      projList.push({s, depth, lateral, sx, size, kw, footY: horizon + (this.EYE_H/depth)*proj});
     }
     projList.sort((a,b)=> b.depth - a.depth);   // 远 → 近
 
     for(const it of projList){
       const {s, depth, sx, size} = it;
       if(size < 0.8) continue;
-      const half = Math.max(2, size*0.42);
+      const half = Math.max(2, size*0.42, (it.kw||0)*0.55);
       const c0 = Math.max(0, Math.floor((sx-half)/step));
       const c1 = Math.min(n-1, Math.ceil((sx+half)/step));
       let seg = -1;
@@ -975,7 +993,9 @@ const FPView = {
         if(!vis && seg>=0){
           ctx.save();
           ctx.beginPath(); ctx.rect(seg*step, 0, (c-seg)*step, h); ctx.clip();
-          this._sprite(ctx, s, sx, it.footY, size, depth);
+          // 先铺地面碰撞轮廓（在立面之前，来自同一画家层），再立起贴片
+          if(s.kind === "prop") this._propFootprint(ctx, it, horizon, proj, ca, sa);
+          this._sprite(ctx, s, sx, it.footY, size, depth, it.kw);
           ctx.restore();
           seg=-1;
         }
@@ -983,7 +1003,7 @@ const FPView = {
     }
   },
 
-  _sprite(ctx, s, cx, foot, size, depth){
+  _sprite(ctx, s, cx, foot, size, depth, kw){
     const fog = Math.max(0.16, 1-depth/this.MAX_D);
     ctx.globalAlpha = fog;
     const k = size;
@@ -1071,57 +1091,125 @@ const FPView = {
       ctx.fillStyle = "#2b3336"; ctx.fillRect(cx-Math.max(1,k*0.03), foot-k*0.62, Math.max(2,k*0.06), k*0.62);
       ctx.fillStyle = "#ffe9b8"; ctx.beginPath(); ctx.arc(cx, foot-k*0.72, Math.max(2,k*0.09), 0, 6.2832); ctx.fill();
     } else if(s.kind === "prop"){
-      this._propSprite(ctx, s, cx, foot, size);
+      this._propSprite(ctx, s, cx, foot, size, kw);
     }
     ctx.globalAlpha = 1;
   },
 
-  /* 掩体外观：与 2D prop() 同种类、同配色（树 / 灌木 / 岩石 / 集装箱 / 卡车 / 木箱 / 油桶…） */
-  _propSprite(ctx, s, cx, foot, k){
+  /* 地面碰撞轮廓（v0.23.2）
+   * ------------------------------------------------------------------
+   * 把 q.w × q.h 的**碰撞矩形**按透视投到地面上，画成一个梯形。
+   * 为什么要这个：片状立面在斜看时厚度为 0，玩家根本无法从它判断边界在哪 ——
+   * 长条掩体（沙袋墙 / 隔离栏 / 货架 / 管道）最典型，看着只是几个小方块，
+   * 走过去才发现整条都是实心的。地面轮廓直接把「这块地不能走」摊开给人看。
+   *
+   * 几何：矩形在相机前向量上的半宽 halfF 决定脚下投影的纵深，
+   * 在右向量上的半宽 halfR 决定左右展开；近端更宽、远端更窄，故为梯形。
+   */
+  _propFootprint(ctx, it, horizon, proj, ca, sa){
+    if(this._noFootprint) return;     // 调试 / A-B 对比开关
+    const s = it.s, q = s.obj;
+    if(!q) return;
+    const depth = it.depth;
+    const halfF = Math.abs(ca)*(q.w||0)*0.5 + Math.abs(sa)*(q.h||0)*0.5;  // 前后
+    const halfR = Math.abs(sa)*(q.w||0)*0.5 + Math.abs(ca)*(q.h||0)*0.5;  // 左右
+    const dNear = depth - halfF, dFar = depth + halfF;
+    // 贴脸 / 跨越相机平面时投影会翻到无穷远，直接不画（玩家已经站在里面了）
+    if(dNear < 18) return;
+    const yNear = horizon + (this.EYE_H/dNear)*proj;
+    const yFar  = horizon + (this.EYE_H/dFar)*proj;
+    if(!Number.isFinite(yNear) || !Number.isFinite(yFar)) return;
+    const lat = it.lateral || 0;
+    const xNear = it.sx + (lat*(1/dNear - 1/depth))*proj;
+    const xFar  = it.sx + (lat*(1/dFar  - 1/depth))*proj;
+    const wNear = (halfR/dNear)*proj;
+    const wFar  = (halfR/dFar)*proj;
+
+    ctx.beginPath();
+    ctx.moveTo(xFar-wFar, yFar);
+    ctx.lineTo(xFar+wFar, yFar);
+    ctx.lineTo(xNear+wNear, yNear);
+    ctx.lineTo(xNear-wNear, yNear);
+    ctx.closePath();
+    /* 两套对比同时上：
+     *   - 填充用暗色（压住地面）→ 在**亮**地面上能看出「这整块是实心的」；
+     *   - 描边用淡白（提亮边界）→ 在**暗**地面 / 夜战光照下也能看到一条边线。
+     * 只用暗色时，暗环境里轮廓和地面糊在一起，等于没画（实测 0.24 的纯黑几乎看不见）。
+     * 片状立面本来就只能显示正对的那一面 —— 玩家绕到侧面时看到的是一个薄端面，
+     * 只有地面轮廓能同时表达「它有多长、朝向哪边」。 */
+    /* 只看近处：远景里每个小物件都挂一圈白框会变成满地 UI 标记，又乱又没用 ——
+       玩家真正需要判断「能不能过去」的时候，都是站在跟前。260px 内满强度，
+       680px 外完全消失。 */
+    const atten = M.clamp(1 - (depth-260)/420, 0, 1);
+    if(atten <= 0.02) return;
+
+    /* 强度必须给足：_lighting 在精灵层之后用加色（lighter）打光，
+     * 会把这里的暗部重新提亮 —— 实测 0.44 的填充最终只差 26 个色阶，
+     * 肉眼基本看不见（等于没画）。0.62 填充 + 0.55 白描边才在打光后仍然成立。 */
+    ctx.save();
+    ctx.globalAlpha = atten;
+    ctx.fillStyle = "rgba(3,6,9,0.62)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(226,240,248,0.55)";
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.restore();
+  },
+
+  /* 掩体外观：与 2D prop() 同种类、同配色（树 / 灌木 / 岩石 / 集装箱 / 卡车 / 木箱 / 油桶…）
+   *
+   * v0.23.2：横向尺寸一律改用 `kw`（碰撞矩形在视线方向的投影宽度），不再用 `k`（高度）乘系数。
+   * 各分支的**纵向**仍以 k 为基准，所以形状比例和描边粗细都不受影响 ——
+   * 这也是没用 ctx.scale 整体拉伸的原因：非等比缩放会把 lineWidth 一起拉粗。 */
+  _propSprite(ctx, s, cx, foot, k, kw){
     const q = s.obj || {}, kind = q.kind || "";
     const fill = q.fill || "#6e6552", edge = q.edge || "rgba(0,0,0,0.55)";
+    // kw 在极近处可能非常大，限一个上限避免一张贴片糊满整屏
+    const bwBase = (kw > 2) ? Math.min(kw, k*3.2) : k*0.95;
 
     // 统一投影（圆物用椭圆，方物用矩形）
     ctx.fillStyle = "rgba(0,0,0,0.30)";
     if(kind==="tree"||kind==="bush"||kind==="rock"){
-      ctx.beginPath(); ctx.ellipse(cx, foot, k*0.36, k*0.055, 0, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx, foot, bwBase*0.5, k*0.055, 0, 0, 6.2832); ctx.fill();
     } else {
-      ctx.fillRect(cx-k*0.45, foot-k*0.05, k*0.9, k*0.07);
+      ctx.fillRect(cx-bwBase/2, foot-k*0.05, bwBase, k*0.07);
     }
 
     if(kind === "tree"){
       const trunkW = Math.max(2, k*0.10), trunkH = k*0.46;
       ctx.fillStyle = "#3a2f22"; ctx.fillRect(cx-trunkW/2, foot-trunkH, trunkW, trunkH);
       ctx.fillStyle = "rgba(24,40,22,0.96)";
-      ctx.beginPath(); ctx.ellipse(cx, foot-k*0.70, k*0.34, k*0.30, 0, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx, foot-k*0.70, bwBase*0.50, k*0.30, 0, 0, 6.2832); ctx.fill();
       ctx.fillStyle = fill;
-      ctx.beginPath(); ctx.ellipse(cx-k*0.10, foot-k*0.80, k*0.26, k*0.22, 0.3, 0, 6.2832); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(cx+k*0.12, foot-k*0.64, k*0.24, k*0.20, -0.2, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx-bwBase*0.15, foot-k*0.80, bwBase*0.38, k*0.22, 0.3, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx+bwBase*0.18, foot-k*0.64, bwBase*0.35, k*0.20, -0.2, 0, 6.2832); ctx.fill();
       ctx.fillStyle = "rgba(140,190,120,0.14)";
-      ctx.beginPath(); ctx.ellipse(cx-k*0.04, foot-k*0.88, k*0.14, k*0.09, 0, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx-bwBase*0.06, foot-k*0.88, bwBase*0.21, k*0.09, 0, 0, 6.2832); ctx.fill();
     } else if(kind === "bush"){
       ctx.fillStyle = "rgba(28,46,26,0.95)";
-      ctx.beginPath(); ctx.ellipse(cx, foot-k*0.34, k*0.46, k*0.34, 0, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx, foot-k*0.34, bwBase*0.50, k*0.34, 0, 0, 6.2832); ctx.fill();
       ctx.fillStyle = fill;
-      ctx.beginPath(); ctx.ellipse(cx-k*0.12, foot-k*0.40, k*0.30, k*0.24, 0.3, 0, 6.2832); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(cx+k*0.14, foot-k*0.30, k*0.28, k*0.22, -0.2, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx-bwBase*0.13, foot-k*0.40, bwBase*0.33, k*0.24, 0.3, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx+bwBase*0.15, foot-k*0.30, bwBase*0.30, k*0.22, -0.2, 0, 6.2832); ctx.fill();
     } else if(kind === "rock"){
       ctx.fillStyle = fill;
       ctx.beginPath();
-      ctx.moveTo(cx-k*0.44, foot-k*0.44);
-      ctx.lineTo(cx-k*0.24, foot-k*0.92);
-      ctx.lineTo(cx+k*0.16, foot-k*0.98);
-      ctx.lineTo(cx+k*0.44, foot-k*0.58);
-      ctx.lineTo(cx+k*0.34, foot-k*0.06);
-      ctx.lineTo(cx-k*0.14, foot);
+      /* 横向顶点按「原本 ±0.44k 为满宽」等比映射到 ±bwBase/2 */
+      ctx.moveTo(cx-bwBase*0.500, foot-k*0.44);
+      ctx.lineTo(cx-bwBase*0.273, foot-k*0.92);
+      ctx.lineTo(cx+bwBase*0.182, foot-k*0.98);
+      ctx.lineTo(cx+bwBase*0.500, foot-k*0.58);
+      ctx.lineTo(cx+bwBase*0.386, foot-k*0.06);
+      ctx.lineTo(cx-bwBase*0.159, foot);
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = "rgba(180,190,170,0.16)";
       ctx.beginPath();
-      ctx.moveTo(cx-k*0.24, foot-k*0.92); ctx.lineTo(cx+k*0.16, foot-k*0.98);
-      ctx.lineTo(cx+k*0.10, foot-k*0.62); ctx.lineTo(cx-k*0.26, foot-k*0.56);
+      ctx.moveTo(cx-bwBase*0.273, foot-k*0.92); ctx.lineTo(cx+bwBase*0.182, foot-k*0.98);
+      ctx.lineTo(cx+bwBase*0.114, foot-k*0.62); ctx.lineTo(cx-bwBase*0.295, foot-k*0.56);
       ctx.closePath(); ctx.fill();
     } else if(kind === "barrel"){
-      const bw = k*0.62, bh = k*0.94;
+      // 油桶是圆柱：正面宽度就等于碰撞直径
+      const bw = bwBase, bh = k*0.94;
       ctx.fillStyle = fill;
       ctx.fillRect(cx-bw/2, foot-bh, bw, bh);
       ctx.beginPath(); ctx.ellipse(cx, foot-bh, bw/2, k*0.07, 0, 0, 6.2832); ctx.fill();
@@ -1130,7 +1218,7 @@ const FPView = {
       ctx.beginPath(); ctx.moveTo(cx-bw/2, foot-bh*0.66); ctx.lineTo(cx+bw/2, foot-bh*0.66);
       ctx.moveTo(cx-bw/2, foot-bh*0.34); ctx.lineTo(cx+bw/2, foot-bh*0.34); ctx.stroke();
     } else if(kind === "container" || kind === "truck" || kind === "crate" || kind === "shelf" || kind === "table" || kind === "machine"){
-      const bw = k*(kind==="container"?1.25:kind==="truck"?1.5:0.95);
+      const bw = bwBase;
       const bh = k*(kind==="container"?0.85:kind==="truck"?0.95:0.9);
       ctx.fillStyle = fill; ctx.fillRect(cx-bw/2, foot-bh, bw, bh);
       ctx.strokeStyle = edge; ctx.lineWidth = Math.max(1,k*0.028);
@@ -1149,7 +1237,7 @@ const FPView = {
         ctx.fillRect(cx-bw*0.46, foot-bh+k*0.10, bw*0.42, bh*0.34);
       }
     } else if(kind === "sandbag"){
-      const bw = k*1.1, bh = k*0.46;
+      const bw = bwBase, bh = k*0.46;
       ctx.fillStyle = fill;
       for(let i=0;i<3;i++){
         ctx.beginPath();
@@ -1161,7 +1249,7 @@ const FPView = {
         ctx.beginPath(); ctx.ellipse(cx-bw/3+bw*i/3, foot-bh*0.6, bw*0.20, bh*0.52, 0, 0, 6.2832); ctx.stroke();
       }
     } else if(kind === "barrier"){
-      const bw = k*1.1, bh = k*0.62;
+      const bw = bwBase, bh = k*0.62;
       ctx.fillStyle = fill; ctx.fillRect(cx-bw/2, foot-bh, bw, bh);
       ctx.strokeStyle = edge; ctx.lineWidth = 1; ctx.strokeRect(cx-bw/2, foot-bh, bw, bh);
       ctx.fillStyle = "rgba(196,164,58,0.55)";
@@ -1173,7 +1261,7 @@ const FPView = {
         ctx.closePath(); ctx.fill();
       }
     } else {
-      const bw = k*0.95, bh = k*0.85;
+      const bw = bwBase, bh = k*0.85;
       ctx.fillStyle = fill; ctx.fillRect(cx-bw/2, foot-bh, bw, bh);
       ctx.strokeStyle = edge; ctx.lineWidth = Math.max(1,k*0.03);
       ctx.strokeRect(cx-bw/2, foot-bh, bw, bh);

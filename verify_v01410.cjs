@@ -1985,5 +1985,69 @@ check('RaidStash 把负 bandages 抬到 0', __healed.bandages, 0, 0.001);
 if (__stRaw === null) G('localStorage.removeItem(RaidStash.KEY)');
 else G('localStorage.setItem(RaidStash.KEY,' + JSON.stringify(__stRaw) + ')');
 
+/* ==========================================================================
+ * 41. 3D 装饰碰撞箱对齐（v0.23.2）
+ * --------------------------------------------------------------------------
+ * 背景：3D 里掩体是 billboard 贴片，而贴片的横向宽度是从**高度**乘固定系数推出来的，
+ * 与碰撞矩形 q.w/q.h 完全无关。结果长条掩体（沙袋墙 134×38 / 隔离栏 206×38）
+ * 被画成小方块，玩家看着能侧身过去、实际撞上一整道墙；卡车反过来被画大近 3 倍。
+ * 这一组锁的就是「宽度必须来自碰撞矩形」这条契约。
+ * ========================================================================== */
+console.log('\n=== 41. 3D 装饰碰撞箱对齐（v0.23.2） ===');
+const __fp3 = fs.readFileSync(path.join(SRC, 'fpview.js'), 'utf8');
+
+/* --- ① 墙不重复画 --- */
+check('props 渲染跳过 kind==="wall"（墙已由按面渲染负责）',
+  /if\(\(q\.kind \|\| "wall"\) === "wall"\) continue;/.test(__fp3) ? 1 : 0, 1, 0.001);
+
+/* --- ② 宽度来源：碰撞矩形在相机右向量上的支撑半径 --- */
+check('横向宽度取碰撞矩形的支撑半径（|sa|·w/2 + |ca|·h/2）',
+  /Math\.abs\(sa\)\*\(q\.w\|\|40\)\*0\.5 \+ Math\.abs\(ca\)\*\(q\.h\|\|40\)\*0\.5/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('kw 参与横向视锥剔除（长条不被提前丢掉）',
+  /halfSpan = Math\.max\(size, kw\*0\.5\)/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('kw 传入 _sprite 再交给 _propSprite',
+  /this\._sprite\(ctx, s, sx, it\.footY, size, depth, it\.kw\)/.test(__fp3) &&
+  /this\._propSprite\(ctx, s, cx, foot, size, kw\)/.test(__fp3) ? 1 : 0, 1, 0.001);
+
+/* --- ③ 各形状不再用「高度 × 系数」当宽度 --- */
+check('_propSprite 以 kw 推出 bwBase', /const bwBase = \(kw > 2\)/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('长条类宽度改用 bwBase（barrier / sandbag / container 组 / 默认）',
+  /const bw = bwBase, bh = k\*0\.46/.test(__fp3) &&
+  /const bw = bwBase, bh = k\*0\.62/.test(__fp3) &&
+  /const bw = bwBase;\s*\n\s*const bh = k\*\(kind==="container"/.test(__fp3) &&
+  /const bw = bwBase, bh = k\*0\.85/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('旧的固定系数宽度已消失（k*1.1 / k*1.25 / k*1.5 不再做宽度）',
+  !/const bw = k\*1\.1/.test(__fp3) && !/const bw = k\*\(kind==="container"\?1\.25/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('宽度的极端值有上限（近处不糊满屏）', /Math\.min\(kw, k\*3\.2\)/.test(__fp3) ? 1 : 0, 1, 0.001);
+
+/* --- ④ 地面碰撞轮廓 --- */
+check('地面轮廓函数存在', /_propFootprint\(ctx, it, horizon, proj, ca, sa\)/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('轮廓由前向 / 右向两个支撑半径推出梯形',
+  /halfF = Math\.abs\(ca\)\*\(q\.w\|\|0\)\*0\.5 \+ Math\.abs\(sa\)\*\(q\.h\|\|0\)\*0\.5/.test(__fp3) &&
+  /halfR = Math\.abs\(sa\)\*\(q\.w\|\|0\)\*0\.5 \+ Math\.abs\(ca\)\*\(q\.h\|\|0\)\*0\.5/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('轮廓有近平面保护（跨越相机平面时不画）', /if\(dNear < 18\) return;/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('轮廓按距离衰减（远处不挂白框）',
+  /M\.clamp\(1 - \(depth-260\)\/420, 0, 1\)/.test(__fp3) ? 1 : 0, 1, 0.001);
+check('轮廓画在立面之前（同一画家层内先地面后贴片）',
+  /if\(s\.kind === "prop"\) this\._propFootprint\([^)]*\);\s*\n\s*this\._sprite\(/.test(__fp3) ? 1 : 0, 1, 0.001);
+
+/* --- ⑤ 数值：支撑半径的几何必须对 --- */
+const __kwOf = (w, h, yaw, depth, proj) => {
+  const ca = Math.cos(yaw), sa = Math.sin(yaw);
+  const halfR = Math.abs(sa) * w / 2 + Math.abs(ca) * h / 2;
+  return (halfR * 2 / depth) * proj;
+};
+/* 注意朝向约定：矩形 206×38 的 206 沿 x 轴延伸。
+ *   相机 yaw=0     → 右向量=(0,1) → 横向是 y → 看到 38（端面/厚度）
+ *   相机 yaw=π/2   → 右向量=(-1,0) → 横向是 x → 看到 206（长边） */
+check('沿 x 看过去时宽度=厚度（206×38 看成 38）', __kwOf(206, 38, 0, 400, 1000), 38 / 400 * 1000, 0.5);
+check('沿 y 看过去时宽度=长度（206×38 看成 206）', __kwOf(206, 38, Math.PI / 2, 400, 1000), 206 / 400 * 1000, 0.5);
+check('斜 45° 时介于两者之间',
+  __kwOf(206, 38, Math.PI / 4, 400, 1000) > 38 / 400 * 1000 &&
+  __kwOf(206, 38, Math.PI / 4, 400, 1000) < 206 / 400 * 1000 ? 1 : 0, 1, 0.001);
+/* 方形斜看时投影会变宽，最多 √2 倍 —— 这是 AABB 支撑函数的正确行为，不是 bug */
+check('方形斜看投影最宽为 √2 倍（支撑函数的正确行为）',
+  Math.abs(__kwOf(74, 74, Math.PI / 4, 400, 1000) / __kwOf(74, 74, 0, 400, 1000) - Math.SQRT2) < 0.01 ? 1 : 0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

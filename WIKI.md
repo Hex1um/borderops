@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（694 条断言 / 40 组）
+npm run verify       # 无浏览器依赖的逻辑回归（711 条断言 / 41 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -440,5 +440,8 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **精英怪（v0.23.0）**：感知档写在 `RAID_ARCH[arch].sense`，`raidAISense()` 里**优先级最高**；`RAID_AI_SENSE` 的 scav/pmc/boss 三档**不许动**（玩家文案与 verify 组 36 引用着 520/900/1250）。精英怪只在其 POI 包围盒内出生（内缩按短边自适应 + 兜底夹回盒内），出生归属记 `spawnPoi`（之后他会追着玩家跑出包围盒）。新增精英怪要给 `frontShield` / `callAt` 这类行为的挂点，别直接在 `_botsUpdate` 里堆 if。
 - **正面挡弹要放过爆炸（v0.23.0）**：`_damage` 里 `RAID_ARCH[target.arch].frontShield` 只看 `opts.blast`，所以火箭与破片溅射必须带 `{blast:true}`，否则盾面会把爆炸也吃下去、防盾手变成无敌。新增任何爆炸伤害源都要带上这个标记。
 - **手电亮度（v0.23.0）**：参数统一在 `RAID_FLASH` + `raidFlashGain(indoor)`，2D / 3D 共用一份。**只允许提 alpha，不允许加 `reach`** —— 射程一加长，光就会溢出门口照亮隔壁房间，「3D 能透视」立刻复活。3D 的室内亮核前移（`0.5 - coreShift*ind`）与中心热点都和 indoor 挂钩，不要改成常量。
+- **3D 掩体宽度必须来自碰撞矩形（v0.23.2）**：`_drawSprites` 里用**相机右向量**对 `q.w × q.h` 求支撑半径 `halfR = |sa|·w/2 + |ca|·h/2`，再投影成 `kw`。**不要退回「高度 × 固定系数」** —— 那会把沙袋墙(134×38) 画成 59 宽的小方块、卡车(92×196) 画大 2.9 倍，玩家看着能侧身过去、实际撞上一整道墙。所有形状的横向尺寸用 `bwBase`（含 `k×3.2` 封顶），纵向仍用 `k`（高度像素）—— 这样描边不会被非等比拉伸（这也是不用 `ctx.scale` 整体拉伸的原因）。
+  - `kind==="wall"` 在 `_drawSprites` 里**必须跳过**：这类模板被 `_pushProp` 同时塞进 `props` 与 `walls`，墙已由 `_paintWalls` 按面渲染；再画一张 billboard 就是「一张灰片插在墙里」。
+- **地面碰撞轮廓（v0.23.2）**：`_propFootprint()` 把碰撞矩形按透视投成地面梯形，是片状立面无法替代的 —— 绕到侧面只能看到薄端面，只有地面投影能同时表达长度与朝向。强度必须给足：`_lighting` 在精灵层之后用加色打光会把暗部提亮回去（实测 0.44 填充只剩 26 色阶差，等于没画）。按 `M.clamp(1-(depth-260)/420,0,1)` 衰减，否则远处满地白框。调试开关 `FPView._noFootprint`，A/B 用同会话双帧做像素差。
 - **空投的可感知性（v0.23.0）**：`CFG.raidMinimap` 默认 **false**，小地图上的标点等于没有。真正的指示器是 `hud()` 里的屏幕边缘箭头（2D 走相机投影、3D 走 `ViewMode.yaw` 差角），世界层只画光柱不写字 —— 两处都写文字会出现两条「空投」标签且位置对不上。
 - **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件；`raid-*.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。

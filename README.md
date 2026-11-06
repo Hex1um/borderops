@@ -45,7 +45,7 @@
 
 ```sh
 npm start          # 等价于 node server.js，默认 3000 端口
-npm run verify     # 无浏览器逻辑回归（40 组 / 694 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏）
+npm run verify     # 无浏览器逻辑回归（41 组 / 711 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏）
 npm run check      # 校验版本号三处同步 + 脚本缓存串（无需安装依赖）
 # 真实浏览器冒烟（需系统 Edge + Python playwright，先起服务）：
 PORT=3211 node server.js
@@ -90,7 +90,7 @@ python -m http.server 8132
 | `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，694 项断言） |
+| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，711 项断言） |
 | `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（42 项断言）与只读机制体检 |
 | `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告 |
 
