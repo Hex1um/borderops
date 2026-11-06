@@ -1215,10 +1215,15 @@ const FPView = {
      *  条带用 64 条（竖向），每条 3 段，总像素量仍≈一次全屏 fill。
      *  边界全部取整对齐、互不重叠 —— 加色模式下重叠会叠出一条亮缝，那正是「锯齿」的来源。 */
     const reach = Math.max(w, h) * 0.46;
+    /* v0.23.0：室内手电增益（与 2D 共用 RAID_FLASH 同一套参数，避免两边调不同步）。
+       室内满值时中心 alpha ×1.95、亮核位置由 0.50 前移到 0.40 —— 光柱更亮也更收束。
+       射程不含在内：reach 由屏幕尺寸决定，与 indoor 无关，挡住「加射程就穿墙」的路。 */
+    const ind = Math.max(0, Math.min(1, indoor));
+    const fh = raidFlashGain(ind);
     const g = ctx.createRadialGradient(cx, h*0.62, Math.max(8, reach*0.05), cx, h*0.62, reach);
     // 色值与 2D _lightLayer 手电锥完全一致（255,236,182 / 255,224,160）
-    g.addColorStop(0, "rgba(255,236,182,0.12)");
-    g.addColorStop(0.5, "rgba(255,224,160,0.046)");
+    g.addColorStop(0, "rgba(255,236,182,"+(RAID_FLASH.cone3d*fh).toFixed(4)+")");
+    g.addColorStop(0.5 - RAID_FLASH.coreShift*ind, "rgba(255,224,160,"+(RAID_FLASH.cone3dMid*fh).toFixed(4)+")");
     g.addColorStop(1, "rgba(255,224,160,0)");
     ctx.fillStyle = g;
     const zb = this._zbuf, zstep = this._step||3, zn = this._cols||0;
@@ -1248,6 +1253,20 @@ const FPView = {
         if(yBot < h){ ctx.globalAlpha = 1; ctx.fillRect(x0, yBot, sw, h-yBot); }
       }
       ctx.globalAlpha = 1;
+    }
+
+    /* 2b) v0.23.0：室内中心热点。
+     * 只把散射 alpha 整体乘上去，观感是「整片变白」而不是「手电照着」；
+     * 再叠一个窄而亮的中心斑（半径 = reach×0.24）才有直射过曝的感觉。
+     * 画在加色层里、条带之后，所以它会盖在墙面上 —— 这是对的：手电正对的那面墙就是最亮处。 */
+    if(ind > 0.02){
+      const hr = Math.max(40, reach*RAID_FLASH.hotR);
+      const hotA = RAID_FLASH.hot*ind;
+      const hg = ctx.createRadialGradient(cx, h*0.62, 0, cx, h*0.62, hr);
+      hg.addColorStop(0, "rgba(255,236,182,"+hotA.toFixed(4)+")");
+      hg.addColorStop(0.55, "rgba(255,236,182,"+(hotA*0.35).toFixed(4)+")");
+      hg.addColorStop(1, "rgba(255,236,182,0)");
+      ctx.fillStyle = hg; ctx.fillRect(0, 0, w, h);
     }
 
     // 3) 静态探照灯：把 2D 的光池按世界坐标投到屏幕上（超出视锥自动裁剪）

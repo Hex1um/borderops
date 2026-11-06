@@ -20,7 +20,7 @@
     if(typeof globalThis.EndlessWorld === "undefined")  globalThis.EndlessWorld = function(){};
     return;
   }
-  var ver = (typeof CFG !== "undefined" && CFG.version) || "0.22.3";
+  var ver = (typeof CFG !== "undefined" && CFG.version) || "0.23.0";
   for(var i=0;i<LAZY.length;i++)
     document.write('<script src="src/' + LAZY[i] + '.js?v=' + ver + '"><\/script>');
 })();

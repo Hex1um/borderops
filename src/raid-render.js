@@ -320,11 +320,12 @@ const RenderRaid = {
     const p=R.player;
     if(p){
       const ang=p.angle||0, reach=560, half=0.42;
+      /* v0.23.0：室内手电增益。室内压暗只压环境光，手电光锥反而按 indoor 提亮，
+         形成「屋子越黑、手电越亮」的对比；reach 保持 560 不变（加射程 = 光穿墙）。 */
+      const fh=raidFlashGain(R.indoor);
       const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,reach);
-      /* v0.22.3：亮度略微调高（0.30/0.12 → 0.36/0.15），配合「屋子里更黑」，
-         否则进屋后眼前只剩一片黑。色值不变，verify 的色温断言仍锁着。 */
-      g.addColorStop(0,"rgba(255,236,182,0.36)");
-      g.addColorStop(0.5,"rgba(255,224,160,0.15)");
+      g.addColorStop(0,"rgba(255,236,182,"+(RAID_FLASH.cone2d*fh).toFixed(3)+")");
+      g.addColorStop(0.5,"rgba(255,224,160,"+(RAID_FLASH.cone2dMid*fh).toFixed(3)+")");
       g.addColorStop(1,"rgba(255,224,160,0)");
       ctx.fillStyle=g;
       /* 手电扇形按遮挡裁剪：96 条精确射线各自求最近遮挡距离，再连成可见轮廓。
@@ -581,6 +582,23 @@ const RenderRaid = {
 
     // 光照层（探照灯 + 玩家手电），暖色加色叠加，强化荒凉紧张氛围
     this._lightLayer(ctx, game, cam, vw, vh);
+
+    /* v0.23.0：空投信标（涌潮落点）。画在光照层之上，远处也能一眼看到 ——
+       否则「再等一分钟」只存在于 HUD 的一行字里，玩家根本感知不到。
+       这里只画光柱 / 光斑，**不写文字**：文字统一由 hud() 的方位指示负责，
+       否则屏幕上会同时出现两条「空投」标签，而且位置还对不上。 */
+    if(R.airdrops && R.airdrops.length){
+      const now=raidElapsed(R);
+      for(const a of R.airdrops){
+        if(a.x<cam.x-240||a.x>cam.x+vw+240||a.y<cam.y-240||a.y>cam.y+vh+240) continue;
+        const pulse=0.55+0.45*Math.sin(now*3.4);
+        ctx.fillStyle="rgba(255,210,63,"+(0.09+0.09*pulse).toFixed(3)+")";
+        ctx.beginPath(); ctx.arc(a.x, a.y, 96+18*pulse, 0, 6.2832); ctx.fill();
+        ctx.fillStyle="rgba(255,210,63,0.85)";
+        ctx.fillRect(a.x-2.5, a.y-58, 5, 46);
+        ctx.beginPath(); ctx.arc(a.x, a.y-58, 5+2*pulse, 0, 6.2832); ctx.fill();
+      }
+    }
 
     // 撤离点（塔科夫式：关闭=灰、付费=金、开放=绿）
     for(const e of R.extracts){
@@ -1446,6 +1464,59 @@ const RenderRaid = {
       }
     }
 
+    /* --- v0.23.0：空投方位指示（2D / 3D 通用） ---
+     * CFG.raidMinimap 默认是关的，空投不能只靠小地图标点（那等于没有）。
+     * 这里用「相对朝向的方位 + 距离」画一个屏幕边缘的信标：
+     *   2D —— 用相机投影，在视野内就落在真实位置，出屏就夹到边缘；
+     *   3D —— 用 yaw 差角摆到准星周围一圈，不依赖世界投影（3D 下世界投影会算错）。
+     * 两种情况都从屏幕中心连线画一个指向三角，方向语义一致。 */
+    if(R.airdrops && R.airdrops.length){
+      const is3=(typeof ViewMode!=="undefined" && ViewMode.is3D());
+      const cx0=v.w*0.5, cy0=is3 ? v.h*0.55 : v.h*0.5;
+      const mgx=mob?52:66, mgy=mob?86:78;
+      const marks=[];
+      for(const a of R.airdrops){
+        const dd=M.dist(p.x,p.y,a.x,a.y);
+        let sx, sy;
+        if(is3){
+          const rel=M.normAngle(Math.atan2(a.y-p.y, a.x-p.x) - (ViewMode.yaw||0));
+          const rr=Math.min(v.w,v.h)*0.33;
+          sx=cx0 + Math.sin(rel)*rr;
+          sy=cy0 - Math.cos(rel)*rr;
+        }else{
+          sx=(a.x-R.camera.x)*(game.zoom||1);
+          sy=(a.y-R.camera.y)*(game.zoom||1);
+          sx=M.clamp(sx, mgx, v.w-mgx);
+          sy=M.clamp(sy, mgy+72, v.h-mgy-48);
+        }
+        marks.push({ sx, sy, dd,
+          label:"空投 "+a.name+(dd>=1000? " "+(dd/1000).toFixed(1)+"k":" "+Math.round(dd)) });
+      }
+      /* 方位相近的几个空投会落在同一片屏幕位置，标签会叠成一坨。
+         按 y 排序后逐条下推：只要和上一条水平接近且垂直间隔不够，就往下让 19px。 */
+      marks.sort((a,b)=>a.sy-b.sy);
+      for(let i=1;i<marks.length;i++){
+        const prev=marks[i-1], cur=marks[i];
+        if(Math.abs(cur.sx-prev.sx)<86 && (cur.sy-prev.sy)<19) cur.sy=prev.sy+19;
+      }
+      for(const m of marks){
+        const ang=Math.atan2(m.sy-cy0, m.sx-cx0);
+        ctx.save();
+        ctx.translate(m.sx, m.sy); ctx.rotate(ang);
+        ctx.fillStyle="#ffd23f";
+        ctx.beginPath(); ctx.moveTo(11,0); ctx.lineTo(-6,6.5); ctx.lineTo(-6,-6.5); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.font=(mob?"bold 10px":"bold 11px")+" system-ui,sans-serif";
+        ctx.textAlign="center";
+        const tw=ctx.measureText(m.label).width;
+        ctx.fillStyle="rgba(14,11,4,0.82)";
+        ctx.fillRect(m.sx-tw/2-6, m.sy+11, tw+12, 16);
+        ctx.fillStyle="#ffd23f";
+        ctx.fillText(m.label, m.sx, m.sy+23);
+      }
+      ctx.textAlign="left";
+    }
+
     /* --- 小地图 --- */
     if(CFG.raidMinimap) this.minimap(ctx, v);
 
@@ -1682,6 +1753,25 @@ const RenderRaid = {
       } else ctx.fillStyle="rgba(150,170,190,0.35)";
       ctx.fillRect(mx+rm.x*sx, my+rm.y*sy, Math.max(2,rm.w*sx), Math.max(2,rm.h*sy));
     }
+    /* v0.23.0：8 个核心 POI —— 淡金底 + 单字标识，一眼看出「哪片值得跑一趟」。
+       单字而不是全名：小地图只有 160×134，写全名会糊成一团。 */
+    ctx.font="9px ui-monospace,monospace"; ctx.textAlign="center";
+    for(const poi of (typeof RAID_POI!=="undefined"?RAID_POI:[])){
+      if(!poi.box) continue;
+      ctx.fillStyle="rgba(255,210,80,0.18)";
+      ctx.fillRect(mx+poi.box.x*sx, my+poi.box.y*sy,
+        Math.max(3,poi.box.w*sx), Math.max(3,poi.box.h*sy));
+      ctx.fillStyle="rgba(255,214,110,0.92)";
+      ctx.fillText(poi.tag, mx+poi.cx*sx, my+poi.cy*sy+3);
+    }
+    ctx.textAlign="left";
+    // 空投：亮黄方块，压在所有标识之上
+    for(const a of (R.airdrops||[])){
+      const ax2=mx+a.x*sx, ay2=my+a.y*sy;
+      ctx.fillStyle="#ffd23f";
+      ctx.fillRect(ax2-2.5, ay2-2.5, 5, 5);
+    }
+
     // 商店（枪=金 / 材料=绿 / 回收=蓝 / 黑市=紫），一眼决定往哪跑
     for(const s of (R.shops||[])){
       ctx.fillStyle = s.kind==="black"?"#ffd23f":s.kind==="rec"?"#62c8ff":s.kind==="mat"?"#8fe07a":"#ffb44a";

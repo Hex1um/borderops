@@ -99,7 +99,7 @@ Object.assign(Raid, {
       const dd=M.dist(hit.x,hit.y,o.x,o.y);
       if(dd>R) continue;
       const fall=M.clamp(1-dd/R*0.5,0.5,1);
-      this._damage(o, dmg*0.35*fall, sh, {element:"none",armorPen:gun.armorPen}, {chain:true});
+      this._damage(o, dmg*0.35*fall, sh, {element:"none",armorPen:gun.armorPen}, {chain:true, blast:true});
       n++;
     }
     if(n>0){
@@ -225,6 +225,23 @@ Object.assign(Raid, {
       return;
     }
     let d=dmg;
+    /* v0.23.0：防盾手正面挡弹。
+       命中方向落在目标正面 ±58° 内就吃 72% 减伤；绕到背后打完全免疫，爆炸（opts.blast）无视盾面。
+       判定用「目标→攻击者」与「目标朝向」的夹角，所以侧面 90° 已经是满伤 ——
+       玩家不需要精确绕背，只要别正对着他站桩对枪。 */
+    { const _ar = target.arch ? RAID_ARCH[target.arch] : null;
+      if(_ar && _ar.frontShield>0 && attacker && !opts.blast){
+        const toA=Math.atan2(attacker.y-target.y, attacker.x-target.x);
+        const rel=Math.abs(M.normAngle(toA-(target.angle||0)));
+        if(rel < Math.PI*0.32){
+          d *= (1-_ar.frontShield);
+          if((this.elapsed-(target._shieldTipT||-99))>0.9){
+            target._shieldTipT=this.elapsed;
+            this._float(target.x,target.y-56,"盾面挡下","#8a93a6");
+          }
+        }
+      }
+    }
     const _armorAtHit=target.armor||0;   // v0.14.11：用于判定「护甲是否在本次命中被打穿」
 
     /* ---------------- v0.14.10 元素克制 ---------------- */
@@ -542,7 +559,7 @@ Object.assign(Raid, {
 
   /* ----------------------------- 搜索补给 ----------------------------- */
   // 搜索耗时：保险箱按等级加长（V 级要撬 3.3 秒），普通箱 1.1 秒，地面物品堆几乎瞬拾
-  _searchNeed(c){ return c && c.ground ? 0.3 : ((c && c.locked) ? (1.6 + M.clamp(c.lockLv||1,1,5)*0.35) : 1.1); },
+  _searchNeed(c){ return c && c.ground ? 0.3 : (c && c.airdrop) ? 1.5 : ((c && c.locked) ? (1.6 + M.clamp(c.lockLv||1,1,5)*0.35) : 1.1); },
   _searchUpdate(dt){
     if(!this.search) return;
     const { c }=this.search;
@@ -588,6 +605,19 @@ Object.assign(Raid, {
       } else if(c.drop){
         this._collect(c.drop, c.x, c.y);
         if(c.cash){ this.creds+=c.cash; this._float(c.x, c.y-46, "+₽"+c.cash, "#8fe07a"); }
+      } else if(c.airdrop){
+        /* v0.23.0：空投箱 —— 按 V 级军火箱品质出 3 件 + 一笔现金。
+           品质仍走 raidLuckAt，所以「末段涌潮的空投」比「中段涌潮的空投」更好，
+           这条曲线和时间品质曲线是同一根，不另设参数。 */
+        for(let i=0;i<3;i++){
+          const vit=this._rollVaultLoot(5, c.x, c.y);
+          this._collect(vit, c.x, c.y);
+          if(vit && vit.kind==="weapon") this._giveGunAmmo(vit, c.x, c.y);
+        }
+        const gain=RNG.ri(120,260);
+        this.creds+=gain;
+        this._float(c.x, c.y-46, "空投 +₽"+gain, "#ffd23f");
+        SFX.pickup();
       } else if(c.locked){
         // 上锁保险箱：按 lockLv 决定件数与品质（等级越高装备越好），并稳定出卢布
         const lv=M.clamp(c.lockLv||1,1,5);
@@ -1053,6 +1083,61 @@ Object.assign(Raid, {
     else this._feed("系统", "增援部队已进入战区", "", false, "warn");
   },
 
+  /* ==================== v0.23.0：精英怪 ==================== */
+
+  /* 增援呼叫员（broodmother）当场叫一支 2 人小队。
+   * 与 _spawnReinforcement 的区别：那个是「全图随机刷一队」，这个是「就地叫」——
+   * 小队出现在呼叫员身边两个身位内，玩家必须在被包围前先解决掉呼叫员。 */
+  _callReinforce(b){
+    const sid = b.squadId || ("call"+(b.id||"x"));
+    for(let i=0;i<2;i++){
+      const a=RNG.fr(0,6.2832), rad=90+i*48;
+      const pt=this._spawnSafePoint(b.x+Math.cos(a)*rad, b.y+Math.sin(a)*rad, 16);
+      const gun=blGunGen(RNG.ri(11,15), {type:RNG.pick(["rifle","smg","shotgun"])});
+      const op=new RaidOperator({
+        id:"cal"+(this.uidN++)+"-"+i, cls:"scav", name:"增援 · 小队",
+        x:pt.x, y:pt.y, angle:RNG.fr(0,6.2832),
+        speed:RNG.fr(120,142), hp:RNG.ri(70,95), color:"#d0a0e0",
+        gun, smart:false, creds:RNG.ri(20,60), lootLimit:1, squadId:sid,
+      });
+      this.ops.push(op);
+    }
+    this._feed("警告", (b.name||"呼叫员")+" 呼叫了增援小队", "", false, "warn");
+    this._toast("敌人呼叫增援", "#ff8a5a");
+  },
+
+  /* ==================== v0.23.0：中后期涌潮（留场动力 C） ====================
+   * 时间品质曲线只解决了「晚开箱更值钱」，玩家感知不到「现在图里发生了什么」。
+   * 涌潮补上：中段 210s / 末段 330s 各落一批空投，广播坐标、小地图可见、AI 也会去抢。
+   *
+   * 关键约束：容器表两端必须一致（Net.sendLoot 用 containers.indexOf 定位），
+   * 所以这里既不能用全局 RNG（两端状态不同），也不能用 _openPointInRoom（内部吃 RNG）。
+   * 落点因此取自 seed 派生的局部 LCG + POI 手工指定的开阔锚点。 */
+  _surge(n){
+    if(!this.airdrops) this.airdrops=[];
+    const rnd=raidSurgeRand(((this.seed||0)>>>0) + ((n*2654435761)>>>0));
+    const count=1+(rnd()<0.45?1:0);
+    /* 优先排除已经落过空投的 POI —— 两次涌潮都掉在同一个地方，等于白白浪费一次机会。
+       used 集合只依赖 airdrops，而 airdrops 是两端同序 append 的，所以不影响确定性。 */
+    const used=new Set((this.airdrops||[]).map(a=>a.poi));
+    let pool=RAID_POI.filter(p=>!used.has(p.id));
+    if(!pool.length) pool=RAID_POI.slice();
+    const picked=[];
+    for(let i=0;i<count && pool.length;i++){
+      const k=Math.floor(rnd()*pool.length)%pool.length;
+      picked.push(pool.splice(k,1)[0]);
+    }
+    for(const poi of picked){
+      const x=M.clamp(poi.drop[0]+(rnd()-0.5)*120, 80, RAID_MAP_W-80);
+      const y=M.clamp(poi.drop[1]+(rnd()-0.5)*120, 80, RAID_MAP_H-80);
+      this.containers.push({ x, y, tier:2, kind:"weapon", airdrop:true,
+        searched:false, drop:null, poi:poi.id });
+      this.airdrops.push({ x, y, name:poi.name, poi:poi.id, life:150 });
+      this._feed("空投", "补给空投落点 · "+poi.name+"（"+Math.round(x)+" / "+Math.round(y)+"）", "", false, "info");
+    }
+    if(picked.length) this._toast("补给空投已落地 · 小地图可见", "#ffd23f");
+  },
+
   /* ----------------------------- 火箭弹 ----------------------------- */
   _updateRocket(rk, dt){
     const nx=rk.x+Math.cos(rk.ang)*rk.speed*dt, ny=rk.y+Math.sin(rk.ang)*rk.speed*dt;
@@ -1073,7 +1158,7 @@ Object.assign(Raid, {
     for(const o of this.ops){
       if(!o.alive || o===rk.owner) continue;
       const d=M.dist(x,y,o.x,o.y);
-      if(d<=R){ const fall=M.clamp(1-d/R*0.6,0.35,1); this._damage(o, rk.dmg*fall, rk.owner, rk.gun); }
+      if(d<=R){ const fall=M.clamp(1-d/R*0.6,0.35,1); this._damage(o, rk.dmg*fall, rk.owner, rk.gun, {blast:true}); }
     }
     for(let i=0;i<16;i++){ const a=Math.random()*6.28, s=Math.random()*260+80;
       this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.5,maxLife:0.5,color:i%2?"#ffd23f":"#ff7a1f",size:3}); }

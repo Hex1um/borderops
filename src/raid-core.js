@@ -46,7 +46,11 @@ const Raid = {
   elapsed:0,
   reinforceT:0,
   _squadN:0,
-  maxOps:42,
+  maxOps:48,
+  /* v0.23.0：涌潮 / 空投 */
+  seed:0,              // 本局种子（涌潮落点由它派生局部 LCG，两端一致）
+  surgeIdx:0,          // 已触发的涌潮次数
+  airdrops:[],         // 场上空投（渲染 + 小地图）
 
   /* ----------------------------- 启动 ----------------------------- */
   // 启动失败时把已从仓库扣除的装备/现金/钥匙/医疗品原样退回，避免“局没进去装备没了”。
@@ -99,8 +103,9 @@ const Raid = {
   _start(game, opts={}){
     // 联机：所有客户端必须用同一个种子，地图 / 箱子 / 撤离点开放状态才会一致
     this.online=!!opts.online;
-    if(this.online && opts.seed) RNG.setSeed(opts.seed>>>0);
-    else RNG.setSeed((Date.now()^(Math.random()*1e9))>>>0);
+    if(this.online && opts.seed) this.seed=opts.seed>>>0;
+    else this.seed=(Date.now()^(Math.random()*1e9))>>>0;
+    RNG.setSeed(this.seed);
     this.active=true;
     this.game=game;
     this.resetUiState();
@@ -118,6 +123,7 @@ const Raid = {
     this.inv={weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],cores:[],receivers:[],keys:[],ammo:{}};
     this.uidN=0;
     this.elapsed=0; this.reinforceT=0; this._squadN=0;
+    this.surgeIdx=0; this.airdrops=[];
     this.spawnGrace=8;                        // 开局 8 秒 AI 不主动锁定（玩家先开枪即失效）
     this.spectate=false; this._ended=false;
 
@@ -405,6 +411,44 @@ const Raid = {
         }));
       }
 
+    }
+
+    /* v0.23.0：POI 专属精英怪。只在该 POI 的包围盒内出生，全图其他地方不出现 ——
+       这让 8 个 POI 各自有「招牌威胁」，「要不要进这个 POI」才成为真决策。
+       数量由 RAID_POI[].elites 决定（合计 10 只），普通 AI 仍是 30 + Boss 3。 */
+    for(const poi of RAID_POI){
+      const spec=RAID_ARCH[poi.elite];
+      if(!spec || !poi.box) continue;
+      const n=poi.elites||1;
+      for(let i=0;i<n;i++){
+        /* 内缩量按包围盒短边自适应：神庙这种 360×300 的小 POI 用 96 内缩只剩
+           168×108 的可用区，_spawnSafePoint 很容易把点推到盒外（成立后就不算「POI 专属」了）。 */
+        const inset=Math.max(28, Math.min(96, Math.min(poi.box.w, poi.box.h)*0.22));
+        const raw=this._openPointInRoom(poi.box, inset);
+        const safe=this._spawnSafePoint(raw.x, raw.y, 22);
+        // 兜底夹回包围盒：宁可贴着墙出生，也不让精英怪跑到别的区域去
+        const pt={
+          x:M.clamp(safe.x, poi.box.x+18, poi.box.x+poi.box.w-18),
+          y:M.clamp(safe.y, poi.box.y+18, poi.box.y+poi.box.h-18),
+        };
+        const gtype = poi.elite==="shieldbearer" ? "shotgun" : "rifle";
+        const g=blGunGen(RNG.ri(13,17), {type:gtype, rarity:"purple"});
+        g.uid=this._uid(); g.kind="weapon";
+        const at=spec.armorTier||0, ht=spec.helmetTier||0;
+        const eliteOp=new RaidOperator({
+          id:"poi-"+poi.id+"-"+i, cls:"pmc", bounty:false,
+          name:"★ "+spec.label, arch:poi.elite,
+          x:pt.x, y:pt.y, angle:RNG.fr(0,6.2832), r:spec.r,
+          speed:spec.speed, hp:Math.round(100*spec.hpMul), color:spec.color,
+          gun:g,
+          armor:at?RAID_ARMORS[at].maxArmor:0, dr:at?RAID_ARMORS[at].dr:0, armorTier:at,
+          helmetArmor:ht?RAID_HELMETS[ht].maxArmor:0, helmetDr:ht?RAID_HELMETS[ht].dr:0, helmetTier:ht,
+          smart:true, creds:RNG.ri(120,320), lootLimit:spec.lootLimit,
+        });
+        // 出生归属：他会追着玩家跑出包围盒，所以「是哪个 POI 的精英」只能记在出生时
+        eliteOp.spawnPoi=poi.id;
+        this.ops.push(eliteOp);
+      }
     }
 
     // 摄像机对准玩家

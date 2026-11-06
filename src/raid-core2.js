@@ -175,6 +175,12 @@ Object.assign(Raid, {
     const randKind=()=>{ const a=[
       {weight:30, v:"weapon"}, {weight:24, v:"armor"},
       {weight:18, v:"medical"}, {weight:28, v:"random"} ]; return a[RNG.weighted(a)].v; };
+    /* v0.23.0：POI 内的箱子按该 POI 的 kinds 出类型（大坝多军械、小镇多杂货/医疗…）。
+       只在 POI 包围盒内生效，POI 外的箱子仍是全局权重，避免「全图都变味」。 */
+    const kindAt=(x,y)=>{
+      const poi=raidPoiAt(x,y);
+      return (poi && poi.kinds && poi.kinds.length) ? RNG.pick(poi.kinds) : randKind();
+    };
     // 房间内箱子：密度随地图扩大（每间 2 起、每 9 万像素 +1）
     for(const rm of RAID_ROOMS){
       if(rm.extract) continue;
@@ -183,7 +189,7 @@ Object.assign(Raid, {
       for(let i=0;i<n;i++){
         const p=this._openPointInRoom(rm, 66);
         this.containers.push({ x:p.x, y:p.y, tier:RNG.weighted([{weight:52},{weight:34},{weight:14}]),
-          kind:randKind(), searched:false, drop:null });
+          kind:kindAt(p.x,p.y), searched:false, drop:null });
       }
     }
     // 房间外的散落补给（地图空旷处，绕开房间矩形与户外掩体）
@@ -209,7 +215,7 @@ Object.assign(Raid, {
     for(const sh of this.sheds){
       const p=this._openPointInRoom(sh, 46);
       this.containers.push({ x:p.x, y:p.y, tier:RNG.weighted([{weight:38},{weight:36},{weight:26}]),
-        kind:randKind(), searched:false, drop:null });
+        kind:kindAt(p.x,p.y), searched:false, drop:null });
     }
     // 上锁保险箱：分 5 档保险等级（lockLv），必须用对应等级钥匙打开
     //   V 级（军火箱）改为「全图随机、每局 20% 概率一口」，不再固定藏在大坝库底。
@@ -467,6 +473,15 @@ Object.assign(Raid, {
     this.timer-=dt;
     if(this.timer<=60 && !this._shownWarn){ this._shownWarn=true; this._feed("系统","撤离窗口将在 60 秒后关闭","警告",false,"warn"); }
     if(this.timer<=0){ this.timer=0; this._fail("超时未撤离"); return; }
+
+    /* v0.23.0：涌潮触发。必须放在 hostSim 之外 —— 空投容器会 append 到 this.containers，
+       而 Net.sendLoot 用 containers.indexOf(c) 定位，两端列表必须同长同序。
+       时钟取 raidDuration - timer（timer 所有端本地等速递减），不用 elapsed（仅房主推进）。 */
+    if(this.surgeIdx<RAID_SURGE_AT.length
+       && (this.raidDuration-this.timer)>=RAID_SURGE_AT[this.surgeIdx]){
+      this.surgeIdx++;
+      this._surge(this.surgeIdx);
+    }
 
     // 世界模拟只由房主（或单机）负责；客户端只接收快照
     const hostSim = !this.online || (typeof Net!=="undefined" && Net.isHost);
@@ -1089,6 +1104,13 @@ Object.assign(Raid, {
     for(const b of this.ops){
       if(b.isPlayer||b.remote||b.ghost||!b.alive) continue;
       const sense=raidAISense(b);
+      /* v0.23.0：增援呼叫员（broodmother）—— 血量掉到 callAt 以下就在原地叫一支 2 人小队。
+         只叫一次（_called 上锁），所以玩家的正确应对是「先速杀」而不是「先清小怪」。
+         放在目标筛选之前：被围住的瞬间就该有反馈，而不是等他打完这一梭子。 */
+      if(b.arch==="broodmother" && !b._called){
+        const at=(RAID_ARCH.broodmother.callAt||0.6);
+        if(b.hp < b.maxHP*at){ b._called=true; this._callReinforce(b); }
+      }
       // 联机房主：AI 会在「自己 + 所有远端玩家」里挑最近的可见目标
       // AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
       // v0.21.9：基线不再预设玩家原始距离 —— 否则被墙挡住的近处玩家会屏蔽更远但可见的敌对目标
@@ -1148,6 +1170,12 @@ Object.assign(Raid, {
         // 压得更狠（170 才开始保持距离，60 以内才后退）
         if(d>170){ mx=Math.cos(b.angle); my=Math.sin(b.angle); }
         else if(d<60){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); }
+        /* v0.23.0：潜行侦察兵（wraith）不站正面 —— 逼近时带一个固定的侧向分量，
+           走弧线贴上来，正对着他反而容易打空。侧别选一次就固定，否则会左右抽搐。 */
+        if(b.arch==="wraith" && d>170){
+          const arc=(b._arcSide||(b._arcSide=RNG.chance(0.5)?1:-1))*0.62;
+          mx+=-Math.sin(b.angle)*arc; my+=Math.cos(b.angle)*arc;
+        }
         // 换弹时不再「端着空枪往前冲」——拉开距离等装填完
         if(b.reloadT>0 && d<620){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); b.state="reload"; }
         // 交战时左右游走，不再站桩对射（玩家更难被「固定靶」式预瞄）

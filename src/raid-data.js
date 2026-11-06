@@ -407,7 +407,11 @@ const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","a
  *   主动搜寻 smart 0.88 / pmc 0.74 / scav 0.56、枪声听距系数 1.0。 */
 /* ==================== v0.22.2：静态地形分区 ====================
  * biome / 室内 / 危险度全部由坐标查表得到，不读 RNG、不依赖运行时动态量
- * （AI 数量、玩家路径、计时都会让联机两端 seed 重放分叉）。
+ * （AI 数量、玩家路径都会让联机两端 seed 重放分叉）。
+ * v0.23.0 起新增的「时间品质曲线」是唯一例外：它读局内时钟（raidDuration - timer），
+ *   而 timer 在所有端本地等速递减、与 HUD 倒计时同源，两端读到同一进度，
+ *   不会像 elapsed 那样在客户端恒为 0。允许的状态只有「坐标 + 局内时钟」，
+ *   绝不允许读 RNG / AI 数量 / 玩家路径。
  * 400px 网格在模块加载时预计算一次，热路径 O(1)：30+ AI 每帧调 raidAISense，
  * 不能在这里遍历 103 个房间矩形 + 8 片密林。 */
 const RAID_BIOME_CELL = 400;
@@ -452,8 +456,138 @@ function raidDangerAt(x,y){
   const gy=M.clamp(Math.floor(y/(RAID_MAP_H/3)),0,2);
   return RAID_ZONE_DANGER[gy][gx];
 }
+/* ==================== v0.23.0：局内时间品质曲线（留场动力 A） ====================
+ * 诊断：v0.22.x 之前 lootLuck 只读「带入装备估值 + 坐标」，掉落品质与局内时长
+ *   完全无关；而增援从 180s 起每 20~32s 刷一队（上限 42）。收益恒定 + 风险单调上升
+ *   → 理性最优解必然是「搜完身边一圈就撤」。这不是玩家没耐心，是结构把门关上了。
+ *
+ * 这里给 luck 加一条随时间递增的项，让「晚开箱」天然比「早开箱」值钱：
+ *   前 1/3 局（0~160s）   → 0        ，开局照常，不鼓励原地磨蹭
+ *   中 1/3 局（160~320s） → 线性 0 → +0.12
+ *   末 1/3 局（320~480s） → 线性 +0.12 → +0.22
+ *
+ * 仍然确定性：时钟取 raidDuration - timer，timer 在所有端本地等速递减、与 HUD 同源，
+ *   两条客户端和房主读到的是同一个局内进度；不读 RNG、不读玩家路径。
+ *   （与 biome / danger 一样是「只读局内状态」的纯函数，状态从「坐标」扩到「坐标 + 时钟」。） */
+const RAID_TIME_LUCK = [0.00, 0.12, 0.22];
+function raidTimeLuck(elapsed, duration){
+  const T = (duration>0) ? duration : 480;
+  const u = M.clamp((elapsed||0)/T, 0, 1);
+  const a = 1/3, b = 2/3;
+  if(u <= a) return 0;
+  if(u <= b) return RAID_TIME_LUCK[1]*(u-a)/(b-a);
+  return RAID_TIME_LUCK[1] + (RAID_TIME_LUCK[2]-RAID_TIME_LUCK[1])*(u-b)/(1-b);
+}
+/* luck 合成：带入装备 + 静态危险度 + 局内时长。
+ * 上限从 0.85 提到 0.95 —— 否则末段的时间收益会被老上限直接吃掉，
+ * 「晚开箱更值钱」在满配重装身上完全感受不到。
+ *
+ * 时钟取 raidDuration - timer 而不是 elapsed：elapsed 只在房主（hostSim）分支推进，
+ * 且不在联机快照里，客户端会永远读到 0 → 两端 loot 品质分叉。
+ * timer 是所有端都在本地递减、且和 HUD 倒计时同源，用它才两端一致。 */
+function raidElapsed(R){
+  if(!R || !R.raidDuration || R.timer===undefined) return 0;
+  return M.clamp(R.raidDuration - R.timer, 0, R.raidDuration);
+}
 function raidLuckAt(R,x,y){
-  return M.clamp((R.lootLuck||0) + raidDangerAt(x,y)*0.35, 0, 0.85);
+  const poi = raidPoiAt(x,y);
+  const base = (R.lootLuck||0) + raidDangerAt(x,y)*0.35 + (poi ? poi.luck : 0);
+  const t = raidTimeLuck(raidElapsed(R), R && R.raidDuration);
+  return M.clamp(base + t, 0, 0.95);
+}
+
+/* ==================== v0.23.0：手电亮度参数（2D / 3D 共用） ====================
+ * 问题不是「手电本身暗」，而是室内压暗（2D 0.52 / 3D 0.82）和手电亮度是两套独立参数：
+ * 进屋后房子黑了、手电没变亮，等于双层打折。这里给一个随 Raid.indoor 增长的增益，
+ * 让「越黑的屋子，手电越显眼」。
+ *
+ * 只提 alpha，绝不加射程 —— reach 一加长，光就会溢出门口照亮隔壁房间，
+ * 那正是玩家反复反馈的「3D 能透视」。（reach 仍锁在 560，见 raid-render / fpview）
+ * 三个暖色 rgb（255,236,182 / 255,224,160 / 255,228,160）一个都不动，色温断言安全。 */
+const RAID_FLASH = {
+  cone2d:   0.36,    // 2D 光锥中心 alpha（室外基准）
+  cone2dMid:0.15,    // 2D 光锥半程 alpha
+  cone3d:   0.12,    // 3D 散射中心 alpha（室外基准）
+  cone3dMid:0.046,   // 3D 散射半程 alpha
+  indoorGain:0.95,   // 室内增益：室内满值时 ×1.95
+  hot:      0.10,    // 3D 室内中心热点 alpha（满值）
+  hotR:     0.24,    // 热点半径 = reach × hotR
+  coreShift:0.10,    // 室内亮核位置前移量（0.5 → 0.40，光柱更收束）
+};
+/* 手电增益系数：indoor 0→1 映射到 1→1.95 */
+function raidFlashGain(indoor){
+  return 1 + RAID_FLASH.indoorGain * M.clamp(indoor||0, 0, 1);
+}
+
+/* ==================== v0.23.0：8 个核心 POI ====================
+ * 不新建房间簇 —— RAID_ROOMS 里已经有 8 组天然成簇的地点，直接把簇升级成 POI：
+ *   区域内给品质加成（luck）+ 容器类型偏向（kinds）+ 专属精英怪（elite）
+ *   + 一个确定性空投落点（drop，涌潮用）。
+ * 判定纯查表、不读 RNG，联机两端结果一致。
+ * rooms 只收「地理上真的挨着」的房间 —— 把 rDock(9700,7700) 并进 dock(3720,2250)
+ * 会让包围盒横跨半张图，看似「一个 POI」实则把所有东西都圈进去。 */
+const RAID_POI = [
+  { id:"dam",     name:"大坝",       rooms:["damCtrl","damGate"],
+    drop:[3415,8400],  luck:0.07, kinds:["weapon","armor"],   elite:"shieldbearer", elites:1, tag:"坝",
+    perk:"军械箱密度高，适合重装进场收割" },
+  { id:"prison",  name:"监狱",       rooms:["prisonA","prisonB","prisonC","prisonT","prisonYard"],
+    drop:[1600,5560],  luck:0.08, kinds:["weapon","medical"], elite:"shieldbearer", elites:1, tag:"狱",
+    perk:"钥匙与护甲最多，收容区钥匙爆率高" },
+  { id:"town",    name:"小镇",       rooms:["townSq","townHall","townShop","townChurch","townH1","townH2","townH3","townH4"],
+    drop:[2140,7260],  luck:0.04, kinds:["random","medical"], elite:"wraith",       elites:1, tag:"镇",
+    perk:"巷战密集，医疗物资多但地形开阔" },
+  { id:"rail",    name:"铁路调度场", rooms:["rStation","rFreight","rCtrl","rExpl"],
+    drop:[11610,5200], luck:0.09, kinds:["weapon","random"],  elite:"broodmother",  elites:2, tag:"铁",
+    perk:"全图最危险的 POI，弹药与配件回报最高" },
+  { id:"quarry",  name:"采石场",     rooms:["quarry"],
+    drop:[3730,6640],  luck:0.06, kinds:["armor","random"],   elite:"shieldbearer", elites:1, tag:"石",
+    perk:"爆破区地形，护甲箱集中" },
+  { id:"factory", name:"机械工厂",   rooms:["factory","assem","print"],
+    drop:[3550,530],   luck:0.08, kinds:["weapon","armor"],   elite:"broodmother",  elites:1, tag:"厂",
+    perk:"改装模块与配件产出地" },
+  { id:"dock",    name:"东码头",     rooms:["dock"],
+    drop:[3930,2400],  luck:0.07, kinds:["random","weapon"],  elite:"wraith",       elites:2, tag:"港",
+    perk:"集装箱迷宫，适合偷袭与绕后" },
+  { id:"temple",  name:"古神庙",     rooms:["temple"],
+    drop:[1160,3150],  luck:0.10, kinds:["random","medical"], elite:"wraith",       elites:1, tag:"庙",
+    perk:"核心（core）专属产出，危险度最高" },
+];
+/* 包围盒在模块加载时预算一次；raidPoiAt 每开一箱只查 8 个矩形 */
+for(const p of RAID_POI){
+  let x0=1e9, y0=1e9, x1=-1e9, y1=-1e9;
+  for(const id of p.rooms){
+    const rm=RAID_ROOMS.find(r=>r.id===id);
+    if(!rm) continue;
+    x0=Math.min(x0,rm.x); y0=Math.min(y0,rm.y);
+    x1=Math.max(x1,rm.x+rm.w); y1=Math.max(y1,rm.y+rm.h);
+  }
+  p.box = (x0<=x1&&y0<=y1) ? {x:x0,y:y0,w:x1-x0,h:y1-y0} : null;
+  p.cx = (x0+x1)/2; p.cy = (y0+y1)/2;
+}
+function raidPoiAt(x,y){
+  for(let i=0;i<RAID_POI.length;i++){
+    const b=RAID_POI[i].box;
+    if(b && x>=b.x && x<=b.x+b.w && y>=b.y && y<=b.y+b.h) return RAID_POI[i];
+  }
+  return null;
+}
+function raidPoiById(id){ return RAID_POI.find(p=>p.id===id) || null; }
+
+/* ==================== v0.23.0：中后期涌潮（留场动力 C） ====================
+ * 时间品质曲线只解决了「晚开箱更值钱」，但玩家感知不到「现在图里发生了什么」。
+ * 涌潮补上这一层：中段和末段各落一批空投，广播坐标，AI 也会去抢 ——
+ * 「再等一分钟」从此有一个具体的目标，而不是抽象的期望值。
+ *
+ * 触发点用局内时钟（raidDuration - timer）判定，而不是 elapsed：
+ * elapsed 只在房主分支推进，客户端恒为 0，涌潮会永远不触发。
+ * 落点由 seed 派生的**局部** LCG 决定，不碰全局 RNG（全局 RNG 在两端状态不同）。 */
+const RAID_SURGE_AT = [210, 330];
+function raidSurgeRand(seed){
+  let s = ((seed>>>0) ^ 0x9e3779b9) >>> 0;
+  return function(){
+    s = (s ^ (s<<13)) >>> 0; s = (s ^ (s>>>17)) >>> 0; s = (s ^ (s<<5)) >>> 0;
+    return s / 4294967296;
+  };
 }
 
 const RAID_AI_SENSE = {
@@ -461,9 +595,44 @@ const RAID_AI_SENSE = {
   pmc:  { sight:900,  memory:5.5, react:0.22, hunt:0.70, hear:1.00 },
   boss: { sight:1250, memory:9.0, react:0.06, hunt:0.95, hear:1.40 },
 };
+
+/* ==================== v0.23.0：精英怪原型（arch） ====================
+ * 来源是旧模式 enemies.js 的三只怪，但**不新增 RAID_AI_SENSE 档位** ——
+ * 那三档的数值（520 / 900 / 1250）被玩家文案和 verify 组 36 引用着，
+ * 加一档就要连带改文案口径。这里改成「arch 覆盖表」：自带 sense，
+ * 在 raidAISense() 里优先级最高，三档原样保留。
+ *
+ * 三只怪各自解决一种玩家习惯：
+ *   wraith       听距 1.6×、视距只有 400 —— 靠枪声摸过来，你先听见它还是它先看见你不好说
+ *   shieldbearer 正面 72% 免伤、移速 78 —— 逼你绕后或用爆炸，不能站着对枪
+ *   broodmother  血量过半呼叫一支 2 人小队 —— 逼你速杀，拖住就被包
+ * 玩家文案只写「感知强/弱」，不写具体数字（数字只在代码里）。 */
+const RAID_ARCH = {
+  wraith: {
+    label:"潜行侦察兵", short:"侦察兵", color:"#9be7ff",
+    sense:{ sight:400, memory:3.0, react:0.35, hunt:0.85, hear:1.60 },
+    hpMul:1.9, speed:188, r:14, armorTier:0, helmetTier:0, frontShield:0,
+    lootLimit:1, note:"听距极大、视距很短：靠枪声摸过来，正面开火前你看不见他",
+  },
+  shieldbearer: {
+    label:"防盾手", short:"防盾手", color:"#8a93a6",
+    sense:{ sight:780, memory:6.0, react:0.30, hunt:0.60, hear:1.00 },
+    hpMul:3.6, speed:78, r:20, armorTier:5, helmetTier:4, frontShield:0.72,
+    lootLimit:3, note:"正面挡弹，必须绕后或用爆炸 / 穿甲",
+  },
+  broodmother: {
+    label:"增援呼叫员", short:"呼叫员", color:"#b06bd0",
+    sense:{ sight:1100, memory:8.0, react:0.15, hunt:0.90, hear:1.30 },
+    hpMul:6.5, speed:64, r:26, armorTier:6, helmetTier:5, frontShield:0,
+    lootLimit:5, callAt:0.60, note:"血量过半会呼叫一支增援小队，尽量速杀",
+  },
+};
+
 function raidAISense(b){
-  let base = RAID_AI_SENSE.scav;
-  if(b){
+  /* v0.23.0：arch 覆盖优先于 scav / pmc / boss 三档（三档本身不动）。 */
+  const arch = (b && b.arch && RAID_ARCH[b.arch]) ? RAID_ARCH[b.arch] : null;
+  let base = arch ? arch.sense : RAID_AI_SENSE.scav;
+  if(b && !arch){
     if(b.bounty) base = RAID_AI_SENSE.boss;                    // Boss
     else if(b.cls==="pmc") base = RAID_AI_SENSE.pmc;           // Raider 由 smart 单独判定
     else if(b.smart) base = RAID_AI_SENSE.pmc;
@@ -1405,8 +1574,13 @@ const RaidStash = {
 class RaidOperator {
   constructor(o){
     this.id=o.id; this.name=o.name; this.isPlayer=!!o.isPlayer; this.cls=o.cls||"pmc"; this.bounty=!!o.bounty;
+    /* v0.23.0：精英怪原型（wraith / shieldbearer / broodmother），null 表示常规 AI。
+       只影响感知档、体型、正面挡弹与呼叫增援，不改变伤害/护甲结算主流程。 */
+    this.arch = o.arch || null;
+    this.callT = (this.arch==="broodmother") ? 24 : 0;
+    this._called = false;
     this.x=o.x; this.y=o.y; this.angle=o.angle!==undefined?o.angle:0;
-    this.r=13; this.speed=o.speed||150; this.color=o.color||"#e06a4a";
+    this.r=o.r||13; this.speed=o.speed||150; this.color=o.color||"#e06a4a";
     // 护甲 / 头盔按 tier 给角色额外血量，高 tier 装备更耐打
     const eqHP=(o.armorTier||0)*14 + (o.helmetTier||0)*8;
     this.hp=(o.hp||100)+eqHP; this.maxHP=this.hp;

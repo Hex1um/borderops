@@ -1783,9 +1783,97 @@ check('_rayLight 走 navCell（含 sight:false 的灌木/岩石）', /idx=this\.
 check('_rayLight 用精确 slab 求交（不是 13px 采样）', /if\(tmin>0\.5 && tmin<best\) best=tmin/.test(raidSrc)?1:0, 1, 0.001);
 check('灯光轮廓改用 _rayLight', /Raid\._rayLight\(x, y, dx, dy, reach\)/.test(__rd2)?1:0, 1, 0.001);
 check('2D 手电射线数提到 96（消锯齿）', /reach, 96\)/.test(__rd2)?1:0, 1, 0.001);
-check('2D 手电亮度调高到 0.36', /255,236,182,0\.36/.test(__rd2)?1:0, 1, 0.001);
-check('3D 手电亮度调高到 0.12', /255,236,182,0\.12/.test(__fp2)?1:0, 1, 0.001);
+check('手电基准亮度抽成 RAID_FLASH（2D 0.36 / 3D 0.12）', /cone2d:\s*0\.36/.test(raidSrc) && /cone3d:\s*0\.12/.test(raidSrc)?1:0, 1, 0.001);
+check('2D / 3D 都走 raidFlashGain（不再写死 alpha）', /raidFlashGain\(R\.indoor\)/.test(__rd2) && /raidFlashGain\(ind\)/.test(__fp2)?1:0, 1, 0.001);
 check('手电色温未变（三处 rgb 都在）', /255,236,182/.test(__rd2) && /255,224,160/.test(__rd2) && /255,228,160/.test(__rd2)?1:0, 1, 0.001);
+
+/* ================================================================ 39. 留场动力 / POI / 精英怪 / 室内手电（v0.23.0） */
+console.log('\n=== 39. 留场动力 / POI / 精英怪 / 室内手电（v0.23.0）===');
+
+/* --- ① 时间品质曲线：让「多待」有回报 --- */
+check('时间曲线前 1/3 局不加成', G('raidTimeLuck(0,480)'), 0, 0.0001);
+check('时间曲线 160s 仍在平台期', G('raidTimeLuck(160,480)'), 0, 0.0001);
+check('时间曲线中段线性（240s = 0.06）', G('raidTimeLuck(240,480)'), 0.06, 0.0005);
+check('时间曲线 320s 到中段终点 0.12', G('raidTimeLuck(320,480)'), 0.12, 0.0005);
+check('时间曲线末段到 0.22', G('raidTimeLuck(480,480)'), 0.22, 0.0005);
+check('时间曲线单调不减',
+  (G('raidTimeLuck(200,480)') <= G('raidTimeLuck(300,480)')
+   && G('raidTimeLuck(300,480)') <= G('raidTimeLuck(460,480)')) ? 1 : 0, 1, 0.001);
+check('缺 duration 时按 480 兜底', G('raidTimeLuck(480,0)'), 0.22, 0.0005);
+/* 时钟必须取 raidDuration - timer，而不是 elapsed（那玩意儿只在房主端推进） */
+check('raidElapsed 取 raidDuration - timer', G('raidElapsed({raidDuration:480,timer:160})'), 320, 0.001);
+check('raidElapsed 无 timer 时返回 0', G('raidElapsed({raidDuration:480})'), 0, 0.001);
+check('luck 上限提到 0.95（末段收益不被老上限吃掉）',
+  G('raidLuckAt({lootLuck:0.90,raidDuration:480,timer:0}, 200,200)'), 0.95, 0.001);
+
+/* --- ② 8 个核心 POI --- */
+check('核心 POI 恰好 8 个', G('RAID_POI.length'), 8, 0.001);
+check('每个 POI 都有包围盒', G('RAID_POI.filter(p=>p.box).length'), 8, 0.001);
+check('每个 POI 都有空投锚点', G('RAID_POI.filter(p=>Array.isArray(p.drop)&&p.drop.length===2).length'), 8, 0.001);
+check('每个 POI 都有单字标识（小地图用）', G('RAID_POI.filter(p=>!!p.tag).length'), 8, 0.001);
+check('POI 包围盒贴合聚类（宽 < 1900 / 高 < 2800）',
+  G('RAID_POI.filter(p=>p.box.w<1900 && p.box.h<2800).length'), 8, 0.001);
+check('raidPoiAt 命中神庙', G('raidPoiAt(1160,3150).id') === 'temple' ? 1 : 0, 1, 0.001);
+check('raidPoiAt 命中铁路调度场', G('raidPoiAt(11610,5200).id') === 'rail' ? 1 : 0, 1, 0.001);
+check('raidPoiAt 空处返回 null', G('raidPoiAt(6600,4800)===null?1:0'), 1, 0.001);
+check('POI 内 luck 高于同危险度的空地',
+  G('raidLuckAt({lootLuck:0,raidDuration:480,timer:480},1160,3150)') >
+  G('raidLuckAt({lootLuck:0,raidDuration:480,timer:480},6600,3150)') ? 1 : 0, 1, 0.001);
+check('POI 容器类型偏向生效（源码按 kinds 取）', /kindAt\(p\.x,p\.y\)/.test(raidSrc)?1:0, 1, 0.001);
+
+/* --- ③ 中后期涌潮 --- */
+check('涌潮触发点 2 个（210s / 330s）',
+  G('RAID_SURGE_AT.length') === 2 && G('RAID_SURGE_AT[0]') === 210 && G('RAID_SURGE_AT[1]') === 330 ? 1 : 0, 1, 0.001);
+const _sg1 = G(`(function(){var r=raidSurgeRand(12345);return [r(),r(),r()];})()`);
+const _sg2 = G(`(function(){var r=raidSurgeRand(12345);return [r(),r(),r()];})()`);
+const _sg3 = G(`(function(){var r=raidSurgeRand(99999);return [r(),r(),r()];})()`);
+check('涌潮随机源同 seed 同序列（两端一致）',
+  (_sg1[0] === _sg2[0] && _sg1[1] === _sg2[1] && _sg1[2] === _sg2[2]) ? 1 : 0, 1, 0.001);
+check('涌潮随机源不同 seed 不同序列', _sg1[0] !== _sg3[0] ? 1 : 0, 1, 0.001);
+check('涌潮触发在 hostSim 之外（容器表两端同长）',
+  /surgeIdx<RAID_SURGE_AT\.length/.test(raidSrc) && !/hostSim\)\{[\s\S]{0,400}_surge\(/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('空投箱按 V 级军火箱出货', /else if\(c\.airdrop\)/.test(raidSrc) && /_rollVaultLoot\(5, c\.x, c\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('空投搜得比常规箱子久（1.5s）', /c\.airdrop\) \? 1\.5/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('空投有世界信标与小地图标记',
+  /R\.airdrops && R\.airdrops\.length/.test(__rd2) && /for\(const a of \(R\.airdrops\|\|\[\]\)\)/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('房主种子落进 this.seed（涌潮落点可重算）', /this\.seed=opts\.seed>>>0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ④ 三只精英怪 --- */
+check('三只精英怪原型都在', G('["wraith","shieldbearer","broodmother"].filter(k=>!!RAID_ARCH[k]).length'), 3, 0.001);
+check('原有三档 AI 感知没被改动',
+  G('RAID_AI_SENSE.scav.sight') === 520 && G('RAID_AI_SENSE.pmc.sight') === 900 && G('RAID_AI_SENSE.boss.sight') === 1250 ? 1 : 0, 1, 0.001);
+check('侦察兵视距短、听距长', G('RAID_ARCH.wraith.sense.sight') === 400 && G('RAID_ARCH.wraith.sense.hear') === 1.6 ? 1 : 0, 1, 0.001);
+check('arch 覆盖优先级高于 smart/pmc',
+  G('raidAISense({arch:"wraith",cls:"pmc",smart:true,x:6600,y:4800}).sight'), 400, 0.001);
+check('普通 AI 仍走原三档', G('raidAISense({cls:"pmc",smart:true,x:6600,y:4800}).sight'), 900, 0.001);
+check('精英怪只在 POI 包围盒内出生', /_openPointInRoom\(poi\.box, inset\)/.test(raidSrc) && /M\.clamp\(safe\.x, poi\.box\.x\+18/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('每个 POI 都配了精英怪', G('RAID_POI.filter(p=>!!RAID_ARCH[p.elite]).length'), 8, 0.001);
+/* 防盾手：正面挡弹 / 绕背满伤 / 爆炸无视 */
+const _sbFront = mkTarget({ armorTier: 0, armor: 0, dr: 0, hp: 1e6, maxHP: 1e6, arch: 'shieldbearer', angle: Math.PI, x: 100, y: 0 });
+check('防盾手正面吃 72% 减伤', dmgOn(_sbFront, 100, phys), 28, 0.6);
+const _sbBack = mkTarget({ armorTier: 0, armor: 0, dr: 0, hp: 1e6, maxHP: 1e6, arch: 'shieldbearer', angle: 0, x: 100, y: 0 });
+check('绕到背后打满伤', dmgOn(_sbBack, 100, phys), 100, 0.6);
+const _sbBlast = mkTarget({ armorTier: 0, armor: 0, dr: 0, hp: 1e6, maxHP: 1e6, arch: 'shieldbearer', angle: Math.PI, x: 100, y: 0 });
+check('爆炸无视盾面', dmgOn(_sbBlast, 100, phys, { blast: true }), 100, 0.6);
+check('火箭爆炸带 blast 标记', /rk\.dmg\*fall, rk\.owner, rk\.gun, \{blast:true\}/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('碎片溅射带 blast 标记', /chain:true, blast:true/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('呼叫员只呼叫一次（_called 上锁）', /b\._called=true; this\._callReinforce\(b\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('呼叫员就地叫 2 人小队', /_callReinforce\(b\)\{[\s\S]{0,400}?for\(let i=0;i<2;i\+\+\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('侦察兵走弧线逼近（不在正面对枪）', /b\.arch==="wraith" && d>170/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('精英怪体型按原型给（不写死 13）', /this\.r=o\.r\|\|13;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 上限为精英怪留了余量（maxOps 48）', /maxOps:48/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* --- ⑤ 室内手电提亮 --- */
+check('室内增益系数上限 1.95', G('raidFlashGain(1)'), 1.95, 0.0001);
+check('室外增益保持 1.0', G('raidFlashGain(0)'), 1, 0.0001);
+check('室内手电亮约 2.8 倍（0.12*1.95 + 0.10 热点）',
+  G('RAID_FLASH.cone3d*raidFlashGain(1) + RAID_FLASH.hot'), 0.334, 0.002);
+check('3D 中心热点存在且半径按 reach 缩放', /RAID_FLASH\.hotR/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('3D 亮核随 indoor 前移（0.5 - coreShift）', /0\.5 - RAID_FLASH\.coreShift\*ind/.test(__fp2) ? 1 : 0, 1, 0.001);
+/* 最要紧的一条：不许加射程 —— 加射程 = 光穿墙复活 */
+check('手电射程仍是 560（没借提亮偷偷加长）',
+  /reach=560, half=0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('2D / 3D 共用同一套手电参数', /RAID_FLASH/.test(__rd2) && /RAID_FLASH/.test(__fp2) ? 1 : 0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);
