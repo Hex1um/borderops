@@ -19,6 +19,8 @@ const Raid = {
   particles:[],
   camera:{x:0,y:0},
   timer:480,
+  raidDuration:480,  // v0.22.2：局时唯一来源（结算用时从这里算，不再写死 480）
+  indoor:0,          // v0.22.2：室内亮度因子 0..1，跨门口平滑过渡（2D / 3D 共用）
   creds:0,
   inv:{weapons:[],armors:[],helmets:[],shields:[],parts:[]},
   carried:{weapons:[],armor:null,helmet:null},
@@ -108,7 +110,7 @@ const Raid = {
     this._stashPersisted=false;
     this.map={w:RAID_MAP_W,h:RAID_MAP_H};
     this.tracers=[]; this.killfeed=[]; this.floats=[]; this.toasts=[]; this.particles=[]; this.rockets=[]; this.blasts=[];
-    this.timer=480; this.creds=0; this.extractT=0; this.search=null;
+    this.timer=this.raidDuration; this.indoor=0; this.creds=0; this.extractT=0; this.search=null;
     this.bandages=1; this.medT=0; this.medUse=null; this.stimT=0;
     this.meds={hemo:0,medkit:0,stim:0,surgery:0};
     this.insured=false; this.insuredVal=0;
@@ -411,6 +413,13 @@ const Raid = {
     this._updateCamera(game);
 
     this._feed("系统", "PMC 已进入战区 · 小心 Scav 出没", "部署", false, "info");
+    /* v0.22.2：本局开放的撤离点进图就告知（房主 seed 决定，两端一致），
+       不用横穿大图到跟前才知道哪个出口没开。 */
+    const openEx=(this.extracts||[]).filter(e=>!e.closed);
+    if(openEx.length){
+      const names=openEx.slice(0,5).map(e=>e.name).join(" / ");
+      this._feed("撤离", "本局开放 "+openEx.length+" 处："+names+(openEx.length>5?" …":""), "部署", false, "info");
+    }
     // 让玩家看懂「携带价值 → 战利品品质」的关系
     const lk=this.lootLuck;
     const lkTxt = !carriedAny ? "裸装进场 · 箱子多为低阶物资" :
@@ -702,6 +711,26 @@ const Raid = {
           name:rm.name, id:rm.id, need:rule.need, cost:rule.cost, feeRate:rule.feeRate||0, closed,
           note:closed?("已关闭 · "+rule.note):rule.note });
       }
+    }
+
+    /* v0.22.2：每个 3×3 行政区保底 1 个开放撤离点。
+     * openChance 最低 0.5，整片区域的出口可能全被掷成关闭 —— 玩家横穿大图
+     * 到跟前才发现没路走，这是「跑远路没回报」最刺眼的一种。强制开最靠区中心的那个。 */
+    const zoneOf=(e)=>{
+      const gx=M.clamp(Math.floor((e.x+e.w/2)/(RAID_MAP_W/3)),0,2);
+      const gy=M.clamp(Math.floor((e.y+e.h/2)/(RAID_MAP_H/3)),0,2);
+      return gy*3+gx;
+    };
+    const openZones=new Set();
+    for(const e of this.extracts) if(!e.closed) openZones.add(zoneOf(e));
+    for(let z=0;z<9;z++){
+      if(openZones.has(z)) continue;
+      const cand=this.extracts.filter(e=>e.closed && zoneOf(e)===z)
+        .sort((a,b)=> (a.cost||0)-(b.cost||0))[0];   // 优先开免费点
+      if(!cand) continue;
+      cand.closed=false;
+      cand.note=(RAID_EXTRACT_RULES[cand.id]||{}).note || cand.note;
+      openZones.add(z);
     }
 
     // 全区主干道（视觉）：东西 / 南北各一条，让大地图有“行政区”结构

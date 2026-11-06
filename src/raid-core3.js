@@ -551,6 +551,9 @@ Object.assign(Raid, {
     this.search.t+=dt;
     const need = this._searchNeed(c);
     if(this.search.t>=need){
+      /* v0.22.2：箱子按所在行政区的静态危险度加权掉落。
+         raidLuckAt 只读坐标（纯函数，不碰 RNG / AI / 计时），联机两端 seed 重放结果一致。 */
+      const luck=raidLuckAt(this, c.x, c.y);
       /* 地面物品堆 —— 逐件尝试装包；装不下的留在原地，这里绝不新生成堆（否则会无限增殖） */
       if(c.ground){
         const rest=[];
@@ -590,7 +593,7 @@ Object.assign(Raid, {
         const lv=M.clamp(c.lockLv||1,1,5);
         const n=1+(lv>=3?1:0)+(lv>=5?2:0);   // V 级军火箱 4 件
         for(let i=0;i<n;i++){
-          const vit=this._rollVaultLoot(lv);
+          const vit=this._rollVaultLoot(lv, c.x, c.y);
           this._collect(vit, c.x, c.y);
           if(vit && vit.kind==="weapon") this._giveGunAmmo(vit, c.x, c.y);   // 箱里的枪带一点弹药
         }
@@ -604,33 +607,33 @@ Object.assign(Raid, {
         // 武器箱也以原材料为主，整枪极少
         const wr=RNG.f();
         if(wr<0.05){
-          const git=this._rollGunLoot("pmc", this.lootLuck);
+          const git=this._rollGunLoot("pmc", luck);
           this._collect(git, c.x, c.y);
           this._giveGunAmmo(git, c.x, c.y);        // 箱里的枪自带匹配口径弹药
         }
-        else if(wr<0.23) this._collect(this._rollPartGear("pmc", this.lootLuck), c.x, c.y);
-        else if(wr<0.52) this._collect(this._rollAmmo(this.lootLuck), c.x, c.y);   // 武器箱是找子弹的首选
-        else this._collect(this._rollMaterial(this.lootLuck), c.x, c.y);
+        else if(wr<0.23) this._collect(this._rollPartGear("pmc", luck), c.x, c.y);
+        else if(wr<0.52) this._collect(this._rollAmmo(luck), c.x, c.y);   // 武器箱是找子弹的首选
+        else this._collect(this._rollMaterial(luck), c.x, c.y);
       } else if(c.kind==="medical"){
         if(RNG.chance(0.72)){
           const n=RNG.ri(1,2);
-          for(let i=0;i<n;i++) this._collect(raidRollMed(this.lootLuck), c.x, c.y);
+          for(let i=0;i<n;i++) this._collect(raidRollMed(luck), c.x, c.y);
           SFX.pickup();
         }
-        else if(RNG.chance(0.45)) this._collect(this._rollMaterial(this.lootLuck), c.x, c.y);
+        else if(RNG.chance(0.45)) this._collect(this._rollMaterial(luck), c.x, c.y);
         else { const g=RNG.ri(25,65); this.creds+=g; this._float(c.x,c.y-30,"+"+g+" 卢布","#8fe07a"); }
       } else if(c.kind==="armor"){
         const roll=RNG.f();
-        if(roll<0.06) this._collect(raidMakeArmor(raidRollArmorTier(this.lootLuck)), c.x, c.y);
-        else if(roll<0.10) this._collect(raidMakeHelmet(raidRollArmorTier(this.lootLuck*0.85)), c.x, c.y);
-        else if(roll<0.13) this._collect(raidMakeShield(raidRollArmorTier(this.lootLuck), this._rollRarity(this.lootLuck)), c.x, c.y);
-        else if(roll<0.88) this._collect(this._rollMaterial(this.lootLuck), c.x, c.y);
-        else this._collect(this._rollPartGear("pmc", this.lootLuck), c.x, c.y);
+        if(roll<0.06) this._collect(raidMakeArmor(raidRollArmorTier(luck)), c.x, c.y);
+        else if(roll<0.10) this._collect(raidMakeHelmet(raidRollArmorTier(luck*0.85)), c.x, c.y);
+        else if(roll<0.13) this._collect(raidMakeShield(raidRollArmorTier(luck), this._rollRarity(luck)), c.x, c.y);
+        else if(roll<0.88) this._collect(this._rollMaterial(luck), c.x, c.y);
+        else this._collect(this._rollPartGear("pmc", luck), c.x, c.y);
       } else if(RNG.chance(0.16)){
-        this._collect(raidRollMed(this.lootLuck), c.x, c.y);
+        this._collect(raidRollMed(luck), c.x, c.y);
         SFX.pickup();
       } else if(RNG.chance(0.35)){
-        this._collect(this._rollAmmo(this.lootLuck), c.x, c.y);
+        this._collect(this._rollAmmo(luck), c.x, c.y);
         SFX.pickup();
       } else if(RNG.chance(0.30)){
         // 普通箱现金：金额与概率双双下调
@@ -639,7 +642,7 @@ Object.assign(Raid, {
         this._float(c.x,c.y-30,"+"+gain+" 卢布","#8fe07a");
         SFX.pickup();
       } else {
-        const it=this._rollGear("pmc", this.lootLuck);
+        const it=this._rollGear("pmc", luck);
         this._collect(it, c.x, c.y);
         if(it && it.kind==="weapon") this._giveGunAmmo(it, c.x, c.y);
       }
@@ -923,7 +926,7 @@ Object.assign(Raid, {
                  shields:(this.inv.shields||[]).length+(this.carried.shield?1:0),
                  materials:this.inv.materials.length,
                  keys:(this.inv.keys||[]).length },
-      looted:this.inv, kills:this.player.kills, time:480-this.timer,
+      looted:this.inv, kills:this.player.kills, time:this.raidDuration-this.timer,
       insured:this.insured, insuredPaid:this.insuredVal,
       tokens:tokenTotal, tokenLoot:this.tokens||0,
     });
@@ -967,7 +970,7 @@ Object.assign(Raid, {
         lootA:this.inv.armors.filter(a=>a!==this.carried.armor),
         lootH:(this.inv.helmets||[]).filter(h=>h!==this.carried.helmet),
         lootP:this.inv.parts||[], lootM:this.inv.materials||[],
-      }, kills:this.player.kills, time:480-this.timer,
+      }, kills:this.player.kills, time:this.raidDuration-this.timer,
       insured:this.insured, insuredPaid:this.insuredVal, recovered,
     });
   },

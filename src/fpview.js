@@ -307,8 +307,27 @@ const FPView = {
     if(!valid.length) return;
     valid.sort((a,b)=> b.dm - a.dm);               // 远 → 近（画家算法）
 
+    const step = this._step||3, n = this._cols||0, zb = this._zbuf;
     for(let i=0;i<valid.length;i++){
       const f = valid[i];
+      /* v0.22.2：只渲染玩家能看到的墙。_zbuf[c] 是该列最近墙的垂直深度；
+         若这面墙覆盖的采样列全都已被更近的墙挡住，整面丢弃 —— 画家算法下它
+         本来也会被盖住，画它只是白费 fill，还会在面与面的缝隙里漏出「墙后面的东西」。
+         采样 5 点保守剔除，不做整屏 clip()，保住热路径。 */
+      if(zb && n>0){
+        const latA = -(f.ax-P.x)*sa + (f.ay-P.y)*ca;
+        const latB = -(f.bx-P.x)*sa + (f.by-P.y)*ca;
+        const sxA = pf.w*0.5 + (latA/Math.max(14,f.d1))*proj;
+        const sxB = pf.w*0.5 + (latB/Math.max(14,f.d2))*proj;
+        const lo = Math.max(0, Math.min(n-1, Math.floor(Math.min(sxA,sxB)/step)));
+        const hi = Math.max(0, Math.min(n-1, Math.ceil(Math.max(sxA,sxB)/step)));
+        const probes=[lo, (lo+hi)>>1, hi, lo+((hi-lo)>>2), lo+(((hi-lo)*3)>>2)];
+        let seen=false;
+        for(let k=0;k<probes.length;k++){
+          if(zb[probes[k]] >= f.dm - 12){ seen=true; break; }
+        }
+        if(!seen) continue;
+      }
       const fog = Math.max(0, Math.min(1, 1 - f.dm/MAX));
       const pal = this._colors[f.sh];
 
@@ -1165,18 +1184,51 @@ const FPView = {
     vig.addColorStop(1, "rgba(4,7,9,0.42)");
     ctx.fillStyle = vig; ctx.fillRect(0, 0, w, h);
 
+    /* v0.22.2：室内压暗。用 Raid.indoor（跨门口约 0.4s 平滑）而不是硬切，
+       放在 lighter 光池之前 —— 手电 / 探照灯随后会加回来，形成「屋子黑、只有手电照亮」。
+       纯深色叠加，不动暖色色值（verify 的色温断言锁着那三个 rgb）。 */
+    const indoor = R.indoor||0;
+    if(indoor > 0.01){
+      ctx.fillStyle = "rgba(3,5,8," + (0.62*indoor).toFixed(3) + ")";
+      ctx.fillRect(0, 0, w, h);
+    }
+
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     /* 2) 地面回光：真正的光束由 _paintWalls 打在墙面上（跟着视线扫），
      *    这里只留一层很淡的地面散射，避免脚下的地变成死黑。
-     *    强度压到 0.09 —— 高过这个值，屏幕正中那块固定亮斑又会盖过墙上的光束。 */
+     *    强度压到 0.09 —— 高过这个值，屏幕正中那块固定亮斑又会盖过墙上的光束。
+     *
+     *    v0.22.2：光束不能穿墙。屏幕散射本身只能落在「看得见的面」上，
+     *    所以这里要的不是逐像素遮挡，而是逐列按墙面深度衰减：
+     *    小房间里墙面都在光程内 → 满亮；空地上最近墙也在 2000 开外 → 压到 0.2 左右。
+     *    用 40 条竖直条带各带一份 globalAlpha 复用同一个渐变（总像素量≈一次全屏 fill），
+     *    条带边界取整对齐、不重叠，避免加色叠加出亮缝。 */
     const reach = Math.max(w, h) * 0.46;
     const g = ctx.createRadialGradient(cx, h*0.62, Math.max(8, reach*0.05), cx, h*0.62, reach);
     // 色值与 2D _lightLayer 手电锥完全一致（255,236,182 / 255,224,160）
     g.addColorStop(0, "rgba(255,236,182,0.09)");
     g.addColorStop(0.5, "rgba(255,224,160,0.035)");
     g.addColorStop(1, "rgba(255,224,160,0)");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = g;
+    const zb = this._zbuf, zstep = this._step||3, zn = this._cols||0;
+    if(!zb || zn <= 0){
+      ctx.fillRect(0, 0, w, h);
+    } else {
+      const LIGHT_REACH = 560, BANDS = 40;
+      for(let b=0;b<BANDS;b++){
+        const x0 = Math.round(b*w/BANDS), x1 = Math.round((b+1)*w/BANDS);
+        if(x1 <= x0) continue;
+        let dmin = this.MAX_D;
+        const c0 = Math.max(0, Math.floor(x0/zstep));
+        const c1 = Math.min(zn-1, Math.floor((x1-1)/zstep));
+        for(let c=c0;c<=c1;c++){ if(zb[c] < dmin) dmin = zb[c]; }
+        const k = Math.max(0.18, Math.min(1, LIGHT_REACH / Math.max(LIGHT_REACH, dmin)));
+        ctx.globalAlpha = k;
+        ctx.fillRect(x0, 0, x1-x0, h);
+      }
+      ctx.globalAlpha = 1;
+    }
 
     // 3) 静态探照灯：把 2D 的光池按世界坐标投到屏幕上（超出视锥自动裁剪）
     for(const f of (R.floodlights||[])){
@@ -1188,6 +1240,12 @@ const FPView = {
       const sy = horizon + (this.EYE_H/depth)*proj;
       const rr = Math.max(30, (f.r||220)/depth*proj*0.8);
       if(sx+rr < 0 || sx-rr > w) continue;
+      /* v0.22.2：灯被墙挡住就不要把光池投过来。取灯心所在列的最前面墙面深度，
+         比灯还近就说明中间隔着墙 —— 少这一下，探照灯会从墙后透出一整片亮斑。 */
+      if(zb && zn > 0 && sx >= 0 && sx < w){
+        const c = Math.max(0, Math.min(zn-1, Math.floor(sx/zstep)));
+        if(zb[c] < depth - 24) continue;
+      }
       const lg = ctx.createRadialGradient(sx, sy, 0, sx, sy, rr);
       lg.addColorStop(0, "rgba(255,228,160,0.20)");
       lg.addColorStop(0.55, "rgba(255,210,140,0.06)");

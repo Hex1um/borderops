@@ -1673,5 +1673,90 @@ check('Raider 标记改用 ★ 消除 ◆ 多义', /smart\?"★ ":""/.test(__cor
 check('黑市摊位统一金色品牌色', (__coreCopy.match(/kind:"black"[^\n]*color:"#ffd23f"/g)||[]).length===2?1:0, 1, 0.001);
 check('黑市地图图标统一 ◈', /"♻":"◈"/.test(__uiCopy)?1:0, 1, 0.001);
 
+/* ==================== v0.22.2 组 37：地图/敌人第一批改造护栏 ==================== */
+console.log('');
+console.log('=== 37. 地图分区 / 手电遮挡 / 室内暗化（v0.22.2）===');
+const __fp2 = fs.readFileSync(path.join(SRC,'fpview.js'),'utf8');
+const __rd2 = fs.readFileSync(path.join(SRC,'raid-render.js'),'utf8');
+
+/* --- 静态地形：必须是不碰 RNG 的纯函数，联机两端 seed 重放才一致 --- */
+const __bio = G(`(function(){
+  var a=raidBiomeAt(7200,600), b=raidBiomeAt(7200,600);
+  var room=RAID_ROOMS.filter(function(r){return !r.open;})[0];
+  var inRoom=raidIndoorAt(room.x+room.w/2, room.y+room.h/2);
+  var outRoom=raidIndoorAt(room.x-700, room.y-700);
+  return { same:a===b, forest:(a&RAID_BIOME_FOREST)?1:0, inRoom:inRoom?1:0, outRoom:outRoom?1:0,
+           gridCells:RAID_BIOME_GRID.length, isTyped:(RAID_BIOME_GRID instanceof Uint8Array)?1:0 };
+})()`);
+check('biome 查表是纯函数（同输入同输出）', __bio.same?1:0, 1, 0.001);
+check('密林格位被标记', __bio.forest, 1, 0.001);
+check('室内精确判定：房内 true / 房外 false', (__bio.inRoom===1 && __bio.outRoom===0)?1:0, 1, 0.001);
+check('biome 网格按 400px 预计算（Uint8Array 一维）', (__bio.gridCells>100 && __bio.isTyped===1)?1:0, 1, 0.001);
+
+const __danger = G(`(function(){
+  var near=raidDangerAt(400,400), far=raidDangerAt(RAID_MAP_W-400, RAID_MAP_H-400);
+  var R={lootLuck:0};
+  return { near:near, far:far, luckNear:raidLuckAt(R,400,400), luckFar:raidLuckAt(R,RAID_MAP_W-400,RAID_MAP_H-400) };
+})()`);
+check('危险度按 3x3 行政区静态分布（近 0 / 远 0.42）', __danger.near, 0, 0.001);
+check('远区危险度更高', __danger.far, 0.42, 0.001);
+check('远区掉落回报更高（纯坐标函数）', __danger.luckFar > __danger.luckNear?1:0, 1, 0.001);
+
+const __sense = G(`(function(){
+  /* 基准刻意不取坐标点：任何坐标都可能落在密林或房间里，直接读基准表最干净 */
+  var raw=RAID_AI_SENSE.scav;
+  var forest=raidAISense({x:7200,y:600,cls:"scav"});
+  var room=RAID_ROOMS.filter(function(r){return !r.open;})[0];
+  var indoor=raidAISense({x:room.x+room.w/2,y:room.y+room.h/2,cls:"scav"});
+  return { baseSight:raw.sight, forestSight:forest.sight, baseHear:raw.hear, indoorHear:indoor.hear,
+           noArg:raidAISense({cls:"scav"})===RAID_AI_SENSE.scav?1:0 };
+})()`);
+check('密林视距 x0.8', __sense.forestSight/__sense.baseSight, 0.8, 0.001);
+check('室内听距 x1.3', __sense.indoorHear/__sense.baseHear, 1.3, 0.001);
+check('不传坐标时直接返回基准档（零开销）', __sense.noArg, 1, 0.001);
+
+/* --- 手电遮挡：假装每条射线都在半程撞墙，扇形半径应收缩到 560*0.5-4 --- */
+const __fan = G(`(function(){
+  var oldRay=Raid._rayWall, oldCS=Raid.navCS;
+  Raid.navCS=1;
+  Raid._rayWall=function(){ return {x:0,y:0,t:0.5}; };
+  var f=RenderRaid._lightFan(0,0,-0.42,0.42,560,40);
+  var maxd=0, min=1e9;
+  for(var i=0;i<f.length;i+=2){ var d=Math.sqrt(f[i]*f[i]+f[i+1]*f[i+1]); if(d>maxd)maxd=d; if(d<min)min=d; }
+  Raid._rayWall=oldRay; Raid.navCS=oldCS;
+  return { n:f.length, maxd:maxd, min:min };
+})()`);
+check('扇形射线数 = 2*(rays+1)', __fan.n, 82, 0.001);
+check('撞墙时射线收缩到命中距离', __fan.maxd, 276, 1.5);
+check('扇形最小半径有下限（贴脸不塌成 0）', __fan.min>=10?1:0, 1, 0.001);
+check('探照灯扇形在索引就绪后缓存', G(`(function(){
+  var oldCS=Raid.navCS; Raid.navCS=1;
+  var f={x:0,y:0,r:220}; RenderRaid._floodFan(f); var has=!!f._fan;
+  Raid.navCS=oldCS;
+  var g={x:0,y:0,r:220}; RenderRaid._floodFan(g); var no=!!g._fan;
+  return (has && !no)?1:0;
+})()`), 1, 0.001);
+check('2D 手电不再整块 arc 扇形', /arc\(p\.x,p\.y,reach, ang-half, ang\+half\)/.test(__rd2)?0:1, 1, 0.001);
+check('2D 手电复用单个径向渐变', (__rd2.match(/createRadialGradient\(p\.x,p\.y,0,p\.x,p\.y,reach\)/g)||[]).length===1?1:0, 1, 0.001);
+
+/* --- 3D：深度分带衰减 + 探照灯深度剔除 + 室内压暗 --- */
+check('3D 散射按每列墙面深度分带衰减', /LIGHT_REACH \/ Math\.max\(LIGHT_REACH, dmin\)/.test(__fp2)?1:0, 1, 0.001);
+check('3D 分带边界取整对齐（不叠亮缝）', /Math\.round\(b\*w\/BANDS\)/.test(__fp2)?1:0, 1, 0.001);
+check('3D 探照灯被墙挡住不投光', /if\(zb\[c\] < depth - 24\) continue;/.test(__fp2)?1:0, 1, 0.001);
+check('3D 室内压暗 0.62（纯深色，不动暖色）', /0\.62\*indoor/.test(__fp2)?1:0, 1, 0.001);
+check('2D 室内压暗 0.34', /0\.34\*indoor/.test(__rd2)?1:0, 1, 0.001);
+check('室内亮度按 dt 指数逼近（无硬切）', /this\.indoor \+ \(want-this\.indoor\)\*Math\.min\(1, dt\*4\.5\)/.test(raidSrc)?1:0, 1, 0.001);
+check('房间地面改纯黑 #040608', /rm\.extract\?"#25452f":"#040608"/.test(__rd2)?1:0, 1, 0.001);
+
+/* --- 地面枪械对比面板 / 局时常量 / 撤离保底 --- */
+check('地面枪械对比面板存在', /_groundGunPanel\(ctx, R, c, v/.test(__rd2)?1:0, 1, 0.001);
+check('面板画出 ▲▼ 优劣与「手持为空」提示', /▲":worse\?" ▼/.test(__rd2) && /手持为空 · 直接拾取/.test(__rd2)?1:0, 1, 0.001);
+check('手持为空时不误标成「提升」', /better=!!cur && r\.a>r\.b/.test(__rd2)?1:0, 1, 0.001);
+check('估值用 M/k 紧凑格式（不撑破面板）', /"₽"\+\(n\/1000000\)\.toFixed\(2\)\+"M"/.test(__rd2)?1:0, 1, 0.001);
+check('局时长抽成 raidDuration=480', G('Raid.raidDuration'), 480, 0.001);
+check('结算不再写死 480', /time:this\.raidDuration-this\.timer/.test(raidSrc)?1:0, 1, 0.001);
+check('每个 3x3 行政区保底 1 个开放撤离点', /if\(openZones\.has\(z\)\) continue;/.test(raidSrc) && /cand\.closed=false;/.test(raidSrc)?1:0, 1, 0.001);
+check('进图播报本局开放撤离点', /本局开放 "\+openEx\.length\+" 处/.test(raidSrc)?1:0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

@@ -362,9 +362,12 @@ Object.assign(Raid, {
     return k;
   },
   // 保险箱战利品：等级越高 → 运气加成 + 品质保底 + 件数更多
-  _rollVaultLoot(lv){
+  _rollVaultLoot(lv, x, y){
     const L=M.clamp(Math.round(lv||1),1,5);
-    const luck=this.lootLuck + L*0.10;
+    /* v0.22.2：保险箱同样吃所在行政区的静态危险度；x/y 省略时退回玩家位置（单测兼容）。 */
+    const px = (typeof x==="number") ? x : (this.player?this.player.x:RAID_MAP_W/2);
+    const py = (typeof y==="number") ? y : (this.player?this.player.y:RAID_MAP_H/2);
+    const luck=Math.min(0.95, raidLuckAt(this, px, py) + L*0.10);
     // 装备品质保底（T0~T5）：V 级军火箱直接 T5 起步，基本只出特种档以上
     const floorT=[0,0,1,2,3,5][L];
     const r=RNG.f();
@@ -451,6 +454,13 @@ Object.assign(Raid, {
       this._searchUpdate(dt);
       this._extractUpdate(dt, game);
       if(!this.active) return;
+    }
+
+    /* v0.22.2：室内亮度渐变。只按玩家坐标查静态房间表，不读 RNG；
+       指数逼近约 0.4s 到位，跨门口不是硬切。2D / 3D 共用同一个因子。 */
+    if(this.player && typeof raidIndoorAt==="function"){
+      const want = raidIndoorAt(this.player.x, this.player.y) ? 1 : 0;
+      this.indoor = M.clamp(this.indoor + (want-this.indoor)*Math.min(1, dt*4.5), 0, 1);
     }
 
     // 计时

@@ -28,6 +28,13 @@ const RenderRaid = {
     vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(14,20,32,0.42)");
     ctx.fillStyle=vg; ctx.fillRect(0,0,v.w,v.h);
     ctx.fillStyle="rgba(28,40,58,0.06)"; ctx.fillRect(0,0,v.w,v.h);
+    /* v0.22.2：2D 的进屋亮度渐变（3D 在 FPView._lighting 里单独处理，强度更大）。
+       共用 Raid.indoor，切维度零状态迁移；只压一层纯深色，不动手电暖色。 */
+    const indoor=R.indoor||0;
+    if(indoor>0.01 && !(typeof ViewMode!=="undefined" && ViewMode.is3D())){
+      ctx.fillStyle="rgba(3,5,8,"+(0.34*indoor).toFixed(3)+")";
+      ctx.fillRect(0,0,v.w,v.h);
+    }
     this.hud(ctx, game, v);
   },
 
@@ -257,6 +264,36 @@ const RenderRaid = {
     }
   },
 
+  /* 光锥可见轮廓：以 (x,y) 为原点、沿 [a0,a1] 均分 rays 条射线，
+     每条求最近墙面交点后回落到半径上，返回可直接 lineTo 的点序列。
+     光束因此停在墙上，不会再「穿过墙照亮墙后面」。 */
+  _lightFan(x, y, a0, a1, reach, rays){
+    const pts=[];
+    const hasRay = typeof Raid._rayWall==="function" && Raid.navCS!=null;
+    for(let i=0;i<=rays;i++){
+      const a=a0+(a1-a0)*i/rays;
+      const dx=Math.cos(a), dy=Math.sin(a);
+      let rr=reach;
+      if(hasRay){
+        const hit=Raid._rayWall(x, y, x+dx*reach, y+dy*reach);
+        // _rayWall 的 t 是采样步进比例，最多比真实墙面多走一步（13px），减 4 让光刚好压在墙上
+        if(hit) rr=M.clamp(reach*hit.t-4, 10, reach);
+      }
+      pts.push(x+dx*rr, y+dy*rr);
+    }
+    return pts;
+  },
+
+  /* 探照灯光池的静态可见轮廓：探照灯本局不动，扇形只算一次并缓存，
+     之后每帧只需一次 fill，不会因为加了遮挡把帧率吃掉。 */
+  _floodFan(f){
+    if(f._fan) return f._fan;
+    const fan=this._lightFan(f.x, f.y, -Math.PI, Math.PI, f.r||220, 48);
+    // 视线索引（navCS）还没建好时算出来的扇形是无遮挡的，不能缓存，否则会永久记住错的结果
+    if(Raid.navCS!=null) f._fan=fan;
+    return fan;
+  },
+
   /* 光照层：探照灯（静态）+ 玩家手电（动态），暖色加色叠加 */
   _lightLayer(ctx, game, cam, vw, vh){
     const R=Raid;
@@ -269,7 +306,11 @@ const RenderRaid = {
         g.addColorStop(0,"rgba(255,228,160,0.20)");
         g.addColorStop(0.55,"rgba(255,210,140,0.07)");
         g.addColorStop(1,"rgba(255,210,140,0)");
-        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,6.2832); ctx.fill();
+        ctx.fillStyle=g;
+        const fan=this._floodFan(f);
+        ctx.beginPath(); ctx.moveTo(f.x, f.y);
+        for(let i=0;i<fan.length;i+=2) ctx.lineTo(fan[i], fan[i+1]);
+        ctx.closePath(); ctx.fill();
       }
     }
     const p=R.player;
@@ -279,8 +320,14 @@ const RenderRaid = {
       g.addColorStop(0,"rgba(255,236,182,0.30)");
       g.addColorStop(0.5,"rgba(255,224,160,0.12)");
       g.addColorStop(1,"rgba(255,224,160,0)");
-      ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(p.x,p.y);
-      ctx.arc(p.x,p.y,reach, ang-half, ang+half); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=g;
+      /* v0.22.2：手电扇形按墙体裁剪。原先直接 arc 画满 0.84rad，光会穿过墙
+         在地上留一片「墙后亮斑」；改成 40 条射线各自求墙面距离再连成轮廓，
+         仍然只创建一个径向渐变（每帧 40 次射线测试，代价可忽略）。 */
+      const fan=this._lightFan(p.x, p.y, ang-half, ang+half, reach, 40);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
+      for(let i=0;i<fan.length;i+=2) ctx.lineTo(fan[i], fan[i+1]);
+      ctx.closePath(); ctx.fill();
     }
     ctx.restore();
   },
@@ -466,7 +513,9 @@ const RenderRaid = {
     // 房间地面
     for(const rm of R.roomRects){
       if(rm.x>cam.x+vw+200||rm.x+rm.w<cam.x-200||rm.y>cam.y+vh+200||rm.y+rm.h<cam.y-200) continue;
-      ctx.fillStyle=rm.extract?"#25452f":rm.tint;
+      /* v0.22.2：屋子里面是黑的（原来按 tint 上色，室内外几乎一样亮）。
+         撤离区保留绿色标识，它不算室内。 */
+      ctx.fillStyle=rm.extract?"#25452f":"#040608";
       ctx.globalAlpha=0.95; ctx.fillRect(rm.x,rm.y,rm.w,rm.h); ctx.globalAlpha=1;
       ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(rm.x,rm.y,rm.w,rm.h);
       // 地面砖缝（横竖两层，提升质感）
@@ -1070,6 +1119,53 @@ const RenderRaid = {
     }
   },
 
+  /* v0.22.2：靠近地上的枪时展示枪械面板，并与手持枪逐项对比。
+     画在 HUD 层（世界层之外），2D / 3D 都可见；位置跟随交互提示条，避开准星。 */
+  _groundGunPanel(ctx, R, c, v, hintY){
+    const drops=(c && c.drops)||[];
+    const g=drops.find(d=>d && d.kind==="weapon");
+    if(!g) return;
+    const cur=R.player && R.player.gun;
+    /* 数值格式化：估值动辄七位数，直接拼数字既撑破面板也没法一眼比大小 */
+    const fmt=(n,big)=>{
+      n=Math.round(n||0);
+      if(!big) return String(n);
+      if(n>=1000000) return "₽"+(n/1000000).toFixed(2)+"M";
+      if(n>=10000) return "₽"+(n/1000).toFixed(1)+"k";
+      return "₽"+n;
+    };
+    const rows=[
+      { k:"伤害", a:Math.round(g.dmg||0), b:cur?Math.round(cur.dmg||0):0 },
+      { k:"弹匣", a:Math.round(g.mag||0), b:cur?Math.round(cur.mag||0):0 },
+      { k:"射速", a:Math.round(g.rpm||0), b:cur?Math.round(cur.rpm||0):0 },
+      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
+    ];
+    const W=276, H=34+rows.length*20+10;
+    const x=Math.max(8, Math.min(v.w-W-8, v.w/2+28));
+    const y=Math.max(8, Math.min(v.h-H-8, hintY-H-16));
+    ctx.save();
+    ctx.fillStyle="rgba(8,12,16,0.90)"; ctx.fillRect(x,y,W,H);
+    ctx.strokeStyle="rgba(120,150,180,0.45)"; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,W-1,H-1);
+    ctx.textAlign="left";
+    ctx.font="bold 12px system-ui,sans-serif";
+    ctx.fillStyle=raidGunColor(g);
+    ctx.fillText(String(gunNameOf(g)||"地上枪械").slice(0,18), x+10, y+18);
+    ctx.font="10px system-ui,sans-serif"; ctx.fillStyle="rgba(180,195,210,0.75)";
+    ctx.fillText(cur?"左：地上 / 右：手持":"手持为空 · 直接拾取", x+10, y+32);
+    ctx.font="11px system-ui,sans-serif";
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i], ry=y+50+i*20;
+      // 手上没枪时不做对比，免得每一行都亮成「提升」
+      const better=!!cur && r.a>r.b, worse=!!cur && r.a<r.b;
+      ctx.fillStyle="rgba(200,212,224,0.85)"; ctx.fillText(r.k, x+10, ry);
+      ctx.fillStyle=better?"#8fe07a":worse?"#ff8a5a":"#dfe7f0";
+      ctx.textAlign="right"; ctx.fillText(fmt(r.a,r.big)+(better?" ▲":worse?" ▼":""), x+168, ry);
+      ctx.fillStyle="rgba(170,185,200,0.70)"; ctx.fillText(cur?fmt(r.b,r.big):"—", x+W-10, ry);
+      ctx.textAlign="left";
+    }
+    ctx.restore();
+  },
+
   /* ----------------------------- HUD ----------------------------- */
   hud(ctx, game, v){
     const R=Raid, p=R.player;
@@ -1331,6 +1427,7 @@ const RenderRaid = {
         if(c.ground){
           const n=(c.drops||[]).length;
           hintAt(Input.isTouch?`点「★」拾取地面物资 ×${n}`:`按 E 拾取地面物资 ×${n}`, "#ffe08a");
+          this._groundGunPanel(ctx, R, c, v, mob?v.h*0.6:(v.h-150)-18);
         } else if(c.locked && !c.searched){
           const lv=M.clamp(c.lockLv||1,1,5);
           const has=R._hasKeyFor(lv);

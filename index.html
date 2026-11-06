@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>边境行动 · BORDER OPS</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-<link rel="stylesheet" href="styles.css?v=0.22.1" />
+<link rel="stylesheet" href="styles.css?v=0.22.2" />
 </head>
 <body>
 <div id="game-root">
@@ -66,36 +66,36 @@
 </div>
 
 <!-- 零构建：经典脚本顺序加载，共享全局词法作用域 -->
-<script src="src/sanitize.js?v=0.22.1"></script>
-<script src="src/config.js?v=0.22.1"></script>
-<script src="src/util.js?v=0.22.1"></script>
-<script src="src/weapons.js?v=0.22.1"></script>
-<script src="src/items.js?v=0.22.1"></script>
-<script src="src/shields.js?v=0.22.1"></script>
-<script src="src/skills.js?v=0.22.1"></script>
-<script src="src/player.js?v=0.22.1"></script>
-<script src="src/enemies.js?v=0.22.1"></script>
-<script src="src/combat.js?v=0.22.1"></script>
+<script src="src/sanitize.js?v=0.22.2"></script>
+<script src="src/config.js?v=0.22.2"></script>
+<script src="src/util.js?v=0.22.2"></script>
+<script src="src/weapons.js?v=0.22.2"></script>
+<script src="src/items.js?v=0.22.2"></script>
+<script src="src/shields.js?v=0.22.2"></script>
+<script src="src/skills.js?v=0.22.2"></script>
+<script src="src/player.js?v=0.22.2"></script>
+<script src="src/enemies.js?v=0.22.2"></script>
+<script src="src/combat.js?v=0.22.2"></script>
 <!-- v0.22.0：onlyRaid 时下面 4 个旧模式脚本不再请求，由 lazy-legacy.js 按需注入 -->
-<script src="src/lazy-legacy.js?v=0.22.1"></script>
-<script src="src/shop.js?v=0.22.1"></script>
-<script src="src/input.js?v=0.22.1"></script>
-<script src="src/render.js?v=0.22.1"></script>
-<script src="src/ui.js?v=0.22.1"></script>
-<script src="src/viewmode.js?v=0.22.1"></script>
-<script src="src/fpview.js?v=0.22.1"></script>
+<script src="src/lazy-legacy.js?v=0.22.2"></script>
+<script src="src/shop.js?v=0.22.2"></script>
+<script src="src/input.js?v=0.22.2"></script>
+<script src="src/render.js?v=0.22.2"></script>
+<script src="src/ui.js?v=0.22.2"></script>
+<script src="src/viewmode.js?v=0.22.2"></script>
+<script src="src/fpview.js?v=0.22.2"></script>
 <!-- v0.22.0：raid.js 按自然边界拆为 7 片，顺序不可调换（core2/core3 用 Object.assign 续接 Raid） -->
-<script src="src/raid-data.js?v=0.22.1"></script>
-<script src="src/raid-core.js?v=0.22.1"></script>
-<script src="src/raid-core2.js?v=0.22.1"></script>
-<script src="src/raid-core3.js?v=0.22.1"></script>
-<script src="src/raid-render.js?v=0.22.1"></script>
-<script src="src/raid-ui.js?v=0.22.1"></script>
-<script src="src/raid-ui2.js?v=0.22.1"></script>
-<script src="src/net.js?v=0.22.1"></script>
-<script src="src/net-p2p.js?v=0.22.1"></script>
-<script src="src/auction.js?v=0.22.1"></script>
-<script src="src/save.js?v=0.22.1"></script>
-<script src="src/main.js?v=0.22.1"></script>
+<script src="src/raid-data.js?v=0.22.2"></script>
+<script src="src/raid-core.js?v=0.22.2"></script>
+<script src="src/raid-core2.js?v=0.22.2"></script>
+<script src="src/raid-core3.js?v=0.22.2"></script>
+<script src="src/raid-render.js?v=0.22.2"></script>
+<script src="src/raid-ui.js?v=0.22.2"></script>
+<script src="src/raid-ui2.js?v=0.22.2"></script>
+<script src="src/net.js?v=0.22.2"></script>
+<script src="src/net-p2p.js?v=0.22.2"></script>
+<script src="src/auction.js?v=0.22.2"></script>
+<script src="src/save.js?v=0.22.2"></script>
+<script src="src/main.js?v=0.22.2"></script>
 </body>
 </html>

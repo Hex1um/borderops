@@ -374,7 +374,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（564 条断言）
+npm run verify       # 无浏览器依赖的逻辑回归（595 条断言）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -386,6 +386,10 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **合并护栏**：v0.22.0 已并入合作者 v0.21.9 的 15 处 bug 修复（原 `raid.js` 的 8 组改动映射到 7 个 `raid-*.js` 分片）。verify 组 35 的 18 条断言会逐项锁定这些修复（撤离费组合扣款 / 终局事件保底 / 权重方向 / 价格单调 / 插板函数改名 / 限速 XFF 等），后续重构若误覆盖会直接红灯。
 - **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
 - **FPS 基线**：`npm run bench:fps` 本机实测参考区间 2D 46.9~53.1 fps、3D 29.7~35.3 fps（headless Chromium，120 帧；合并 v0.21.9 后复跑为 2D 53.1 / p95 22ms，3D 35.3 / p95 32.5ms）。改渲染热路径前后各跑一次对比。
+  - **2026-11-06 起**：本机完整 chromium 的子进程被系统拒绝（`sandbox_win.cc` 0x5 拒绝访问），改用 `chrome-headless-shell`（CDP 接口一致，但绝对帧耗时更高）。这之后的数字只能与同期同浏览器的数字比：v0.22.2 实测 2D 21.8ms / 3D 46.2ms，同期 v0.22.1 基线为 2D 26.3ms / 3D 60.5ms。
 - **文案约定（v0.22.1）**：GP 币一律 `◈` + 金色 `#ffd23f`；`◆` 紫色仅在旧模式代表美元 / eridium；Raider 精英标记用 `★`，列表项目符号用 `▸`，黑市摊位与图标用金色。品质档位按现行 9 阶军工刻度（民用 → 制式 → 军规 → 精选 → 精工 → 特种 → 试验 → 原型 → 定型），玩家文案禁用旧名（`稀有` / `橙装` / `紫装`），写「品阶 / 高品阶」；描述 AI 感知必须引用 `RAID_AI_SENSE` 的分级值，别写回旧的统一 1000px。verify 组 36 会逐条红灯。
+- **地形判定必须纯函数（v0.22.2）**：`raidBiomeAt` / `raidIndoorAt` / `raidDangerAt` / `raidLuckAt` 只读坐标与静态表，**不许读 RNG、AI 数量、计时或玩家状态**。联机掉落靠 seed 各端重放（`Net.sendLoot(index,kind)` 只同步「谁捡了第几件」），任何动态因子都会让两端算出不同结果。新增地形因子请照这四个函数的写法。
+- **手电遮挡（v0.22.2）**：2D 走 `RenderRaid._lightFan()`（40 条射线 × `Raid._rayWall` 求最近墙面 → 连成可见轮廓 → 复用**一个**径向渐变），探照灯用 `_floodFan()` 缓存（`navCS` 未就绪时不写缓存）。3D 没有逐像素遮挡（合成本就只含可见面），走 `_lighting` 里 40 条竖直条带的 `globalAlpha` 衰减 + 探照灯按列深度剔除。**色值 `255,236,182` / `255,224,160` / `255,228,160` 不许动**（verify 色温断言锁着），也不许引入 `createLinearGradient`。verify 组 37 会用假 `_rayWall`（半程返回）验证扇形收缩到 276。
+- **室内暗化（v0.22.2）**：`Raid.indoor` 0..1 按 `dt*4.5` 指数逼近；房间地面固定 `#040608`，撤离区 `#25452f`；2D 叠 `0.34*indoor`、3D 叠 `0.62*indoor`，3D 的压暗必须在 `lighter` 光池之前。
 - **版本三处同步**：`package.json` / `src/config.js` 的 `CFG.version` / `index.html` 全部 `?v=`，改完必须一起改并跑 `npm run check`。
 - **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件；`raid-*.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。

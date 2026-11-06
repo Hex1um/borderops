@@ -405,17 +405,81 @@ const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","a
  * 只影响「发现目标」这一段；射击精度 / 走位 / 包扎仍按 smart 与 cls 原逻辑结算。
  * 旧值（v0.16.0 全档统一）：视距 1000、视线记忆 7.0s、无反应延迟、
  *   主动搜寻 smart 0.88 / pmc 0.74 / scav 0.56、枪声听距系数 1.0。 */
+/* ==================== v0.22.2：静态地形分区 ====================
+ * biome / 室内 / 危险度全部由坐标查表得到，不读 RNG、不依赖运行时动态量
+ * （AI 数量、玩家路径、计时都会让联机两端 seed 重放分叉）。
+ * 400px 网格在模块加载时预计算一次，热路径 O(1)：30+ AI 每帧调 raidAISense，
+ * 不能在这里遍历 103 个房间矩形 + 8 片密林。 */
+const RAID_BIOME_CELL = 400;
+const RAID_BIOME_COLS = Math.ceil(RAID_MAP_W/RAID_BIOME_CELL);
+const RAID_BIOME_ROWS = Math.ceil(RAID_MAP_H/RAID_BIOME_CELL);
+const RAID_BIOME_ROOM = 1, RAID_BIOME_FOREST = 2;
+const RAID_BIOME_GRID = (function(){
+  const g = new Uint8Array(RAID_BIOME_COLS*RAID_BIOME_ROWS);
+  const mark = (rect, bit) => {
+    const x0=Math.max(0,Math.floor(rect.x/RAID_BIOME_CELL));
+    const x1=Math.min(RAID_BIOME_COLS-1,Math.floor((rect.x+rect.w)/RAID_BIOME_CELL));
+    const y0=Math.max(0,Math.floor(rect.y/RAID_BIOME_CELL));
+    const y1=Math.min(RAID_BIOME_ROWS-1,Math.floor((rect.y+rect.h)/RAID_BIOME_CELL));
+    for(let gy=y0;gy<=y1;gy++) for(let gx=x0;gx<=x1;gx++) g[gy*RAID_BIOME_COLS+gx] |= bit;
+  };
+  for(const rm of RAID_ROOMS) if(!rm.open) mark(rm, RAID_BIOME_ROOM);
+  for(const fz of RAID_BIOMES.forest) mark(fz, RAID_BIOME_FOREST);
+  return g;
+})();
+function raidBiomeAt(x,y){
+  const gx=Math.floor(x/RAID_BIOME_CELL), gy=Math.floor(y/RAID_BIOME_CELL);
+  if(gx<0||gy<0||gx>=RAID_BIOME_COLS||gy>=RAID_BIOME_ROWS) return 0;
+  return RAID_BIOME_GRID[gy*RAID_BIOME_COLS+gx];
+}
+/* 玩家进屋判定：先用网格位快速排除，命中边界才做一次精确矩形复核 */
+function raidIndoorAt(x,y){
+  if(!(raidBiomeAt(x,y)&RAID_BIOME_ROOM)) return false;
+  for(const rm of RAID_ROOMS){
+    if(!rm.open && x>rm.x && x<rm.x+rm.w && y>rm.y && y<rm.y+rm.h) return true;
+  }
+  return false;
+}
+/* 3×3 行政区危险度（与 raid-core.js 的 CW=W/3 / CH=H/3 分区一致）。
+   越靠东部铁路 / 西南监狱越危险；穿越大图才该有掉落回报。 */
+const RAID_ZONE_DANGER = [
+  [0.00, 0.10, 0.30],
+  [0.08, 0.18, 0.36],
+  [0.14, 0.24, 0.42],
+];
+function raidDangerAt(x,y){
+  const gx=M.clamp(Math.floor(x/(RAID_MAP_W/3)),0,2);
+  const gy=M.clamp(Math.floor(y/(RAID_MAP_H/3)),0,2);
+  return RAID_ZONE_DANGER[gy][gx];
+}
+function raidLuckAt(R,x,y){
+  return M.clamp((R.lootLuck||0) + raidDangerAt(x,y)*0.35, 0, 0.85);
+}
+
 const RAID_AI_SENSE = {
   scav: { sight:520,  memory:2.5, react:0.55, hunt:0.30, hear:0.65 },
   pmc:  { sight:900,  memory:5.5, react:0.22, hunt:0.70, hear:1.00 },
   boss: { sight:1250, memory:9.0, react:0.06, hunt:0.95, hear:1.40 },
 };
 function raidAISense(b){
-  if(!b) return RAID_AI_SENSE.scav;
-  if(b.bounty) return RAID_AI_SENSE.boss;                    // Boss
-  if(b.cls==="pmc") return RAID_AI_SENSE.pmc;                // Raider 由 smart 单独判定
-  if(b.smart) return RAID_AI_SENSE.pmc;
-  return RAID_AI_SENSE.scav;
+  let base = RAID_AI_SENSE.scav;
+  if(b){
+    if(b.bounty) base = RAID_AI_SENSE.boss;                    // Boss
+    else if(b.cls==="pmc") base = RAID_AI_SENSE.pmc;           // Raider 由 smart 单独判定
+    else if(b.smart) base = RAID_AI_SENSE.pmc;
+  }
+  /* v0.22.2：感知乘 biome。没带坐标时（单测 / 纯类型查询）直接返回原对象引用，
+     既保持旧调用约定，也避免每帧无谓地新建对象。 */
+  if(!b || typeof b.x!=="number" || typeof b.y!=="number") return base;
+  const bio = raidBiomeAt(b.x, b.y);
+  const sMul = (bio & RAID_BIOME_FOREST) ? 0.80 : 1;          // 密林视距 -20%（按区域，网格位即可）
+  /* 室内必须精确判定：400px 网格会把房间外一大圈空地也标成 ROOM，
+     直接用网格位会让听距加成在室外也生效。raidIndoorAt 内部先用网格位 O(1) 排除，
+     只有落在候选格才做一次矩形复核，热路径开销可忽略。 */
+  const hMul = raidIndoorAt(b.x, b.y) ? 1.30 : 1;             // 室内听距 ×1.3
+  if(sMul===1 && hMul===1) return base;
+  return { sight:base.sight*sMul, memory:base.memory, react:base.react,
+           hunt:base.hunt, hear:base.hear*hMul };
 }
 
 /* Scav 制式武器：塔科夫拾荒者只会拿低阶手枪 / 霰弹枪 / 冲锋枪。
