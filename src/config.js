@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.22.0",
+  version: "0.22.1",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -277,7 +277,7 @@ const AFFIXES = {
     { nm:"亚音速适配",   lvl:6,  mods:[{stat:"elemPct",     min:12, max:22}], elem:"cryo" },
     { nm:"破片战斗部",   lvl:8,  mods:[{stat:"splashPct",   min:20, max:35}], needSplash:true },
     // v0.12.5 每次射击发数改为「稀有词条」体系：
-    //   常规非霰弹枪恒定 1 发/次；并联枪管（稀有+）→ 2 发；三发点放（高阶+）→ 3 发
+    //   常规非霰弹枪恒定 1 发/次；并联枪管（精选+）→ 2 发；三发点放（高阶+）→ 3 发
     { nm:"并联霰弹枪管", lvl:14, minQ:3, pellet:1, mods:[{stat:"pellets",     min:1,  max:1}] },
     { nm:"硬芯弹头",   lvl:15, mods:[{stat:"pierce",      min:1,  max:1}] },
     { nm:"战地快拆",   lvl:18, mods:[{stat:"reloadPct",   min:2,  max:4}] },

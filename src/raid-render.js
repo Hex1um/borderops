@@ -581,7 +581,7 @@ const RenderRaid = {
       ctx.fillStyle=s.color; ctx.textAlign="center"; ctx.font="bold 14px system-ui,sans-serif";
       ctx.fillText(s.name, 0, -58);
       ctx.font="bold 15px system-ui,sans-serif";
-      ctx.fillText(s.kind==="gun"?"⌖":s.kind==="mat"?"▤":s.kind==="rec"?"♻":"◆", 0, 14);
+      ctx.fillText(s.kind==="gun"?"⌖":s.kind==="mat"?"▤":s.kind==="rec"?"♻":"◈", 0, 14);
       ctx.restore();
     }
 
@@ -1127,7 +1127,7 @@ const RenderRaid = {
       ctx.fillStyle="#ffd23f";
       // 避免和左侧信息流叠在一起：信息流每行 24px，Boss 行随之下移
       const by=Math.max(mob?62:66, (mob?86:18)+Math.min(4,R.killfeed.length)*24);
-      ctx.fillText(`★ Boss ×${bountyN}（击杀保底 3 件稀有+ 战利品）`, v.w/2, by);
+      ctx.fillText(`★ Boss ×${bountyN}（击杀保底 3 件高品阶战利品）`, v.w/2, by);
     }
 
     /* --- 顶部计时 --- */
@@ -1481,7 +1481,7 @@ const RenderRaid = {
     line("医疗", ownedMed.length ? ownedMed.map(m=>`${m.name} ×${m.n}`).join(" · ") : "（无 · 翻箱或到医疗站补给）",
       ownedMed.length?"#ff9a9a":"#8b95a5", "H 键 / 医疗键：流血自动止血，缺血自动回血；物品栏可逐件使用");
     line("卢布", "₽ "+R.creds, "#8fe07a", "撤离后结算进仓库");
-    if((R.tokens||0)>0) line("GP 币", "◆ "+R.tokens, "#c07bff", "黑市专用货币 · 撤离才落袋");
+    if((R.tokens||0)>0) line("GP 币", "◈ "+R.tokens, "#ffd23f", "黑市专用货币 · 撤离才落袋");
 
     // 物品栏汇总（含容量上限，超出将无法继续拾取）
     const cap = (label, n, capN, col) => {
@@ -1582,7 +1582,7 @@ const RenderRaid = {
     }
     // 商店（枪=金 / 材料=绿 / 回收=蓝 / 黑市=紫），一眼决定往哪跑
     for(const s of (R.shops||[])){
-      ctx.fillStyle = s.kind==="black"?"#c07bff":s.kind==="rec"?"#62c8ff":s.kind==="mat"?"#8fe07a":"#ffb44a";
+      ctx.fillStyle = s.kind==="black"?"#ffd23f":s.kind==="rec"?"#62c8ff":s.kind==="mat"?"#8fe07a":"#ffb44a";
       const px2=mx+s.x*sx, py2=my+s.y*sy;
       ctx.fillRect(px2-1.6, py2-1.6, 3.2, 3.2);
       ctx.strokeStyle="rgba(0,0,0,0.7)"; ctx.lineWidth=0.8; ctx.strokeRect(px2-1.6, py2-1.6, 3.2, 3.2);

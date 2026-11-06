@@ -374,7 +374,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（549 条断言）
+npm run verify       # 无浏览器依赖的逻辑回归（564 条断言）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -386,5 +386,6 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **合并护栏**：v0.22.0 已并入合作者 v0.21.9 的 15 处 bug 修复（原 `raid.js` 的 8 组改动映射到 7 个 `raid-*.js` 分片）。verify 组 35 的 18 条断言会逐项锁定这些修复（撤离费组合扣款 / 终局事件保底 / 权重方向 / 价格单调 / 插板函数改名 / 限速 XFF 等），后续重构若误覆盖会直接红灯。
 - **联机净化规则只有一份**：`src/sanitize.js`（UMD）。改 corpse schema 会同时影响 `server.js`（HTTP 轮询）与 `net.js` / `net-p2p.js`（Pages 上的 WebRTC P2P），必须跑 verify 组 31。
 - **FPS 基线**：`npm run bench:fps` 本机实测参考区间 2D 46.9~53.1 fps、3D 29.7~35.3 fps（headless Chromium，120 帧；合并 v0.21.9 后复跑为 2D 53.1 / p95 22ms，3D 35.3 / p95 32.5ms）。改渲染热路径前后各跑一次对比。
+- **文案约定（v0.22.1）**：GP 币一律 `◈` + 金色 `#ffd23f`；`◆` 紫色仅在旧模式代表美元 / eridium；Raider 精英标记用 `★`，列表项目符号用 `▸`，黑市摊位与图标用金色。品质档位按现行 9 阶军工刻度（民用 → 制式 → 军规 → 精选 → 精工 → 特种 → 试验 → 原型 → 定型），玩家文案禁用旧名（`稀有` / `橙装` / `紫装`），写「品阶 / 高品阶」；描述 AI 感知必须引用 `RAID_AI_SENSE` 的分级值，别写回旧的统一 1000px。verify 组 36 会逐条红灯。
 - **版本三处同步**：`package.json` / `src/config.js` 的 `CFG.version` / `index.html` 全部 `?v=`，改完必须一起改并跑 `npm run check`。
 - **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件；`raid-*.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。

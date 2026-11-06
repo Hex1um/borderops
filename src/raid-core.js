@@ -365,7 +365,7 @@ const Raid = {
         }
         this.ops.push(new RaidOperator({
           id:"op"+i, cls:isPMC?"pmc":"scav",
-          name:(smart?"◆ ":"")+(isPMC?(pmcNames[i%pmcNames.length]):(scavNames[i%scavNames.length])),
+          name:(smart?"★ ":"")+(isPMC?(pmcNames[i%pmcNames.length]):(scavNames[i%scavNames.length])),
           x:pt.x, y:pt.y, angle:RNG.fr(0,6.28),
           speed, hp, color:isPMC?colors[i%4]:colors[4+(i%5)],
           gun, armor, dr, armorTier, helmetArmor, helmetDr, helmetTier,
@@ -1332,9 +1332,9 @@ const Raid = {
       { id:"shopRec2", kind:"rec",  name:"回收超市 II", tag:"RECYCLE",     color:"#62c8ff",
         anchors:[[2740,7350],[2200,7900],[3400,7800],[3800,8600]] },
       // 黑市 ×2：东部铁路枢纽 + 北境（高风险区，离撤离点远）
-      { id:"shopBlack",  kind:"black", name:"黑市",       tag:"BLACK MARKET", color:"#c07bff",
+      { id:"shopBlack",  kind:"black", name:"黑市",       tag:"BLACK MARKET", color:"#ffd23f",
         anchors:[[10020,2900],[10800,4200],[9300,2200]] },
-      { id:"shopBlack2", kind:"black", name:"黑市 II",  tag:"BLACK MARKET", color:"#c07bff",
+      { id:"shopBlack2", kind:"black", name:"黑市 II",  tag:"BLACK MARKET", color:"#ffd23f",
         anchors:[[6900,900],[7400,1800],[8200,5200],[6500,8300]] },
     ];
     const usedAnchors=[];

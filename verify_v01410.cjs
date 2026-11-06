@@ -1652,5 +1652,26 @@ check('限速 XFF 仅在 TRUST_PROXY=1 时采信', /const TRUST_PROXY\s*=\s*proc
 check('标题页 btn-continue 判空绑定', /if\(contBtn\)/.test(__uiSrc)?1:0, 1, 0.001);
 check('拍卖成交清 state 防二次入账', /delete d\.state\[L\.id\]/.test(__aucSrc) && /delete d\.state\[id\]/.test(__aucSrc)?1:0, 1, 0.001);
 
+/* ==================== v0.22.1 组 36：玩家可见文案护栏 ==================== */
+console.log('');
+console.log('=== 36. 玩家可见文案校对（v0.22.1）===');
+const __uiCopy = ['ui','raid-ui','raid-ui2','raid-render','raid-core3']
+  .map(n => fs.readFileSync(path.join(SRC,n+'.js'),'utf8')).join('\n');
+const __coreCopy = fs.readFileSync(path.join(SRC,'raid-core.js'),'utf8');
+check('GP 币不再搭配紫色美元符号 ◆', /◆\s*GP 币|GP 币\s*◆/.test(__uiCopy)?0:1, 1, 0.001);
+const __purpleGP = __uiCopy.split('\n').filter(l => /#c07bff/.test(l) && /GP 币|tokens|tokIn|tokWorth/.test(l)).length;
+check('GP 币不再内联紫色 #c07bff', __purpleGP===0?1:0, 1, 0.001);
+for(const [label, phrase] of [['稀有+','稀有+'],['T5 橙装','T5 橙装'],['高稀有度','高稀有度'],['视野 1000px','视野 <b>1000px']])
+  check('旧措辞已清除：'+label, __uiCopy.includes(phrase)?0:1, 1, 0.001);
+check('玩法说明写入分级视距 520/900/1250', /Scav <b>520<\/b> \/ PMC <b>900<\/b> \/ Boss <b>1250<\/b>/.test(__uiCopy)?1:0, 1, 0.001);
+check('GP 币统一使用金色 ◈', (__uiCopy.match(/◈\s*GP 币/g)||[]).length>=3?1:0, 1, 0.001);
+check('GP 币金色 #ffd23f 已接线', (__uiCopy.match(/#ffd23f/g)||[]).length>=8?1:0, 1, 0.001);
+check('token 结算价格统一 ◈', !/payKind==="token"\?"◆"/.test(__uiCopy) && /payKind==="token"\?"◈"/.test(__uiCopy)?1:0, 1, 0.001);
+check('标题页 chip 标注 ◈ GP 币', /<span>◈ GP 币<\/span>/.test(__uiCopy)?1:0, 1, 0.001);
+check('融合台统一「品阶」标签', /· 品阶 <b/.test(__uiCopy) && !/· 稀有度 <b/.test(__uiCopy)?1:0, 1, 0.001);
+check('Raider 标记改用 ★ 消除 ◆ 多义', /smart\?"★ ":""/.test(__coreCopy) && !/smart\?"◆ ":""/.test(__coreCopy)?1:0, 1, 0.001);
+check('黑市摊位统一金色品牌色', (__coreCopy.match(/kind:"black"[^\n]*color:"#ffd23f"/g)||[]).length===2?1:0, 1, 0.001);
+check('黑市地图图标统一 ◈', /"♻":"◈"/.test(__uiCopy)?1:0, 1, 0.001);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

@@ -49,7 +49,7 @@ const Shop = {
     const base = Math.max(game.world ? game.world.level : 1, pl.level);
     const ilvl = base + (def.ilvlBonus||0);
     const q = rollQuality(ilvl, { mf: pl.mf, weights: def.weights });
-    // 商店与掉落共用同一套改装分布：仅稀有及以上带改装标记
+    // 商店与掉落共用同一套改装分布：仅精选及以上带改装标记
     const m = ["blue","purple","orange","pearl","ancient","rainbow"].includes(q)
       ? rollGearMayhem(pl.mayhem||0) : 0;
     const w = generateWeapon(ilvl+m, { rarity:q, mayhem:m });

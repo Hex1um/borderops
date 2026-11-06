@@ -108,7 +108,7 @@ const UI = {
             <span>13000×9600 大地图</span>
             <span>密林 · 河谷 · 铁路枢纽</span>
             <span>五级钥匙金库</span>
-            <span>GP 币</span>
+            <span>◈ GP 币</span>
           </div>
           <div class="hero-cta">进入配装大厅 <span class="hero-arrow">→</span></div>
         </div>
@@ -172,7 +172,7 @@ const UI = {
               <p>CS2 竞技规则：爆破、经济、五列购买菜单。可选原版枪械或旧刷宝体系枪械。</p>
             </div>
             <div class="mode-card" data-mode="br" role="button" tabindex="0">
-              <div class="mode-ico">◈</div>
+              <div class="mode-ico">✦</div>
               <h3>大逃杀</h3>
               <div class="mode-tag">BATTLE ROYALE · 绝地岛</div>
               <p>PUBG 式缩圈生存：空降绝地岛，搜枪搜甲，安全区不断收缩，活到最后一人吃鸡。</p>

@@ -256,7 +256,7 @@ Object.assign(Raid, {
   _uid(){ return "g"+(this.uidN++)+"-"+Math.floor(Math.random()*9999); },
 
   _rollRarity(luck){
-    // 9 阶品质：走硬预算——稀有及以上总量锁在 5% 左右，特种及以上约 1%
+    // 9 阶品质：走硬预算——精选及以上总量锁在 5% 左右，特种及以上约 1%
     return raidBudgetTier(luck);
   },
 
@@ -300,7 +300,7 @@ Object.assign(Raid, {
     return pt;
   },
 
-  // 枪械战利品：按塔科夫品质档位生成，高稀有度枪更强，并打上 qTier/qName/qColor 供显示
+  // 枪械战利品：按塔科夫品质档位生成，高品阶枪更强，并打上 qTier/qName/qColor 供显示
   // floorTier：品质保底（上锁保险箱按 lockLv 抬高下限，等级越高必出越好的枪）
   _rollGunLoot(cls, luck, floorTier){
     luck=luck||0;
@@ -319,7 +319,7 @@ Object.assign(Raid, {
     let rarity=this._rollRarity(luck);
     if(floorTier) rarity=Math.max(rarity, floorTier);
     const id=RNG.pick(RAID_GUN_TYPES);
-    const hi = rarity>=4 ? (rarity-3)*3 : 0;        // 高稀有度枪额外抬升等级 → 更强
+    const hi = rarity>=4 ? (rarity-3)*3 : 0;        // 高品阶枪额外抬升等级 → 更强
     const ilvl=rarity*3 + hi + 9 + RNG.ri(0,3);
     const cfgId=RAID_TIER_TO_RARITY[rarity]||"white";
     let w=blGunGen(ilvl,{type:id, rarity:cfgId});
@@ -365,7 +365,7 @@ Object.assign(Raid, {
   _rollVaultLoot(lv){
     const L=M.clamp(Math.round(lv||1),1,5);
     const luck=this.lootLuck + L*0.10;
-    // 装备品质保底（T0~T5）：V 级军火箱直接 T5 起步，基本只出橙品以上
+    // 装备品质保底（T0~T5）：V 级军火箱直接 T5 起步，基本只出特种档以上
     const floorT=[0,0,1,2,3,5][L];
     const r=RNG.f();
     // V 级：整枪 / 改装模块权重显著上调，材料让路（开一次就够本）

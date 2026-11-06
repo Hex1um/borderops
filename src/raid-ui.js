@@ -169,32 +169,32 @@ UI.raidSetup=function(){
       <details class="tarkov-intro">
         <summary>塔科夫模式 · 玩法说明（点此展开 / 折叠）</summary>
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
-          与 30 名 <b style="color:#e0b84a">PMC / Scav</b> 加 3 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">◆</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
+          与 30 名 <b style="color:#e0b84a">PMC / Scav</b> 加 3 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">★</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
           ${weaponQualityHidden()
             ? `<b style="color:#ffd23f">当前是精简显示</b>：枪名只显示型号，<b>品质 / 前后缀 / 厂商都隐藏</b>（数值照常生效）。想看成色就去 <b style="color:#8fd0ff">设置 → 显示 → 完整</b>。箱子仍以原材料与配件为主，想拿到好枪要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料）。<b style="color:#8fd0ff">携带装备总估值</b>会影响高阶物资权重。<br>`
             : `<b style="color:#ffd23f">战利品 9 阶品质</b>：${raidTierLegend()}。箱子<b style="color:#ffd76a">绝大多数是原材料与配件</b>，整枪 / 护甲只是少数——想拿到好枪，要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料，名字与品质由它们决定）。任意品质都可能刷出，但<b style="color:#8fd0ff">携带装备总估值</b>会显著抬高高阶物资的权重。<br>`}
           <b style="color:#ff7a3c">开局 3 分钟后</b>全图开始缓慢刷入<b>带装备的增援</b>：有的<b style="color:#e0b84a">组队推进</b>，有的会<b style="color:#ff7a3c">封锁撤离点</b>（封锁者存活时无法读条撤离）。<b style="color:#8fe07a">付费撤离点永不被封锁</b>，实在被堵死就花钱雇车；全图同时最多 2 处被封锁。<br>
-          <b style="color:#ff8a5a">AI 更像真人</b>：视野 <b>1000px</b>、枪声能传 <b>1200px</b>，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（Raider 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#c07bff">本局第一次击杀</b>必得 <b>1 枚 ◆ GP 币</b>（撤离才落袋）—— 想攒 GP 币就得真开打，绕开所有人只会两手空空。<br>
+          <b style="color:#ff8a5a">AI 更像真人</b>：视距<b>分级</b>（Scav <b>520</b> / PMC <b>900</b> / Boss <b>1250</b>），枪声基础 <b>1200px</b> 再按听距分级缩放，听见动静会一路摸过来；遇敌会<b>压到 170px</b>、左右游走、<b style="color:#8fd0ff">侧向急闪躲子弹</b>；<b style="color:#ff8a5a">打空弹匣会当场换弹并后撤</b>（备弹打光就翻尸补弹），<b style="color:#8fe07a">残血会自己找机会包扎</b>（Raider 58% / PMC 45% / Scav 38% 开始用药）。开局 <b>8 秒</b>内 AI 不会主动锁定你（<b>一旦开枪立即作废</b>），够你跑到第一个掩体。<b style="color:#ffd23f">本局第一次击杀</b>必得 <b>1 枚 ◈ GP 币</b>（撤离才落袋）—— 想攒 GP 币就得真开打，绕开所有人只会两手空空。<br>
           <b style="color:#8fe07a">只有成功撤离</b>，携带装备与战利品才写回仓库；阵亡或超时全部丢失。<br>
           <b style="color:#4fd6ff">护盾装备</b>：血条<b>上方</b>那条独立蓝色条，伤害<b>先扣盾、再扣护甲耐久、最后扣血</b>；
           <b>充能延迟</b>= 不受伤害多少秒后开始回盾，<b>充能速度</b>= 每秒回多少；<b>破盾瞬间有一小段无敌</b>，
           之后按延迟重新起盾。护盾由电池组 / 充能模块 / 延时继电器 / 承载框架 4 个配件组成，
           带前后缀与独特加成，可工坊合成、融合升阶、箱子和 Raider 掉落、军火超市购买。<br>
-          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与 GP 币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">120%（±40%）</b> 收你的货，远高于背包直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#c07bff">◆ GP 币</b>，出售高稀有度成品枪与高级改装模块。<br>
-          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 橙装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。钥匙还能在<b style="color:#8fd0ff">工坊合成表</b>用 <b style="color:#ffd76a">16 份原材料</b>做一把（投料品质决定 I~V 级，越好的料出越高级的钥匙）；另外两条路是<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V GP 币；Raider 身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
+          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与 GP 币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">120%（±40%）</b> 收你的货，远高于背包直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#ffd23f">◈ GP 币</b>，出售高品阶成品枪与高级改装模块。<br>
+          <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 特种装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。钥匙还能在<b style="color:#8fd0ff">工坊合成表</b>用 <b style="color:#ffd76a">16 份原材料</b>做一把（投料品质决定 I~V 级，越好的料出越高级的钥匙）；另外两条路是<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V GP 币；Raider 身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
           <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶 · 卢布）</b>与<b>黑市（高阶 · GP 币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
           <b style="color:#8fe07a">可互动设施</b>：<b>监狱 / 小镇 / 大坝</b>里有医疗站（回 45 血并止血）、弹药柜（补满备弹）、警报器（拉响把 AI 引过去，撤离前调虎离山）与<b style="color:#8fd0ff">泄洪闸</b>——闸门一开，水库放空，水底露出 <b style="color:#ffd23f">IV 级 + III 级保险箱</b>各一口，代价是巨响会招来一票人。<br>
           <b style="color:#62c8ff">河流与桥</b>：河道可<b>缓慢涉水</b>通过（速度只剩 45%），泡在水里超过 4.5 秒开始<b style="color:#ff9a8a">失温扣血</b>且越拖越疼——桥面（8 座，含 3 座带双黄线的大桥）完全免减速，赶路还是走桥。<b style="color:#ffd76a">背包满时</b>捡到的多余物资不会消失，会<b>掉在脚下变成发光的小包裹</b>，腾出空间后按 E 还能捡回来；<b style="color:#ff8a5a">Tab 物品栏</b>里每件战利品都有 <b>✕ 丢弃</b> 按钮，丢掉的同样落在脚下，随时能回头捡。<br>
           <b style="color:#ffb44a">子弹是独立物品</b>：4 个口径（9×19 / 5.45×39 / 7.62×54R·12-70 / 40mm）× <b>5 个级别</b>（民用 → 制式 → 军规 → 精工 → 特种，穿深 5→36 递增）。弹匣打空要<b style="color:#ffd36a">按 R 换弹，子弹从背包里扣</b>，背包没子弹就打不响。子弹能<b>合成</b>（工坊「弹药」页，材料越贵弹越高级）、<b>掉落</b>（武器箱首选、清尸必摸）与<b>购买</b>（材料店 T1/T2 卢布、枪械店 T2/T3、黑市 T4/T5 GP 币）。<br>
           <b style="color:#e0b84a">撤离费按带入装备估价浮动</b>：裸装跑刀只收 <b style="color:#8fe07a">0.2 倍</b>（约 ₽70~110，基本白坐）；带得越多折扣越小，带 ₽30 万的重装按原价付、封顶一两千 —— 贵重装备多、护送成本高。<br>
-          <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◆ GP 币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。撤离费先扣局内现金，<b style="color:#ffd36a">不够再从仓库补扣</b>（只在真正撤离成功时扣）。</div>
+          <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◈ GP 币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。撤离费先扣局内现金，<b style="color:#ffd36a">不够再从仓库补扣</b>（只在真正撤离成功时扣）。</div>
       </details>
-      <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · GP 币 <b style="color:#c07bff">◆ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 护盾 ${stash.shields.length} · 配件 ${(stash.parts||[]).length} · 改装模块 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
+      <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · GP 币 <b style="color:#ffd23f">◈ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 护盾 ${stash.shields.length} · 配件 ${(stash.parts||[]).length} · 改装模块 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
 
       <div class="raid-launch">
         <div class="rl-text">
           <div class="rl-title">${carryVal>0?`${gearVal>0?'已配装':'只带现金'} · 总价值 ₽${priceText(carryVal)}`:'裸装跑刀'}</div>
-          <div class="rl-sub">${carryVal>0?`装备 ₽${priceText(gearVal)}${cashVal>0?` + 带入现金 ₽${priceText(cashVal)}（卢布 ₽${priceText(cashIn)}${tokWorth>0?` · GP 币 ◆${tokIn}≈₽${priceText(tokWorth)}`:''}）`:''} · `:''}撤离费按装备估值浮动：雇车撤离约 <b style="color:#ffd36a">₽${priceText(feeMin)} ~ ${priceText(feeMax)}</b> · 免费撤离点需坚守 7~10 秒</div>
+          <div class="rl-sub">${carryVal>0?`装备 ₽${priceText(gearVal)}${cashVal>0?` + 带入现金 ₽${priceText(cashVal)}（卢布 ₽${priceText(cashIn)}${tokWorth>0?` · GP 币 ◈${tokIn}≈₽${priceText(tokWorth)}`:''}）`:''} · `:''}撤离费按装备估值浮动：雇车撤离约 <b style="color:#ffd36a">₽${priceText(feeMin)} ~ ${priceText(feeMax)}</b> · 免费撤离点需坚守 7~10 秒</div>
         </div>
         <div class="rl-btns">
           <button class="btn ghost" id="btn-raid-online" style="border-color:#7ee08a66;color:#9fe0a8;">联机突袭 · 2~4 人</button>
@@ -213,7 +213,7 @@ UI.raidSetup=function(){
         </div>
         <div class="rc-row">
           <span class="rc-label">带入 GP 币</span>
-          <span class="rc-val" style="color:#c07bff">◆ <b id="rc-tok-val">${tokIn}</b>${tokIn>0?`<span style="font-size:11px;color:#8b7ba8"> ≈ ₽${priceText(tokWorth)}</span>`:''}<span style="font-size:11px;color:#6f6f8b"> / ${maxTok}</span></span>
+          <span class="rc-val" style="color:#ffd23f">◈ <b id="rc-tok-val">${tokIn}</b>${tokIn>0?`<span style="font-size:11px;color:#c9a961"> ≈ ₽${priceText(tokWorth)}</span>`:''}<span style="font-size:11px;color:#6f6f8b"> / ${maxTok}</span></span>
           <span class="rc-btns">
             <input id="rc-tokens" type="range" min="0" max="${maxTok}" step="1" value="${tokIn}"
               style="width:190px;vertical-align:middle;" ${maxTok>0?"":"disabled"}>
@@ -229,7 +229,7 @@ UI.raidSetup=function(){
           </span>
         </div>
         <div class="rc-hint">带进图的现金可以在局内商店 / 黑市直接花（黑市只收 GP 币）；<b style="color:#ff8a5a">阵亡即丢失</b>，撤离成功则连本局所得一起带回仓库。<br>
-          卢布与 GP 币<b style="color:#8fd0ff">都计入配装总价值</b>（1 枚 ◆ GP 币按 <b>₽${priceText(RAID_TOKEN_RATE)}</b> 折算，仅用于估值显示，不可兑换）；撤离费与保费只按<b>装备</b>估值计算。<br>
+          卢布与 GP 币<b style="color:#8fd0ff">都计入配装总价值</b>（1 枚 ◈ GP 币按 <b>₽${priceText(RAID_TOKEN_RATE)}</b> 折算，仅用于估值显示，不可兑换）；撤离费与保费只按<b>装备</b>估值计算。<br>
           <b style="color:#8fd0ff">初始装备包</b>：勾选后进场即从带入的卢布现金里扣 <b>₽${RAID_SUPPORT_CASH}</b>，出生点投放
           <b>2 把白装枪 + 对应口径 T2 制式弹 + T1 护盾 / 护甲 / 头盔 + 绷带与止血针</b>（走过去按 E 搜；钱不够买不了）。</div>
       </div>
@@ -469,7 +469,7 @@ UI.raidResult=function(res){
         <div><span class="rr-k">存活时长</span><b>${mm}分${ss}秒</b></div>
         <div><span class="rr-k">击杀数</span><b>${res.kills}</b></div>
         ${res.success?`<div><span class="rr-k">带出卢布</span><b style="color:#8fe07a">₽ ${res.creds}</b></div>`:``}
-        ${res.success&&res.tokens?`<div><span class="rr-k">GP 币</span><b style="color:#c07bff">◆ ${res.tokens}</b></div>`:``}
+        ${res.success&&res.tokens?`<div><span class="rr-k">GP 币</span><b style="color:#ffd23f">◈ ${res.tokens}</b></div>`:``}
         ${res.success&&res.returned.materials?`<div><span class="rr-k">原材料</span><b style="color:#ffd76a">${res.returned.materials}</b></div>`:``}
       </div>
       <div class="raid-result-label">${res.success?"带出并入库：":"丢失："}</div>

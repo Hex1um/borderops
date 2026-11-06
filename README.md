@@ -16,8 +16,8 @@
 
 ## 特性
 
-- **撤离射击循环**：9 阶军规品质战利品（武器品质当前暂时禁用）、5 级钥匙与上锁箱、9 家随机商店（枪械/材料/回收/黑市）、GP 币经济、装备保险与撤离费
-- **武器品质开关**：`CFG.weaponQuality = false` 时新枪统一按标准品质生成，不显示品质名/颜色，也不吃品质倍率与具名；护甲、头盔、护盾、配件与弹药品质不受影响，改回 `true` 即恢复
+- **撤离射击循环**：9 阶军规品质战利品 + 12 阶枪械品质、5 级钥匙与上锁箱、9 家随机商店（枪械/材料/回收/黑市）、GP 币经济、装备保险与撤离费
+- **品质显示分层**：`CFG.display = "compact"`（默认）隐藏品质名 / 前后缀 / 厂商，只留真枪型号，数值照常生效；`"full"` 全显示。`CFG.weaponQuality` 是总开关（默认 `true`，设 `false` 时新枪统一按标准品质生成、不吃品质倍率与具名）
 - **塔科夫制式弹药**：`5.45×39mm PS gs` / `T gs` / `7.62×39mm BP gzh` / `9×19mm RIP` / `9×39mm SP-6 gs` / `40mm VOG-25` / `5.45×39mm BT gs`，
   按「无防护 / 护盾 / 硬质插板」三系终点效应区分；引燃、撕裂、钝击失能、跳弹、迟滞均为可解释的弹道效应
 - **改装词条**：兵工厂 × 枪型 × 品级 × 改装词条 × 部件组合生成；词条全部为可解释的工艺参数（冷锻枪管、浮置枪管、精磨扳机、制退器、后坐控制、有效射程……）
@@ -45,7 +45,7 @@
 
 ```sh
 npm start          # 等价于 node server.js，默认 3000 端口
-npm run verify     # 无浏览器依赖的逻辑回归：减伤 / 弹种 / 状态 / 护盾 / 词缀池
+npm run verify     # 无浏览器逻辑回归（36 组 / 564 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏）
 npm run check      # 校验版本号三处同步 + 脚本缓存串（无需安装依赖）
 # 真实浏览器冒烟（需系统 Edge + Python playwright，先起服务）：
 PORT=3211 node server.js
@@ -66,7 +66,7 @@ python -m http.server 8132
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
 4. **兼容旧存档**：v0.15.0 保留了全部内部键名（`element` / `mayhem` / `elemPct` / `core` 等）与 localStorage 存档结构，仅改变语义与显示；`ELEMENTS` 是 `AMMO_TYPES` 的兼容别名。新代码请优先使用 `AMMO_TYPES`。
 5. 改动沿用现有风格：紧凑单行、中文注释带 `vX.Y.Z` 前缀。
-6. **门禁与工具**：`npm run check`（版本三处同步 + 静态/懒加载脚本清单）、`npm run verify`（无浏览器逻辑回归，含旧档迁移 / 净化 / EV 护栏）、`npm run bench:fps`（可选，需本机 Chrome，输出 `fps-baseline.json`）。`main` 分支由 `.github/workflows/ci.yml` 自动跑 check + verify + 全量语法检查。
+6. **门禁与工具**：`npm run check`（版本三处同步 + 静态/懒加载脚本清单）、`npm run verify`（无浏览器逻辑回归，含旧档迁移 / 净化 / EV / 文案护栏）、`npm run bench:fps`（可选，需本机 Chrome，输出 `fps-baseline.json`）。`.github/workflows/ci.yml` 已备好但因当前凭据缺 `workflow` scope 尚未推送到远端，需按 CHANGELOG 的「发布备注（CI 权限）」启用一次。
 
 ## 目录结构
 
@@ -90,8 +90,8 @@ python -m http.server 8132
 | `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，201 项断言） |
-| `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（28 项断言）与只读机制体检 |
+| `verify_v01410.cjs` | vm 沙箱逻辑回归（`npm run verify`，564 项断言） |
+| `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（42 项断言）与只读机制体检 |
 | `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告 |
 
 ## GitHub Pages 部署说明

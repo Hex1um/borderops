@@ -475,7 +475,7 @@ Object.assign(Raid, {
       if(!killer.netKiller && !this._firstKillToken){
         this._firstKillToken=true;
         this.tokens=(this.tokens||0)+1;
-        this._float(victim.x, victim.y-72, "◆ 首杀 · GP 币 +1", "#c07bff");
+        this._float(victim.x, victim.y-72, "◈ 首杀 · GP 币 +1", "#ffd23f");
         this._feed("黑市", "首杀确认 · GP 币 +1（撤离才落袋）", "奖励", false, "info");
       }
       this._feed(killer.netKiller?(killer.name||"队友"):"你", victim.name, killer.gun?gunNameOf(killer.gun):"徒手", !killer.netKiller, "kill");
@@ -530,7 +530,7 @@ Object.assign(Raid, {
       const KLV=[{weight:52,lv:1},{weight:26,lv:2},{weight:14,lv:3},{weight:6,lv:4},{weight:2,lv:5}];
       drops.push(raidMakeKey(KLV[RNG.weighted(KLV)].lv));
     }
-    // Boss：保底 3 件「稀有及以上」战利品（材料 / 配件 / 装备）
+    // Boss：保底 3 件「高品阶」战利品（材料 / 配件 / 装备）
     if(bot.bounty) for(const it of raidBountyLoot()) drops.push(it);
     const cash=Math.max(0, Math.round((bot.creds||0)*0.3));
     if(drops.length || cash>0){
@@ -650,7 +650,7 @@ Object.assign(Raid, {
       }
       if(RNG.chance(c.locked ? (0.06+0.04*(c.lockLv||1)) : 0.02)){
         this.tokens=(this.tokens||0)+1;
-        this._float(c.x, c.y-64, "◆ GP 币 +1", "#c07bff");
+        this._float(c.x, c.y-64, "◈ GP 币 +1", "#ffd23f");
         SFX.levelup();
       }
       this.search=null;
@@ -1033,7 +1033,7 @@ Object.assign(Raid, {
       const helmetTier=armorTier?RNG.ri(2,5):0;
       const isBlocker = !!(blockZone && i===0);
       const op=new RaidOperator({
-        id:"re"+(this.uidN++)+"-"+(i+1), cls:"pmc", name:(smart?"◆ ":"")+(isBlocker?"封锁者":(squadId?"小队":"游骑兵")),
+        id:"re"+(this.uidN++)+"-"+(i+1), cls:"pmc", name:(smart?"★ ":"")+(isBlocker?"封锁者":(squadId?"小队":"游骑兵")),
         x:p.x, y:p.y, angle:RNG.fr(0,6.28),
         speed:RNG.fr(140,162), hp:RNG.ri(95,140),
         color:isBlocker?"#ff7a3c":"#e0b84a",
@@ -1215,7 +1215,7 @@ Object.assign(Raid, {
     if(p.maxShield>0) line("护盾 · "+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
       `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`);
     line("卢布", "#8fe07a", "₽ "+priceText(R.creds)+" · 撤离后结算进仓库");
-    if((R.tokens||0)>0) line("GP 币", "#c07bff", "◆ "+R.tokens+" · 撤离才落袋");
+    if((R.tokens||0)>0) line("GP 币", "#ffd23f", "◈ "+R.tokens+" · 撤离才落袋");
 
     /* 弹药栏（v0.20.0）：按口径 × 级别堆叠，总发数有上限 */
     {

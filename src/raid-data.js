@@ -568,11 +568,11 @@ const RAID_GEAR_BASE  = 0.32;
 
 /* ---------------- 硬性稀有度预算 ----------------
  * 目标（用户明确要求）：每 100 件战利品里
- *   · 稀有及以上（T3 稀有 / T4 军规）≈ 3.2 件（原 5 件）
+ *   · 精选及以上（T3 精选 / T4 精工）≈ 3.2 件（原 5 件）
  *   · 特种及以上（T5 特种 ~ T8 原型）≈ 0.55 件（原 1 件）
- * 做法：先掷「是否进稀有段 / 特种段」，再在段内按权重挑档。
+ * 做法：先掷「是否进精选段 / 特种段」，再在段内按权重挑档。
  * 携带估值的「运气」只做两件小事：段内更偏顶端（T4 而非 T3、T8 而非 T5），
- * 以及总量最多 +30%（3.2%→4.2%）、+40%（0.55%→0.8%），不会把整局刷成紫橙。 */
+ * 以及总量最多 +30%（3.2%→4.2%）、+40%（0.55%→0.8%），不会把整局刷成高阶品。 */
 const RAID_BUDGET = { lv0:0.032, lvCap:0.042, lg0:0.0055, lgCap:0.008,
                       wLow:[{weight:0.72},{weight:0.21},{weight:0.07}] };
 function raidBudgetTier(luck){
@@ -583,7 +583,7 @@ function raidBudgetTier(luck){
   if(r<pL){   // 特种段 T5~T8：运气越好越偏 T7 / T8
     return 5 + RNG.weighted([{weight:0.82-0.30*k},{weight:0.15},{weight:0.025+0.20*k},{weight:0.005+0.10*k}]);
   }
-  if(r<pR){   // 稀有段 T3 / T4
+  if(r<pR){   // 精选段 T3 / T4
     return 3 + RNG.weighted([{weight:0.88-0.22*k},{weight:0.12+0.22*k}]);
   }
   return RNG.weighted(RAID_BUDGET.wLow);   // T0 / T1 / T2
@@ -678,8 +678,8 @@ const RAID_MATERIALS = [
 const RAID_MAT_BY_ID = {};
 for(const m of RAID_MATERIALS) RAID_MAT_BY_ID[m.id]=m;
 
-/* Boss 保底战利品：击杀 Boss「至少 3 件稀有及以上」
- *   ① 一件 T4~T6 原材料　② 一件稀有 / 特种配件　③ 一件稀有以上护甲 / 头盔 / 整枪 */
+/* Boss 保底战利品：击杀 Boss「至少 3 件高品阶」
+ *   ① 一件 T4~T6 原材料　② 一件精选 / 特种配件　③ 一件精选以上护甲 / 头盔 / 整枪 */
 function raidBountyLoot(){
   const out=[];
   // ① 原材料
@@ -690,7 +690,7 @@ function raidBountyLoot(){
     value:Math.round(base.value*(1+RAID_RARITY_VAL[mt])/10)*10,
     color:RAID_RARITY_COLOR[mt], qName:RAID_TIERS[mt].name,
     uid:"bq"+Math.floor(Math.random()*1e9).toString(36) });
-  // ② 配件：稀有起，25% 直接给特种档
+  // ② 配件：精选起，25% 直接给特种档
   const pt=rollPart(RNG.pick(GUN_SLOTS).id, 18, RNG.chance(0.25)?"orange":"purple");
   pt.kind="part"; pt.uid="bq"+Math.floor(Math.random()*1e9).toString(36);
   out.push(pt);

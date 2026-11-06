@@ -33,7 +33,7 @@ UI.raidFieldShop=function(key){
       <div class="si-stats">${tname}${qn?" · "+qn:""} · 伤害 ${g.dmg} · 弹匣 ${g.mag} · 射速 ${g.rpm}<br>
         配件 ${(g.parts||[]).length} 个 · 估值 ₽${priceTextShort(g.value||0)}</div>
       <div class="si-buy">
-        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◆":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
+        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◈":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
         <button class="btn ghost" data-fbuy="${payKind}:${sid}:${idx}" ${can?"":"disabled"}>购买</button>
       </div>
     </div>`;
@@ -50,7 +50,7 @@ UI.raidFieldShop=function(key){
       <div class="si-name" style="color:${a.color||"#dfe7f0"}">${a.name} <span style="font-size:11px;opacity:.7">×${a.n}</span></div>
       <div class="si-stats">${a.spec} · ${lvName}级 · 单发估值 ₽${a.value?Math.round(a.value/a.n):0} · 穿深 ${E.pen}${owned?" · 背包已有 "+owned:""}</div>
       <div class="si-buy">
-        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◆":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
+        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◈":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
         <button class="btn ghost" data-fbuy="${payKind==="token"?"tokenammo":"cashammo"}:${sid}:${idx}" ${can?"":"disabled"}>购买</button>
       </div>
     </div>`;
@@ -64,7 +64,7 @@ UI.raidFieldShop=function(key){
       <div class="si-name" style="color:${k.color||"#ffd23f"}">${k.name} <span style="font-size:11px;opacity:.75">[${RAID_LOCK_NAME[k.lv]}]</span></div>
       <div class="si-stats">可开 ${RAID_LOCK_NAME[k.lv]} 及以下的保险箱 · 可用 ${k.uses} 次 · 估值 ₽${priceTextShort(k.value||0)}</div>
       <div class="si-buy">
-        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◆":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
+        <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◈":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
         <button class="btn ghost" data-fbuy="key:${sid}:${idx}" ${can?"":"disabled"}>购买</button>
       </div>
     </div>`;
@@ -78,27 +78,27 @@ UI.raidFieldShop=function(key){
       : `<div class="empty-hint">货架已空 · 本局不再补货</div>`;
     if(kind==="black"){
       const parts=sh.stock.parts||[];
-      body += parts.length ? `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 高级改装模块（GP 币兑换）</div>` +
+      body += parts.length ? `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◈ 高级改装模块（GP 币兑换）</div>` +
         parts.map((c,i)=>{
           const can=tokens>=(c.tokenPrice||10);
           return `<div class="si">
             <div class="si-name" style="color:${c.color||"#c07bff"}">${c.name||raidCoreName(c)}</div>
             <div class="si-stats">等级 ${RAID_ROMAN[c.lv]||c.lv} · ${(c.mods||[]).map(m=>`${AFFIX_LABEL[m.stat]||m.stat} +${m.value}`).join(" · ")||"—"}</div>
-            <div class="si-buy"><span class="si-price ${can?"":"cant"}">◆ ${c.tokenPrice||10}</span>
+            <div class="si-buy"><span class="si-price ${can?"":"cant"}">◈ ${c.tokenPrice||10}</span>
               <button class="btn ghost" data-fbuy="tokenpart:${sid}:${i}" ${can?"":"disabled"}>兑换</button></div>
           </div>`;
         }).join("")
         : "";
       const bkeys=sh.stock.keys||[];
-      if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级钥匙（GP 币兑换 · 开同级及以下保险箱）</div>` +
+      if(bkeys.length) body += `<div class="hint" style="margin:10px 0 6px;">◈ 高级钥匙（GP 币兑换 · 开同级及以下保险箱）</div>` +
         bkeys.map((k,i)=>keyCard(k,"token",i)).join("");
       const bammo=sh.stock.ammo||[];
-      if(bammo.length) body += `<div class="hint" style="margin:10px 0 6px;">◆ 高级弹药 T4 / T5（GP 币兑换 · 一条 30 发）</div>` +
+      if(bammo.length) body += `<div class="hint" style="margin:10px 0 6px;">◈ 高级弹药 T4 / T5（GP 币兑换 · 一条 30 发）</div>` +
         bammo.map((a,i)=>ammoCard(a,"token",i)).join("");
     } else if(kind==="gun"){
       // 改装模块不可合成 —— 枪械店常备低阶改装模块，卢布直接买
       const parts=sh.stock.parts||[];
-      if(parts.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 改装模块（卢布购买 · 不可合成）</div>` +
+      if(parts.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">▸ 改装模块（卢布购买 · 不可合成）</div>` +
         parts.map((c,i)=>{
           const can=money>=(c.shopPrice||0);
           const mods=(c.mods||[]).map(m=>`${AFFIX_LABEL[m.stat]||m.stat} +${m.value}`).join(" · ");
@@ -110,7 +110,7 @@ UI.raidFieldShop=function(key){
           </div>`;
         }).join("");
       const gammo=sh.stock.ammo||[];
-      if(gammo.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 弹药（一条 30 发 · 本店枪型口径）</div>` +
+      if(gammo.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">▸ 弹药（一条 30 发 · 本店枪型口径）</div>` +
         gammo.map((a,i)=>ammoCard(a,"cash",i)).join("");
     }
   } else if(kind==="mat"){
@@ -144,10 +144,10 @@ UI.raidFieldShop=function(key){
       </div>`;
     }).join("");
     const mammo=sh.stock.ammo||[];
-    if(mammo.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 弹药（一条 30 发 · T1 民用 / T2 制式）</div>` +
+    if(mammo.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">▸ 弹药（一条 30 发 · T1 民用 / T2 制式）</div>` +
       mammo.map((a,i)=>ammoCard(a,"cash",i)).join("");
     const mkeys=sh.stock.keys||[];
-    if(mkeys.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">◆ 钥匙（开对应等级的上锁保险箱 · 带进图才会生效）</div>` +
+    if(mkeys.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">▸ 钥匙（开对应等级的上锁保险箱 · 带进图才会生效）</div>` +
       mkeys.map((k,i)=>keyCard(k,"cash",i)).join("");
   } else if(kind==="rec"){
     // 回收超市：把背包里的东西折现（v0.19.0：估价 × 1.2 ± 0.4，按件稳定浮动）
@@ -191,7 +191,7 @@ UI.raidFieldShop=function(key){
   }
 
   const wallet = kind==="black"
-    ? `<div class="shop-gold" style="color:#c07bff">◆ GP 币 ${tokens}</div><div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`
+    ? `<div class="shop-gold" style="color:#ffd23f">◈ GP 币 ${tokens}</div><div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`
     : `<div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`;
 
   UI._set(`
@@ -208,14 +208,14 @@ UI.raidFieldShop=function(key){
         <div class="shop-desc">${kind==="rec"
           ? `回收超市按装备估值的 <b style="color:#62c8ff">${Math.round(RAID_FIELD_SELL_RATE*100)}%（±${Math.round(RAID_FIELD_SELL_JITTER*100)}%）</b> 收购（背包直售只有 ${Math.round(RAID_VENDOR_RATE*100)}%）。带进图卖能多赚，但要先活着走到这里。`
           : kind==="black"
-            ? `黑市只认 <b style="color:#c07bff">◆ GP 币</b>：<b>本局首杀必得 1 枚</b>，之后靠上锁箱与 Raider 掉落，撤离时再按带出价值结算。这里出售 <b style="color:#ffd23f">高稀有度成品枪</b>、高级改装模块与 <b style="color:#c07bff">III~V 级保险箱钥匙</b>，卢布买不到。`
+            ? `黑市只认 <b style="color:#ffd23f">◈ GP 币</b>：<b>本局首杀必得 1 枚</b>，之后靠上锁箱与 Raider 掉落，撤离时再按带出价值结算。这里出售 <b style="color:#ffd23f">高品阶成品枪</b>、高级改装模块与 <b style="color:#ffd23f">III~V 级保险箱钥匙</b>，卢布买不到。`
             : `用<b style="color:#ffd23f">局内卢布</b>交易 —— 卢布要先在局内搜刮到，撤离后才真正落袋。死了，钱和货一起没。`}</div>
         ${wallet}
         <button class="btn ghost" data-fclose="1">离开（继续突袭）</button>
       </div>
       <div class="shop-solo">
         <span class="solo-badge" style="border-color:${sh.color}66;color:${sh.color}">独立摊位</span>
-        <span>${sh.name}${kind==="gun"?"只卖成品枪":kind==="mat"?"只卖原材料 / 配件 / 医疗 / I~II 级钥匙":kind==="rec"?"只收货，不卖货":"只收 ◆ GP 币，换高级枪 / 改装模块 / III~V 级钥匙"} · 货架与其他摊位各算各的，不互通。</span>
+        <span>${sh.name}${kind==="gun"?"只卖成品枪":kind==="mat"?"只卖原材料 / 配件 / 医疗 / I~II 级钥匙":kind==="rec"?"只收货，不卖货":"只收 ◈ GP 币，换高级枪 / 改装模块 / III~V 级钥匙"} · 货架与其他摊位各算各的，不互通。</span>
       </div>
       <div class="shop-list">${body}</div>
       <div class="hint" style="margin-top:12px;">关闭面板后游戏继续 —— 谈生意时背后随时可能来人。</div>
@@ -596,13 +596,13 @@ UI.raidFusion=function(opts){
       const mr=Math.max(...items.map(x=>qOf(x)));
       const pfT=Math.min(9,mt+(n>=3?1:0)), pfR=Math.min(8,mr+1+(n>=3?1:0));
       preview=`<div class="hint" style="color:#8fd0ff;">
-        产物：<b>T${pfT} 护盾</b> · 稀有度 <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b> · 四配件与前后缀按新表重掷</div>`;
+        产物：<b>T${pfT} 护盾</b> · 品阶 <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b> · 四配件与前后缀按新表重掷</div>`;
     } else if(main && (main.kind==="armor"||main.kind==="helmet")){
       const mt=Math.max(...items.map(x=>x.tier||1));
       const mr=Math.max(...items.map(x=>x.rarity|0));
       const pfT=Math.min(9,mt+(n>=3?1:0)), pfR=Math.min(8,mr+1+(n>=3?1:0));
       preview=`<div class="hint" style="color:#8fd0ff;">
-        产物：<b>T${pfT} ${main.kind==="helmet"?"头盔":"护甲"}</b> · 稀有度 <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b> · 按新表满耐久生成</div>`;
+        产物：<b>T${pfT} ${main.kind==="helmet"?"头盔":"护甲"}</b> · 品阶 <b style="color:${RAID_RARITY_COLOR[pfR]}">${RAID_RARITY_NAME[pfR]}</b> · 按新表满耐久生成</div>`;
     } else if(main && (main.slot==="core"||main.core)){
       const same=items.filter(i=>(i.slot==="core"||i.core)&&i.core===main.core&&i.lv===main.lv&&(i.elem||"")===(main.elem||"")&&(i.boost||"")===(main.boost||""));
       const ok=same.length>=2 && main.lv<RAID_CORE_MAX;
@@ -807,7 +807,7 @@ UI.raidStash=function(opts){
         ${tabs.map(t=>`<button class="shop-tab ${TAB===t.id?'on':''}" data-stab="${t.id}"><b>${t.name}</b><span class="tab-tag">${t.n}</span></button>`).join('')}
       </div>
       <div class="shop-list">${body}</div>
-      <div class="hint" style="margin-top:12px;">提示：拆解高稀有度枪械能得到高品质配件，再装到喜欢的枪上，比直接卖掉更划算。</div>
+      <div class="hint" style="margin-top:12px;">提示：拆解高品阶枪械能得到高品质配件，再装到喜欢的枪上，比直接卖掉更划算。</div>
     </div>`);
 
   UI.overlay.querySelectorAll('[data-stab]').forEach(el=>{
