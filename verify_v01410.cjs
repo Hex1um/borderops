@@ -1717,17 +1717,17 @@ check('不传坐标时直接返回基准档（零开销）', __sense.noArg, 1, 0
 
 /* --- 手电遮挡：假装每条射线都在半程撞墙，扇形半径应收缩到 560*0.5-4 --- */
 const __fan = G(`(function(){
-  var oldRay=Raid._rayWall, oldCS=Raid.navCS;
+  var oldRay=Raid._rayLight, oldCS=Raid.navCS;
   Raid.navCS=1;
-  Raid._rayWall=function(){ return {x:0,y:0,t:0.5}; };
+  Raid._rayLight=function(){ return 276; };      // 每条射线都在 276px 处撞到遮挡
   var f=RenderRaid._lightFan(0,0,-0.42,0.42,560,40);
   var maxd=0, min=1e9;
   for(var i=0;i<f.length;i+=2){ var d=Math.sqrt(f[i]*f[i]+f[i+1]*f[i+1]); if(d>maxd)maxd=d; if(d<min)min=d; }
-  Raid._rayWall=oldRay; Raid.navCS=oldCS;
+  Raid._rayLight=oldRay; Raid.navCS=oldCS;
   return { n:f.length, maxd:maxd, min:min };
 })()`);
 check('扇形射线数 = 2*(rays+1)', __fan.n, 82, 0.001);
-check('撞墙时射线收缩到命中距离', __fan.maxd, 276, 1.5);
+check('撞墙时射线收缩到命中距离', __fan.maxd, 274, 1.5);
 check('扇形最小半径有下限（贴脸不塌成 0）', __fan.min>=10?1:0, 1, 0.001);
 check('探照灯扇形在索引就绪后缓存', G(`(function(){
   var oldCS=Raid.navCS; Raid.navCS=1;
@@ -1740,13 +1740,14 @@ check('2D 手电不再整块 arc 扇形', /arc\(p\.x,p\.y,reach, ang-half, ang\+
 check('2D 手电复用单个径向渐变', (__rd2.match(/createRadialGradient\(p\.x,p\.y,0,p\.x,p\.y,reach\)/g)||[]).length===1?1:0, 1, 0.001);
 
 /* --- 3D：深度分带衰减 + 探照灯深度剔除 + 室内压暗 --- */
-check('3D 散射按每列墙面深度分带衰减', /LIGHT_REACH \/ Math\.max\(LIGHT_REACH, dmin\)/.test(__fp2)?1:0, 1, 0.001);
-check('3D 分带边界取整对齐（不叠亮缝）', /Math\.round\(b\*w\/BANDS\)/.test(__fp2)?1:0, 1, 0.001);
+check('3D 手电按墙面自身的深度衰减（不是整列取最近）', /const kWall = KFAR \+ \(1-KFAR\)\*Math\.max\(0, Math\.min\(1, \(LIGHT_REACH-d\)\/220\)\)/.test(__fp2)?1:0, 1, 0.001);
+check('3D 手电按墙顶/墙脚分成三段', /const wallBot = horizon \+ \(this\.EYE_H\/d\)\*proj/.test(__fp2) && /const wallTop = horizon \+ \(\(this\.EYE_H-wallH\)\/d\)\*proj/.test(__fp2)?1:0, 1, 0.001);
+check('3D 条带边界取整对齐（不叠亮缝）', /Math\.round\(s\*w\/SEGS\)/.test(__fp2)?1:0, 1, 0.001);
 check('3D 探照灯被墙挡住不投光', /if\(zb\[c\] < depth - 24\) continue;/.test(__fp2)?1:0, 1, 0.001);
-check('3D 室内压暗 0.62（纯深色，不动暖色）', /0\.62\*indoor/.test(__fp2)?1:0, 1, 0.001);
-check('2D 室内压暗 0.34', /0\.34\*indoor/.test(__rd2)?1:0, 1, 0.001);
+check('3D 室内压暗 0.82（纯深色，不动暖色）', /0\.82\*indoor/.test(__fp2)?1:0, 1, 0.001);
+check('2D 室内压暗 0.52', /0\.52\*indoor/.test(__rd2)?1:0, 1, 0.001);
 check('室内亮度按 dt 指数逼近（无硬切）', /this\.indoor \+ \(want-this\.indoor\)\*Math\.min\(1, dt\*4\.5\)/.test(raidSrc)?1:0, 1, 0.001);
-check('房间地面改纯黑 #040608', /rm\.extract\?"#25452f":"#040608"/.test(__rd2)?1:0, 1, 0.001);
+check('房间地面改纯黑 #010203', /rm\.extract\?"#25452f":"#010203"/.test(__rd2)?1:0, 1, 0.001);
 
 /* --- 地面枪械对比面板 / 局时常量 / 撤离保底 --- */
 check('地面枪械对比面板存在', /_groundGunPanel\(ctx, R, c, v/.test(__rd2)?1:0, 1, 0.001);
@@ -1757,6 +1758,34 @@ check('局时长抽成 raidDuration=480', G('Raid.raidDuration'), 480, 0.001);
 check('结算不再写死 480', /time:this\.raidDuration-this\.timer/.test(raidSrc)?1:0, 1, 0.001);
 check('每个 3x3 行政区保底 1 个开放撤离点', /if\(openZones\.has\(z\)\) continue;/.test(raidSrc) && /cand\.closed=false;/.test(raidSrc)?1:0, 1, 0.001);
 check('进图播报本局开放撤离点', /本局开放 "\+openEx\.length\+" 处/.test(raidSrc)?1:0, 1, 0.001);
+
+/* ==================== v0.22.3 组 38：挡光 / 亮度 / 光滑轮廓 ==================== */
+console.log('');
+console.log('=== 38. 灌木挡光 / 手电亮度 / 轮廓抗锯齿（v0.22.3）===');
+const __rl = G(`(function(){
+  var oldC=Raid.navCS, oldCo=Raid.navCols, oldR=Raid.navRows, oldCell=Raid.navCell, oldW=Raid.walls;
+  Raid.navCS=100; Raid.navCols=12; Raid.navRows=4; Raid.navCell=new Array(48); Raid.walls=[];
+  var bush={x:180,y:40,w:40,h:20,sight:false,kind:"bush"};
+  Raid.walls.push(bush);
+  for(var gy=0;gy<=0;gy++) for(var gx=1;gx<=2;gx++){
+    var i=gy*12+gx; (Raid.navCell[i]||(Raid.navCell[i]=[])).push(bush);
+  }
+  var hit  = Raid._rayLight(100,50,1,0,560);      // 正对灌木
+  var miss = Raid._rayLight(100,50,0,-1,560);     // 反方向空地
+  var inside = Raid._rayLight(200,50,1,0,560);    // 站在灌木里不该被自己掐死
+  Raid.navCS=oldC; Raid.navCols=oldCo; Raid.navRows=oldR; Raid.navCell=oldCell; Raid.walls=oldW;
+  return { hit:hit, miss:miss, inside:inside };
+})()`);
+check('灌木挡光：光停在灌木前表面', __rl.hit, 80, 1.5);
+check('空地不误挡光', __rl.miss, 560, 1.5);
+check('站在灌木里光束不被自己掐死', __rl.inside>=10?1:0, 1, 0.001);
+check('_rayLight 走 navCell（含 sight:false 的灌木/岩石）', /idx=this\.navCell/.test(raidSrc)?1:0, 1, 0.001);
+check('_rayLight 用精确 slab 求交（不是 13px 采样）', /if\(tmin>0\.5 && tmin<best\) best=tmin/.test(raidSrc)?1:0, 1, 0.001);
+check('灯光轮廓改用 _rayLight', /Raid\._rayLight\(x, y, dx, dy, reach\)/.test(__rd2)?1:0, 1, 0.001);
+check('2D 手电射线数提到 96（消锯齿）', /reach, 96\)/.test(__rd2)?1:0, 1, 0.001);
+check('2D 手电亮度调高到 0.36', /255,236,182,0\.36/.test(__rd2)?1:0, 1, 0.001);
+check('3D 手电亮度调高到 0.12', /255,236,182,0\.12/.test(__fp2)?1:0, 1, 0.001);
+check('手电色温未变（三处 rgb 都在）', /255,236,182/.test(__rd2) && /255,224,160/.test(__rd2) && /255,228,160/.test(__rd2)?1:0, 1, 0.001);
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

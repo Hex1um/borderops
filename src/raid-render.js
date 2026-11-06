@@ -32,7 +32,7 @@ const RenderRaid = {
        共用 Raid.indoor，切维度零状态迁移；只压一层纯深色，不动手电暖色。 */
     const indoor=R.indoor||0;
     if(indoor>0.01 && !(typeof ViewMode!=="undefined" && ViewMode.is3D())){
-      ctx.fillStyle="rgba(3,5,8,"+(0.34*indoor).toFixed(3)+")";
+      ctx.fillStyle="rgba(2,3,5,"+(0.52*indoor).toFixed(3)+")";
       ctx.fillRect(0,0,v.w,v.h);
     }
     this.hud(ctx, game, v);
@@ -265,19 +265,23 @@ const RenderRaid = {
   },
 
   /* 光锥可见轮廓：以 (x,y) 为原点、沿 [a0,a1] 均分 rays 条射线，
-     每条求最近墙面交点后回落到半径上，返回可直接 lineTo 的点序列。
-     光束因此停在墙上，不会再「穿过墙照亮墙后面」。 */
+     每条求最近遮挡距离后回落到半径上，返回可直接 lineTo 的点序列。
+     光束因此停在墙上 / 灌木上，不会再「穿过遮挡照亮后面」。
+
+     v0.22.3：改用 `_rayLight`（精确 DDA 求交 + 包含灌木/岩石等 sight:false 的碰撞体）。
+     原来用 `_rayWall` 的 13px 采样，每条射线会冲进墙里最多 13px、角度上又只有 40 条，
+     拼出来的轮廓就是玩家看到的「光照边缘明显锯齿」。这里射线数提到 96、距离精确到像素，
+     边界才真正贴着墙面。 */
   _lightFan(x, y, a0, a1, reach, rays){
     const pts=[];
-    const hasRay = typeof Raid._rayWall==="function" && Raid.navCS!=null;
+    const hasRay = typeof Raid._rayLight==="function" && Raid.navCS!=null;
     for(let i=0;i<=rays;i++){
       const a=a0+(a1-a0)*i/rays;
       const dx=Math.cos(a), dy=Math.sin(a);
       let rr=reach;
       if(hasRay){
-        const hit=Raid._rayWall(x, y, x+dx*reach, y+dy*reach);
-        // _rayWall 的 t 是采样步进比例，最多比真实墙面多走一步（13px），减 4 让光刚好压在墙上
-        if(hit) rr=M.clamp(reach*hit.t-4, 10, reach);
+        // 减 2 让光边缘正好压在遮挡物表面，不会溢出到墙里形成一圈毛边
+        rr=M.clamp(Raid._rayLight(x, y, dx, dy, reach)-2, 10, reach);
       }
       pts.push(x+dx*rr, y+dy*rr);
     }
@@ -288,7 +292,7 @@ const RenderRaid = {
      之后每帧只需一次 fill，不会因为加了遮挡把帧率吃掉。 */
   _floodFan(f){
     if(f._fan) return f._fan;
-    const fan=this._lightFan(f.x, f.y, -Math.PI, Math.PI, f.r||220, 48);
+    const fan=this._lightFan(f.x, f.y, -Math.PI, Math.PI, f.r||220, 72);
     // 视线索引（navCS）还没建好时算出来的扇形是无遮挡的，不能缓存，否则会永久记住错的结果
     if(Raid.navCS!=null) f._fan=fan;
     return fan;
@@ -317,14 +321,15 @@ const RenderRaid = {
     if(p){
       const ang=p.angle||0, reach=560, half=0.42;
       const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,reach);
-      g.addColorStop(0,"rgba(255,236,182,0.30)");
-      g.addColorStop(0.5,"rgba(255,224,160,0.12)");
+      /* v0.22.3：亮度略微调高（0.30/0.12 → 0.36/0.15），配合「屋子里更黑」，
+         否则进屋后眼前只剩一片黑。色值不变，verify 的色温断言仍锁着。 */
+      g.addColorStop(0,"rgba(255,236,182,0.36)");
+      g.addColorStop(0.5,"rgba(255,224,160,0.15)");
       g.addColorStop(1,"rgba(255,224,160,0)");
       ctx.fillStyle=g;
-      /* v0.22.2：手电扇形按墙体裁剪。原先直接 arc 画满 0.84rad，光会穿过墙
-         在地上留一片「墙后亮斑」；改成 40 条射线各自求墙面距离再连成轮廓，
-         仍然只创建一个径向渐变（每帧 40 次射线测试，代价可忽略）。 */
-      const fan=this._lightFan(p.x, p.y, ang-half, ang+half, reach, 40);
+      /* 手电扇形按遮挡裁剪：96 条精确射线各自求最近遮挡距离，再连成可见轮廓。
+         仍然只创建一个径向渐变，每帧 96 次射线测试（每次只穿 2~3 个网格）。 */
+      const fan=this._lightFan(p.x, p.y, ang-half, ang+half, reach, 96);
       ctx.beginPath(); ctx.moveTo(p.x, p.y);
       for(let i=0;i<fan.length;i+=2) ctx.lineTo(fan[i], fan[i+1]);
       ctx.closePath(); ctx.fill();
@@ -515,7 +520,7 @@ const RenderRaid = {
       if(rm.x>cam.x+vw+200||rm.x+rm.w<cam.x-200||rm.y>cam.y+vh+200||rm.y+rm.h<cam.y-200) continue;
       /* v0.22.2：屋子里面是黑的（原来按 tint 上色，室内外几乎一样亮）。
          撤离区保留绿色标识，它不算室内。 */
-      ctx.fillStyle=rm.extract?"#25452f":"#040608";
+      ctx.fillStyle=rm.extract?"#25452f":"#010203";
       ctx.globalAlpha=0.95; ctx.fillRect(rm.x,rm.y,rm.w,rm.h); ctx.globalAlpha=1;
       ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(rm.x,rm.y,rm.w,rm.h);
       // 地面砖缝（横竖两层，提升质感）

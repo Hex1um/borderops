@@ -1157,6 +1157,62 @@ Object.assign(Raid, {
     return null;
   },
   _los(x1,y1,x2,y2){ return !this._rayWall(x1,y1,x2,y2); },
+
+  /* v0.22.3：手电专用射线。
+     和 _rayWall 的两点不同：
+       1) 走 navCell（**全部**碰撞体），所以灌木 / 岩石 / 废料堆也挡光 —— 视线可以穿过
+          灌木（sight:false），但手电的光不该穿过去。
+       2) 逐格 DDA + 精确 slab 求交，返回精确距离而不是 13px 采样的近似值。采样误差
+          是「光照边缘毛刺 / 锯齿」的来源：40 条射线各自差十几像素，拼出来的轮廓就是花边。
+     代价：格宽 256，560px 的光程只穿 2~3 格，比原来的 43 次采样更省。 */
+  _rayLight(x1,y1,dx,dy,maxLen){
+    const CS=this.navCS, cols=this.navCols, rows=this.navRows, idx=this.navCell;
+    if(!CS || !idx) return maxLen;
+    const len=Math.hypot(dx,dy);
+    if(len<1e-6) return maxLen;
+    const ux=dx/len, uy=dy/len;
+    let gx=Math.floor(x1/CS), gy=Math.floor(y1/CS);
+    if(gx<0||gy<0||gx>=cols||gy>=rows) return maxLen;
+    const stepX=ux>0?1:-1, stepY=uy>0?1:-1;
+    const adx=Math.abs(ux)<1e-9, ady=Math.abs(uy)<1e-9;
+    const tdx=adx?Infinity:CS/Math.abs(ux);
+    const tdy=ady?Infinity:CS/Math.abs(uy);
+    let tmx=adx?Infinity:((ux>0?(gx+1)*CS:gx*CS)-x1)/ux;
+    let tmy=ady?Infinity:((uy>0?(gy+1)*CS:gy*CS)-y1)/uy;
+    let best=maxLen;
+    for(let guard=0; guard<80; guard++){
+      const arr=idx[gy*cols+gx];
+      if(arr){
+        for(let i=0;i<arr.length;i++){
+          const w=arr[i];
+          let tmin=0, tmax=best;
+          if(adx){ if(x1<w.x||x1>w.x+w.w) continue; }
+          else {
+            let a=(w.x-x1)/ux, b=(w.x+w.w-x1)/ux;
+            if(a>b){ const t=a; a=b; b=t; }
+            if(a>tmin) tmin=a;
+            if(b<tmax) tmax=b;
+            if(tmin>tmax) continue;
+          }
+          if(ady){ if(y1<w.y||y1>w.y+w.h) continue; }
+          else {
+            let a=(w.y-y1)/uy, b=(w.y+w.h-y1)/uy;
+            if(a>b){ const t=a; a=b; b=t; }
+            if(a>tmin) tmin=a;
+            if(b<tmax) tmax=b;
+            if(tmin>tmax) continue;
+          }
+          // tmin=0 说明发射点就在这个碰撞体里（站在灌木/墙里），不能因此把光全掐掉
+          if(tmin>0.5 && tmin<best) best=tmin;
+        }
+      }
+      if(tmx<tmy){ if(tmx>best) break; gx+=stepX; tmx+=tdx; }
+      else { if(tmy>best) break; gy+=stepY; tmy+=tdy; }
+      if(gx<0||gy<0||gx>=cols||gy>=rows) break;
+    }
+    return best;
+  },
+
   _pointSeg(px,py,x1,y1,x2,y2){
     const dx=x2-x1, dy=y2-y1; const L2=dx*dx+dy*dy;
     if(L2===0) return Math.hypot(px-x1,py-y1);

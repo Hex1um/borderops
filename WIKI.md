@@ -374,7 +374,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（595 条断言）
+npm run verify       # 无浏览器依赖的逻辑回归（606 条断言）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -390,6 +390,9 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **文案约定（v0.22.1）**：GP 币一律 `◈` + 金色 `#ffd23f`；`◆` 紫色仅在旧模式代表美元 / eridium；Raider 精英标记用 `★`，列表项目符号用 `▸`，黑市摊位与图标用金色。品质档位按现行 9 阶军工刻度（民用 → 制式 → 军规 → 精选 → 精工 → 特种 → 试验 → 原型 → 定型），玩家文案禁用旧名（`稀有` / `橙装` / `紫装`），写「品阶 / 高品阶」；描述 AI 感知必须引用 `RAID_AI_SENSE` 的分级值，别写回旧的统一 1000px。verify 组 36 会逐条红灯。
 - **地形判定必须纯函数（v0.22.2）**：`raidBiomeAt` / `raidIndoorAt` / `raidDangerAt` / `raidLuckAt` 只读坐标与静态表，**不许读 RNG、AI 数量、计时或玩家状态**。联机掉落靠 seed 各端重放（`Net.sendLoot(index,kind)` 只同步「谁捡了第几件」），任何动态因子都会让两端算出不同结果。新增地形因子请照这四个函数的写法。
 - **手电遮挡（v0.22.2）**：2D 走 `RenderRaid._lightFan()`（40 条射线 × `Raid._rayWall` 求最近墙面 → 连成可见轮廓 → 复用**一个**径向渐变），探照灯用 `_floodFan()` 缓存（`navCS` 未就绪时不写缓存）。3D 没有逐像素遮挡（合成本就只含可见面），走 `_lighting` 里 40 条竖直条带的 `globalAlpha` 衰减 + 探照灯按列深度剔除。**色值 `255,236,182` / `255,224,160` / `255,228,160` 不许动**（verify 色温断言锁着），也不许引入 `createLinearGradient`。verify 组 37 会用假 `_rayWall`（半程返回）验证扇形收缩到 276。
-- **室内暗化（v0.22.2）**：`Raid.indoor` 0..1 按 `dt*4.5` 指数逼近；房间地面固定 `#040608`，撤离区 `#25452f`；2D 叠 `0.34*indoor`、3D 叠 `0.62*indoor`，3D 的压暗必须在 `lighter` 光池之前。
+- **室内暗化**：`Raid.indoor` 0..1 按 `dt*4.5` 指数逼近；房间地面固定 `#010203`，撤离区 `#25452f`；v0.22.3 起 2D 叠 `0.52*indoor`、3D 叠 `0.82*indoor`，3D 的压暗必须在 `lighter` 光池之前。
+- **挡光统一走 `_rayLight`（v0.22.3）**：它是逐格 DDA + 精确 slab 求交，**读 `navCell`（全部碰撞体）**，所以灌木 / 岩石 / 废料堆这些 `sight:false` 的东西挡光但不挡视线；`_rayWall` 仍读 `losCell`（只看 `sight!==false`）。要给「光」加判定就用 `_rayLight`，要给「视线 / AI 索敌」加判定就用 `_rayWall`，别混。手电轮廓 96 条射线、探照灯 72 条（后者必须缓存 `f._fan`，`navCS` 未就绪时不写缓存）。
+- **3D 手电按墙面深度分三段（v0.22.3）**：64 条竖条带 × {墙顶以上: kFar 0.16 / 墙面: 按自身深度截止式衰减 / 墙脚以下: 1.0}。**不要退回「每列取最近墙深统一压一遍」**——那会让墙顶以上的天空和门口后面的远房间跟着满亮，看起来就是光穿墙。条带边界必须取整对齐且不重叠（加色模式下重叠会叠出亮缝 = 锯齿）。
+- **3D 墙面剔除的对比基准（v0.22.3 踩坑）**：判可见性时 `_zbuf[col]` 必须跟**这面墙在该列自身的深度**比（沿屏幕横坐标透视插值 `1/((1-u)/d1 + u/d2)`），不能跟面中点 `f.dm` 比 —— 斜着离开相机的长墙会把近端误判成"被挡住"而整面删掉，屏幕上直接破洞。工作区根的 `probe_cull.js` 会拿"剔除 vs 完全不剔除"两帧做像素差自检（`meanDiff` 应 < 3、差异像素 < 2%）。
 - **版本三处同步**：`package.json` / `src/config.js` 的 `CFG.version` / `index.html` 全部 `?v=`，改完必须一起改并跑 `npm run check`。
 - **2D/3D 分层**：3D 只有 `src/viewmode.js`（输入 / 设置 / 朝向）与 `src/fpview.js`（渲染）两个文件；`raid-*.js` 里只有 4 个最小钩子（渲染分支、移动方向旋转、开火角覆盖、暂停面板按钮）。

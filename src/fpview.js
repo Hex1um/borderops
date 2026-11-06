@@ -310,21 +310,28 @@ const FPView = {
     const step = this._step||3, n = this._cols||0, zb = this._zbuf;
     for(let i=0;i<valid.length;i++){
       const f = valid[i];
-      /* v0.22.2：只渲染玩家能看到的墙。_zbuf[c] 是该列最近墙的垂直深度；
-         若这面墙覆盖的采样列全都已被更近的墙挡住，整面丢弃 —— 画家算法下它
-         本来也会被盖住，画它只是白费 fill，还会在面与面的缝隙里漏出「墙后面的东西」。
-         采样 5 点保守剔除，不做整屏 clip()，保住热路径。 */
+      /* v0.22.2：只渲染玩家能看到的墙。_zbuf[c] 是该列最近墙的垂直深度。
+         v0.22.3 修正一处会「漏墙」的判定：原来拿 zb 跟这面墙的**中点深度 f.dm**
+         比，可一面斜着离开相机的长墙，近端的自身深度远小于 dm，于是近端明明全裸
+         也被判成「被挡住」，整面被剔掉 → 屏幕上直接破一个洞（就是玩家说的「透视」）。
+         现在每个探针都用**这面墙在该列自己的深度**（沿屏幕横坐标做透视插值）去比，
+         探针也从 5 个加到 9 个，保守剔除但不误杀。 */
       if(zb && n>0){
         const latA = -(f.ax-P.x)*sa + (f.ay-P.y)*ca;
         const latB = -(f.bx-P.x)*sa + (f.by-P.y)*ca;
-        const sxA = pf.w*0.5 + (latA/Math.max(14,f.d1))*proj;
-        const sxB = pf.w*0.5 + (latB/Math.max(14,f.d2))*proj;
+        const d1s = Math.max(14, f.d1), d2s = Math.max(14, f.d2);
+        const sxA = pf.w*0.5 + (latA/d1s)*proj;
+        const sxB = pf.w*0.5 + (latB/d2s)*proj;
         const lo = Math.max(0, Math.min(n-1, Math.floor(Math.min(sxA,sxB)/step)));
         const hi = Math.max(0, Math.min(n-1, Math.ceil(Math.max(sxA,sxB)/step)));
-        const probes=[lo, (lo+hi)>>1, hi, lo+((hi-lo)>>2), lo+(((hi-lo)*3)>>2)];
-        let seen=false;
-        for(let k=0;k<probes.length;k++){
-          if(zb[probes[k]] >= f.dm - 12){ seen=true; break; }
+        const span = sxB - sxA;
+        let seen = false;
+        for(let k=0;k<9;k++){
+          const col = lo + Math.round((hi-lo)*k/8);
+          const px = col*step;
+          const u = Math.abs(span) < 1e-6 ? 0 : Math.max(0, Math.min(1, (px-sxA)/span));
+          const own = 1/((1-u)/d1s + u/d2s);        // 这一列上这面墙自己的深度
+          if(zb[col] >= own - 12){ seen = true; break; }
         }
         if(!seen) continue;
       }
@@ -1189,43 +1196,56 @@ const FPView = {
        纯深色叠加，不动暖色色值（verify 的色温断言锁着那三个 rgb）。 */
     const indoor = R.indoor||0;
     if(indoor > 0.01){
-      ctx.fillStyle = "rgba(3,5,8," + (0.62*indoor).toFixed(3) + ")";
+      ctx.fillStyle = "rgba(2,3,5," + (0.82*indoor).toFixed(3) + ")";
       ctx.fillRect(0, 0, w, h);
     }
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    /* 2) 地面回光：真正的光束由 _paintWalls 打在墙面上（跟着视线扫），
-     *    这里只留一层很淡的地面散射，避免脚下的地变成死黑。
-     *    强度压到 0.09 —— 高过这个值，屏幕正中那块固定亮斑又会盖过墙上的光束。
+    /* 2) 手电在地面 / 墙面上的散射。
      *
-     *    v0.22.2：光束不能穿墙。屏幕散射本身只能落在「看得见的面」上，
-     *    所以这里要的不是逐像素遮挡，而是逐列按墙面深度衰减：
-     *    小房间里墙面都在光程内 → 满亮；空地上最近墙也在 2000 开外 → 压到 0.2 左右。
-     *    用 40 条竖直条带各带一份 globalAlpha 复用同一个渐变（总像素量≈一次全屏 fill），
-     *    条带边界取整对齐、不重叠，避免加色叠加出亮缝。 */
+     *  v0.22.2 只按「每列最近墙面深度」整列压一遍 —— 结果是：只要这一列里有一面近墙，
+     *  整列（含墙顶以上的天空、门口的远处房间）都跟着满亮，看着就是「光穿墙」。
+     *
+     *  v0.22.3 改成按列分三段，段边界由墙面在该列的屏幕位置决定：
+     *    墙顶以上 → 那是天空 / 墙后面的东西，给最暗的 kFar
+     *    墙顶~墙脚 → 墙面本身，按它自己的深度衰减（光程 560px 内满亮）
+     *    墙脚以下 → 脚下地面，离得近，满亮
+     *  这样「光停在哪面墙上」在屏幕上是明确的一条线，而不是一整块矩形。
+     *  条带用 64 条（竖向），每条 3 段，总像素量仍≈一次全屏 fill。
+     *  边界全部取整对齐、互不重叠 —— 加色模式下重叠会叠出一条亮缝，那正是「锯齿」的来源。 */
     const reach = Math.max(w, h) * 0.46;
     const g = ctx.createRadialGradient(cx, h*0.62, Math.max(8, reach*0.05), cx, h*0.62, reach);
     // 色值与 2D _lightLayer 手电锥完全一致（255,236,182 / 255,224,160）
-    g.addColorStop(0, "rgba(255,236,182,0.09)");
-    g.addColorStop(0.5, "rgba(255,224,160,0.035)");
+    g.addColorStop(0, "rgba(255,236,182,0.12)");
+    g.addColorStop(0.5, "rgba(255,224,160,0.046)");
     g.addColorStop(1, "rgba(255,224,160,0)");
     ctx.fillStyle = g;
     const zb = this._zbuf, zstep = this._step||3, zn = this._cols||0;
     if(!zb || zn <= 0){
       ctx.fillRect(0, 0, w, h);
     } else {
-      const LIGHT_REACH = 560, BANDS = 40;
-      for(let b=0;b<BANDS;b++){
-        const x0 = Math.round(b*w/BANDS), x1 = Math.round((b+1)*w/BANDS);
-        if(x1 <= x0) continue;
-        let dmin = this.MAX_D;
-        const c0 = Math.max(0, Math.floor(x0/zstep));
-        const c1 = Math.min(zn-1, Math.floor((x1-1)/zstep));
-        for(let c=c0;c<=c1;c++){ if(zb[c] < dmin) dmin = zb[c]; }
-        const k = Math.max(0.18, Math.min(1, LIGHT_REACH / Math.max(LIGHT_REACH, dmin)));
-        ctx.globalAlpha = k;
-        ctx.fillRect(x0, 0, x1-x0, h);
+      const LIGHT_REACH = 560, SEGS = 64, KFAR = 0.16, wallH = this.WALL_H;
+      for(let s=0; s<SEGS; s++){
+        const x0 = Math.round(s*w/SEGS), x1 = Math.round((s+1)*w/SEGS);
+        const sw = x1 - x0;
+        if(sw <= 0) continue;
+        // 取条带中心那一列的墙面深度（列步长 3px，64 条时一条带覆盖 8~17 列，够用）
+        const c = Math.max(0, Math.min(zn-1, Math.floor((x0+sw*0.5)/zstep)));
+        const d = Math.max(14, zb[c]);
+        /* 光程内满亮，560px 附近收干净 —— 用 560/d 的软衰减会「远墙永远有一层亮」，
+           那正是玩家说的「光能透过墙」，所以改成截止式：340px 以内 1.0，之后 220px 内线性落到 kFar。 */
+        const kWall = KFAR + (1-KFAR)*Math.max(0, Math.min(1, (LIGHT_REACH-d)/220));
+        const wallBot = horizon + (this.EYE_H/d)*proj;              // 墙脚在屏幕上的 y
+        const wallTop = horizon + ((this.EYE_H-wallH)/d)*proj;      // 墙顶在屏幕上的 y
+        const yTop = Math.max(0, Math.min(h, wallTop));
+        const yBot = Math.max(0, Math.min(h, wallBot));
+        // 墙上沿以上：天空 / 墙后面的东西
+        if(yTop > 0){ ctx.globalAlpha = KFAR; ctx.fillRect(x0, 0, sw, yTop); }
+        // 墙面
+        if(yBot > yTop){ ctx.globalAlpha = kWall; ctx.fillRect(x0, yTop, sw, yBot-yTop); }
+        // 墙脚以下：脚下地面
+        if(yBot < h){ ctx.globalAlpha = 1; ctx.fillRect(x0, yBot, sw, h-yBot); }
       }
       ctx.globalAlpha = 1;
     }
