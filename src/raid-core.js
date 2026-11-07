@@ -305,9 +305,38 @@ const Raid = {
       };
       _pick(MIN_DIST);
       if(slots.length<30) _pick(430);
-      const total=Math.min(slots.length, 30);  // 普通 AI（不含 Boss）：略多于原 28，配合全图分布更充实
+
+      /* v0.27.0：POI 驻守小队 —— 让「哪里必有人」变成可学习的知识。
+         8 个 POI 各驻一支 2~4 人小队（共享 squadId，第一名是队长），
+         剩余名额仍是全图散布的游荡者，保留随机性。
+         小队抱团逻辑（raid-core2 的 squadId 分支）早就写好了，之前只是刷怪时
+         从没填过 squadId，所以所有人都变成了纯游荡。 */
+      const guards=[];
+      let guardBudget=Math.min(18, 30-12);      // 最多 18 人驻守，至少留 12 名游荡者
+      for(const poi of RAID_POI){
+        if(!poi.box || guardBudget<=0) continue;
+        const n=Math.min(guardBudget, RNG.ri(2,4));
+        guardBudget-=n;
+        this._squadN=(this._squadN||0)+1;
+        const sid="sq"+this._squadN;
+        const inset=Math.max(28, Math.min(96, Math.min(poi.box.w,poi.box.h)*0.22));
+        for(let k=0;k<n;k++){
+          const raw=this._openPointInRoom(poi.box, inset);
+          const safe=this._spawnSafePoint(raw.x, raw.y, 18);
+          const pt={
+            x:M.clamp(safe.x, poi.box.x+18, poi.box.x+poi.box.w-18),
+            y:M.clamp(safe.y, poi.box.y+18, poi.box.y+poi.box.h-18),
+          };
+          guards.push({pt, sid, leader:k===0, poi:poi.id});
+        }
+      }
+      /* 驻守队员先占名额，游荡者只补剩下的 */
+      const list=guards.slice();
+      const wanderN=Math.max(0, 30-guards.length);
+      for(let i=0;i<Math.min(wanderN, slots.length);i++) list.push({pt:slots[i]});
+      const total=list.length;
       for(let i=0;i<total;i++){
-        const pt=slots[i];
+        const entry=list[i], pt=entry.pt;
         const isPMC=RNG.chance(0.36);
         let gun, hp, speed, armor, dr, armorTier, helmetArmor, helmetDr, helmetTier;
         let smart=false, creds=RNG.ri(20,70), lootLimit=4;
@@ -376,7 +405,7 @@ const Raid = {
         } else if(smart && armorTier>0 && armorTier<RAID_ARMOR_TYPE_TIER){
           shieldVal=Math.round(30+armorTier*7+gs*18);
         }
-        this.ops.push(new RaidOperator({
+        const op=new RaidOperator({
           id:"op"+i, cls:isPMC?"pmc":"scav",
           name:(smart?"★ ":"")+(isPMC?(pmcNames[i%pmcNames.length]):(scavNames[i%scavNames.length])),
           x:pt.x, y:pt.y, angle:RNG.fr(0,6.28),
@@ -389,12 +418,16 @@ const Raid = {
              记账接上，不额外给它们加无敌时间。 */
           shieldTier: shieldVal>0 ? M.clamp(armorTier||1,1,3) : 0,
           smart, creds, lootLimit,
-        }));
+        });
+        /* v0.27.0：驻守队员带小队标记与归属 POI；游荡者 entry.sid 为空，行为不变。 */
+        if(entry.sid){ op.squadId=entry.sid; op.isLeader=!!entry.leader; op.homePoi=entry.poi; }
+        this.ops.push(op);
       }
 
       // Boss：3 名精锐，掉落保底好枪 + 带词条配件，HUD 高亮
-      // 塔科夫 Boss 名称：Reshala / Killa / Shturman。
-      const bountyNames=["Reshala","Killa","Shturman"];
+      /* v0.27.0：改用原创代号。之前直接沿用了另一部撤离射击作品的三名 Boss 名，
+         既不是本作设定，也让「边境行动」的世界观寄生在别人 IP 上。 */
+      const bountyNames=["铁锈","屠夫","调度长"];
       const bountyRooms=["factory","village","dock","temple","depot"];
       const bountyOrder=bountyRooms.map(id=>RAID_ROOMS.find(r=>r.id===id)).filter(Boolean)
         .sort((a,b)=>M.dist(b.x+b.w/2,b.y+b.h/2,px,py)-M.dist(a.x+a.w/2,a.y+a.h/2,px,py));

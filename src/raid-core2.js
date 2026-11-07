@@ -1213,6 +1213,16 @@ Object.assign(Raid, {
   },
 
   /* ----------------------------- AI PMC ----------------------------- */
+  /* v0.27.0：驻守 AI 的巡逻点取自己 POI 包围盒内的随机点，
+     不再从全图 90 个手写点里抽 —— 否则「驻守」会立刻变成满地乱跑。 */
+  _poiPatrolPoint(poiId){
+    const poi=(typeof RAID_POI!=="undefined") ? RAID_POI.find(p=>p.id===poiId) : null;
+    if(!poi || !poi.box) return null;
+    const b=poi.box;
+    return [RNG.fr(b.x+40, Math.max(b.x+41, b.x+b.w-40)),
+            RNG.fr(b.y+40, Math.max(b.y+41, b.y+b.h-40))];
+  },
+
   _botsUpdate(dt, game){
     // 联机非房主：AI 完全由房主模拟，这里只渲染影子
     if(this.online && typeof Net!=="undefined" && !Net.isHost) return;
@@ -1444,9 +1454,11 @@ Object.assign(Raid, {
         // 主动搜寻概率按索敌等级：Scav 0.30 / PMC 0.70 / Boss 0.95
         const huntP = sense.hunt;
         const hunts = b.gun && tgt.alive && RNG.chance(huntP);
+        /* v0.27.0：驻守队员在本 POI 内换点，游荡者仍走全图巡逻点 */
+        const homePt = b.homePoi ? this._poiPatrolPoint(b.homePoi) : null;
         const pt = hunts
           ? [tgt.x+RNG.fr(-560,560), tgt.y+RNG.fr(-560,560)]
-          : RNG.pick((this.patrolPts&&this.patrolPts.length)?this.patrolPts:RAID_PATROL);
+          : (homePt || RNG.pick((this.patrolPts&&this.patrolPts.length)?this.patrolPts:RAID_PATROL));
         b.roamPt={x:M.clamp(pt[0]+RNG.fr(-40,40),60,RAID_MAP_W-60),
                   y:M.clamp(pt[1]+RNG.fr(-40,40),60,RAID_MAP_H-60)};
         b.roamT=RNG.fr(3,7);   // 巡逻换点更勤

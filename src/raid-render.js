@@ -385,7 +385,10 @@ const RenderRaid = {
           const k=span>0 ? M.clamp((RAID_FLASH_OP.fadeFar-d)/span, 0, 1) : 1;
           if(k<=0.02) continue;
           const ind=(typeof raidIndoorAt==="function" && raidIndoorAt(o.x,o.y)) ? 1 : 0;
-          beam(o.x, o.y, o.angle||0, 560, 0.42,
+          /* v0.27.0：长度跟着它的感知档位走（Scav 520 / PMC 900 / Boss 1250），
+             与 raidAiLit 的判定同源，不再一律画 560。 */
+          const opReach=(typeof raidAiBeamReach==="function") ? raidAiBeamReach(o) : 560;
+          beam(o.x, o.y, o.angle||0, opReach, 0.42,
                RAID_FLASH_OP.cone2d, RAID_FLASH_OP.cone2dMid,
                raidFlashGain(ind)*k, RAID_FLASH_OP.fan);
         }

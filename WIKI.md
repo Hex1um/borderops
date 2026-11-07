@@ -1,6 +1,6 @@
 # 边境行动 BORDER OPS · 中文 Wiki
 
-> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.26.1**（由 `npm run check` 校验，升版必须同步）。
+> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.27.0**（由 `npm run check` 校验，升版必须同步）。
 > 代码与实现细节见 [README.md](README.md)，逐版改动见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（928 条断言 / 47 组）
+npm run verify       # 无浏览器依赖的逻辑回归（951 条断言 / 48 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -463,3 +463,8 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **ESLint 白名单（v0.26.1）**：`eslint.config.js` 在加载时扫描 `src/*.js` 顶层声明自动生成全局白名单（含一行内逗号连续声明）。**新增顶层全局符号不用改配置**，但如果符号是通过 `window.X=` / UMD `root.X=` 挂载的（如 `Sanitize`），要在配置末尾的手工列表补上，否则 `no-undef` 会误报。`no-unused-vars` 故意关闭（共享全局架构下全是误报）；ESLint 10 需 Node ≥20.19（运行时门槛仍是 Node ≥18）。`npm run lint` 目前只在本地跑：本机 OAuth App 凭据缺 `workflow` scope，push / contents API 都改不了 `.github/workflows/ci.yml`，独立 lint job 需合作者在 GitHub 网页端补入（YAML 见 CHANGELOG v0.26.1 ④）；主 gate 仍零 npm 依赖。
 - **测试产物与断言构成（v0.26.1）**：`testshots/` 已 gitignore 且不入库（3.5MB PNG），只有 `shots/` 是本地截图也忽略。`verify.cjs` 结尾会打印「行为断言 / vm 表达式 / 源码护栏」三类占比 —— **源码护栏约占 17%，对重命名重构脆弱**，别把总条数当行为覆盖率；新增纯逻辑断言优先放第 47 组那种「只调函数验返回值」的写法。
 - **明确暂缓的架构项（v0.26.1 决议）**：不引入 ESM / esbuild 构建期校验（与零构建、下载即跑的核心约定冲突）、不做全量 JSDoc + `checkJs`（26k 行注解成本远高于收益）、`net.js` / `net-p2p.js` 快照逻辑收敛需先补 golden 快照测试并单独一轮、雪藏四模式删除属产品决策需用户拍板、房主迁移 / 断线重连是功能开发不是技术债。评审里「CHANGELOG 提 875 条 = 数字没跟上」是误判（逐版历史记录）。
+- **AI 光锥长度必须走 `raidAiBeamReach(b)`（v0.27.0 踩坑）**：v0.26 用 `aiReachCap=560` 把 PMC 900 / Boss 1250 全压成玩家水平，`RAID_AI_SENSE` 分级失效。现在统一 `min(sense.sight, aiBeamMax=1200)`，**2D `raid-render` 的 op 光锥与 3D `fpview` 的 op 光池都调它**，别再写死 560——画出来的光和判定的光必须同源，否则玩家看到的是假信息。玩家自瞄仍是 560（不对称是刻意的：AI 看得比你远）。
+- **POI 小队只用 `squadId` + `homePoi`（v0.27.0）**：刷怪时按 `RAID_POI` 组 2~4 人队、第一名 `isLeader`、驻守名额上限 18（`Math.min(18, 30-12)` 留 12 名游荡者）。抱团逻辑本来就在 `raid-core2` 的 `squadId` 分支里，**别重复实现**；驻守巡逻点必须走 `_poiPatrolPoint(homePoi)`（包围盒内随机），否则「驻守」立刻退化成全图乱跑。未知 POI 返回 `null`，调用方回退全图巡逻点。
+- **噪音与联动（v0.27.0）**：`_noise` 现在**返回被惊动数量**，翻箱（普通 280 / 尸体 210 / 保险箱 300+等级×60）与开火都靠它；地面物品堆 0.3s 秒拾不算翻箱、不触发。受击广播只传**同阵营** 620px 内、1.2s 节流（`_shoutT`），只给声源位置不给精确目标。穿甲反馈用 `penMul<=0.75` 判定高穿弹（`armorPen≥0.28`），0.45s 节流（`_penFxT`），护甲两成时用一次性 `_armorLowFx`。
+- **Boss 用原创代号（v0.27.0）**：`铁锈 / 屠夫 / 调度长`。之前借用的是另一部撤离射击作品的三名 Boss 名，**源码注释里也不要再写那三个名字**（verify 组 48 有 `!/Reshala|Killa|Shturman/` 断言，写进注释也会红）。
+- **那份「地图/敌人」评审的三条误判（v0.27.0 核实）**：① `wraith` 的 `phasing` 完全无敌在 `src/enemies.js:72`，属**旧战役模式**，Raid 的 `RAID_ARCH.wraith` 是「潜行侦察兵」无无敌；② 「所有人只打玩家」不成立，`_consider` 有完整阵营判定（Scav 互不打 / PMC 打 Scav / Boss 敌对 / 同 `squadId` 不互打）；③ 护甲 97.3% 漏算 `HELMET_BODY_SHARE=0.40`，躯干实际 `1-(1-0.86)(1-0.81×0.4)=90.5%`，再乘 `penMul=1-pen×0.90`。方向（减伤墙）对，数字夸大。

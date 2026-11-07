@@ -611,7 +611,10 @@ const RAID_LIT = {
   half:      0.42,   // 与 2D beam / 3D 手电锥半角一致
   widen:     1.34,   // 最外层羽化，判定边界与画面亮斑外缘对齐
   reach:     560,    // 与手电 reach 一致，绝不加长（加长 = 光穿墙）
-  aiReachCap:560,    // AI 手电不比玩家照得远
+  /* v0.27.0：AI 手电不再封顶 560 —— 之前这个封顶把 PMC 的 900 / Boss 的 1250
+     全压成和玩家一样，RAID_AI_SENSE 的三档分级形同虚设。现在按 sense.sight 走，
+     只用一个渲染/判定共用的上限防止光锥无限长。 */
+  aiBeamMax:1200,    // AI 光锥长度上限（与 RAID_FLASH_OP.fadeFar 对齐）
   aiHalf:    0.55,   // AI 略宽一点，免得夜里全瞎
   nearBox:   110,    // 箱子「就在身边」半径（交互半径 78 之外留余量）
   hitByTime: 3.0,    // 受击后锁定攻击者 3 秒
@@ -641,9 +644,14 @@ function raidPlayerLit(R, x, y){
 }
 function raidAiLit(R, b, x, y){
   if(!b) return false;
-  const sense=(typeof raidAISense==="function")?raidAISense(b):null;
-  const reach=Math.min(RAID_LIT.aiReachCap, sense?sense.sight:520);
+  const reach=raidAiBeamReach(b);
   return raidBeamLit(R,b.x,b.y,b.angle||0,x,y,RAID_LIT.aiHalf,reach);
+}
+/* AI 光锥长度：按它的感知档位走，只受统一上限约束。2D / 3D 渲染必须调它，
+   否则会出现「画出来的光比判定的光短/长」，玩家看到的就是假信息。 */
+function raidAiBeamReach(b){
+  const sense=(typeof raidAISense==="function" && b)?raidAISense(b):null;
+  return Math.min(RAID_LIT.aiBeamMax, sense?sense.sight:520);
 }
 function raidContainerVisible(R, c){
   if(!c) return false;

@@ -559,7 +559,9 @@ const nameFiles = ['config', ...raidModules, 'ui', 'shop', 'player', 'world', 'e
 const allNameSrc = nameFiles.map(f => fs.readFileSync(path.join(SRC, f + '.js'), 'utf8')).join('\n') + cfgSrc;
 const deltaHits = ['干员', '悬赏', '黑市代币', '配给券', '三角洲', '曼德尔', '烽火地带', '哈夫克'].filter(w => allNameSrc.includes(w));
 check('源码中无三角洲术语', deltaHits.length, 0, 0.001);
-check('Boss 使用塔科夫名称', /Reshala/.test(raidSrc) && /Killa/.test(raidSrc) && /Shturman/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* v0.27.0：Boss 从「借用某作品角色名」改为原创代号，断言同步反转 */
+check('Boss 使用原创代号（不再借用既有 IP）',
+  !/Reshala|Killa|Shturman/.test(raidSrc) && /bountyNames=\["铁锈","屠夫","调度长"\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('选角文案为「选择你的 PMC」', /选择你的 PMC/.test(uiSrc) ? 1 : 0, 1, 0.001);
 check('精英 AI 改称 Raider', /Raider/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('货币文案为 GP 币 / 美元', /GP 币/.test(raidSrc) && !/黑市代币|配给券/.test(allNameSrc) ? 1 : 0, 1, 0.001);
@@ -2851,6 +2853,55 @@ check('负重只读 inv：加满武器后负载上升',
   __misc47.load[0]===0 && __misc47.load[1]>0 ? 1 : 0, 1, 0.001);
 check('高档拆解产出不低于低档（族顺序有效）',
   __misc47.hiTier > __misc47.loTier ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 48. AI 感知与密度（v0.27.0）
+ * ========================================================================== */
+console.log('\n=== 48. AI 感知与密度：射程分级 / POI 小队 / 搜索引怪 / 穿甲反馈（v0.27.0）===');
+
+/* ① AI 手电射程恢复分级（v0.26 曾把 PMC/Boss 一律压到 560） */
+check('AI 光锥上限 1200（不再封顶 560）', G('RAID_LIT.aiBeamMax'), 1200, 0.001);
+check('Scav 光锥 = 520', G('raidAiBeamReach({"cls":"scav"})'), 520, 0.001);
+check('PMC 光锥 = 900（分级恢复）', G('raidAiBeamReach({"cls":"pmc"})'), 900, 0.001);
+check('Boss 光锥 = 1200（感知 1250 被上限截断）', G('raidAiBeamReach({"bounty":true})'), 1200, 0.001);
+check('精英怪短视距仍生效（wraith 400）', G('raidAiBeamReach({"arch":"wraith"})'), 400, 0.001);
+check('2D op 光锥与判定同源', /raidAiBeamReach\(o\)/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('3D op 光池与判定同源', /raidAiBeamReach\(o\)/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('旧的 aiReachCap 已移除', G('typeof RAID_LIT.aiReachCap') === "undefined" ? 1 : 0, 1, 0.001);
+
+/* ② POI 驻守小队 */
+check('刷怪按 POI 组队并写入 squadId',
+  /guardBudget/.test(raidSrc) && /op\.squadId=entry\.sid/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('驻守名额上限 18、至少留 12 名游荡者',
+  /Math\.min\(18, 30-12\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('每队 2~4 人', /RNG\.ri\(2,4\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const __poiPt = JSON.parse(G(`JSON.stringify((()=>{
+  const poi=RAID_POI.find(p=>p.box);
+  if(!poi) return {ok:false,inside:false,none:false};
+  const pt=Raid._poiPatrolPoint(poi.id);
+  return {ok:Array.isArray(pt)&&pt.length===2,
+    inside: pt[0]>=poi.box.x && pt[0]<=poi.box.x+poi.box.w && pt[1]>=poi.box.y && pt[1]<=poi.box.y+poi.box.h,
+    none: Raid._poiPatrolPoint("no_such_poi")===null};
+})())`));
+check('驻守巡逻点落在本 POI 包围盒内', __poiPt.ok && __poiPt.inside ? 1 : 0, 1, 0.001);
+check('未知 POI 返回 null（回退全图巡逻点）', __poiPt.none ? 1 : 0, 1, 0.001);
+check('巡逻选点优先本 POI', /b\.homePoi \? this\._poiPatrolPoint\(b\.homePoi\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ③ 搜索引怪 + 受击小队联动 */
+check('_noise 返回惊动数量', /return woke;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('翻箱完成时制造噪音', /this\._noise\(c\.x, c\.y, nR, this\.player\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('保险箱比普通箱更响', /c\.locked \? \(300 \+ M\.clamp/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('受击广播只传同阵营', /if\(o\.cls!==target\.cls\) continue;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('广播有 1.2s 节流', /target\._shoutT=M\.now\(\)\+1\.2/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ④ 穿甲反馈 */
+check('高穿弹给出「穿甲」提示', /penMul<=0\.75/.test(raidSrc) && /"穿甲"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('护甲两成时一次性警告', /_armorLowFx/.test(raidSrc) && /护甲濒临击穿/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑤ Boss 原创命名 */
+check('Boss 不再借用既有 IP 的角色名',
+  !/Reshala|Killa|Shturman/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('Boss 使用原创代号', /bountyNames=\["铁锈","屠夫","调度长"\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

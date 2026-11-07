@@ -1410,7 +1410,6 @@ const FPView = {
       const ops = (R.ops||[]).filter(o=>o!==p && !o.isPlayer && o.alive!==false
         && (o.hp===undefined || o.hp>0) && o.flash!==false);
       if(ops.length){
-        const LIGHT_REACH = 560;
         const near = 700, far = 1300;             // 与 2D 的 620/1200 略放宽（3D 视野更远）
         for(const o of ops){
           const rx0 = o.x-p.x, ry0 = o.y-p.y;
@@ -1420,8 +1419,10 @@ const FPView = {
           const sx0 = w/2 + (lat0/d0)*proj;
           const sy0 = horizon + (this.EYE_H/d0)*proj;      // 脚下（光源本体）
           const a = o.angle||0;
+          /* v0.27.0：长度跟感知档位走（与 2D / raidAiLit 同源），不再一律 560。 */
+          const opReach = (typeof raidAiBeamReach==="function") ? raidAiBeamReach(o) : 560;
           /* 光池中心 = 朝向前方 40% 射程处（贴脸时 40% 已经够近，不会飘到天上） */
-          const fwd = Math.min(170, Math.max(70, LIGHT_REACH*0.30));
+          const fwd = Math.min(170, Math.max(70, opReach*0.30));
           const rx1 = (o.x + Math.cos(a)*fwd) - p.x;
           const ry1 = (o.y + Math.sin(a)*fwd) - p.y;
           const d1 = rx1*ca + ry1*sa;
@@ -1436,7 +1437,7 @@ const FPView = {
             const c = Math.max(0, Math.min(zn-1, Math.floor(sx1/zstep)));
             if(zb[c] < d1 - 24) continue;
           }
-          const k = M.clamp((far-d0)/(far-near), 0, 1) * M.clamp((LIGHT_REACH-d1)/220, 0.15, 1);
+          const k = M.clamp((far-d0)/(far-near), 0, 1) * M.clamp((opReach-d1)/220, 0.15, 1);
           if(k <= 0.02) continue;
           const pool = ctx.createRadialGradient(sx1, sy1, 0, sx1, sy1, rr);
           pool.addColorStop(0,   "rgba(255,234,178,"+(0.20*k).toFixed(4)+")");

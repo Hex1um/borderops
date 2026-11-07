@@ -48,8 +48,10 @@ Object.assign(Raid, {
     if(it.kind==="med"){ b.bandages=(b.bandages||0)+1; return; }
   },
 
-  /* 枪声扩散：范围内的 AI 记下声源位置，冲过去查看 */
+  /* 枪声 / 翻箱声扩散：范围内的 AI 记下声源位置，冲过去查看。
+     v0.27.0：返回被惊动的数量，调用方据此给玩家一句可感知的提示。 */
   _noise(x, y, r, src){
+    let woke=0;
     for(const b of this.ops){
       if(b===src || !b.alive || b.isPlayer || b.remote || b.ghost) continue;
       if(b.state==="engage" || b.state==="heal") continue;
@@ -59,7 +61,9 @@ Object.assign(Raid, {
       // 已经有更近的线索就不覆盖
       if(b.investigate && b.investigate.t>2.5) continue;
       b.investigate={ x:x+RNG.fr(-80,80), y:y+RNG.fr(-80,80), t:RNG.fr(7,12) };   // 听到动静后追得更久
+      woke++;
     }
+    return woke;
   },
 
   _nearestFoe(o, range){
@@ -379,6 +383,19 @@ Object.assign(Raid, {
       target.helmetArmor-=helmAbs;
     }
     d-=armorAbs+helmAbs;
+    /* v0.27.0：穿甲要可感知 —— 高穿弹把护甲减伤削弱到 75% 以下时给「穿甲」浮字 + 火花，
+       0.45s 节流防连发刷屏。以前护甲耐久只会默默掉，玩家看不出「这发打穿了」。 */
+    if(armorAbs>0 && penMul<=0.75 && (target._penFxT||0)<=M.now()){
+      target._penFxT=M.now()+0.45;
+      this._float(target.x, target.y-64, "穿甲", "#ffd23f");
+      if(typeof this.spawnHit==="function") this.spawnHit(target.x, target.y, "#ffd23f");
+    }
+    /* 护甲跌到两成时一次性提醒「濒临击穿」（归零时另有 armorBroken 提示） */
+    if(armorAbs>0 && !target._armorLowFx && (target.maxArmor||0)>0
+       && target.armor<=target.maxArmor*0.2){
+      target._armorLowFx=true;
+      this._float(target.x, target.y-80, "护甲濒临击穿", "#ff8a5a");
+    }
     if(headshot && helmAbs>0 && target.isPlayer)
       this._float(target.x, target.y-52, "头盔 -"+Math.round(helmAbs), "#8fd0ff");
     /* v0.14.11 改2：T4+ 护甲耐久归零 → 不再是装甲型（黄条转红、腐蚀克制失效）。
@@ -398,6 +415,19 @@ Object.assign(Raid, {
     /* v0.26.0：受击后 3 秒内，自瞄 / 索敌直接锁定攻击者（仍受 _los 遮挡）。
        玩家与 AI 共用；窗口只存在本地，不进联机快照。 */
     raidHitLock(target, attacker);
+    /* v0.27.0：被打的 AI 把动静传给附近**同阵营**（小队联动 / 驻守队反应），
+       让「打一个引来一队」成立。只传声源位置，不传精确目标。
+       1.2 秒节流：一核子弹打同一目标只广播一次。 */
+    if(!target.isPlayer && attacker && (target._shoutT||0)<=M.now()){
+      target._shoutT=M.now()+1.2;
+      for(const o of this.ops){
+        if(o===target || o.isPlayer || o.remote || o.ghost || !o.alive) continue;
+        if(o.cls!==target.cls) continue;
+        if(M.dist(o.x,o.y,target.x,target.y)>620) continue;
+        if(o.investigate && o.investigate.t>4) continue;
+        o.investigate={ x:attacker.x+RNG.fr(-70,70), y:attacker.y+RNG.fr(-70,70), t:6.0 };
+      }
+    }
     target.hp-=d;
 
     if(target.isPlayer){
@@ -629,6 +659,13 @@ Object.assign(Raid, {
         return;
       }
       c.searched=true;
+      /* v0.27.0：翻箱 / 搜身会发出动静 —— 把「白拿」变成「要付代价」。
+         保险箱最响（撬锁），尸体最轻；地面物品堆在上面提前 return 了，不算翻箱。 */
+      {
+        const nR = c.locked ? (300 + M.clamp(c.lockLv||1,1,5)*60) : (c.body ? 210 : 280);
+        const woke = this._noise(c.x, c.y, nR, this.player);
+        if(woke>0) this._float(this.player.x, this.player.y-58, "动静引来 "+woke+" 个敌人", "#ffb35a");
+      }
       // 开锁：消耗一次钥匙耐久
       if(c.locked){
         const k=this._useKey(c.lockLv||1);
