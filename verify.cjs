@@ -2808,5 +2808,64 @@ check('新材料 id 稳定可用（旧螺丝 / 激光晶体）',
 check('拆解族按 tier 递增（新料不破坏高档产出）',
   G('(()=>{for(const f in SALVAGE_FAMILY){let p=-1;for(const id of SALVAGE_FAMILY[f]){const m=RAID_MAT_BY_ID[id];if(!m||m.tier<p)return false;p=m.tier;}}return true;})()') ? 1 : 0, 1, 0.001);
 
+/* ==========================================================================
+ * 47. 断言质量：纯行为断言补强（v0.26.1）
+ * 这一组刻意不引用任何源码字符串，只调用真实函数并验证返回值 —— 重命名、
+ * 重构、改注释都不会影响它们。与「源码护栏」组形成对照。
+ * ========================================================================== */
+console.log('\n=== 47. 断言质量：纯行为断言补强（v0.26.1）===');
+const __econ47 = JSON.parse(G(`JSON.stringify((()=>{
+  const k="probe_same_key";
+  return {
+    p1:raidShopPrice(1000,k), p2:raidShopPrice(5000,k),
+    field:raidFieldSellPrice(1000,k), bag:raidBagSellPrice(1000),
+    superp:raidSuperPrice(1000,k),
+    f0:raidExtractFeeMult(0), f1:raidExtractFeeMult(50000), f2:raidExtractFeeMult(1e9),
+    lo:raidSalvageMat("metal",1), hi:raidSalvageMat("metal",8)
+  };
+})())`));
+check('局内商店售价随估值单调递增', __econ47.p2 > __econ47.p1 ? 1 : 0, 1, 0.001);
+check('四档价格函数都给出正估值',
+  __econ47.p1>0 && __econ47.field>0 && __econ47.bag>0 && __econ47.superp>0 ? 1 : 0, 1, 0.001);
+check('回收超市收购价高于背包直售（同底价）',
+  __econ47.field > __econ47.bag ? 1 : 0, 1, 0.001);
+check('撤离费倍率随带入估值单调递增',
+  __econ47.f0 < __econ47.f1 && __econ47.f1 <= __econ47.f2 ? 1 : 0, 1, 0.001);
+check('撤离费倍率封顶不超 1.4', __econ47.f2 <= 1.4001 ? 1 : 0, 1, 0.001);
+const __misc47 = JSON.parse(G(`JSON.stringify((()=>{
+  const k=raidMakeKey(3);
+  const sc=raidAISense({x:0,y:0,cls:"scav"}), pm=raidAISense({x:0,y:0,cls:"pmc"}),
+        bo=raidAISense({x:0,y:0,bounty:true});
+  const empty={inv:{weapons:[],armors:[],helmets:[],shields:[],parts:[],materials:[],meds:[],receivers:[],keys:[],ammo:{}}};
+  const e0=raidLoadOf(empty);
+  empty.inv.weapons=new Array(6).fill(0); const e1=raidLoadOf(empty);
+  return {keyOk:k.kind==="key"&&k.lv===3&&k.uses>0&&k.maxUses>0&&k.value>0&&!!k.uid,
+          sight:[sc.sight,pm.sight,bo.sight], load:[e0,e1],
+          loTier:(RAID_MAT_BY_ID[raidSalvageMat("metal",1)]||{}).tier,
+          hiTier:(RAID_MAT_BY_ID[raidSalvageMat("metal",8)]||{}).tier};
+})())`));
+check('钥匙生成结构完整（kind/lv/uses/maxUses/value/uid）', __misc47.keyOk ? 1 : 0, 1, 0.001);
+check('AI 三档视距分级 520 / 900 / 1250',
+  __misc47.sight[0]===520 && __misc47.sight[1]===900 && __misc47.sight[2]===1250 ? 1 : 0, 1, 0.001);
+check('负重只读 inv：加满武器后负载上升',
+  __misc47.load[0]===0 && __misc47.load[1]>0 ? 1 : 0, 1, 0.001);
+check('高档拆解产出不低于低档（族顺序有效）',
+  __misc47.hiTier > __misc47.loTier ? 1 : 0, 1, 0.001);
+
+/* ---- 断言构成可见化（v0.26.1）----
+ * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
+ * 某段实现或文案是否仍在的「源码护栏」（对重命名、重构脆弱）。把两者的数量分开
+ * 报出来，避免把总条数当成等价的行为覆盖率。分类按源码形态静态统计；
+ * 运行时条数含循环内动态生成，两者不一定相等。 */
+const SELF_SRC = fs.readFileSync(__filename, 'utf8');
+const CHECK_LINES = SELF_SRC.split('\n').filter(l => /^\s*check\(/.test(l));
+const SRC_MARK = /(raidSrc|__rd2|__fp2|netSrc|__uiCopy|__coreCopy|vmSrc|allNameSrc|__inp\b|\bhtml\b|__rd\b)/;
+const nSrc = CHECK_LINES.filter(l => SRC_MARK.test(l)).length;
+const nExpr = CHECK_LINES.filter(l => !SRC_MARK.test(l) && /\bG\(/.test(l)).length;
+const nBeh = CHECK_LINES.length - nSrc - nExpr;
+console.log(`\n=== 断言构成（按源码形态静态分类，共 ${CHECK_LINES.length} 个 check 条目）===`);
+console.log(`  行为/数值断言 ${nBeh}  |  vm 表达式求值 ${nExpr}  |  源码护栏 ${nSrc}`);
+console.log(`  ⚠ 源码护栏对重命名/重构脆弱；本轮实际执行 ${pass + fail} 条（含循环内动态生成）`);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

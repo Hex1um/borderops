@@ -67,5 +67,42 @@ else {
   else ok("懒加载脚本使用 CFG.version 动态拼接 ?v=");
 }
 
-if (failed) { console.error("\n检查未通过。请同步 package.json / CFG.version / index.html 的 ?v=。"); process.exit(1); }
+/* ---- v0.26.1：文档版本引用也纳入门禁 ----
+ * 之前 WIKI 顶部长期停在 v0.19.0、README 还写着「CI 因缺 workflow scope 尚未推送」，
+ * 而 CI 其实早已成功运行。版本一致性不能只管代码三处，文档同样会漂。 */
+// 7) WIKI 顶部「当前版本」
+const wiki = read("WIKI.md");
+const wikiVer = wiki.match(/当前版本\s*\*\*v([0-9.]+)\*\*/);
+if (!wikiVer) fail("WIKI.md 找不到「当前版本 **vX.Y.Z**」标记");
+else if (wikiVer[1] !== version) fail(`WIKI.md 当前版本 = v${wikiVer[1]}，应为 v${version}`);
+else ok("WIKI.md 当前版本 = v" + version);
+
+// 8) CHANGELOG 最新一节的版本（后面的历史节保留当时真实数字，不许改）
+const changelog = read("CHANGELOG.md");
+const chVer = changelog.match(/^## v([0-9.]+)\s/m);
+if (!chVer) fail("CHANGELOG.md 找不到 ## vX.Y.Z 条目");
+else if (chVer[1] !== version) fail(`CHANGELOG.md 最新节 = v${chVer[1]}，应为 v${version}`);
+else ok("CHANGELOG.md 最新节 = v" + version);
+
+// 9) README 里描述 verify.cjs 的多处断言数必须一致（一处更新另一处漏掉是常见漂移）
+//    只看提到 verify 的行，别把 playwright_smoke.py 的「42 项断言」也算进来。
+const readme = read("README.md");
+const nums = readme.split("\n")
+  .filter(l => /verify\.cjs|npm run verify/.test(l))
+  .flatMap(l => [...l.matchAll(/(\d+)\s*(?:条|项)断言/g)].map(x => +x[1]));
+if (nums.length < 2) fail("README.md 找不到两处断言数");
+else if (new Set(nums).size !== 1) fail(`README.md 断言数不一致：${nums.join(" / ")}`);
+else ok(`README.md ${nums.length} 处断言数一致（${nums[0]}）`);
+
+// 10) 文案护栏：CI 早已启用，不许再出现「尚未推送 / 未启用」的旧说法
+// 只拦明确的过时表述；「本机凭据缺 workflow scope」属于现状说明，不能误判
+if (/CI[^\n]*(尚未推送到远端|未启用|需按 CHANGELOG)/.test(readme))
+  fail("README.md 仍有「CI 未启用」的过时说明");
+else ok("README.md 无过时 CI 说明");
+
+// 11) LICENSE 存在（有真实合作者，许可缺失会造成归属模糊）
+if (!fs.existsSync(path.join(ROOT, "LICENSE"))) fail("缺少 LICENSE 文件");
+else ok("LICENSE 存在");
+
+if (failed) { console.error("\n检查未通过。请同步 package.json / CFG.version / index.html 的 ?v= 与文档版本引用。"); process.exit(1); }
 console.log("\n全部通过。");

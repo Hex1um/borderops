@@ -2,6 +2,8 @@
 Thumbs.db
 node_modules/
 shots/
+# 浏览器冒烟截图（3.5MB 产物，CI artifact 或本地留存，不入版本库）
+testshots/
 __pycache__/
 *.pyc
 .git/

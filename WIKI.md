@@ -1,6 +1,6 @@
 # 边境行动 BORDER OPS · 中文 Wiki
 
-> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.19.0**。
+> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.26.1**（由 `npm run check` 校验，升版必须同步）。
 > 代码与实现细节见 [README.md](README.md)，逐版改动见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（919 条断言 / 46 组）
+npm run verify       # 无浏览器依赖的逻辑回归（928 条断言 / 47 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -458,4 +458,8 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **黑市只卖 5~8 档（v0.26.0）**：`_shopStock("black")` 的 `TIERS=[5,6,7,8]` 是硬约定；枪走 `_shopGun(t, undefined, true)`（黑市专属 `+8 ilvl` / `dmg×1.18` / `value×1.25` / `black` 标记，普通枪店不能带这个参数）。`out.gears` 是新增品类（护甲/头盔/护盾，t 同时当 tier 和 rarity），UI 的 `tokengear` 购买分支按 `kind` 分栏到 `inv.armors/helmets/shields`；新增品类时记得同步 `out` 初始结构、卡片渲染和购买分支三处。
 - **防具穿戴切换（v0.26.0）**：`_stowGear(which)` 卸下时必须把 `_wearShield` / `_wearGear` 写过的**所有**玩家字段清干净（`maxShield` / `shieldTier` / `shieldInvulnMax` / `armorTier` / `maxHelmetArmor` …），漏一个就会出现「卸下了还在生效」。`_invEquipGear` 先 `splice` 腾格再 `_swapEquip`，失败要还原；`data-equip` / `data-stow` 都按 `type` 分派，别再退化成只认数组下标。
 - **钥匙折旧 / 静止扩散 / 材料族（v0.26.0）**：钥匙**次数机制不变**，只有 `value` 随 `uses/maxUses` 折旧（`raidKeyRefresh`，报废前留 30% 残值），别把它改成百分比耐久。`RAID_STILL_SPREAD=0.65` 只在 `mv<0.05` 生效。材料表 `RAID_MATERIALS` 的 **id 是存档键，一个都不许改**，只改 `name` / 加条目；`SALVAGE_FAMILY` 每个族必须按 `tier` **递增**排列 —— `raidSalvageMat` 取「最后一个不超过目标档」的 id，顺序乱了高档配件会拆出低档料（verify 组 46 有专门断言）。
-- **git 隧道故障时的同步方式（v0.26.0 踩坑）**：Watt Toolkit 可能把 `github.com` / `api.github.com` 反代挂掉（`git fetch` 报 `CONNECT tunnel failed, response 502`、curl 返回 000），但 **`codeload.github.com` 与 `hex1um.github.io` 常常仍然可用**。此时用 `curl -k https://codeload.github.com/Hex1um/borderops/tar.gz/refs/heads/main` 拉完整归档覆盖工作区（保留 `.git`、只删远端已移除的 tracked 文件），并从 Pages 的 `CHANGELOG.md` 读更新说明。注意 Git Bash 的 `/tmp` = `%TEMP%`。**代码能同步，但 push 仍需隧道恢复**；恢复后先 `git fetch` → `git reset --soft origin/main`（保留工作区）→ 只提交本次改动 → `git push`，绝不强推。
+- **git 隧道故障时的同步方式（v0.26.0 踩坑）**：Watt Toolkit 可能把 `github.com` / `api.github.com` 反代挂掉（`git fetch` 报 `CONNECT tunnel failed, response 502`、curl 返回 000），但 **`codeload.github.com` 与 `hex1um.github.io` 常常仍然可用**。此时用 `curl -k https://codeload.github.com/Hex1um/borderops/tar.gz/refs/heads/main` 拉完整归档覆盖工作区（保留 `.git`、只删远端已移除的 tracked 文件），并从 Pages 的 `CHANGELOG.md` 读更新说明。注意 Git Bash 的 `/tmp` = `%TEMP%`。**代码能同步，但 push 仍需隧道恢复**；恢复后 `git fetch` → **`git reset --mixed origin/main`**（保留工作区、index 对齐远端）→ 用 `git diff --ignore-space-at-eol --stat` 只挑实质改动 `git add`，**别用 `git add -A`**（`core.autocrlf=true` + codeload LF 归档会混进一堆纯行尾噪声）→ commit → push，绝不强推。另：Pages 是 `build_type=legacy`，判断线上是否更新只认 curl index.html 的 `?v=` 与 `pages/builds/latest` 状态，别只看 Actions 里 `pages build and deployment` 的红绿。
+- **工程基线（v0.26.1）**：`LICENSE` 是 MIT 但版权行故意写中性 `BORDER OPS contributors`，**归属仍待与合作者确认**，别单方改成某个人名。`npm run check` 现在还校验 WIKI 顶部版本、CHANGELOG 首节版本、README 两处断言数一致、无过时 CI 文案、LICENSE 存在 —— 升版时这 5 处必须跟着动；CHANGELOG 历史节的旧断言数**不要改**，那是当时的事实。
+- **ESLint 白名单（v0.26.1）**：`eslint.config.js` 在加载时扫描 `src/*.js` 顶层声明自动生成全局白名单（含一行内逗号连续声明）。**新增顶层全局符号不用改配置**，但如果符号是通过 `window.X=` / UMD `root.X=` 挂载的（如 `Sanitize`），要在配置末尾的手工列表补上，否则 `no-undef` 会误报。`no-unused-vars` 故意关闭（共享全局架构下全是误报）；ESLint 10 需 Node ≥20.19（运行时门槛仍是 Node ≥18）。`npm run lint` 目前只在本地跑：本机 OAuth App 凭据缺 `workflow` scope，push / contents API 都改不了 `.github/workflows/ci.yml`，独立 lint job 需合作者在 GitHub 网页端补入（YAML 见 CHANGELOG v0.26.1 ④）；主 gate 仍零 npm 依赖。
+- **测试产物与断言构成（v0.26.1）**：`testshots/` 已 gitignore 且不入库（3.5MB PNG），只有 `shots/` 是本地截图也忽略。`verify.cjs` 结尾会打印「行为断言 / vm 表达式 / 源码护栏」三类占比 —— **源码护栏约占 17%，对重命名重构脆弱**，别把总条数当行为覆盖率；新增纯逻辑断言优先放第 47 组那种「只调函数验返回值」的写法。
+- **明确暂缓的架构项（v0.26.1 决议）**：不引入 ESM / esbuild 构建期校验（与零构建、下载即跑的核心约定冲突）、不做全量 JSDoc + `checkJs`（26k 行注解成本远高于收益）、`net.js` / `net-p2p.js` 快照逻辑收敛需先补 golden 快照测试并单独一轮、雪藏四模式删除属产品决策需用户拍板、房主迁移 / 断线重连是功能开发不是技术债。评审里「CHANGELOG 提 875 条 = 数字没跟上」是误判（逐版历史记录）。

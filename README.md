@@ -45,7 +45,7 @@
 
 ```sh
 npm start          # 等价于 node server.js，默认 3000 端口
-npm run verify     # 无浏览器逻辑回归（46 组 / 919 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏）
+npm run verify     # 无浏览器逻辑回归（47 组 / 928 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏）
 npm run check      # 校验版本号三处同步 + 脚本缓存串（无需安装依赖）
 # 真实浏览器冒烟（需系统 Edge + Python playwright，先起服务）：
 PORT=3211 node server.js
@@ -59,14 +59,15 @@ python -m http.server 8132
 
 ## 技术约束（给后续维护者）
 
-1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载）。
+1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载，许可原文见 `vendor/peerjs.LICENSE`）；项目自身许可见 `LICENSE`（MIT，版权归属待与合作者确认）。
 2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载（v0.25.0 共 30 个）：
    `sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`
    其中 `raid-core2` / `raid-core3` 用 `Object.assign(Raid, {` 续接主控对象，**顺序不可调换**；`lazy-legacy.js` 在 `CFG.onlyRaid=true` 时不请求 `world` / `endless` / `dust2` / `br` 四个旧模式脚本。
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
 4. **兼容旧存档**：v0.15.0 保留了全部内部键名（`element` / `mayhem` / `elemPct` / `core` 等）与 localStorage 存档结构，仅改变语义与显示；`ELEMENTS` 是 `AMMO_TYPES` 的兼容别名。新代码请优先使用 `AMMO_TYPES`。
 5. 改动沿用现有风格：紧凑单行、中文注释带 `vX.Y.Z` 前缀。
-6. **门禁与工具**：`npm run check`（版本三处同步 + 静态/懒加载脚本清单）、`npm run verify`（无浏览器逻辑回归，含旧档迁移 / 净化 / EV / 文案护栏）、`npm run bench:fps`（可选，需本机 Chrome，输出 `fps-baseline.json`）。`.github/workflows/ci.yml` 已备好但因当前凭据缺 `workflow` scope 尚未推送到远端，需按 CHANGELOG 的「发布备注（CI 权限）」启用一次。
+6. **门禁与工具**：`npm run check`（代码三处版本 + 文档版本引用 + 脚本缓存串 + 懒加载清单）、`npm run lint`（ESLint 静态检查，可选本地工具）、`npm run verify`（无浏览器逻辑回归，含旧档迁移 / 净化 / EV / 文案护栏）、`npm run bench:fps`（可选，需本机 Chrome，输出 `fps-baseline.json`）。`.github/workflows/ci.yml` 自 v0.23.2 起已在 GitHub 网页创建并启用，每次 push 自动跑 check / verify / 全量语法检查。`npm run lint` 目前是**本地工具**（0 error）：本机 OAuth 凭据缺 `workflow` scope，无法推送 workflow 文件，CI 的独立 lint job 需合作者在 GitHub 网页端补入（配置见 CHANGELOG v0.26.1 ④）。
+7. **测试的两类断言**：`verify.cjs` 里既有在 vm 中真实调用结算 / 生成逻辑的**行为断言**，也有检查实现或文案是否仍在的**源码护栏断言**（对重命名、重构脆弱）。运行结束时 `npm run verify` 会打印两类占比，别把总条数当成等价的行为覆盖率。
 
 ## 目录结构
 
@@ -90,9 +91,10 @@ python -m http.server 8132
 | `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，919 项断言） |
+| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，928 项断言） |
 | `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（42 项断言）与只读机制体检 |
-| `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告 |
+| `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告（本地产物；`testshots/` 已 gitignore，不入库） |
+| `LICENSE` | 项目 MIT 许可（含第三方 PeerJS 声明） |
 
 ## GitHub Pages 部署说明
 

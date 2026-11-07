@@ -1,5 +1,96 @@
 # Changelog
 
+## v0.26.1 — 2026-11-07
+
+本轮不改玩法，只做「靠工具保证正确性」的工程基线。起因是另一份仓库评审给出 9 条问题；
+逐条核实后采纳低风险高收益的 5 条，其余明确暂缓（理由写在 WIKI 维护者速查）。
+
+### ① 补 LICENSE（唯一法律硬伤）
+
+新增 `LICENSE`（MIT），版权行用中性的 **`BORDER OPS contributors`**，不单方宣称归属 ——
+仓库有真实合作者，最终版权表述仍需与其确认。文件末尾附第三方声明：
+`vendor/peerjs.min.js` 自带 MIT 许可，原文保留在 `vendor/peerjs.LICENSE`。
+
+### ② 文档版本漂移纳入门禁
+
+`check_version.js` 原本只校验代码三处版本，文档长期无人管：WIKI 顶部还写着
+「当前版本 **v0.19.0**」，README 第 69 行还写着「CI 因缺 workflow scope 尚未推送」
+（CI 自 v0.23.2 起就一直 success）。新增 5 项校验：
+
+| 新增校验 | 防的是什么 |
+|---|---|
+| WIKI 顶部「当前版本」= `CFG.version` | 顶部版本长期不更新 |
+| CHANGELOG 最新一节版本 = `CFG.version` | 升版忘写 CHANGELOG |
+| README 多处「N 条/项断言」数字一致 | 一处更新另一处漏掉 |
+| README 不得再出现「CI 未启用」表述 | 过时说明回流 |
+| `LICENSE` 存在 | 许可被误删 |
+
+CHANGELOG 的**历史节保留当时真实数字**（v0.25.1 那节仍写 875 条），这是逐版事实，
+不改成当前值；评审把这条当成「数字没跟上」属于误判。
+
+### ③ 测试产物出库
+
+`testshots/` 7 张 PNG 共 **3.5MB** 一直在版本库里，`.gitignore` 只忽略了 `shots/`。
+现已 `git rm -r --cached`（本地文件保留）并加入 `.gitignore`。`test-report.json`
+只有 13KB 且被冒烟脚本读取，暂留。
+
+### ④ 引入 ESLint（独立 CI job，不破坏零依赖主门禁）
+
+- `eslint@10.14.0` 精确固定 + `package-lock.json`；`npm run lint` = `eslint src/`。
+- `eslint.config.js`（flat config）**在加载时扫描 `src/*.js` 顶层声明自动生成全局白名单**，
+  并处理一行内的逗号连续声明（`const A=1, B=2;`）。这样 30 个共享全局的脚本里，
+  拼错的全局名仍会被 `no-undef` 抓到，而跨文件引用不会刷屏。
+- 规则：`no-undef` / `no-implied-eval` / `no-undef-init` / `no-dupe-*` / `no-unreachable` /
+  `no-self-assign` / `no-constant-condition` 为 error；**`no-unused-vars` 刻意关闭** ——
+  顶层声明本来就是给别的文件用的，开它只有误报。
+- 首轮扫描报出 70 个 `no-undef`，核实后全是白名单漏扫（逗号声明 `RAID_MAP_H` /
+  `RAD_MAX`、UMD 挂载的 `Sanitize`、宿主全局 `MutationObserver` / `URLSearchParams` / `module`），
+  不是真拼错；补齐扫描器后 **0 error / 0 warning**。
+- **CI 集成暂缓（凭据限制，非代码问题）**：本机 OAuth App 凭据缺 `workflow` scope，
+  `git push` 更新 `.github/workflows/ci.yml` 被 GitHub 直接拒绝，改走 contents API
+  同样返回 404。因此 `npm run lint` 目前只在本地跑（0 error），主 `gate` job
+  保持零 npm 依赖不变。**待合作者在 GitHub 网页端 `Actions →` 编辑 ci.yml 补入**：
+
+  ```yaml
+    lint:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4
+          with: { node-version: '22', cache: 'npm' }
+        - run: npm ci --no-audit --no-fund --ignore-scripts
+        - run: npm run lint
+  ```
+
+  这个 job 独立成 job 的用意：装依赖失败不会掩盖 check / verify 的结果。
+
+### ⑤ 断言分层可见化 + 行为断言补强
+
+`verify.cjs` 结尾现在打印**断言构成**（按源码形态静态分类）：
+
+```
+行为/数值断言 651  |  vm 表达式求值 100  |  源码护栏 157
+⚠ 源码护栏对重命名/重构脆弱；本轮实际执行 928 条
+```
+
+评审说「大量断言测源码字符串」方向对，但实测源码护栏约占 **17%**，不是主体；
+这轮删 `raidRoomAt` 过滤、改 8 个材料名、新增 `gears` 品类时也只红了 4 条。
+把两类分开报出来，避免把总数当成等价的行为覆盖率。新增第 47 组 **9 条纯行为断言**
+（价格四档 / 撤离费阶梯与封顶 / 钥匙结构 / AI 三档视距 / 负重只读 inv / 拆解档位），
+不引用任何源码字符串，重命名重构都不会误伤。
+
+### 明确暂缓（不是漏做）
+
+ESM / esbuild 构建期校验（与零构建、零依赖、开箱即跑的核心约定冲突）、全量 JSDoc +
+`checkJs`（26k 行注解成本远高于收益）、`net.js` / `net-p2p.js` 快照逻辑收敛（回归面最大，
+应先补 golden 快照测试单独一轮）、删除雪藏四模式（产品决策，得用户拍板）、
+房主迁移 / 断线重连（功能开发而非技术债）。
+
+### 验证
+
+`npm run check` 全过（含新增 5 项文档校验）；`npm run verify` **47 组 / 928 条全过**；
+`npm run lint` **0 error / 0 warning**；全量 `node --check` 通过；浏览器探针 `ok:true`。
+
 ## v0.26.0 — 2026-11-06
 
 基线说明：本轮开始时本机的 `github.com` / `api.github.com` 被 Watt Toolkit 代理挡死
