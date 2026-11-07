@@ -812,8 +812,11 @@ Object.assign(Raid, {
     /* 移动：强心针 +25% / 双手都空 +50% / 背包越满越慢（满载 -30%）。
        空手判定必须是「双手都空」—— 副手还端着枪时只空主手不该白拿加成。
        raidSpeedMul 只读 inv，是纯函数，联机两端算出来的减速一致。 */
+    /* v0.28.0：手持狙击枪额外 ×0.62 —— 换来的是握手电更远、单发更准，
+       代价是跑不动。与背包负重、空手加成相乘，互不覆盖。 */
     const sp=p.speed*(p.reloadT>0?0.7:1)*(this.stimT>0?1.25:1)
-      *((p.gun||p.secondary)?1:RAID_BAREHAND_SPEED)*raidSpeedMul(this);
+      *((p.gun||p.secondary)?1:RAID_BAREHAND_SPEED)*raidSpeedMul(this)
+      *((typeof raidGunMoveMul==="function") ? raidGunMoveMul(p) : 1);
     this._moveOp(p, mx*sp*dt, my*sp*dt);
     p.vx=mx*sp; p.vy=my*sp;
 

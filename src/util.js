@@ -5,17 +5,25 @@
 // 可重播随机（mulberry32）
 function makeRNG(seed){
   let a = seed >>> 0;
-  return function(){
+  const f = function(){
     a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  /* v0.28.0：暴露内部状态，供「确定性生成后精确恢复」用。
+     每日特价要在渲染时按 时间桶+分支 重放一次货品，如果不管序列，
+     房主与客户端的 RNG 会错位（生成链路靠同种子同步推进）。 */
+  f.state   = () => a;
+  f.restore = (s) => { a = s >>> 0; };
+  return f;
 }
 
 const RNG = {
   rng: Math.random,
   setSeed(s){ this.rng = makeRNG(s); },
+  snapshot(){ return (this.rng && typeof this.rng.state==="function") ? this.rng.state() : null; },
+  restoreSnap(s){ if(s!==null && s!==undefined && this.rng && typeof this.rng.restore==="function") this.rng.restore(s); },
   // 0..1
   f(){ return this.rng(); },
   /* 区间浮点。参数写反会自动交换，非数字回落到 0 —— 
@@ -232,7 +240,9 @@ const MOVE_SPREAD_CAP = {
   shotgun:0.95,  "霰弹":0.95, "霰弹枪":0.95,
   rifle:0.85,    "步枪":0.85,
   lmg:0.95,      "机枪":0.95,
-  sniper:0.48,   "狙击":0.48, "狙击枪":0.48,
+  /* v0.28.0：0.48 → 0.85。旧上限下「边跑边狙」仍能稳定命中，与狙击枪的定位冲突；
+     现在移动中散布几乎全向，必须站定才打。 */
+  sniper:0.85,   "狙击":0.85, "狙击枪":0.85,
   launcher:0.70, "火箭筒":0.70,
 };
 function moveSpreadCap(cat){

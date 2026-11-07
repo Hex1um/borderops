@@ -1892,8 +1892,9 @@ check('3D 中心热点存在且半径按 reach 缩放', /RAID_FLASH\.hotR/.test(
 check('3D 亮核随 indoor 前移（0.5 - coreShift）', /0\.5 - RAID_FLASH\.coreShift\*ind/.test(__fp2) ? 1 : 0, 1, 0.001);
 /* 最要紧的一条：不许加射程 —— 加射程 = 光穿墙复活。
    v0.25.0：本地玩家改走 beam() 形参，射程仍是字面量 560、半角仍是 0.42。 */
-check('手电射程仍是 560（没借提亮偷偷加长）',
-  /p\.angle\|\|0, 560, 0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
+/* v0.28.0：手电射程改为「按武器取值」—— 常规 560、狙击 900，仍不许借提亮偷加长 */
+check('常规手电射程仍 560、狙击枪另走 raidPlayerBeam',
+  /reach:\s+560,/.test(raidSrc) && /raidPlayerBeam\(R\)/.test(__rd2) ? 1 : 0, 1, 0.001);
 check('2D / 3D 共用同一套手电参数', /RAID_FLASH/.test(__rd2) && /RAID_FLASH/.test(__fp2) ? 1 : 0, 1, 0.001);
 
 /* ==========================================================================
@@ -2141,8 +2142,8 @@ check('3D 半程 alpha 0.090 → 0.198',
 check('室内热点翻倍 0.10 → 0.20', G('RAID_FLASH.hot'), 0.20, 0.0001);
 check('3D 中心+热点合计 0.68（v0.23.0 是 0.334）',
   G('RAID_FLASH.cone3d*raidFlashGain(1)+RAID_FLASH.hot'), 0.68, 0.002);
-check('射程仍锁 560（没借提亮偷偷加长）',
-  /p\.angle\|\|0, 560, 0\.42/.test(__rd2) && /LIGHT_REACH = 560/.test(__fp2) ? 1 : 0, 1, 0.001);
+check('3D 手电同样走 raidPlayerBeam（不再写死 560）',
+  /raidPlayerBeam\(Raid\)/.test(__fp2) ? 1 : 0, 1, 0.001);
 check('三个暖色 rgb 一个没动（色温不变）',
   /255,236,182/.test(__rd2) && /255,224,160/.test(__rd2) && /255,228,160/.test(__rd2) &&
   /255,236,182/.test(__fp2) && /255,224,160/.test(__fp2) ? 1 : 0, 1, 0.001);
@@ -2331,8 +2332,9 @@ check('2D 地面堆也走同一套判定',
 /* --- ③ 护甲 / 头盔品质色 + 去掉「掉落可至…」 --- */
 check('商店 / 结算 / 回收超市都不再出现「掉落可至」',
   raidSrc.indexOf('掉落可至') < 0 ? 1 : 0, 1, 0.001);
-check('商店护甲头盔改用 9 阶品质色（RAID_RARITY_COLOR）',
-  /const col=RAID_RARITY_COLOR\[0\], tcol=ARMOR_TIER_COLOR\[t\];/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* v0.28.0（用户要求）：商店左边栏改回 T1~T9 颜色阶梯，不再九张卡一片棕 */
+check('商店护甲 / 头盔左边栏走 T1~T9 阶梯色',
+  /const col=ARMOR_TIER_COLOR\[t\], tcol=col;/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('结算 / 回收超市的护甲头盔色走品质色（带等级色兜底）',
   /RAID_RARITY_COLOR\[r\]\) \? RAID_RARITY_COLOR\[r\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('商店卡片仍保留 T1~T9 的等级徽标（品质色统一后不至于九张卡一样）',
@@ -2902,6 +2904,83 @@ check('护甲两成时一次性警告', /_armorLowFx/.test(raidSrc) && /护甲�
 check('Boss 不再借用既有 IP 的角色名',
   !/Reshala|Killa|Shturman/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('Boss 使用原创代号', /bountyNames=\["铁锈","屠夫","调度长"\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 49. 狙击枪手感 / 等级色阶梯 / 每日特价（v0.28.0）
+ * ========================================================================== */
+console.log('\n=== 49. 狙击枪细长手电 / 移速与散布惩罚 / T1~T9 阶梯色 / 每日特价（v0.28.0）===');
+
+/* ① 狙击枪：细而长的手电 */
+const __sniper = JSON.parse(G(`JSON.stringify((()=>{
+  const rifle={type:"rifle",cat:"rifle"}, snip={type:"sniper",cat:"sniper"};
+  return {
+    r:raidPlayerBeam({player:{gun:rifle}}),
+    s:raidPlayerBeam({player:{gun:snip}}),
+    mvS:raidGunMoveMul({gun:snip}), mvR:raidGunMoveMul({gun:rifle}),
+    capS:MOVE_SPREAD_CAP.sniper, capR:MOVE_SPREAD_CAP.rifle,
+  };
+})())`));
+check('常规手电半角 0.42 / 射程 560 不变', __sniper.r.baseHalf===0.42 && __sniper.r.reach===560 ? 1 : 0, 1, 0.001);
+check('狙击手电更细（半角 0.20）', __sniper.s.baseHalf===0.20 ? 1 : 0, 1, 0.001);
+check('狙击手电更远（射程 900）', __sniper.s.reach===900 ? 1 : 0, 1, 0.001);
+check('枪型判定用 type 或 cat 都认', G('raidPlayerBeam({player:{gun:{cat:"sniper"}}}).sniper')===true ? 1 : 0, 1, 0.001);
+check('2D 手电走 raidPlayerBeam', /raidPlayerBeam\(R\)/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('3D 手电走 raidPlayerBeam', /raidPlayerBeam\(Raid\)/.test(__fp2) ? 1 : 0, 1, 0.001);
+
+/* ② 狙击枪：移速大幅下降 + 移动散布大幅劣化 */
+check('手持狙击移速 ×0.62', __sniper.mvS, G('RAID_SNIPER_MOVE_MUL'), 0.0001);
+check('非狙击移速不受影响', __sniper.mvR, 1, 0.0001);
+check('移速计算乘上 raidGunMoveMul', /raidGunMoveMul\(p\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('狙击移动散布上限提到 0.85', __sniper.capS, 0.85, 0.0001);
+/* 移动散布的增长斜率（K）才是「狙击比步枪更吃移动」的关键：
+   两者上限同为 0.85，但 sniper 的 K=26 远高于 rifle，会更早撞到上限。 */
+check('狙击移动散布斜率高于步枪',
+  G('MOVE_SPREAD_K.sniper') > G('MOVE_SPREAD_K.rifle') &&
+  G('MOVE_SPREAD_K.sniper')>=20 ? 1 : 0, 1, 0.001);
+
+/* ③ T1~T9 颜色阶梯 */
+const __tierCol = JSON.parse(G(`JSON.stringify({
+  c1:ARMOR_TIER_COLOR[1], c5:ARMOR_TIER_COLOR[5], c9:ARMOR_TIER_COLOR[9],
+  t1:RAID_TIERS[0].color, t5:RAID_TIERS[4].color, t9:RAID_TIERS[8].color,
+  uniq:[...new Set(ARMOR_TIER_COLOR.slice(1,10))].length
+})`));
+check('T1 = 民用色 / T9 = 定型色',
+  __tierCol.c1===__tierCol.t1 && __tierCol.c9===__tierCol.t9 ? 1 : 0, 1, 0.001);
+check('T1~T9 九级颜色互不相同（不再是全棕）',
+  __tierCol.uniq===9 && __tierCol.c1!==__tierCol.c9 ? 1 : 0, 1, 0.001);
+check('商店护甲 / 头盔左边栏用阶梯色',
+  /const col=ARMOR_TIER_COLOR\[t\], tcol=col;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ④ 每日特价：确定性 + 5 分支 + 医疗品除外 */
+check('特价时间桶 1 小时', G('RAID_DEAL_BUCKET_MS'), 3600000, 0.001);
+check('时间桶函数单调（相邻毫秒同桶）',
+  G('raidDealBucket(1000)===raidDealBucket(2000) && raidDealBucket(0)<raidDealBucket(RAID_DEAL_BUCKET_MS)') ? 1 : 0, 1, 0.001);
+check('种子对分支 / 桶 / seq 敏感',
+  G('raidDealSeed("a",1,0)!==raidDealSeed("b",1,0) && raidDealSeed("a",1,0)!==raidDealSeed("a",2,0) && raidDealSeed("a",1,0)!==raidDealSeed("a",1,1)') ? 1 : 0, 1, 0.001);
+const __deal = JSON.parse(G(`JSON.stringify((()=>{
+  const out={};
+  for(const b of ["weapon","armor","shield","part","ammo"]){
+    const d1=UI._raidDailyDeal(b), d2=UI._raidDailyDeal(b);
+    out[b]={ ok:!!d1, same:d1&&d2&&d1.name===d2.name&&d1.price===d2.price,
+             price:d1&&d1.price, tier:(d1&&d1.item&&d1.item.tier)||0 };
+  }
+  out.med = UI._raidDailyDeal("med")===null;
+  return out;
+})())`));
+check('五个分支都能生成特价',
+  ["weapon","armor","shield","part","ammo"].every(b=>__deal[b] && __deal[b].ok) ? 1 : 0, 1, 0.001);
+check('同一小时内重复调用结果稳定（确定性）',
+  ["weapon","armor","shield","part","ammo"].every(b=>__deal[b].same) ? 1 : 0, 1, 0.001);
+check('特价都是正价格', ["weapon","armor","shield","part","ammo"].every(b=>__deal[b].price>0) ? 1 : 0, 1, 0.001);
+check('特价护甲是高防护等级（T6+）', __deal.armor.tier>=6 ? 1 : 0, 1, 0.001);
+check('医疗品不设特价', __deal.med ? 1 : 0, 1, 0.001);
+check('特价购买后 seq 递增（买走立即换下一件）',
+  /stash\.dailyDeals\[key\]=\{ hour:bucket, seq:/.test(raidSrc) && /UI\._raidDealCache=null/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('特价生成前后换回原 RNG 闭包（不打乱联机序列）',
+  /RNG\.rng=saved;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('商店 UI 渲染特价卡与「抢购」按钮',
+  /每日特价/.test(raidSrc) && /data-buy="deal:\$\{branch\}"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('五个 tab 都挂上特价卡', (raidSrc.match(/dealCard\('/g)||[]).length>=5 ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

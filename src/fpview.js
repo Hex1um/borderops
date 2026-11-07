@@ -425,7 +425,11 @@ const FPView = {
      * 看起来就像手电永远照着同一个方向。改成按面加色：离视点越近越亮、
      * 越偏离视线中心越暗（锥半角与 2D _lightLayer 的 0.42rad 对齐），
      * 光斑于是会随视线在墙面上扫过。 */
-    const REACH = this.LIGHT_REACH, halfW = pf.w*0.5, HALF = 0.64;
+    /* v0.28.0：手持狙击枪时 3D 手电也「细而长」（reach 900 / 锥更窄），
+       与 2D 的 raidPlayerBeam 同源。 */
+    const _pb = (typeof raidPlayerBeam==="function" && typeof Raid!=="undefined") ? raidPlayerBeam(Raid) : null;
+    const REACH = _pb ? _pb.reach : this.LIGHT_REACH;
+    const halfW = pf.w*0.5, HALF = (_pb && _pb.sniper) ? 0.34 : 0.64;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     for(let i=valid.length-1; i>=0; i--){            // 近 → 远，加色与顺序无关
@@ -1337,7 +1341,9 @@ const FPView = {
     if(!zb || zn <= 0){
       ctx.fillRect(0, 0, w, h);
     } else {
-      const LIGHT_REACH = 560, SEGS = 64, KFAR = 0.16, wallH = this.WALL_H;
+      const _pb2 = (typeof raidPlayerBeam==="function" && typeof Raid!=="undefined") ? raidPlayerBeam(Raid) : null;
+      const LIGHT_REACH = _pb2 ? _pb2.reach : 560;
+      const SEGS = 64, KFAR = 0.16, wallH = this.WALL_H;
       for(let s=0; s<SEGS; s++){
         const x0 = Math.round(s*w/SEGS), x1 = Math.round((s+1)*w/SEGS);
         const sw = x1 - x0;

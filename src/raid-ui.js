@@ -554,6 +554,76 @@ UI.raidPause=function(confirmQuit){
  *   用塔科夫仓库的卢布采购枪械 / 护甲 / 绷带，直接入库到 RaidStash，
  *   可在配装大厅携带下场或投保。撤离成功才会真正带走；阵亡或超时全部丢失。
  * ========================================================================= */
+/* ==================== v0.28.0：军火超市每日特价 ====================
+ * 每个分支（枪 / 护甲 / 护盾 / 配件 / 弹药，医疗品除外）一件高品质特价。
+ * 确定性生成：同一小时内所有人看到同一件（种子 = 分支+时间桶+已买次数）；
+ * 买走 seq+1 立即换下一件，没人买则 1 小时后时间桶变化自然刷新。
+ * 关键：生成前后把 RNG 的闭包换回去，绝不打乱游戏内随机序列 ——
+ *       联机两端靠同种子推进，序列一旦错位就会分叉。
+ */
+UI._raidDealCache=null;
+UI._raidDailyDeal=function(branch){
+  const bucket=raidDealBucket();
+  const st=RaidStash.load();
+  const rec=(st.dailyDeals && st.dailyDeals[branch]) || null;
+  const seq=(rec && rec.hour===bucket) ? (rec.seq|0) : 0;
+  const key=branch+"|"+bucket+"|"+seq;
+  const cache=UI._raidDealCache;
+  if(cache && cache.key===key) return cache.deal;
+
+  const saved=RNG.rng;
+  let item=null, name="", meta="", stats="";
+  try{
+    RNG.setSeed(raidDealSeed(branch, bucket, seq));
+    if(branch==="weapon"){
+      const type=RNG.pick(["rifle","sniper","smg","shotgun"]);
+      const qt=5+RNG.ri(0,2);                 // 特种 / 试验 / 原型
+      const g=blGunGen(20,{type, rarity:RAID_TIER_TO_RARITY[qt]});
+      ensureGunAffixes(g);
+      g.uid=raidUniqueUid("deal-weapon-"); g.kind="weapon";
+      g.qTier=qt; g.qName=RAID_TIERS[qt].name; g.qColor=RAID_TIERS[qt].color;
+      item=g; name=gunNameOf(g);
+      meta=(WEAPON_TYPES[type]?WEAPON_TYPES[type].name:type)+" · "+RAID_TIERS[qt].name;
+      stats=`伤害 ${g.dmg} · 弹匣 ${g.mag} · 射速 ${g.rpm} · 穿甲 ${Math.round((g.armorPen||0)*100)}%`;
+    } else if(branch==="armor"){
+      const t=RNG.ri(6,9), r=4+RNG.ri(0,2);
+      const a=raidMakeArmor(t,r); item=a; name=a.name;
+      meta="护甲 · T"+t+" · "+RAID_RARITY_NAME[r];
+      stats=`减伤 ${Math.round(a.dr*100)}% · 护甲值 ${a.maxArmor}`;
+    } else if(branch==="shield"){
+      const t=RNG.ri(5,9), r=4+RNG.ri(0,2);
+      const s=raidMakeShield(t,r); item=s; name=s.name;
+      meta="护盾 · T"+t+" · "+RAID_RARITY_NAME[r];
+      stats=`容量 ${s.capacity} · 充能 ${s.rate}/s · 延迟 ${s.delay}s`;
+    } else if(branch==="part"){
+      const slot=RNG.pick(GUN_SLOTS).id;
+      const pt=rollPart(slot, 18, RAID_TIER_TO_RARITY[5+RNG.ri(0,2)]);
+      item=pt; name=partNameOf(pt)||"配件";
+      meta="配件 · "+(GUN_SLOT_BY_ID[slot]?GUN_SLOT_BY_ID[slot].name:slot)+(partQualityName(pt)?" · "+partQualityName(pt):"");
+      stats=partText(pt)||"";
+    } else if(branch==="ammo"){
+      const cal=RNG.pick(AMMO_CAL_LIST), lv=4+RNG.ri(0,1);
+      const d=ammoDef(cal, lv); item=d;
+      name=d.name+" ×"+RAID_AMMO_STACK;
+      meta=AMMO_CALS[cal].spec+" · T"+lv;
+      stats="一条 "+RAID_AMMO_STACK+" 发 · 单发估值 ₽"+Math.round(d.value);
+    }
+  } finally {
+    RNG.rng=saved;              // 换回原闭包 —— 游戏内随机序列零影响
+  }
+  if(!item) return null;
+
+  const baseVal = (branch==="ammo")
+    ? (item.value||0)*RAID_AMMO_STACK
+    : (item.value || (typeof partValue==="function" ? partValue(item) : 0) || 1000);
+  /* 特价定价：估值 ×1.35（常规军火超市是 ×2.0±0.5）—— 明显便宜，但不至于白送 */
+  const price = Math.max(1, Math.round(baseVal*1.35));
+
+  const deal={ branch, item, name, meta, stats, price, bucket, seq };
+  UI._raidDealCache={ key, deal };
+  return deal;
+};
+
 UI.raidShop=function(opts){
   opts=opts||{};
   // 每次打开货架都重新随机（切 tab 时保留当前批次）
@@ -571,6 +641,21 @@ UI.raidShop=function(opts){
     const W=g=>{ const w=blGunGen(12,{type:g, weights:{white:4,green:8,blue:6,purple:2.4,orange:0.7,pearl:0.22,ancient:0.08,rainbow:0.02}}); ensureGunAffixes(w); w.uid=raidUniqueUid("shop-"+g+"-"); w.kind="weapon"; return w; };
     UI._raidShopGuns = RAID_GUN_TYPES.map(W);
   }
+
+  /* v0.28.0：每日特价卡（每个分支一张，医疗品除外） */
+  const dealCard=(branch)=>{
+    const d=UI._raidDailyDeal(branch);
+    if(!d) return "";
+    const can=stash.creds>=d.price;
+    const leftMin=Math.max(1, Math.ceil((raidDealBucketEnd(d.bucket)-Date.now())/60000));
+    return `<div class="shop-item" style="border-left-color:#ffd23f;background:rgba(255,210,63,.06);">
+      <div class="si-name" style="color:#ffd23f">◈ 每日特价 · ${d.name}</div>
+      <div class="si-meta">${d.meta} · <b style="color:#ffd23f">全服同一件 · 先到先得</b></div>
+      <div class="si-stats">${d.stats}<br><span style="color:#8fd0ff">${leftMin} 分钟后刷新 · 买走立即换下一件</span></div>
+      <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(d.price)}</span>
+        <button class="btn" data-buy="deal:${branch}" ${can?'':'disabled'}>抢购</button></div>
+    </div>`;
+  };
 
   const wCards=UI._raidShopGuns.map(g=>{
     const col=raidGunColor(g);
@@ -591,11 +676,10 @@ UI.raidShop=function(opts){
 
   // v0.21.3：护甲与头盔合并成一栏，用整行小标题分区
   const gridHead=t=>`<div style="grid-column:1/-1;font-size:13px;font-weight:800;color:#cfd8e2;margin:12px 0 2px;padding-left:8px;border-left:3px solid #8fd0ff;">${t}</div>`;
-  /* v0.25.0：护甲 / 头盔卡的**颜色改用 9 阶品质色**（RAID_RARITY_COLOR），
-   * 和仓库、配装、融合台统一。原来这里取的是 ARMOR_TIER_COLOR（按防护等级的旧色表），
-   * 于是同一件 T5 甲在商店是紫灰、在仓库是品质色 —— 两个页面的「绿蓝紫橙」对不上。
-   * 商店货架只卖民用底材，品质色自然都是「民用」，所以另外用一小块等级徽标
-   * （仍用等级色）把 T1~T9 区分开，避免九张卡长得一模一样。 */
+  /* v0.28.0（用户要求）：左边栏与 T 徽标改用 **T1~T9 的颜色阶梯**。
+   * v0.25.0 曾把左边栏统一成「民用」品质色，结果是九张护甲卡全一片棕，
+   * 完全看不出 T5 和 T8 的区别。现在 ARMOR_TIER_COLOR 直接对齐 9 阶品质皮
+   * （T1 民用棕 → T9 定型青），左边栏与徽标同色，阶梯一眼可见。 */
   const armorHead=gridHead("护甲 T1~T9 · 减伤 / 护甲值");
   const helmetHead=gridHead("头盔 T1~T9 · 爆头减伤 / 耐久");
   const tierBadge=(t,col)=>`<span style="display:inline-block;font-size:11px;font-weight:800;padding:0 5px;border-radius:3px;`+
@@ -605,7 +689,7 @@ UI.raidShop=function(opts){
   // 9 级护甲（仅售普通品质；稀有度靠掉落 / 融合）
   const aCards=RAID_ARMOR_TIERS.map(t=>{
     const a=RAID_ARMORS[t], price=raidSuperPrice(a.value, "armor"+t), can=stash.creds>=price;
-    const col=RAID_RARITY_COLOR[0], tcol=ARMOR_TIER_COLOR[t];
+    const col=ARMOR_TIER_COLOR[t], tcol=col;   // v0.28.0：T1~T9 颜色阶梯
     const grade = t>=8?'重型防弹衣' : (t>=6?'插板背心' : (t>=3?'防弹背心':'软质背心'));
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${tierBadge(t,tcol)}${a.name.replace(/^T\d+\s*/,"")}</div>
@@ -619,7 +703,7 @@ UI.raidShop=function(opts){
   // 9 级头盔
   const hCards=RAID_ARMOR_TIERS.map(t=>{
     const h=RAID_HELMETS[t], price=raidSuperPrice(h.value, "helmet"+t), can=stash.creds>=price;
-    const col=RAID_RARITY_COLOR[0], tcol=ARMOR_TIER_COLOR[t];
+    const col=ARMOR_TIER_COLOR[t], tcol=col;   // v0.28.0：T1~T9 颜色阶梯
     const grade = t>=8?'全罩头盔' : (t>=6?'防弹头盔' : (t>=3?'战术头盔':'软质头套'));
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${tierBadge(t,tcol)}${h.name.replace(/^T\d+\s*/,"")}</div>
@@ -731,7 +815,12 @@ UI.raidShop=function(opts){
         ${tabs.map(t=>`<button class="shop-tab ${TAB===t.id?'on':''}" data-tab="${t.id}"><b>${t.name}</b><span class="tab-tag">${t.tag}</span></button>`).join('')}
       </div>
       <div class="shop-list">
-        ${TAB==='weapon'?wCards : TAB==='armor'?(armorHead+aCards+helmetHead+hCards) : TAB==='shield'?sCards : TAB==='part'?pCards : TAB==='ammo'?ammoCards : medCard}
+        ${TAB==='weapon'? (dealCard('weapon')+wCards)
+          : TAB==='armor'? (dealCard('armor')+armorHead+aCards+helmetHead+hCards)
+          : TAB==='shield'? (dealCard('shield')+sCards)
+          : TAB==='part'? (dealCard('part')+pCards)
+          : TAB==='ammo'? (dealCard('ammo')+ammoCards)
+          : medCard}
       </div>
       <div class="hint" style="margin-top:12px;">卢布来自突袭中搜刮与撤离带出（V-EX 雇车等会消耗）。先下场搜刮攒钱，再来超市补强配装与绷带。</div>
     </div>`);
@@ -750,7 +839,26 @@ UI.raidShop=function(opts){
     el.onclick=()=>{
       const parts=el.dataset.buy.split(':'); const type=parts[0]; const key=parts[1];
       /* v0.19.0：局外军火超市统一按 估价 × (2.0 ± 0.5) 结算 */
-      if(type==='bandage'){
+      if(type==='deal'){
+        /* v0.28.0：每日特价 —— 先到先得，买走立即换下一件（seq+1） */
+        const d=UI._raidDailyDeal(key);
+        if(!d) return;
+        if(stash.creds<d.price) return;
+        stash.creds-=d.price;
+        if(key==='weapon') stash.weapons.push(d.item);
+        else if(key==='armor') stash.armors.push(d.item);
+        else if(key==='shield') (stash.shields=stash.shields||[]).push(d.item);
+        else if(key==='part') (stash.parts=stash.parts||[]).push(d.item);
+        else if(key==='ammo'){
+          stash.ammo=stash.ammo||{};
+          stash.ammo[d.item.id]=(stash.ammo[d.item.id]||0)+RAID_AMMO_STACK;
+        }
+        const bucket=raidDealBucket();
+        stash.dailyDeals=stash.dailyDeals||{};
+        const rec=stash.dailyDeals[key];
+        stash.dailyDeals[key]={ hour:bucket, seq:(rec&&rec.hour===bucket?(rec.seq|0):0)+1 };
+        UI._raidDealCache=null;                  // 强制下一次重新生成
+      } else if(type==='bandage'){
         const price=raidSuperPrice((RAID_MED_BY_ID.bandage||{}).value||100, "bandage");
         if(stash.creds<price) return;
         stash.creds-=price; stash.bandages=(stash.bandages||0)+1;

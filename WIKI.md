@@ -1,6 +1,6 @@
 # 边境行动 BORDER OPS · 中文 Wiki
 
-> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.27.0**（由 `npm run check` 校验，升版必须同步）。
+> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.28.0**（由 `npm run check` 校验，升版必须同步）。
 > 代码与实现细节见 [README.md](README.md)，逐版改动见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
@@ -406,7 +406,7 @@ A：官方部署走 HTTP；GitHub Pages 走 P2P，需要双方网络允许 WebRT
 ```sh
 npm start            # node server.js，默认 3000 端口
 npm run check        # 版本三处同步 + 静态/懒加载脚本清单
-npm run verify       # 无浏览器依赖的逻辑回归（951 条断言 / 48 组）
+npm run verify       # 无浏览器依赖的逻辑回归（977 条断言 / 49 组）
 npm run bench:fps    # FPS 基准（需本机 Chrome，2D/3D 各 120 帧 → fps-baseline.json）
 python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
@@ -468,3 +468,7 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **噪音与联动（v0.27.0）**：`_noise` 现在**返回被惊动数量**，翻箱（普通 280 / 尸体 210 / 保险箱 300+等级×60）与开火都靠它；地面物品堆 0.3s 秒拾不算翻箱、不触发。受击广播只传**同阵营** 620px 内、1.2s 节流（`_shoutT`），只给声源位置不给精确目标。穿甲反馈用 `penMul<=0.75` 判定高穿弹（`armorPen≥0.28`），0.45s 节流（`_penFxT`），护甲两成时用一次性 `_armorLowFx`。
 - **Boss 用原创代号（v0.27.0）**：`铁锈 / 屠夫 / 调度长`。之前借用的是另一部撤离射击作品的三名 Boss 名，**源码注释里也不要再写那三个名字**（verify 组 48 有 `!/Reshala|Killa|Shturman/` 断言，写进注释也会红）。
 - **那份「地图/敌人」评审的三条误判（v0.27.0 核实）**：① `wraith` 的 `phasing` 完全无敌在 `src/enemies.js:72`，属**旧战役模式**，Raid 的 `RAID_ARCH.wraith` 是「潜行侦察兵」无无敌；② 「所有人只打玩家」不成立，`_consider` 有完整阵营判定（Scav 互不打 / PMC 打 Scav / Boss 敌对 / 同 `squadId` 不互打）；③ 护甲 97.3% 漏算 `HELMET_BODY_SHARE=0.40`，躯干实际 `1-(1-0.86)(1-0.81×0.4)=90.5%`，再乘 `penMul=1-pen×0.90`。方向（减伤墙）对，数字夸大。
+- **手电参数只能走 `raidPlayerBeam(R)`（v0.28.0）**：常规 0.42/560、狙击 0.20/900，2D 光锥、3D 光池、`raidPlayerLit` 判定三处**必须**共用它。别再在任何地方写死 560/0.42 —— 一旦画面和判定不同源，玩家看到的就是假信息。`RAID_LIT.reach` 仍是 560，狙击是另一条参数，不是把 560 改大。
+- **狙击枪的手感三件套（v0.28.0）**：`raidGunMoveMul` ×0.62（只看主手 `p.gun`）、`MOVE_SPREAD_CAP.sniper` 0.85（移动中几乎全向，站定才准）。改狙击平衡时这三个数要一起看：光锥越远 → 越容易被反打，移速和散布就是代价。
+- **护甲等级色（v0.28.0）**：`ARMOR_TIER_COLOR` 现在 = `["#9aa4b2", ...RAID_TIERS.map(t=>t.color)]`，T1 民用棕 → T9 定型青。军火超市护甲 / 头盔卡的**左边栏与 T 徽标都用它**（不要再退回 `RAID_RARITY_COLOR[0]`，那样九张卡又是一片棕）。护甲底材的品质仍是「民用」，等级色只表达 T 档，两者不冲突。
+- **每日特价（v0.28.0）**：种子 = `raidDealSeed(分支, 时间桶, 已买次数)`，1 小时一桶，和拍卖行期号同一套确定性思路。**生成前后必须把 `RNG.rng` 闭包换回去**（`const saved=RNG.rng … finally RNG.rng=saved`）—— 联机两端靠同种子推进，序列错位就分叉。玩家「买过几次」存 `RaidStash.dailyDeals[分支]={hour,seq}`，买走 seq+1 立即换下一件；没人买则换桶自然刷新。医疗品**不设**特价。时间桶函数用 `ms===undefined` 判断，别写 `ms||Date.now()`（时间戳 0 会被当假值，verify 组 49 有断言）。

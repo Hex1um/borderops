@@ -357,7 +357,10 @@ const RenderRaid = {
     if(p){
       /* v0.23.0：室内手电增益。室内压暗只压环境光，手电光锥反而按 indoor 提亮，
          形成「屋子越黑、手电越亮」的对比；reach 保持 560 不变（加射程 = 光穿墙）。 */
-      beam(p.x, p.y, p.angle||0, 560, 0.42,
+      /* v0.28.0：手持狙击枪时手电「细而长」—— 半角 0.42→0.20、射程 560→900。
+         与 raidPlayerLit 的判定同源（都走 raidPlayerBeam），不会出现「画面照得到、判定照不到」。 */
+      const pb=(typeof raidPlayerBeam==="function") ? raidPlayerBeam(R) : {baseHalf:0.42,reach:560};
+      beam(p.x, p.y, p.angle||0, pb.reach, pb.baseHalf,
            RAID_FLASH.cone2d, RAID_FLASH.cone2dMid, raidFlashGain(R.indoor), RAID_FLASH_FAN);
     }
     /* v0.25.0：其他 AI / 远端玩家的手电。

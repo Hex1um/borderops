@@ -607,10 +607,22 @@ const RAID_FLASH_OP = {
 /* v0.26.0：静止（几乎没移动）时收束射击散布；移动时原样不动。 */
 const RAID_STILL_SPREAD = 0.65;
 
+/* v0.28.0：狙击枪的三条专属手感 ——
+   ① 手电变成「细而长」的一束（看得更远，但视野窄）；
+   ② 手持时移速大幅下降（重枪，跑不动）；
+   ③ 移动中射击精度大幅崩坏（不奖励「边跑边狙」）。 */
+const RAID_SNIPER_MOVE_MUL = 0.62;      // 手持狙击的移速倍率（由 raidGunMoveMul 使用）
+/* 移动时的散布上限（弧度半宽）在 util.js 的 MOVE_SPREAD_CAP.sniper 里，
+   已从 0.48 提到 0.85 —— 位移中开枪几乎打不中，站定才准。 */
+
 const RAID_LIT = {
   half:      0.42,   // 与 2D beam / 3D 手电锥半角一致
   widen:     1.34,   // 最外层羽化，判定边界与画面亮斑外缘对齐
-  reach:     560,    // 与手电 reach 一致，绝不加长（加长 = 光穿墙）
+  reach:     560,    // 步枪 / 手枪等常规手电
+  /* v0.28.0：狙击枪的手电窄而长 —— 看得更远，但光锥更细，侧面几乎不注意不到。
+     仍然受 _rayLight 遮挡，不会穿墙；reach 加长只影响门外/野外的有效视距。 */
+  sniperHalf:  0.20,
+  sniperReach: 900,
   /* v0.27.0：AI 手电不再封顶 560 —— 之前这个封顶把 PMC 的 900 / Boss 的 1250
      全压成和玩家一样，RAID_AI_SENSE 的三档分级形同虚设。现在按 sense.sight 走，
      只用一个渲染/判定共用的上限防止光锥无限长。 */
@@ -637,10 +649,27 @@ function raidPlayerAimAngle(R){
     return ViewMode.yaw||0;
   return (R && R.player && R.player.angle)||0;
 }
+/* 玩家当前手电的窄长参数：手持狙击枪时换一套（2D / 3D / 判定共用）。 */
+function raidPlayerBeam(R){
+  const g=R&&R.player&&R.player.gun;
+  const sniper=!!(g && (g.type==="sniper"||g.cat==="sniper"));
+  const base = sniper ? RAID_LIT.sniperHalf : RAID_LIT.half;
+  return {
+    baseHalf: base,                    // 渲染用：beam() 内部对每层再乘 widen
+    half: base*RAID_LIT.widen,         // 判定用：取最外层羽化边缘，和画面外缘对齐
+    reach: sniper ? RAID_LIT.sniperReach : RAID_LIT.reach,
+    sniper,
+  };
+}
+/* 手持武器的移速倍率（目前只有狙击枪有惩罚）。只看主手 —— 副手要紧的是正在用的那把。 */
+function raidGunMoveMul(p){
+  const g=p&&p.gun;
+  return (g && (g.type==="sniper"||g.cat==="sniper")) ? RAID_SNIPER_MOVE_MUL : 1;
+}
 function raidPlayerLit(R, x, y){
   const p=R&&R.player; if(!p) return false;
-  return raidBeamLit(R,p.x,p.y,raidPlayerAimAngle(R),x,y,
-                     RAID_LIT.half*RAID_LIT.widen,RAID_LIT.reach);
+  const bm=raidPlayerBeam(R);
+  return raidBeamLit(R,p.x,p.y,raidPlayerAimAngle(R),x,y,bm.half,bm.reach);
 }
 function raidAiLit(R, b, x, y){
   if(!b) return false;
@@ -1659,7 +1688,10 @@ function priceTextShort(v){
 }
 // 护甲/头盔等级 → 颜色（T1 灰 → T9 黄铜）
 // 补上索引 9（原表缺 T9，护甲卡片会渲染出 color:undefined），并统一为低饱和军规色
-const ARMOR_TIER_COLOR = ["#9aa4b2","#9aa4b2","#9db39a","#93ad7c","#7b9ab5","#9c8fb5","#c68b4c","#b06a62","#c2a76a","#c9b878"];
+/* v0.28.0：护甲等级色不再是一组自刻的土黄色，直接对齐 9 阶品质皮 ——
+   T1=民用(棕) → T9=定型(青)，与仓库 / 融合台 / 掉落同一套色阶。
+   索引 0 保留旧的中性灰（T0 不存在，仅做占位）。 */
+const ARMOR_TIER_COLOR = ["#9aa4b2", ...RAID_TIERS.map(t=>t.color)];
 
 // 所有新物品统一用尽量唯一的 uid；商店反复购买不再产生重复 uid。
 function raidUniqueUid(prefix){
@@ -1731,6 +1763,24 @@ function raidRepairList(arr, fn){
     }catch(e){ bad.push(it); }
   }
   return { list:out, bad:bad.length };
+}
+
+/* ==================== v0.28.0：军火超市每日特价 ====================
+ * 时间桶 1 小时 + 分支名 + 已买次数 → FNV-1a 32 位种子 → RNG.setSeed 重放。
+ * 与拍卖行「期号货池」同一套确定性思路：任何设备在同一小时内打开商店，
+ * 看到的是同一件特价。玩家「买过几次」是本地状态（纯静态站没有全局库存），
+ * 买走就用下一个 seq 生成下一件；没人买则 1 小时后 bucket 变化自然刷新。
+ */
+const RAID_DEAL_BUCKET_MS = 3600000;
+/* 注意用 ms===undefined 而不是 ms||Date.now()：时间戳 0 是合法值，
+   写成 falsy 判断会把 0 当成「没传」直接取当前时间，单测和回放都会错。 */
+function raidDealBucket(ms){ return Math.floor((ms===undefined?Date.now():ms)/RAID_DEAL_BUCKET_MS); }
+function raidDealBucketEnd(b){ return (b+1)*RAID_DEAL_BUCKET_MS; }
+function raidDealSeed(branch, bucket, seq){
+  let h = 2166136261 >>> 0;
+  const s = String(branch) + ":" + (bucket|0) + ":" + (seq|0);
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
 }
 
 const RaidStash = {
