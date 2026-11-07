@@ -2690,10 +2690,10 @@ const __vis = JSON.parse(G(`JSON.stringify((()=>{
 check('玩家手电：前方可见 / 背后不可见', __vis.ahead===true && __vis.behind===false ? 1 : 0, 1, 0.001);
 check('箱子：近身可见 / 远处黑暗不可见', __vis.near===true && __vis.dark===false ? 1 : 0, 1, 0.001);
 check('AI 用自己的手电判定', __vis.ai===true ? 1 : 0, 1, 0.001);
-check('AI 视野接入 raidAiLit（两处）',
-  (raidSrc.match(/raidAiLit\(this,b,/g)||[]).length>=2 ? 1 : 0, 1, 0.001);
-check('AI 索敌保留 _los（光和子弹都不穿墙）',
-  /if\(!locked && !raidAiLit\(this,b,o\.x,o\.y\)\) return;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 感知改走视线判定（_aiAware，灌木不挡光）',
+  /_aiAware\(b,o\.x,o\.y\)/.test(raidSrc) && /_aiAware\(b,tgt\.x,tgt\.y\)/.test(raidSrc) && /_aiAware\(b, x, y\)\{/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 索敌仍保留 _los（不穿墙）',
+  /return this\._los\(b\.x,b\.y,x,y\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('玩家自瞄只认玩家光锥', /o&&o\.isPlayer\) \? raidPlayerLit\(this,x,y\) : raidAiLit/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('容器交互也走可见性（看不见就摸不到）',
   (raidSrc.match(/if\(!raidContainerVisible\(this,c\)\) continue;/g)||[]).length>=2 ? 1 : 0, 1, 0.001);
@@ -3025,8 +3025,8 @@ check('迟滞期间不隔墙开枪（开火仍只认 canSee）',
   /if\(canSee && b\.fireCd<=0 && b\.reloadT<=0\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('守卫东张西望改为平滑转向（不再瞬跳 RNG 角）',
   !/b\.angle=RNG\.fr\(0,6\.28\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('AI 对移动目标做弹道预判（smart）',
-  /aimX \+= b\._tvx\*tof\*0\.55/.test(raidSrc) && /ivx = Math\.max\(-420/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 对移动目标做弹道预判（smart，带偏移限幅）',
+  /let lx=b\._tvx\*tof\*0\.55/.test(raidSrc) && /const lm=Math\.hypot\(lx,ly\), lmax=Math\.min\(70, d\*0\.10\)/.test(raidSrc) && /ivx = Math\.max\(-420/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ④ 箱子隔墙不可见（近身也过 _los） */
 const __t50vis = JSON.parse(G(`JSON.stringify((()=>{
@@ -3154,6 +3154,43 @@ const __t51bn = (()=>{ const m=raidSrc.match(/bountyNames=\[[\s\S]*?\]/); return
 check('PMC 名称池 ≥18', __t51pmc>=18 ? 1 : 0, 1, 0.001);
 check('Scav 名称池 ≥18', __t51sn>=18 ? 1 : 0, 1, 0.001);
 check('Boss 代号 ≥8', __t51bn>=8 ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 52. v0.30.1：AI 感知改视线 / 察觉迟滞 / 预判限幅 / 贴边吸附
+ * ========================================================================== */
+console.log('\n=== 52. AI 感知改视线 / 察觉迟滞 / 预判限幅 / 贴边吸附（v0.30.1）===');
+
+const __t52 = JSON.parse(G(`JSON.stringify((()=>{
+  try{
+    const me={ _los:()=>true }, b={x:0,y:0,angle:0,cls:"pmc",alive:true};
+    return {
+      ahead:  Raid._aiAware.call(me, b, 300, 0),
+      behind: Raid._aiAware.call(me, b, -300, 0),
+      close:  Raid._aiAware.call(me, b, -60, 0),
+      walled: Raid._aiAware.call({_los:()=>false}, b, 300, 0),
+      far:    Raid._aiAware.call(me, b, 2000, 0),
+    };
+  }catch(e){ return { err:String(e) }; }
+})())`));
+check('AI 正前方 300px 可见（视线 + 锥内）', (!__t52.err && __t52.ahead===true)?1:0, 1, 0.001);
+check('AI 背后 300px 不可见（受手电锥限制）', (!__t52.err && __t52.behind===false)?1:0, 1, 0.001);
+check('AI 背后 60px 贴身可见（全向感知）', (!__t52.err && __t52.close===true)?1:0, 1, 0.001);
+check('AI 隔墙不可见（_los 仍生效）', (!__t52.err && __t52.walled===false)?1:0, 1, 0.001);
+check('AI 超视距不可见', (!__t52.err && __t52.far===false)?1:0, 1, 0.001);
+check('AI 感知用 _rayWall/视线，不再被灌木光遮挡死',
+  /return this\._los\(b\.x,b\.y,x,y\);/.test(raidSrc) && /_aiAware\(b, x, y\)\{/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 感知体内不得出现 _rayLight（否则灌木又会挡死感知）',
+  (()=>{ const m=raidSrc.match(/_aiAware\(b, x, y\)\{[\s\S]*?\n  \},/); return m && !/_rayLight/.test(m[0]) && /_los/.test(m[0]) ? 1 : 0; })(), 1, 0.001);
+check('已察觉目标的追踪锥 1.25rad（迟滞）',
+  /angOff<1\.25/.test(raidSrc) && /const tracking = !!b\.lastSeen/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('反应进度衰减放慢（1.5 → 0.6）',
+  /_detectT\|\|0\)-dt\*0\.6/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('预判偏移限幅（≤ min(70px, 10% 距离)）',
+  /lmax=Math\.min\(70, d\*0\.10\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('贴边吸附（残差 <0.10rad 直接对齐）',
+  /if\(Math\.abs\(M\.normAngle\(realAng-b\.angle\)\) < 0\.10\) b\.angle=M\.normAngle\(realAng\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('循光不劫持已警觉单位（!b.lastSeen）',
+  /if\(!aware && !b\.investigate && !b\.lastSeen && b\.gun\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

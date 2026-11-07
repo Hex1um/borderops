@@ -194,6 +194,10 @@ Object.assign(Raid, {
         return { item: raidMakeMaterial(0.6), bucket:"materials" };
       }
       return { item: raidMakeMaterial(0), bucket:"materials" };   // 垫底 ≈70%
+    } catch(e){
+      /* v0.30.1：任何工厂异常都不能让「已扣费」的抽奖崩掉 —— 兜底给一份材料。 */
+      console.warn("[Raid] 抽奖投骰异常，已回退为材料", e);
+      return { item: raidMakeMaterial(0), bucket:"materials" };
     } finally {
       RNG.rng = prevRng;
       if(snap!==null) RNG.restoreSnap(snap);
@@ -1286,6 +1290,23 @@ Object.assign(Raid, {
     b.angle = M.normAngle(cur + step);
   },
 
+  /* v0.30.1：AI 感知判定 —— **用视线（_rayWall，灌木不挡）**，不再用手电光路（_rayLight，灌木挡光）。
+   * 手电仍然决定「能看多远 / 多宽」（reach + aiHalf），但一丛灌木不该让 AI 完全看不见 2 米外的人。
+   * 旧实现用 raidBeamLit（_rayLight），玩家站在灌木投下的光锥阴影边缘时，判定逐帧真假翻转：
+   *   _detectT 永远攒不到 react → 永不交战/开火，朝向在实时目标与陈旧 lastSeen 之间来回切 → 抖动。
+   * 近距离（<near）放宽到 360°：贴脸时不该因为目标在侧面就把人当空气。 */
+  _aiAware(b, x, y){
+    if(!b) return false;
+    const reach = (typeof raidAiBeamReach==="function") ? raidAiBeamReach(b) : 560;
+    const dx=x-b.x, dy=y-b.y, d=Math.hypot(dx,dy);
+    if(d>reach || d<1) return false;
+    if(d>110){    // 贴身（110px 内）不看朝向
+      const off = Math.abs(M.normAngle(Math.atan2(dy,dx)-(b.angle||0)));
+      if(off > RAID_LIT.aiHalf) return false;
+    }
+    return this._los(b.x,b.y,x,y);
+  },
+
   _botsUpdate(dt, game){
     // 联机非房主：AI 完全由房主模拟，这里只渲染影子
     if(this.online && typeof Net!=="undefined" && !Net.isHost) return;
@@ -1320,7 +1341,7 @@ Object.assign(Raid, {
         /* v0.26.0：AI 只在**自己手电**照到的地方能发现目标；受击 3 秒内例外，
            且例外目标自带最高优先级（打我的人优先）。_los 依旧保留，光和子弹都不穿墙。 */
         const locked = raidHitLocked(b,o);
-        if(!locked && !raidAiLit(this,b,o.x,o.y)) return;
+        if(!locked && !this._aiAware(b,o.x,o.y)) return;
         const pri = locked ? -4000
                   : (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;
         /* v0.30.0：目标黏性 —— 当前目标只要还活着且可见，就给它 -140 的「续锁」优惠，
@@ -1337,9 +1358,15 @@ Object.assign(Raid, {
       /* 索敌分级：Scav 视距短、反应慢、忘得快；PMC 更警觉；Boss 几乎即时锁定。
        * _detectT 累积「持续看见」的时间，视线中断会快速衰减；已警觉的 AI 重新发现目标时不再重复反应延迟。 */
       const grace = this.spawnGrace>0 && (tgt.isPlayer || tgt.remote);
-      const seenNow = tgt.alive && d<sense.sight && !grace && this._los(b.x,b.y,tgt.x,tgt.y)
-        && (raidHitLocked(b,tgt) || raidAiLit(this,b,tgt.x,tgt.y));
-      b._detectT = seenNow ? (b._detectT||0)+dt : Math.max(0,(b._detectT||0)-dt*1.5);
+      /* v0.30.1：察觉迟滞 —— 已经看见过的目标，只要还在 1.25rad 的「追踪锥」内且有视线，
+         就不算丢失。避免在光锥/阴影边缘反复丢失-重获（那是抖动与不开火的根）。 */
+      const angOff = Math.abs(M.normAngle(Math.atan2(tgt.y-b.y, tgt.x-b.x) - (b.angle||0)));
+      const tracking = !!b.lastSeen && tgt.alive && d<sense.sight && angOff<1.25
+        && this._los(b.x,b.y,tgt.x,tgt.y);
+      const seenNow = tgt.alive && d<sense.sight && !grace
+        && (raidHitLocked(b,tgt) || this._aiAware(b,tgt.x,tgt.y) || tracking);
+      // 衰减放慢（1.5→0.6）：边缘偶发丢帧不再把反应进度清零
+      b._detectT = seenNow ? (b._detectT||0)+dt : Math.max(0,(b._detectT||0)-dt*0.6);
       const canSee = seenNow && (b._detectT>=sense.react || !!b.lastSeen);
       /* v0.29.0：感知迟滞（消除「视角跳动」）。
        * 手电锥边缘 + 掩体拐角会让 seenNow 逐帧翻转 —— 状态在 engage/chase/roam 之间来回切，
@@ -1356,7 +1383,7 @@ Object.assign(Raid, {
          玩家（或另一个 AI）的光束扫到这名 AI 身上 / 它光锥前方 120px 处时，
          还没发现人的 AI 会转向光源方向摸过去。带 0.25~0.4s 节流 + 距离上限，
          不会每帧对全场 AI 两两做射线（44 个单位最坏 1900 次/帧）。 */
-      if(!aware && !b.investigate && b.gun){
+      if(!aware && !b.investigate && !b.lastSeen && b.gun){
         b._litT = (b._litT||0) - dt;
         if(b._litT <= 0){
           b._litT = 0.25 + Math.random()*0.15;
@@ -1414,10 +1441,21 @@ Object.assign(Raid, {
           b._tvx = (b._tvx===undefined) ? ivx : b._tvx*0.82 + ivx*0.18;
           b._tvy = (b._tvy===undefined) ? ivy : b._tvy*0.82 + ivy*0.18;
           const tof=Math.min(0.30, d/900);            // 子弹飞行时间近似（秒）
-          aimX += b._tvx*tof*0.55; aimY += b._tvy*tof*0.55;   // 只预判一半，别把 AI 做成外挂
+          /* v0.30.1：预判偏移**限幅** —— 旧版速度噪声能把瞄准点甩出 20°+，
+             正好把玩家顶到手电光锥边缘。现在最大横向偏移 = min(70px, d×0.10)。 */
+          let lx=b._tvx*tof*0.55, ly=b._tvy*tof*0.55;
+          const lm=Math.hypot(lx,ly), lmax=Math.min(70, d*0.10);
+          if(lm>lmax){ lx=lx/lm*lmax; ly=ly/lm*lmax; }
+          aimX += lx; aimY += ly;
         } else { b._tvx=0; b._tvy=0; }
         tgt._px=tgt.x; tgt._py=tgt.y;
         this._face(b, M.angle(b.x,b.y,aimX,aimY), b.smart?0.26:0.19, dt, b.smart?7.5:6.0);
+        /* v0.30.1：贴边吸附 —— 残差 <0.10rad 时直接对齐真实目标角，
+           杜绝「在光锥边缘来回抖动」的驻留状态（玩家永远停在正中）。 */
+        if(canSee){
+          const realAng=M.angle(b.x,b.y,tgt.x,tgt.y);
+          if(Math.abs(M.normAngle(realAng-b.angle)) < 0.10) b.angle=M.normAngle(realAng);
+        }
         const ad=M.dist(b.x,b.y,aimX,aimY);           // 用「所知位置」算距离，丢失视线时不用实时坐标
         let mx=0,my=0;
         // 压得更狠（170 才开始保持距离，60 以内才后退）
