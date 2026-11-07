@@ -259,8 +259,17 @@ const Raid = {
     for(const it of this.carried.weapons) this.inv.weapons.push(it);
     const hostSim = !this.online || (typeof Net==="undefined") || Net.isHost;
     if(hostSim){
-      const pmcNames=["USEC·猎犬","BEAR·雪松","USEC·游骑兵","BEAR·极地","PMC·审判者","PMC·铁锤"];
-      const scavNames=["破烂王·瓦夏","赌徒·谢尔盖","醉汉·鲍里斯","老猎人·米沙","暴躁哥·尤拉","捡漏的·科利亚"];
+      /* v0.30.0：名称池扩充（各 18 个）—— 同一局里 AI 兵牌很少重名，交火时更好分辨。 */
+      const pmcNames=[
+        "USEC·猎犬","BEAR·雪松","USEC·游骑兵","BEAR·极地","PMC·审判者","PMC·铁锤",
+        "USEC·渡鸦","BEAR·狼獾","USEC·夜枭","BEAR·铁砧","PMC·刀锋","PMC·墙盾",
+        "USEC·回声","BEAR·冻土","USEC·灰隼","BEAR·镰刀","PMC·钟摆","PMC·灰狼",
+      ];
+      const scavNames=[
+        "破烂王·瓦夏","赌徒·谢尔盖","醉汉·鲍里斯","老猎人·米沙","暴躁哥·尤拉","捡漏的·科利亚",
+        "独眼·格里沙","瘸腿·彼得","耳鸣·伊万","快手·安东","老烟枪·费佳","哑巴·萨沙",
+        "扒手·廖沙","铁胃·瓦洛佳","胆小鬼·科斯佳","锅炉工·斯捷潘","守夜人·阿尔乔姆","浪人·季马",
+      ];
       const colors=["#e06a4a","#e0b84a","#b06ae0","#4ae0a0","#e04a8a","#7a9be0","#d0d04a","#4ac0d0","#d06a6a"];
       // AI 全图刷 —— 取消"只刷在距玩家>620px 房间"的限制，
       // 改为先构建全图候选生成点池（房间内部点 + 院子/道路室外点），再均匀挑选，
@@ -427,7 +436,7 @@ const Raid = {
       // Boss：3 名精锐，掉落保底好枪 + 带词条配件，HUD 高亮
       /* v0.27.0：改用原创代号。之前直接沿用了另一部撤离射击作品的三名 Boss 名，
          既不是本作设定，也让「边境行动」的世界观寄生在别人 IP 上。 */
-      const bountyNames=["铁锈","屠夫","调度长"];
+      const bountyNames=["铁锈","屠夫","调度长","煤矿","钟楼","老账房","毒蜂","压路机"];
       const bountyRooms=["factory","village","dock","temple","depot"];
       const bountyOrder=bountyRooms.map(id=>RAID_ROOMS.find(r=>r.id===id)).filter(Boolean)
         .sort((a,b)=>M.dist(b.x+b.w/2,b.y+b.h/2,px,py)-M.dist(a.x+a.w/2,a.y+a.h/2,px,py));

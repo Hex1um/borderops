@@ -561,7 +561,7 @@ const deltaHits = ['干员', '悬赏', '黑市代币', '配给券', '三角洲',
 check('源码中无三角洲术语', deltaHits.length, 0, 0.001);
 /* v0.27.0：Boss 从「借用某作品角色名」改为原创代号，断言同步反转 */
 check('Boss 使用原创代号（不再借用既有 IP）',
-  !/Reshala|Killa|Shturman/.test(raidSrc) && /bountyNames=\["铁锈","屠夫","调度长"\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+  !/Reshala|Killa|Shturman/.test(raidSrc) && /bountyNames=\["铁锈","屠夫","调度长",/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('选角文案为「选择你的 PMC」', /选择你的 PMC/.test(uiSrc) ? 1 : 0, 1, 0.001);
 check('精英 AI 改称 Raider', /Raider/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('货币文案为 GP 币 / 美元', /GP 币/.test(raidSrc) && !/黑市代币|配给券/.test(allNameSrc) ? 1 : 0, 1, 0.001);
@@ -2903,7 +2903,7 @@ check('护甲两成时一次性警告', /_armorLowFx/.test(raidSrc) && /护甲�
 /* ⑤ Boss 原创命名 */
 check('Boss 不再借用既有 IP 的角色名',
   !/Reshala|Killa|Shturman/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('Boss 使用原创代号', /bountyNames=\["铁锈","屠夫","调度长"\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('Boss 使用原创代号', /bountyNames=\["铁锈","屠夫","调度长",/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ==========================================================================
  * 49. 狙击枪手感 / 等级色阶梯 / 每日特价（v0.28.0）
@@ -3026,7 +3026,7 @@ check('迟滞期间不隔墙开枪（开火仍只认 canSee）',
 check('守卫东张西望改为平滑转向（不再瞬跳 RNG 角）',
   !/b\.angle=RNG\.fr\(0,6\.28\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('AI 对移动目标做弹道预判（smart）',
-  /aimX \+= vx\*tof\*0\.55/.test(raidSrc) ? 1 : 0, 1, 0.001);
+  /aimX \+= b\._tvx\*tof\*0\.55/.test(raidSrc) && /ivx = Math\.max\(-420/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ④ 箱子隔墙不可见（近身也过 _los） */
 const __t50vis = JSON.parse(G(`JSON.stringify((()=>{
@@ -3052,19 +3052,20 @@ const __t50gacha = JSON.parse(G(`JSON.stringify((()=>{
   try{
     const ok={weapons:1,armors:1,helmets:1,shields:1,parts:1,materials:1};
     let n=0, high=0, bad=0;
-    for(let i=0;i<1500;i++){
+    for(let i=0;i<2000;i++){
       const r=Raid._gachaRoll();
       if(!r || !r.item || !ok[r.bucket]){ bad++; continue; }
       n++;
+      /* v0.30.0：只统计「极品」T8+（T7 属于高档段，1.8%/3 会正常出现，不能算极品） */
       const t=r.item.tier|0, q=r.item.qTier|0;
-      if(t>=7 || q>=7) high++;
+      if(t>=8 || q>=8) high++;
     }
     return { n, high, bad };
   }catch(e){ return { err:String(e) }; }
 })())`));
-check('抽奖结果都在合法栏目内', !__t50gacha.err && __t50gacha.bad===0 && __t50gacha.n>1400 ? 1 : 0, 1, 0.001);
-check('抽奖极品（T7+）比例极低（<1%）',
-  !__t50gacha.err && __t50gacha.high/Math.max(1,__t50gacha.n) < 0.01 ? 1 : 0, 1, 0.001);
+check('抽奖结果都在合法栏目内', !__t50gacha.err && __t50gacha.bad===0 && __t50gacha.n>1900 ? 1 : 0, 1, 0.001);
+check('抽奖极品（T8+）比例极低（<0.5%）',
+  !__t50gacha.err && __t50gacha.high/Math.max(1,__t50gacha.n) < 0.005 ? 1 : 0, 1, 0.001);
 const __t50iso = JSON.parse(G(`JSON.stringify((()=>{
   try{
     RNG.setSeed(424242);
@@ -3082,6 +3083,77 @@ check('步枪移动散布斜率 ≥24（旧 16）', G('MOVE_SPREAD_K.rifle')>=24
 check('移动散布上限抬高（步枪 0.98）', G('MOVE_SPREAD_CAP.rifle'), 0.98, 0.0001);
 check('静止/运动散布差距 ≥20 倍（步枪）',
   G('moveSpreadMul("rifle",1)')/Math.max(1e-9,G('moveSpreadMul("rifle",0)')) >= 20 ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 51. v0.30.0：配件 1/4 权重 / 高品配件加成 / 瞄准镜 / AI 手电限速 / 名称池 / 循光
+ * ========================================================================== */
+console.log('\n=== 51. 配件 1/4 权重 / 高品加成 / 瞄准镜 / AI 手电限速 / 名称池 / 循光（v0.30.0）===');
+
+/* ① 配件品质权重：后一档 = 前一档 ×1/4 */
+const __t51w = JSON.parse(G('JSON.stringify(RAID_PART_TIER_W)'));
+check('配件 T5/T4 = 1/4', __t51w[5]/__t51w[4], 0.25, 1e-9);
+check('配件 T6/T5 = 1/4', __t51w[6]/__t51w[5], 0.25, 1e-9);
+check('配件 T7/T6 = 1/4', __t51w[7]/__t51w[6], 0.25, 1e-9);
+check('配件 T8/T7 = 1/4', __t51w[8]/__t51w[7], 0.25, 1e-9);
+check('配件最高三档不进普通掉落（权重 0）',
+  (__t51w[9]===0 && __t51w[10]===0 && __t51w[11]===0) ? 1 : 0, 1, 0.001);
+check('配件掷点不会落在最高三档（RNG.weighted 把 0 当 1，必须切片）',
+  G(`(()=>{ for(let i=0;i<4000;i++) if(raidRollPartRarityIdx(0)>8) return 0; return 1; })()`), 1, 0.001);
+check('配件品质改用独立权重（不再走 raidBudgetTier）',
+  /raidRollPartRarityIdx\(cls==="scav"\?0:luck\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ② 高品质配件加成大幅提升（同种子对比，排除抖动干扰） */
+const __t51part = JSON.parse(G(`JSON.stringify((()=>{
+  try{
+    RNG.setSeed(777);
+    const w = partStatValue("dmgPct", 20, RARITY_BY_ID["white"]);
+    RNG.setSeed(777);
+    const o = partStatValue("dmgPct", 20, RARITY_BY_ID["orange"]);
+    RNG.setSeed(777);
+    const s = partStatValue("dmgPct", 20, RARITY_BY_ID["singularity"]);
+    RNG.rng = Math.random;
+    let scopeOk = 0;
+    for(let i=0;i<40;i++){
+      const p = rollPart("scope", 20, "purple");
+      if((p.mods||[]).some(m=>m.stat==="accPct" && m.value>0)) scopeOk++;
+    }
+    return { w, o, s, ratio:s/Math.max(0.001,w), scopeOk };
+  }catch(e){ return { err:String(e) }; }
+})())`));
+check('高品质配件加成大幅提升（顶档/民用 ≥10 倍）',
+  !__t51part.err && __t51part.ratio>=10 ? 1 : 0, 1, 0.001);
+check('民用配件数值基本不变（不误伤低档）',
+  !__t51part.err && __t51part.w>5 && __t51part.w<9 ? 1 : 0, 1, 0.001);
+
+/* ③ 瞄准镜槽位 */
+const __t51slot = JSON.parse(G('JSON.stringify({ n:GUN_SLOTS.length, scope: GUN_SLOT_BY_ID.scope ? { name:GUN_SLOT_BY_ID.scope.name, stats:GUN_SLOT_BY_ID.scope.stats } : null })'));
+check('新增瞄准镜槽位（name=瞄准镜）',
+  __t51slot.scope && __t51slot.scope.name==="瞄准镜" ? 1 : 0, 1, 0.001);
+check('瞄准镜词条偏重精度（accPct 出现 2 次）',
+  __t51slot.scope && __t51slot.scope.stats.filter(s=>s==="accPct").length===2 ? 1 : 0, 1, 0.001);
+check('GUN_SLOTS 扩到 10 个槽位', __t51slot.n===10 ? 1 : 0, 1, 0.001);
+check('瞄准镜必带射击精度词条（40 次全中）',
+  !__t51part.err && __t51part.scopeOk===40 ? 1 : 0, 1, 0.001);
+check('瞄准镜参与 2D 瞄具渲染',
+  /p\.slot==="optic"\|\|p\.slot==="scope"/.test(__rd2) ? 1 : 0, 1, 0.001);
+
+/* ④ AI 手电不再跳动：角速度上限 + 目标黏性 + 预判限幅  ⑤ 循光 */
+check('AI 转向有角速度上限（光锥不会甩）',
+  /const cap = \(maxTurn\|\|6\.0\) \* Math\.max\(0\.0001, dt\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 目标黏性（不再每帧切目标）',
+  /const stick = \(o===b\._tgt && o\.alive\) \? -140 : 0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 预判速度做了限幅 + 一阶低通',
+  /b\._tvx = \(b\._tvx===undefined\) \? ivx : b\._tvx\*0\.82 \+ ivx\*0\.18/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 被手电照到会循光找来源',
+  /发现光源/.test(raidSrc) && /b\.investigate = \{ x:src\.x, y:src\.y, t:3\.5 \}/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑥ 名称池扩充 */
+const __t51pmc = (raidSrc.match(/"USEC·/g)||[]).length + (raidSrc.match(/"BEAR·/g)||[]).length + (raidSrc.match(/"PMC·/g)||[]).length;
+const __t51sn = (()=>{ const m=raidSrc.match(/scavNames=\[[\s\S]*?\]/); return m ? (m[0].match(/"/g)||[]).length/2 : 0; })();
+const __t51bn = (()=>{ const m=raidSrc.match(/bountyNames=\[[\s\S]*?\]/); return m ? (m[0].match(/"/g)||[]).length/2 : 0; })();
+check('PMC 名称池 ≥18', __t51pmc>=18 ? 1 : 0, 1, 0.001);
+check('Scav 名称池 ≥18', __t51sn>=18 ? 1 : 0, 1, 0.001);
+check('Boss 代号 ≥8', __t51bn>=8 ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

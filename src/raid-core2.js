@@ -363,8 +363,9 @@ Object.assign(Raid, {
   // 散装配件：品质随运气浮动（越高档词缀越好）；floorTier 为品质保底（V 级军火箱用）
   _rollPartGear(cls, luck, floorTier){
     const slot=RNG.pick(GUN_SLOTS).id;
-    const lt=raidBudgetTier(cls==="scav"?0:luck);
-    let idx=M.clamp(lt, 0, RARITIES.length-1);
+    /* v0.30.0：配件品质改走独立的几何权重（后一档 = 前一档 ×1/4），
+       不再共用 raidBudgetTier —— 高品质配件更稀有，但加成更猛（见 partStatValue）。 */
+    let idx=raidRollPartRarityIdx(cls==="scav"?0:luck);
     if(floorTier) idx=Math.max(idx, Math.min(floorTier, RARITIES.length-1));
     const pt=rollPart(slot, cls==="scav"?8:14, RARITIES[idx].id);
     pt.kind="part";
@@ -1270,10 +1271,19 @@ Object.assign(Raid, {
 
   /* v0.29.0：按 dt 归一化的平滑转向。
      旧写法每帧固定 lerp 系数（0.08~0.26），帧率越高转得越快、掉帧时又突然很慢，
-     观感就是「视角一顿一顿 / 抖动」。这里换算成「每秒等效转向比例」，帧率无关。 */
-  _face(b, targetAngle, perFrameRate, dt){
+     观感就是「视角一顿一顿 / 抖动」。这里换算成「每秒等效转向比例」，帧率无关。
+     v0.30.0：再加**角速度上限**（maxTurn, 弧度/秒）与死区 —— 目标位置每帧都在变
+     （走位、切目标、预判点抖动）时，旧版 lerp 会带着手电光锥一起甩；限速后
+     无论目标怎么动，每帧最多转 maxTurn*dt，光锥只会平滑扫过去，不会跳。 */
+  _face(b, targetAngle, perFrameRate, dt, maxTurn){
+    const cur = b.angle||0;
+    const d = M.normAngle(targetAngle - cur);
+    if(Math.abs(d) < 0.006){ b.angle = M.normAngle(cur); return; }   // 死区：微小抖动直接忽略
     const t = 1 - Math.pow(1 - M.clamp(perFrameRate||0.14, 0.001, 0.99), Math.max(0.0001, dt*60));
-    b.angle = M.lerpAngle(b.angle||0, targetAngle, Math.min(1, t));
+    let step = d * Math.min(1, t);
+    const cap = (maxTurn||6.0) * Math.max(0.0001, dt);
+    if(Math.abs(step) > cap) step = (step>0?1:-1) * cap;
+    b.angle = M.normAngle(cur + step);
   },
 
   _botsUpdate(dt, game){
@@ -1313,12 +1323,17 @@ Object.assign(Raid, {
         if(!locked && !raidAiLit(this,b,o.x,o.y)) return;
         const pri = locked ? -4000
                   : (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;
-        if((dd+pri)<d && dd<sight && this._los(b.x,b.y,o.x,o.y)){ d=dd; tgt=o; }
+        /* v0.30.0：目标黏性 —— 当前目标只要还活着且可见，就给它 -140 的「续锁」优惠，
+           除非另一个候选比它近 140px 以上才换人。否则两个距离相近的敌人会让 AI
+           每帧在目标之间来回切，手电光锥跟着左右甩（这就是「手电筒经常跳动」的主因之一）。 */
+        const stick = (o===b._tgt && o.alive) ? -140 : 0;
+        if((dd+pri+stick)<d && dd<sight && this._los(b.x,b.y,o.x,o.y)){ d=dd; tgt=o; }
       };
       _consider(p);
       if(this.online){ for(const o of this.ops){ if(o.isPlayer||o.remote) _consider(o); } }
       for(const o of this.ops){ if(!o.isPlayer && !o.remote) _consider(o); }
       if(!tgt || !tgt.alive) tgt=p;
+      b._tgt = tgt;
       /* 索敌分级：Scav 视距短、反应慢、忘得快；PMC 更警觉；Boss 几乎即时锁定。
        * _detectT 累积「持续看见」的时间，视线中断会快速衰减；已警觉的 AI 重新发现目标时不再重复反应延迟。 */
       const grace = this.spawnGrace>0 && (tgt.isPlayer || tgt.remote);
@@ -1336,6 +1351,32 @@ Object.assign(Raid, {
       else b._seenHold = Math.max(0, (b._seenHold||0) - dt);
       const aware = canSee || (b._seenHold>0 && b.lastSeen);
       if(canSee) b.lastSeen={ x:tgt.x, y:tgt.y, t:sense.memory };   // 记住最后位置，丢失视线也不马上忘
+
+      /* v0.30.0：被别人的手电照到 → 循光找来源。
+         玩家（或另一个 AI）的光束扫到这名 AI 身上 / 它光锥前方 120px 处时，
+         还没发现人的 AI 会转向光源方向摸过去。带 0.25~0.4s 节流 + 距离上限，
+         不会每帧对全场 AI 两两做射线（44 个单位最坏 1900 次/帧）。 */
+      if(!aware && !b.investigate && b.gun){
+        b._litT = (b._litT||0) - dt;
+        if(b._litT <= 0){
+          b._litT = 0.25 + Math.random()*0.15;
+          const lx = b.x + Math.cos(b.angle||0)*120, ly = b.y + Math.sin(b.angle||0)*120;
+          let src = null;
+          if(this.player && typeof raidPlayerLit==="function"
+             && (raidPlayerLit(this, b.x, b.y) || raidPlayerLit(this, lx, ly))) src = this.player;
+          if(!src && typeof raidAiLit==="function"){
+            for(const o of this.ops){
+              if(o===b || !o.alive || o.isPlayer || o.remote) continue;
+              if(M.dist(b.x,b.y,o.x,o.y) > 900) continue;
+              if(raidAiLit(this, o, b.x, b.y) || raidAiLit(this, o, lx, ly)){ src = o; break; }
+            }
+          }
+          if(src){
+            b.investigate = { x:src.x, y:src.y, t:3.5 };
+            if(b.smart) this._float(b.x, b.y-30, "！发现光源", "#ffd23f");
+          }
+        }
+      }
 
       /* 所有 AI 都会用医疗品 —— 血量低于阈值且暂时脱离火线时自行包扎 */
       if(b.medT>0){
@@ -1365,12 +1406,18 @@ Object.assign(Raid, {
         if(!canSee && b.lastSeen){ aimX=b.lastSeen.x; aimY=b.lastSeen.y; }
         if(canSee && b.smart && tgt._px!==undefined){
           const step=Math.max(0.0001, dt);
-          const vx=(tgt.x-tgt._px)/step, vy=(tgt.y-tgt._py)/step;
+          let ivx=(tgt.x-tgt._px)/step, ivy=(tgt.y-tgt._py)/step;
+          /* v0.30.0：速度限幅 + 一阶低通。旧版直接拿「本帧位移/本帧 dt」当速度，
+             掉帧时 dt 变小、位移不变 → 瞬时速度成倍放大，预判点乱蹦，手电跟着抖。 */
+          ivx = Math.max(-420, Math.min(420, ivx));
+          ivy = Math.max(-420, Math.min(420, ivy));
+          b._tvx = (b._tvx===undefined) ? ivx : b._tvx*0.82 + ivx*0.18;
+          b._tvy = (b._tvy===undefined) ? ivy : b._tvy*0.82 + ivy*0.18;
           const tof=Math.min(0.30, d/900);            // 子弹飞行时间近似（秒）
-          aimX += vx*tof*0.55; aimY += vy*tof*0.55;   // 只预判一半，别把 AI 做成外挂
-        }
+          aimX += b._tvx*tof*0.55; aimY += b._tvy*tof*0.55;   // 只预判一半，别把 AI 做成外挂
+        } else { b._tvx=0; b._tvy=0; }
         tgt._px=tgt.x; tgt._py=tgt.y;
-        this._face(b, M.angle(b.x,b.y,aimX,aimY), b.smart?0.26:0.19, dt);
+        this._face(b, M.angle(b.x,b.y,aimX,aimY), b.smart?0.26:0.19, dt, b.smart?7.5:6.0);
         const ad=M.dist(b.x,b.y,aimX,aimY);           // 用「所知位置」算距离，丢失视线时不用实时坐标
         let mx=0,my=0;
         // 压得更狠（170 才开始保持距离，60 以内才后退）
@@ -1431,7 +1478,7 @@ Object.assign(Raid, {
       if(tgt.alive && d<340){
         b.state="flee";
         const a=M.angle(tgt.x,tgt.y,b.x,b.y);
-        this._face(b, a, 0.14, dt);
+        this._face(b, a, 0.14, dt, 5.0);
         const fx=b.x, fy=b.y;
         this._moveOp(b, Math.cos(a)*b.speed*1.05*dt, Math.sin(a)*b.speed*1.05*dt);
         // 贴墙逃不掉时先沿墙侧移，再不行就换一个随机方向挣扎一会儿
@@ -1453,7 +1500,7 @@ Object.assign(Raid, {
         const dz=M.dist(b.x,b.y,cx,cy);
         if(dz>64){
           const a=M.angle(b.x,b.y,cx,cy);
-          this._face(b, a, 0.12, dt);
+          this._face(b, a, 0.12, dt, 5.0);
           this._moveOp(b, Math.cos(a)*b.speed*0.9*dt, Math.sin(a)*b.speed*0.9*dt);
           b.state="move"; continue;
         }
@@ -1462,7 +1509,7 @@ Object.assign(Raid, {
         /* v0.29.0：驻守时的「东张西望」不再瞬间跳到随机角 —— 改成平滑转向目标角，
            否则每天 1.5~3 秒视角会硬跳一下（这就是玩家看到的「视角跳动」之一）。 */
         if(b.roamT<=0){ b._guardLook=RNG.fr(0,6.28); b.roamT=RNG.fr(1.5,3); }
-        if(b._guardLook!==undefined) this._face(b, b._guardLook, 0.10, dt);
+        if(b._guardLook!==undefined) this._face(b, b._guardLook, 0.10, dt, 2.5);
         continue;
       }
 
@@ -1475,7 +1522,7 @@ Object.assign(Raid, {
           const ad=M.dist(b.x,b.y,ax,ay);
           if(ad>150){
             const a=M.angle(b.x,b.y,ax,ay);
-            this._face(b, a, 0.10, dt);
+            this._face(b, a, 0.10, dt, 4.0);
             this._moveOp(b, Math.cos(a)*b.speed*0.85*dt, Math.sin(a)*b.speed*0.85*dt);
             b.state="move"; continue;
           }
@@ -1490,7 +1537,7 @@ Object.assign(Raid, {
           const dl=M.dist(b.x,b.y,b.lastSeen.x,b.lastSeen.y);
           if(dl>70){
             const a=M.angle(b.x,b.y,b.lastSeen.x,b.lastSeen.y);
-            this._face(b, a, 0.14, dt);
+            this._face(b, a, 0.14, dt, 5.0);
             const ox=b.x, oy=b.y;
             this._moveOp(b, Math.cos(a)*b.speed*dt, Math.sin(a)*b.speed*dt);
             // 目标在墙后就放弃，避免顶着掩体原地抽搐
@@ -1510,7 +1557,7 @@ Object.assign(Raid, {
           const di=M.dist(b.x,b.y,iv.x,iv.y);
           if(di>64){
             const a=M.angle(b.x,b.y,iv.x,iv.y);
-            this._face(b, a, 0.13, dt);
+            this._face(b, a, 0.13, dt, 5.0);
             const ox=b.x, oy=b.y;
             this._moveOp(b, Math.cos(a)*b.speed*dt, Math.sin(a)*b.speed*dt);
             if(Math.hypot(b.x-ox,b.y-oy) < b.speed*dt*0.35){ b.investigate=null; }
@@ -1542,7 +1589,7 @@ Object.assign(Raid, {
       }
       if(b.roamPt){
         const a=M.angle(b.x,b.y,b.roamPt.x,b.roamPt.y);
-        this._face(b, a, 0.08, dt);
+        this._face(b, a, 0.08, dt, 3.5);
         const ox=b.x, oy=b.y;
         this._moveOp(b, Math.cos(a)*b.speed*0.8*dt, Math.sin(a)*b.speed*0.8*dt);
         if(Math.hypot(b.x-ox,b.y-oy) < b.speed*0.8*dt*0.25){
@@ -1572,7 +1619,7 @@ Object.assign(Raid, {
     const dd=M.dist(b.x,b.y,c.x,c.y);
     if(dd>54){
       const a=M.angle(b.x,b.y,c.x,c.y);
-      this._face(b, a, 0.14, dt);
+      this._face(b, a, 0.14, dt, 5.0);
       // 卡住绕行：撞墙时先侧移一段，还是走不通才放弃这个箱子
       if(b._lootDetour && b._lootDetour.t>0){
         b._lootDetour.t-=dt;

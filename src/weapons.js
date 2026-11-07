@@ -149,6 +149,9 @@ const GUN_SLOTS = [
   { id:"barrel",      name:"枪管",     stats:["dmgPct","projSpeed","accPct","range"] },
   { id:"mag",         name:"弹匣",     stats:["magPct","reloadPct","critChance"] },
   { id:"optic",       name:"瞄具",     stats:["accPct","critChance","critDmg"] },
+  /* v0.30.0：新增「瞄准镜」—— 专门堆射击精度（accPct 在 stats 里出现两次，
+     RNG.pick 抽中概率翻倍；rollPart 还会额外保证一条高倍 accPct）。 */
+  { id:"scope",       name:"瞄准镜",   stats:["accPct","accPct","range","critDmg"] },
   { id:"grip",        name:"握把",     stats:["accPct","fireRatePct","recoil"] },
   { id:"stock",       name:"枪托",     stats:["fireRatePct","reloadPct","moveSpeed"] },
   { id:"muzzle",      name:"枪口",     stats:["projSpeed","critChance","recoil","range"] },
@@ -161,12 +164,30 @@ for(const s of GUN_SLOTS) GUN_SLOT_BY_ID[s.id]=s;
 
 // 单条配件词缀数值
 function partStatValue(stat, ilvl, R){
-  if(AFFIX_INT.includes(stat)) return Math.max(1, Math.round(2 + ilvl*0.06 + R.mult*0.6));
+  const mult = Math.max(1, R.mult||1);
+  if(AFFIX_INT.includes(stat)) return Math.max(1, Math.round(2 + ilvl*0.06 + Math.pow(mult,1.15)*0.7));
   const scale = AFFIX_PCT.includes(stat) ? (1 + ilvl/150) : (1 + ilvl/100);
   /* v0.21.3：抖动改用 RNG（而不是 Math.random）—— 拍卖行要「全网同一份货」，
-   * 靠全局种子重放生成，只要有一处绕过 RNG 取随机，两台设备算出来的估值就会不一样。 */
-  const v = 6 * scale * (0.7 + R.mult*0.42) * (0.85 + RNG.f()*0.35);
+   * 靠全局种子重放生成，只要有一处绕过 RNG 取随机，两台设备算出来的估值就会不一样。
+   * v0.30.0：高品质配件加成大幅提升（幂次曲线）—— 低品质几乎不变，顶端约 ×2.5~3：
+   *   mult 1 → ×1.16（同旧 1.12）；3.5 → ×3.9（旧 2.17）；6.2 → ×8.5（旧 3.30）；12 → ×22（旧 5.7）。 */
+  const v = 6 * scale * (0.7 + Math.pow(mult, 1.55) * 0.46) * (0.85 + RNG.f()*0.35);
   return Math.round(v*10)/10;
+}
+
+/* v0.30.0：配件品质权重 —— 与护甲/材料同一规则，**后一档 = 前一档 × 1/4**。
+ *   0~3 档是常见段（民用/制式/军规/精选，40/30/18/8）；
+ *   第 4 档（精工）起几何衰减：2 → 0.5 → 0.125 → 0.03125 → 0.0078125；
+ *   最高三档（特供/珍藏/孤品）按原设定**不进普通掉落**（只从黑市赌博机出）。
+ *   注意：RNG.weighted 会把「0 权重」当作 1，所以这里只把前 9 档交给它，而不是靠 0 屏蔽。 */
+const RAID_PART_TIER_W = [40, 30, 18, 8, 2, 0.5, 0.125, 0.03125, 0.0078125, 0, 0, 0];
+const RAID_PART_DROP_TIERS = 9;        // 普通掉落最多到第 9 档（定型）
+function raidRollPartRarityIdx(luck){
+  const k = Math.max(0, Math.min(1, luck||0));
+  const boost = 1 + k*0.9;      // 运气只整体抬高高档段总量，不改档内 1/4 比例
+  const w = RAID_PART_TIER_W.slice(0, RAID_PART_DROP_TIERS)
+    .map((x,i)=>({ weight: i>=4 ? x*boost : x }));
+  return RNG.weighted(w);        // 0..8
 }
 
 // 生成一个配件
@@ -175,7 +196,12 @@ function rollPart(slotId, ilvl, rarityId){
   const R = RARITY_BY_ID[rarityId] || RARITIES[1];
   const n = R.id==="white" ? 1 : (R.mult>=3 ? 3 : 2);
   const mods=[], used=new Set();
-  for(let i=0;i<n;i++){
+  /* v0.30.0：瞄准镜固定带一条高倍「射击精度」—— 不管品质高低，装了它都明显更准。 */
+  if(slot.id==="scope"){
+    used.add("accPct");
+    mods.push({ stat:"accPct", value: Math.round(partStatValue("accPct", ilvl, R) * 1.6 * 10) / 10 });
+  }
+  for(let i=mods.length;i<n;i++){
     let st = RNG.pick(slot.stats);   // v0.21.9：原先 i===0 三元两分支完全相同，删掉死条件
     if(used.has(st)){
       const alt = slot.stats.filter(s=>!used.has(s));

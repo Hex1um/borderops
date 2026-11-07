@@ -1044,7 +1044,7 @@ const RenderRaid = {
       ctx.globalAlpha = 1;
     }
     // 瞄具
-    if(S.scope && (g.parts||[]).some(p=>p.slot==="optic")){
+    if(S.scope && (g.parts||[]).some(p=>(p.slot==="optic"||p.slot==="scope"))){
       ctx.fillStyle = "#141a20";
       ctx.fillRect(S.body*0.34, -S.bh/2-2.1, 5.5, 2.1);
       ctx.fillStyle = "#ffd23f";
@@ -1099,7 +1099,7 @@ const RenderRaid = {
       ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(o.x+gx*gLen, o.y+gy*gLen); ctx.stroke();
       ctx.strokeStyle=gCol; ctx.lineWidth=2.4;
       ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(o.x+gx*gLen, o.y+gy*gLen); ctx.stroke();
-      if(g && (g.parts||[]).some(p=>p.slot==="optic")){
+      if(g && (g.parts||[]).some(p=>(p.slot==="optic"||p.slot==="scope"))){
         ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(o.x+gx*gLen*0.42, o.y+gy*gLen*0.42, 2.2,0,6.28); ctx.fill();
       }
     }
