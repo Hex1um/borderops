@@ -1307,6 +1307,24 @@ Object.assign(Raid, {
     return this._los(b.x,b.y,x,y);
   },
 
+  /* v0.30.2：外围「注意锥」—— 只用来**转身对焦**，不用来开火。
+   * 之前的 _aiAware 只认光锥（0.55rad）内的目标，光锥外的人根本进不了候选：
+   *   AI 不会转身去把光锥扫过去，玩家贴着边缘站着就只会反复擦边 → 看起来一直抖。
+   * 这里给一个更宽的锥（近距离几乎全向、远处仍要求目标在手电附近），
+   * 命中后 AI 会朝目标转身；真正开火仍由 _aiAware（窄锥）决定。 */
+  _aiNotice(b, x, y){
+    if(!b) return false;
+    const reach = (typeof raidAiBeamReach==="function") ? raidAiBeamReach(b) : 560;
+    const dx=x-b.x, dy=y-b.y, d=Math.hypot(dx,dy);
+    if(d>reach || d<1) return false;
+    /* 320px 内注意角从 0.55 线性放宽到 1.30（≈74°）；再远就纯看光锥。
+       这样「贴脸侧后方」能被察觉，远处黑暗里的目标仍然藏得住。 */
+    const extra = M.clamp((320-d)/320, 0, 1) * 0.75;
+    const half = RAID_LIT.aiHalf + extra;
+    if(Math.abs(M.normAngle(Math.atan2(dy,dx)-(b.angle||0))) > half) return false;
+    return this._los(b.x,b.y,x,y);
+  },
+
   _botsUpdate(dt, game){
     // 联机非房主：AI 完全由房主模拟，这里只渲染影子
     if(this.online && typeof Net!=="undefined" && !Net.isHost) return;
@@ -1341,7 +1359,8 @@ Object.assign(Raid, {
         /* v0.26.0：AI 只在**自己手电**照到的地方能发现目标；受击 3 秒内例外，
            且例外目标自带最高优先级（打我的人优先）。_los 依旧保留，光和子弹都不穿墙。 */
         const locked = raidHitLocked(b,o);
-        if(!locked && !this._aiAware(b,o.x,o.y)) return;
+        /* v0.30.2：候选筛选用「注意锥」（比光锥宽），这样光锥外的目标也能被 AI 发现并转身对焦 */
+        if(!locked && !this._aiNotice(b,o.x,o.y)) return;
         const pri = locked ? -4000
                   : (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;
         /* v0.30.0：目标黏性 —— 当前目标只要还活着且可见，就给它 -140 的「续锁」优惠，
@@ -1376,6 +1395,9 @@ Object.assign(Raid, {
        * 丢失视线期间朝向 / 移动都指向 lastSeen（最后已知位置），不拿目标的实时坐标作弊。 */
       if(seenNow) b._seenHold = 0.6;
       else b._seenHold = Math.max(0, (b._seenHold||0) - dt);
+      /* v0.30.2：注意保持窗 —— 目标在注意锥内就记 0.6s，避免在注意锥边界反复进出导致「转头抖」。 */
+      if(tgt && tgt.alive && this._aiNotice(b, tgt.x, tgt.y)) b._noticeHold = 0.6;
+      else b._noticeHold = Math.max(0, (b._noticeHold||0) - dt);
       const aware = canSee || (b._seenHold>0 && b.lastSeen);
       if(canSee) b.lastSeen={ x:tgt.x, y:tgt.y, t:sense.memory };   // 记住最后位置，丢失视线也不马上忘
 
@@ -1423,6 +1445,18 @@ Object.assign(Raid, {
         if(b.hp < b.maxHP*lowHP && b.bandages>0 && safe && b._dodgeT<=0){
           b.medT = b.smart ? 1.3 : 2.0; b.state="heal"; continue;
         }
+      }
+
+      /* v0.30.2：还没进光锥，但目标已经在「注意锥」内 → 转身把他纳入光锥。
+         只转身（近距离轻微逼近），不开火 —— 开火仍要等 _aiAware（窄锥）成立。
+         这是「光锥外目标永远进不来」的修法：先转身，目标自然滑进光锥。 */
+      if(!aware && !grace && b.gun && b._noticeHold>0 && tgt && tgt.alive && tgt!==b){
+        b.state="suspect"; b.lootTarget=null; b.lootT=0;
+        this._face(b, M.angle(b.x,b.y,tgt.x,tgt.y), 0.16, dt, 4.5);
+        const nd=M.dist(b.x,b.y,tgt.x,tgt.y);
+        // 150~230px：缓步压近，避免「隔着两米干瞪眼」；更远只转头不动
+        if(nd>150 && nd<230) this._moveOp(b, Math.cos(b.angle)*b.speed*0.45*dt, Math.sin(b.angle)*b.speed*0.45*dt);
+        continue;
       }
 
       /* 有枪 + 已经察觉（严格看见，或刚丢失视线 0.6s 内）→ 交战 */

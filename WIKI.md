@@ -1,6 +1,6 @@
 # 边境行动 BORDER OPS · 中文 Wiki
 
-> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.30.1**（由 `npm run check` 校验，升版必须同步）。
+> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.30.2**（由 `npm run check` 校验，升版必须同步）。
 > 代码与实现细节见 [README.md](README.md)，逐版改动见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---

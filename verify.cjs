@@ -2691,7 +2691,7 @@ check('玩家手电：前方可见 / 背后不可见', __vis.ahead===true && __v
 check('箱子：近身可见 / 远处黑暗不可见', __vis.near===true && __vis.dark===false ? 1 : 0, 1, 0.001);
 check('AI 用自己的手电判定', __vis.ai===true ? 1 : 0, 1, 0.001);
 check('AI 感知改走视线判定（_aiAware，灌木不挡光）',
-  /_aiAware\(b,o\.x,o\.y\)/.test(raidSrc) && /_aiAware\(b,tgt\.x,tgt\.y\)/.test(raidSrc) && /_aiAware\(b, x, y\)\{/.test(raidSrc) ? 1 : 0, 1, 0.001);
+  /_aiAware\(b,tgt\.x,tgt\.y\)/.test(raidSrc) && /_aiAware\(b, x, y\)\{/.test(raidSrc) && /_aiNotice\(b,o\.x,o\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('AI 索敌仍保留 _los（不穿墙）',
   /return this\._los\(b\.x,b\.y,x,y\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('玩家自瞄只认玩家光锥', /o&&o\.isPlayer\) \? raidPlayerLit\(this,x,y\) : raidAiLit/.test(raidSrc) ? 1 : 0, 1, 0.001);
@@ -3191,6 +3191,45 @@ check('贴边吸附（残差 <0.10rad 直接对齐）',
   /if\(Math\.abs\(M\.normAngle\(realAng-b\.angle\)\) < 0\.10\) b\.angle=M\.normAngle\(realAng\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('循光不劫持已警觉单位（!b.lastSeen）',
   /if\(!aware && !b\.investigate && !b\.lastSeen && b\.gun\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 53. v0.30.2：外围注意锥（光锥外目标能进入光锥）
+ * ========================================================================== */
+console.log('\n=== 53. 外围注意锥（光锥外目标能进入光锥，v0.30.2）===');
+
+const __t53 = JSON.parse(G(`JSON.stringify((()=>{
+  try{
+    const me={ _los:()=>true }, b={x:0,y:0,angle:0,cls:"pmc",alive:true};
+    const at=(d,off)=>({ x:Math.cos(off)*d, y:Math.sin(off)*d });
+    const p1=at(200,0.70), p2=at(600,0.70), p3=at(200,Math.PI), p4=at(200,0);
+    return {
+      nearSide: Raid._aiNotice.call(me, b, p1.x, p1.y),   // 近距侧向（光锥外但注意锥内）
+      farSide:  Raid._aiNotice.call(me, b, p2.x, p2.y),   // 远距侧向（光锥外）
+      behind:   Raid._aiNotice.call(me, b, p3.x, p3.y),   // 正后方（不该察觉）
+      front:    Raid._aiNotice.call(me, b, p4.x, p4.y),   // 正前方
+      walled:   Raid._aiNotice.call({_los:()=>false}, b, p1.x, p1.y),
+      awareSide: Raid._aiAware.call(me, b, p1.x, p1.y),   // 窄锥：侧向不该算「看见」
+    };
+  }catch(e){ return { err:String(e) }; }
+})())`));
+check('注意锥：近距侧向目标能被察觉（光锥外 → 可转身纳入）',
+  (!__t53.err && __t53.nearSide===true)?1:0, 1, 0.001);
+check('注意锥：远距侧向不察觉（远处仍要靠手电）',
+  (!__t53.err && __t53.farSide===false)?1:0, 1, 0.001);
+check('注意锥：正后方不察觉（背后仍可潜行）',
+  (!__t53.err && __t53.behind===false)?1:0, 1, 0.001);
+check('注意锥：正前方可察觉', (!__t53.err && __t53.front===true)?1:0, 1, 0.001);
+check('注意锥：隔墙不察觉', (!__t53.err && __t53.walled===false)?1:0, 1, 0.001);
+check('窄锥 _aiAware 仍只认光锥（侧向不算看见 → 不开火）',
+  (!__t53.err && __t53.awareSide===false)?1:0, 1, 0.001);
+check('候选筛选用注意锥（_aiNotice）',
+  /!this\._aiNotice\(b,o\.x,o\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('注意保持窗 0.6s（避免边界转头抖）',
+  /b\._noticeHold = 0\.6/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('未进光锥时转身对焦（suspect，不开火）',
+  /b\.state="suspect"/.test(raidSrc) && /if\(!aware && !grace && b\.gun && b\._noticeHold>0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('开火仍只认窄锥 _aiAware',
+  /if\(canSee && b\.fireCd<=0 && b\.reloadT<=0\)/.test(raidSrc) && /this\._aiAware\(b,tgt\.x,tgt\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
