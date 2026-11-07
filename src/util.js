@@ -128,7 +128,9 @@ const M = {
   // 角度归一化到 -PI..PI
   normAngle(a){ while(a>Math.PI)a-=Math.PI*2; while(a<-Math.PI)a+=Math.PI*2; return a; },
   // 角度插值（最短路径）
-  lerpAngle(a,b,t){ return a + M.normAngle(b-a)*t; },
+  /* v0.29.0：结果也归一化。旧实现只归一化「差值」，a 本身会无限累加（可到几十弧度），
+     某些直接比较 / 序列化角度的地方会出现跳变；归一化后角度恒在 [-π, π]。 */
+  lerpAngle(a,b,t){ return M.normAngle(a + M.normAngle(b-a)*t); },
   now(){ return performance.now()/1000; },
 };
 
@@ -215,37 +217,38 @@ const SFX = (function(){
    移动射击散布系数（四大模式共用，玩家与电脑同一公式）
    冲锋枪（SMG）几乎不受移动影响，其余枪械移动中散布暴涨。
    cat 兼容英文类别与中文类别名。
+   v0.29.0：整体 K ×1.5 左右 —— 拉大「静止 vs 运动」的精度差：
+   站定几乎指哪打哪，一跑起来子弹就散了（狙击尤其明显）。
    ------------------------------------------------------------ */
 const MOVE_SPREAD_K = {
-  smg:3.2,      "冲锋枪":3.2,
-  pistol:11.0,  "手枪":11.0,
-  shotgun:12.0, "霰弹":12.0, "霰弹枪":12.0,
-  rifle:16.0,   "步枪":16.0,
-  lmg:18.0,     "机枪":18.0,
-  sniper:26.0,  "狙击":26.0, "狙击枪":26.0,
-  launcher:12.0,"火箭筒":12.0,
+  smg:4.8,      "冲锋枪":4.8,
+  pistol:16.5,  "手枪":16.5,
+  shotgun:18.0, "霰弹":18.0, "霰弹枪":18.0,
+  rifle:24.0,   "步枪":24.0,
+  lmg:27.0,     "机枪":27.0,
+  sniper:39.0,  "狙击":39.0, "狙击枪":39.0,
+  launcher:18.0,"火箭筒":18.0,
 };
 function isSMG(cat){ return cat==="smg" || cat==="冲锋枪"; }
 function moveSpreadMul(cat, mv){
   const k = MOVE_SPREAD_K[cat];
-  const K = (k===undefined) ? 16.0 : k;      // 未分类按步枪处理
+  const K = (k===undefined) ? 24.0 : k;      // 未分类按步枪处理
   const m = Math.max(0, Math.min(1, mv||0));
   return 1 + m*K;
 }
 
 /* 移动散布的物理上限（弧度，半宽）：防止扩散大到全向乱飞，
-   仍然远大于站立散布，近距离勉强、中远距离彻底失准。 */
+   仍然远大于站立散布，近距离勉强、中远距离彻底失准。
+   v0.29.0：上限同步抬高，避免 K 调大后被 cap 提前截断（否则移动惩罚形同虚设）。 */
 const MOVE_SPREAD_CAP = {
-  pistol:0.58,   "手枪":0.58,
-  shotgun:0.95,  "霰弹":0.95, "霰弹枪":0.95,
-  rifle:0.85,    "步枪":0.85,
-  lmg:0.95,      "机枪":0.95,
-  /* v0.28.0：0.48 → 0.85。旧上限下「边跑边狙」仍能稳定命中，与狙击枪的定位冲突；
-     现在移动中散布几乎全向，必须站定才打。 */
-  sniper:0.85,   "狙击":0.85, "狙击枪":0.85,
-  launcher:0.70, "火箭筒":0.70,
+  pistol:0.72,   "手枪":0.72,
+  shotgun:1.05,  "霰弹":1.05, "霰弹枪":1.05,
+  rifle:0.98,    "步枪":0.98,
+  lmg:1.05,      "机枪":1.05,
+  sniper:0.98,   "狙击":0.98, "狙击枪":0.98,
+  launcher:0.80, "火箭筒":0.80,
 };
 function moveSpreadCap(cat){
   const c = MOVE_SPREAD_CAP[cat];
-  return (c===undefined) ? 0.85 : c;
+  return (c===undefined) ? 0.98 : c;
 }

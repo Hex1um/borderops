@@ -604,8 +604,19 @@ const RAID_FLASH_OP = {
  * 距离，所以「隔墙看不见」是几何事实，不需要再写第二套建筑判定。
  * 全部只读坐标 / 朝向 / 静态表，不读 RNG、不读局内时钟 —— 联机两端一致。
  */
-/* v0.26.0：静止（几乎没移动）时收束射击散布；移动时原样不动。 */
-const RAID_STILL_SPREAD = 0.65;
+/* v0.26.0：静止（几乎没移动）时收束射击散布；移动时原样不动。
+ * v0.29.0：收束更狠 0.65 → 0.42 —— 站立/蹲点明显更准，和移动射击拉开差距。 */
+const RAID_STILL_SPREAD = 0.42;
+
+/* v0.29.0：2D 手持枪整体放大倍率（俯视角下枪身偏小、看不清枪型）。 */
+const RAID_2D_GUN_SCALE = 1.40;
+
+/* v0.29.0：局内抽奖机 —— 每种摊位一台；黑市 GP 币，其余卢布。
+   极品约 0.2%、垫底七成，成本远高于期望，避免成为刷钱机。 */
+const RAID_GACHA = {
+  cash:  { cost: 1200, costTxt:"₽1,200", cur:"₽", label:"卢布" },
+  token: { cost: 8,    costTxt:"◈8",     cur:"◈", label:"GP 币" },
+};
 
 /* v0.28.0：狙击枪的三条专属手感 ——
    ① 手电变成「细而长」的一束（看得更远，但视野窄）；
@@ -685,7 +696,13 @@ function raidAiBeamReach(b){
 function raidContainerVisible(R, c){
   if(!c) return false;
   const p=R&&R.player; if(!p) return true;
-  if(M.dist(p.x,p.y,c.x,c.y)<=RAID_LIT.nearBox) return true;
+  /* v0.29.0：即使箱子就在身边，**中间隔一堵墙也看不见**。
+     旧实现在 nearBox 半径内直接 return true，等于隔墙透视（玩家站在墙外就能看到屋里箱子）；
+     现在近身也要过 `_los`（射线打墙），只有真正没有阻挡才算「在身边可见」。 */
+  if(M.dist(p.x,p.y,c.x,c.y)<=RAID_LIT.nearBox){
+    if(R && typeof R._los==="function" && !R._los(p.x,p.y,c.x,c.y)) return false;
+    return true;
+  }
   return raidPlayerLit(R,c.x,c.y);
 }
 /* 受击锁定用 M.now()（performance.now()/1000）做本地 3 秒窗口：
@@ -1010,8 +1027,10 @@ function raidRollArmorRarity(tier, luck){
   return M.clamp(Math.min(raidBudgetTier(luck||0), maxRar), 0, 8);
 }
 
-// 掉落等级权重：T7+ 极稀有（上锁箱 / 增援封锁者才较常见）
-const RAID_TIER_W    = [23, 30, 25, 14, 4.0, 1.3, 0.28, 0.055, 0.010];   // T6+ 掉落率再降约 40~50%
+/* 掉落等级权重（护甲 / 头盔 / 护盾共用）。v0.29.0：高 tier 极稀，后一档严格 = 前一档 × 1/4。
+ *   T1~T4 常见段保持原样；T5 起几何衰减：2.5 → 0.625 → 0.15625 → 0.0390625 → 0.009765625。
+ *   每档都低于旧值（旧 4.0 / 1.3 / 0.28 / 0.055 / 0.010），高档确实变稀有了。 */
+const RAID_TIER_W    = [23, 30, 25, 14, 2.5, 0.625, 0.15625, 0.0390625, 0.009765625];
 function raidRollArmorTier(luck){
   return 1 + raidLuckPick(RAID_TIER_W, luck, RAID_LUCK_MULT);   // 1..9
 }
@@ -1283,8 +1302,15 @@ function raidRollBoxKey(boxLv){
   const idx=RNG.weighted(w);             // weighted 返回索引（0 起）
   return raidMakeKey(w[idx].lv);
 }
+/* 原材料等级权重（T0~T8，9 档）。
+ * v0.29.0：与护甲同一套规则 —— 高 tier 极稀，且**后一档 = 前一档 × 1/4**。
+ *   T0~T2 是常见段（72 / 21 / 7），T3 起几何衰减：1 → 0.25 → 0.0625 → 0.015625 → 0.00390625 → 0.0009765625。
+ *   携带估值只整体抬高高档段的总量（不改变档内 1/4 比例），保证「带好装备略占便宜」又不破坏稀有度阶梯。 */
+const RAID_MAT_TIER_W = [72, 21, 7, 1.0, 0.25, 0.0625, 0.015625, 0.00390625, 0.0009765625];
 function raidRollMaterialTier(luck){
-  return raidBudgetTier(luck);   // 0..8：T3+ 约 5%、T5+ 约 1%
+  const k=M.clamp(luck||0, 0, 1);
+  const boost=1+k*0.80;                       // 高档段（T3+）总量最多 +80%
+  return RNG.weighted(RAID_MAT_TIER_W.map((w,i)=>({ weight: w*(i>=3?boost:1) })));
 }
 function raidMakeMaterial(luck){
   luck=luck||0;

@@ -1879,7 +1879,7 @@ check('火箭爆炸带 blast 标记', /rk\.dmg\*fall, rk\.owner, rk\.gun, \{blas
 check('碎片溅射带 blast 标记', /chain:true, blast:true/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('呼叫员只呼叫一次（_called 上锁）', /b\._called=true; this\._callReinforce\(b\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('呼叫员就地叫 2 人小队', /_callReinforce\(b\)\{[\s\S]{0,400}?for\(let i=0;i<2;i\+\+\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('侦察兵走弧线逼近（不在正面对枪）', /b\.arch==="wraith" && d>170/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('侦察兵走弧线逼近（不在正面对枪）', /b\.arch==="wraith" && ad>170/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('精英怪体型按原型给（不写死 13）', /this\.r=o\.r\|\|13;/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('AI 上限为精英怪留了余量（maxOps 48）', /maxOps:48/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
@@ -2789,7 +2789,7 @@ check('开锁后刷新价值（次数机制不变）',
 check('物品栏钥匙显示折旧后估值', /money\(raidKeyValue\(k\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* --- ⑥ 静止收束散布 --- */
-check('静止散布系数 0.65', G('RAID_STILL_SPREAD'), 0.65, 0.0001);
+check('静止散布系数 0.42（v0.29.0 收束更狠）', G('RAID_STILL_SPREAD'), 0.42, 0.0001);
 check('只在 mv<0.05 时生效，移动中不变',
   /mv<0\.05 \? RAID_STILL_SPREAD : 1/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
@@ -2931,9 +2931,9 @@ check('3D 手电走 raidPlayerBeam', /raidPlayerBeam\(Raid\)/.test(__fp2) ? 1 : 
 check('手持狙击移速 ×0.62', __sniper.mvS, G('RAID_SNIPER_MOVE_MUL'), 0.0001);
 check('非狙击移速不受影响', __sniper.mvR, 1, 0.0001);
 check('移速计算乘上 raidGunMoveMul', /raidGunMoveMul\(p\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('狙击移动散布上限提到 0.85', __sniper.capS, 0.85, 0.0001);
+check('狙击移动散布上限提到 0.98', __sniper.capS, 0.98, 0.0001);
 /* 移动散布的增长斜率（K）才是「狙击比步枪更吃移动」的关键：
-   两者上限同为 0.85，但 sniper 的 K=26 远高于 rifle，会更早撞到上限。 */
+   v0.29.0 两者上限同为 0.98，但 sniper 的 K=39 远高于 rifle 的 24，会更早撞到上限。 */
 check('狙击移动散布斜率高于步枪',
   G('MOVE_SPREAD_K.sniper') > G('MOVE_SPREAD_K.rifle') &&
   G('MOVE_SPREAD_K.sniper')>=20 ? 1 : 0, 1, 0.001);
@@ -2981,6 +2981,107 @@ check('特价生成前后换回原 RNG 闭包（不打乱联机序列）',
 check('商店 UI 渲染特价卡与「抢购」按钮',
   /每日特价/.test(raidSrc) && /data-buy="deal:\$\{branch\}"/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('五个 tab 都挂上特价卡', (raidSrc.match(/dealCard\('/g)||[]).length>=5 ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 50. v0.29.0：仓库排序 / 高 tier 权重 1/4 / AI 视角 / 箱子隔墙 / 2D 枪 / 抽奖机 / 精度差
+ * ========================================================================== */
+console.log('\n=== 50. 仓库排序 / 高 tier 权重 1/4 / AI 视角 / 箱子隔墙 / 2D 枪 / 抽奖机 / 精度差（v0.29.0）===');
+
+/* ① 仓库装备按价值降序 */
+check('仓库武器/护甲/头盔/护盾按价值降序（byValue）',
+  ['byValue(stash.weapons)','byValue(stash.armors)','byValue(stash.helmets)','byValue(stash.shields)']
+    .every(s=>raidSrc.includes(s)) ? 1 : 0, 1, 0.001);
+check('仓库配件按价值排序且保留原始下标（售卖不会卖错件）',
+  /stash\.parts\s*\.map\(\(pt,i\)=>\(\{ pt, i \}\)\)/.test(raidSrc) && /data-sell="p:\$\{i\}"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('仓库材料按整堆合计价值降序',
+  /matStacks\.sort\(\(a,b\)=>\(\(b\.item\.value\|\|0\)\*b\.n\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ② 高 tier 权重严格「后一档 = 前一档 × 1/4」 */
+const __t50w = JSON.parse(G('JSON.stringify({ tier:RAID_TIER_W, mat:RAID_MAT_TIER_W })'));
+const __t50rat = (arr,i)=>arr[i+1]/arr[i];
+check('护甲 T6/T5 = 1/4', __t50rat(__t50w.tier,4), 0.25, 1e-9);
+check('护甲 T7/T6 = 1/4', __t50rat(__t50w.tier,5), 0.25, 1e-9);
+check('护甲 T8/T7 = 1/4', __t50rat(__t50w.tier,6), 0.25, 1e-9);
+check('护甲 T9/T8 = 1/4', __t50rat(__t50w.tier,7), 0.25, 1e-9);
+check('护甲高 tier 全部低于旧值',
+  (__t50w.tier[4]<=4.0 && __t50w.tier[5]<=1.3 && __t50w.tier[6]<=0.28 && __t50w.tier[7]<=0.055 && __t50w.tier[8]<=0.010)?1:0, 1, 0.001);
+check('材料 T4/T3 = 1/4', __t50rat(__t50w.mat,3), 0.25, 1e-9);
+check('材料 T8/T7 = 1/4', __t50rat(__t50w.mat,7), 0.25, 1e-9);
+check('材料高档段抽样占比 <1%（T5+）',
+  (()=>{ const d=JSON.parse(G(`JSON.stringify((()=>{const c=new Array(9).fill(0);for(let i=0;i<8000;i++)c[raidRollMaterialTier(0)]++;return c;})())`));
+    return (d.slice(5).reduce((a,b)=>a+b,0)/8000) < 0.01 ? 1 : 0; })(), 1, 0.001);
+check('护甲 T8+T9 抽样占比 <0.2%',
+  (()=>{ const d=JSON.parse(G(`JSON.stringify((()=>{const c=new Array(10).fill(0);for(let i=0;i<8000;i++)c[raidRollArmorTier(0)]++;return c;})())`));
+    return (d[8]+d[9])/8000 < 0.002 ? 1 : 0; })(), 1, 0.001);
+
+/* ③ AI 视角：角度归一 + dt 归一转向 + 感知迟滞 + 不隔墙开枪 */
+check('lerpAngle 输出归一化（恒在 [-π,π]）',
+  Math.abs(G('M.lerpAngle(3.0,-3.0,1)')) <= Math.PI+1e-9 ? 1 : 0, 1, 0.001);
+check('AI 转向按 dt 归一（_face 存在且用 pow）',
+  (typeof G('Raid._face')==='function' && /Math\.pow\(1 - /.test(raidSrc))?1:0, 1, 0.001);
+check('AI 感知迟滞 0.6s（消除视角抖动）',
+  /b\._seenHold = 0\.6/.test(raidSrc) && /const aware = canSee \|\| \(b\._seenHold>0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('迟滞期间不隔墙开枪（开火仍只认 canSee）',
+  /if\(canSee && b\.fireCd<=0 && b\.reloadT<=0\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('守卫东张西望改为平滑转向（不再瞬跳 RNG 角）',
+  !/b\.angle=RNG\.fr\(0,6\.28\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 对移动目标做弹道预判（smart）',
+  /aimX \+= vx\*tof\*0\.55/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ④ 箱子隔墙不可见（近身也过 _los） */
+const __t50vis = JSON.parse(G(`JSON.stringify((()=>{
+  const mk=(los)=>({ player:{x:0,y:0,angle:0}, _los:los });
+  return { wall: raidContainerVisible(mk(()=>false), {x:20,y:0}),
+           clear: raidContainerVisible(mk(()=>true), {x:20,y:0}) };
+})())`));
+check('近身但有墙 → 箱子不可见', __t50vis.wall===false ? 1 : 0, 1, 0.001);
+check('近身且无墙 → 箱子可见', __t50vis.clear===true ? 1 : 0, 1, 0.001);
+
+/* ⑤ 2D 手持枪放大 */
+check('2D 手持枪放大倍率 1.4', G('RAID_2D_GUN_SCALE'), 1.4, 0.0001);
+check('handWeapon 乘上 RAID_2D_GUN_SCALE', /\(r\/15\) \* RAID_2D_GUN_SCALE/.test(__rd2) ? 1 : 0, 1, 0.001);
+
+/* ⑥ 抽奖机：每种摊位一台，黑市 GP / 其余卢布，极品极低概率 */
+check('抽奖机成本：卢布 1200 / GP 8',
+  G('RAID_GACHA.cash.cost')===1200 && G('RAID_GACHA.token.cost')===8 ? 1 : 0, 1, 0.001);
+check('每种摊位都渲染抽奖机（data-gacha）', /data-gacha="1"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('黑市用 GP / 其余用卢布',
+  /const gk = kind==="black" \? "token" : "cash"/.test(raidSrc) && /const gk2 = kind==="black" \? "token" : "cash"/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('抽奖投骰方法存在', typeof G('Raid._gachaRoll')==='function' ? 1 : 0, 1, 0.001);
+const __t50gacha = JSON.parse(G(`JSON.stringify((()=>{
+  try{
+    const ok={weapons:1,armors:1,helmets:1,shields:1,parts:1,materials:1};
+    let n=0, high=0, bad=0;
+    for(let i=0;i<1500;i++){
+      const r=Raid._gachaRoll();
+      if(!r || !r.item || !ok[r.bucket]){ bad++; continue; }
+      n++;
+      const t=r.item.tier|0, q=r.item.qTier|0;
+      if(t>=7 || q>=7) high++;
+    }
+    return { n, high, bad };
+  }catch(e){ return { err:String(e) }; }
+})())`));
+check('抽奖结果都在合法栏目内', !__t50gacha.err && __t50gacha.bad===0 && __t50gacha.n>1400 ? 1 : 0, 1, 0.001);
+check('抽奖极品（T7+）比例极低（<1%）',
+  !__t50gacha.err && __t50gacha.high/Math.max(1,__t50gacha.n) < 0.01 ? 1 : 0, 1, 0.001);
+const __t50iso = JSON.parse(G(`JSON.stringify((()=>{
+  try{
+    RNG.setSeed(424242);
+    const a=RNG.snapshot();
+    Raid._gachaRoll(); Raid._gachaRoll();
+    const b=RNG.snapshot();
+    RNG.rng=Math.random;
+    return { same: a===b };
+  }catch(e){ return { err:String(e) }; }
+})())`));
+check('抽奖不推进联机共用 RNG（前后状态一致）', !__t50iso.err && __t50iso.same===true ? 1 : 0, 1, 0.001);
+
+/* ⑦ 静止 / 运动精度差拉大 */
+check('步枪移动散布斜率 ≥24（旧 16）', G('MOVE_SPREAD_K.rifle')>=24 ? 1 : 0, 1, 0.001);
+check('移动散布上限抬高（步枪 0.98）', G('MOVE_SPREAD_CAP.rifle'), 0.98, 0.0001);
+check('静止/运动散布差距 ≥20 倍（步枪）',
+  G('moveSpreadMul("rifle",1)')/Math.max(1e-9,G('moveSpreadMul("rifle",0)')) >= 20 ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

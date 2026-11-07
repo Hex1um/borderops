@@ -219,6 +219,25 @@ UI.raidFieldShop=function(key){
     R._sellRows=rows;
   }
 
+  /* v0.29.0：抽奖机 —— 每种摊位都有一台。
+   *   黑市（black）用 GP 币结算，其余（枪械 / 材料 / 回收）用局内卢布结算。
+   *   概率与成本见 raid-data.js 的 RAID_GACHA / Raid._gachaRoll。 */
+  const gk = kind==="black" ? "token" : "cash";
+  const gacha = RAID_GACHA[gk];
+  const gachaBal = gk==="token" ? tokens : money;
+  const gachaCan = gachaBal >= gacha.cost;
+  body += `<div class="gacha-box" style="grid-column:1/-1;border:1px solid ${sh.color}55;border-radius:10px;padding:12px 14px;margin-top:4px;background:linear-gradient(180deg,rgba(255,210,63,.06),transparent);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:800;font-size:15px;color:${sh.color};">抽奖机 · LUCKY DRAW</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5;">
+            极低概率出 <b style="color:#ffd23f">T7~T9 防护装备 / 高阶枪械 / 具名品</b>，七成是普通原材料。每抽 <b>${gacha.costTxt}</b>（${gacha.label}），理性消费。
+          </div>
+        </div>
+        <button class="btn" data-gacha="1" ${gachaCan?"":"disabled"}>投入 ${gacha.costTxt} 抽一次</button>
+      </div>
+    </div>`;
+
   const wallet = kind==="black"
     ? `<div class="shop-gold" style="color:#ffd23f">◈ GP 币 ${tokens}</div><div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`
     : `<div class="shop-gold">局内卢布 ₽ ${priceTextShort(money)}</div>`;
@@ -339,6 +358,38 @@ UI.raidFieldShop=function(key){
       R._float(R.player.x, R.player.y-40, "购入 "+ky.name, ky.color||"#ffd23f");
       SFX.ui(); UI.raidFieldShop(sid);
     }
+  });
+
+  /* v0.29.0：抽奖机 —— 扣费 → 投骰 → 发奖（背包满则按估值折现卢布，绝不吞钱） */
+  UI.overlay.querySelectorAll("[data-gacha]").forEach(el=>el.onclick=()=>{
+    const gk2 = kind==="black" ? "token" : "cash";
+    const cfg = RAID_GACHA[gk2];
+    if(gk2==="token"){
+      if(R.tokens < cfg.cost){ R._float(R.player.x, R.player.y-40, "GP 币不足", "#ff8a5a"); return; }
+    } else {
+      if(R.creds < cfg.cost){ R._float(R.player.x, R.player.y-40, "卢布不足", "#ff8a5a"); return; }
+    }
+    if(typeof R._gachaRoll!=="function") return;
+    if(gk2==="token") R.tokens -= cfg.cost; else R.creds -= cfg.cost;
+
+    const res = R._gachaRoll();
+    const it = res.item, bucket = res.bucket;
+    const arr = R.inv[bucket] = R.inv[bucket] || [];
+    const cap = RAID_INV_CAP[bucket] || 1;
+    const col = it.color || it.qColor || "#ffd23f";
+    let msg;
+    if(arr.length >= cap){
+      const salvage = Math.max(1, Math.round((it.value||0) * 0.5));
+      R.creds += salvage;
+      msg = "背包已满 · 折现 +₽" + salvage;
+    } else {
+      arr.push(it);
+      msg = "抽中 " + (it.name || gunNameOf(it) || "物品");
+    }
+    R._invDirty = true;
+    R._float(R.player.x, R.player.y-40, msg, col);
+    if(SFX.pickup) SFX.pickup(); else SFX.ui();
+    UI.raidFieldShop(sid);
   });
 
   UI.overlay.querySelectorAll("[data-fsell]").forEach(el=>el.onclick=()=>{
@@ -769,9 +820,13 @@ UI.raidStash=function(opts){
   if(!stash.helmets) stash.helmets=[];
   const TAB=UI._stashTab||"weapon";
 
-  const wCards = stash.weapons.length ? stash.weapons.map(w=>raidWeaponCard(w,{sell:true})).join('') : `<div class="empty-hint">仓库暂无枪械</div>`;
+  /* v0.29.0：仓库装备一律按价值降序 —— 和配装大厅一致，贵的排前面，不用翻到底找。
+     武器 / 护甲 / 头盔 / 护盾的售卖按钮按 uid 回指，安全；配件按原始下标回指（见 pCards）。 */
+  const byValue=(arr)=>(arr||[]).slice().sort((a,b)=>(b.value||0)-(a.value||0));
 
-  const aCards = stash.armors.length ? stash.armors.map(a=>{
+  const wCards = stash.weapons.length ? byValue(stash.weapons).map(w=>raidWeaponCard(w,{sell:true})).join('') : `<div class="empty-hint">仓库暂无枪械</div>`;
+
+  const aCards = stash.armors.length ? byValue(stash.armors).map(a=>{
     const rar=a.rarity|0, col=RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[a.tier];
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${a.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
@@ -783,7 +838,7 @@ UI.raidStash=function(opts){
     </div>`;
   }).join('') : `<div class="empty-hint">仓库暂无护甲</div>`;
 
-  const hCards = stash.helmets.length ? stash.helmets.map(h=>{
+  const hCards = stash.helmets.length ? byValue(stash.helmets).map(h=>{
     const rar=h.rarity|0, col=RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[h.tier];
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${h.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
@@ -796,10 +851,15 @@ UI.raidStash=function(opts){
   }).join('') : `<div class="empty-hint">仓库暂无头盔</div>`;
 
   const sCards = (stash.shields||[]).length
-    ? stash.shields.map(s=>shieldCard(s,{sell:true})).join('')
+    ? byValue(stash.shields).map(s=>shieldCard(s,{sell:true})).join('')
     : `<div class="empty-hint">仓库暂无护盾 · 突袭掉落 / 工坊合成 / 融合 / 军火超市购买</div>`;
 
-  const pCards = stash.parts.length ? stash.parts.map((pt,i)=>{
+  /* v0.29.0：配件按价值降序。注意售卖 / 拆解按钮用的是**原始下标** i，
+     所以先包成 [{pt,i}] 再排序，避免「排序后点售卖卖掉别的配件」。 */
+  const pCards = stash.parts.length ? stash.parts
+    .map((pt,i)=>({ pt, i }))
+    .sort((x,y)=>partValue(y.pt)-partValue(x.pt))
+    .map(({ pt, i })=>{
     const col=partColor(pt);
     const sn=GUN_SLOT_BY_ID[pt.slot]?GUN_SLOT_BY_ID[pt.slot].name:pt.slot;
     const qn=partQualityName(pt);
@@ -826,7 +886,8 @@ UI.raidStash=function(opts){
     if(!s){ s={ id:m.id, item:m, n:0 }; matStacks.push(s); }
     s.n++;
   }
-  matStacks.sort((a,b)=>(a.item.tier|0)-(b.item.tier|0));
+  // v0.29.0：材料按「这一堆的合计价值」降序（贵的堆排前面，不再按 tier 升序）
+  matStacks.sort((a,b)=>((b.item.value||0)*b.n)-((a.item.value||0)*a.n));
   const mCards = matStacks.length ? matStacks.map(s=>{
     const m=s.item, col=RAID_RARITY_COLOR[m.tier]||"#dfe7f0";
     return `<div class="shop-item" style="border-left-color:${col}">

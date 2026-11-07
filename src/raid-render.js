@@ -976,7 +976,9 @@ const RenderRaid = {
    *   空手（跑刀）画战术匕首 —— 跑刀流也能一眼认出来。
    *   局部坐标：+x = 朝向，握把在原点，单位是世界像素，最后按 r/15 缩放。 */
   handWeapon(ctx, o, r){
-    const k = r/15, ang = o.angle||0;
+    /* v0.29.0：2D 手持枪整体放大（RAID_2D_GUN_SCALE=1.4）——俯视角下枪身更清楚，
+       一眼能分辨手枪 / 步枪 / 狙击。锚点仍按 r 定位，只放大模型本身。 */
+    const k = (r/15) * RAID_2D_GUN_SCALE, ang = o.angle||0;
     const ca = Math.cos(ang), sa = Math.sin(ang);
     // 右手：身体右前方（屏幕 y 向下时，(-sin, cos) 就是角色自己的右手边）
     ctx.save();

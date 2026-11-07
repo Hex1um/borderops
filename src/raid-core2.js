@@ -158,6 +158,48 @@ Object.assign(Raid, {
     return out;
   },
 
+  /* v0.29.0：抽奖机投骰。返回 { item, bucket }，bucket 是 R.inv 的栏目名。
+   * 概率「低到离谱」：极品（T8~T9 防护 / 高阶枪 / 具名）合计约 0.2%，七成是垫底原材料；
+   * 成本刻意远高于期望产出，抽奖只是消遣，不是提款机。
+   *
+   * RNG 隔离：工厂内部大量调用全局 RNG。这里临时换成本地种子跑一遍，
+   * 结束后恢复原 RNG 函数与状态 —— 否则抽奖会推进联机共用的随机流，导致两端分叉。 */
+  _gachaRoll(){
+    const prevRng = RNG.rng;
+    const snap = (typeof RNG.snapshot==="function") ? RNG.snapshot() : null;
+    RNG.setSeed((Date.now() ^ ((Math.random()*0x7fffffff)|0))>>>0);
+    try{
+      const r = Math.random();
+      const pick=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+      const gear=(minT,maxT)=>{
+        const t=pick(minT,maxT), k=Math.random();
+        if(k<0.34) return { item: raidMakeArmor(t,t),  bucket:"armors" };
+        if(k<0.67) return { item: raidMakeHelmet(t,t), bucket:"helmets" };
+        if(k<0.90) return { item: raidMakeShield(t,t), bucket:"shields" };
+        return { item: this._shopGun(t), bucket:"weapons" };
+      };
+      if(r < 0.002){                                   // 极品 ≈0.2%
+        const k=Math.random();
+        if(k<0.55) return gear(8,9);
+        if(k<0.78) return { item: raidRollUnique(0.95),       bucket:"weapons" };
+        return { item: raidRollShieldUnique(0.95), bucket:"shields" };
+      }
+      if(r < 0.020) return gear(5,7);                  // 高档 ≈1.8%
+      if(r < 0.100){                                   // 中档 ≈8%
+        if(Math.random()<0.55) return { item: this._rollPartGear("pmc", 0.6), bucket:"parts" };
+        return gear(3,4);
+      }
+      if(r < 0.300){                                   // 小赚 ≈20%
+        if(Math.random()<0.35) return { item: this._rollPartGear("pmc", 0.3), bucket:"parts" };
+        return { item: raidMakeMaterial(0.6), bucket:"materials" };
+      }
+      return { item: raidMakeMaterial(0), bucket:"materials" };   // 垫底 ≈70%
+    } finally {
+      RNG.rng = prevRng;
+      if(snap!==null) RNG.restoreSnap(snap);
+    }
+  },
+
   _buildNavGrid(){
     const CS=256;
     const cols=Math.ceil(RAID_MAP_W/CS), rows=Math.ceil(RAID_MAP_H/CS);
@@ -1226,6 +1268,14 @@ Object.assign(Raid, {
             RNG.fr(b.y+40, Math.max(b.y+41, b.y+b.h-40))];
   },
 
+  /* v0.29.0：按 dt 归一化的平滑转向。
+     旧写法每帧固定 lerp 系数（0.08~0.26），帧率越高转得越快、掉帧时又突然很慢，
+     观感就是「视角一顿一顿 / 抖动」。这里换算成「每秒等效转向比例」，帧率无关。 */
+  _face(b, targetAngle, perFrameRate, dt){
+    const t = 1 - Math.pow(1 - M.clamp(perFrameRate||0.14, 0.001, 0.99), Math.max(0.0001, dt*60));
+    b.angle = M.lerpAngle(b.angle||0, targetAngle, Math.min(1, t));
+  },
+
   _botsUpdate(dt, game){
     // 联机非房主：AI 完全由房主模拟，这里只渲染影子
     if(this.online && typeof Net!=="undefined" && !Net.isHost) return;
@@ -1276,6 +1326,15 @@ Object.assign(Raid, {
         && (raidHitLocked(b,tgt) || raidAiLit(this,b,tgt.x,tgt.y));
       b._detectT = seenNow ? (b._detectT||0)+dt : Math.max(0,(b._detectT||0)-dt*1.5);
       const canSee = seenNow && (b._detectT>=sense.react || !!b.lastSeen);
+      /* v0.29.0：感知迟滞（消除「视角跳动」）。
+       * 手电锥边缘 + 掩体拐角会让 seenNow 逐帧翻转 —— 状态在 engage/chase/roam 之间来回切，
+       * 目标朝向每帧换一个来源，观感就是视角乱跳。这里给「已经看见」加 0.6s 保持窗：
+       *   · aware = 严格看见 或 保持窗内 → 维持交战姿态、朝向连续；
+       *   · 开火仍然只认严格 canSee（不许隔墙开枪）。
+       * 丢失视线期间朝向 / 移动都指向 lastSeen（最后已知位置），不拿目标的实时坐标作弊。 */
+      if(seenNow) b._seenHold = 0.6;
+      else b._seenHold = Math.max(0, (b._seenHold||0) - dt);
+      const aware = canSee || (b._seenHold>0 && b.lastSeen);
       if(canSee) b.lastSeen={ x:tgt.x, y:tgt.y, t:sense.memory };   // 记住最后位置，丢失视线也不马上忘
 
       /* 所有 AI 都会用医疗品 —— 血量低于阈值且暂时脱离火线时自行包扎 */
@@ -1298,26 +1357,37 @@ Object.assign(Raid, {
         }
       }
 
-      /* 有枪 + 看见玩家 → 交战 */
-      if(canSee && b.gun){
+      /* 有枪 + 已经察觉（严格看见，或刚丢失视线 0.6s 内）→ 交战 */
+      if(aware && b.gun){
         b.state="engage"; b.lootTarget=null; b.lootT=0;
-        b.angle=M.lerpAngle(b.angle, M.angle(b.x,b.y,tgt.x,tgt.y), b.smart?0.26:0.19);
+        /* 朝向：看得见就瞄实时位置并做弹道预判；丢了视线只瞄最后已知点（不作弊看穿墙）。 */
+        let aimX=tgt.x, aimY=tgt.y;
+        if(!canSee && b.lastSeen){ aimX=b.lastSeen.x; aimY=b.lastSeen.y; }
+        if(canSee && b.smart && tgt._px!==undefined){
+          const step=Math.max(0.0001, dt);
+          const vx=(tgt.x-tgt._px)/step, vy=(tgt.y-tgt._py)/step;
+          const tof=Math.min(0.30, d/900);            // 子弹飞行时间近似（秒）
+          aimX += vx*tof*0.55; aimY += vy*tof*0.55;   // 只预判一半，别把 AI 做成外挂
+        }
+        tgt._px=tgt.x; tgt._py=tgt.y;
+        this._face(b, M.angle(b.x,b.y,aimX,aimY), b.smart?0.26:0.19, dt);
+        const ad=M.dist(b.x,b.y,aimX,aimY);           // 用「所知位置」算距离，丢失视线时不用实时坐标
         let mx=0,my=0;
         // 压得更狠（170 才开始保持距离，60 以内才后退）
-        if(d>170){ mx=Math.cos(b.angle); my=Math.sin(b.angle); }
-        else if(d<60){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); }
+        if(ad>170){ mx=Math.cos(b.angle); my=Math.sin(b.angle); }
+        else if(ad<60){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); }
         /* v0.23.0：潜行侦察兵（wraith）不站正面 —— 逼近时带一个固定的侧向分量，
            走弧线贴上来，正对着他反而容易打空。侧别选一次就固定，否则会左右抽搐。 */
-        if(b.arch==="wraith" && d>170){
+        if(b.arch==="wraith" && ad>170){
           const arc=(b._arcSide||(b._arcSide=RNG.chance(0.5)?1:-1))*0.62;
           mx+=-Math.sin(b.angle)*arc; my+=Math.cos(b.angle)*arc;
         }
         // 换弹时不再「端着空枪往前冲」——拉开距离等装填完
-        if(b.reloadT>0 && d<620){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); b.state="reload"; }
+        if(b.reloadT>0 && ad<620){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); b.state="reload"; }
         // 交战时左右游走，不再站桩对射（玩家更难被「固定靶」式预瞄）
         b._strafeT=(b._strafeT||0)-dt;
         if(b._strafeT<=0){ b._strafeT=RNG.fr(0.7,1.7); b._strafe=RNG.chance(0.5)?1:-1; }
-        const inRange = d <= Math.min(560, (b.gun.range||700)*0.82);
+        const inRange = ad <= Math.min(560, (b.gun.range||700)*0.82);
         if(inRange){
           const sw=(b.smart?0.72:0.52)*b._strafe;
           mx+=-Math.sin(b.angle)*sw; my+=Math.cos(b.angle)*sw;
@@ -1337,7 +1407,8 @@ Object.assign(Raid, {
           const a2=(b._fleeA!==undefined)?b._fleeA:b.angle+(b._fleeSide||(b._fleeSide=1))*1.3;
           this._moveOp(b, Math.cos(a2)*b.speed*dt, Math.sin(a2)*b.speed*dt);
         } else if(mx||my){ b._fleeT=0; b._fleeA=undefined; }
-        if(b.fireCd<=0 && b.reloadT<=0){
+        // v0.29.0：开火只认严格视野 —— 迟滞期间可以继续朝向 / 追击，但绝不隔墙开枪
+        if(canSee && b.fireCd<=0 && b.reloadT<=0){
           if(b.gun.ammoMag>0){
             // 枪法更准、开火间隔更短（jitter 0.026→0.018 / 0.072→0.050，CD 0.04→0.02 / 0.14→0.085）
             const jitter = b.smart ? 0.008 : (b.cls==="scav" ? 0.050 : 0.018);
@@ -1360,7 +1431,7 @@ Object.assign(Raid, {
       if(tgt.alive && d<340){
         b.state="flee";
         const a=M.angle(tgt.x,tgt.y,b.x,b.y);
-        b.angle=M.lerpAngle(b.angle, a, 0.14);
+        this._face(b, a, 0.14, dt);
         const fx=b.x, fy=b.y;
         this._moveOp(b, Math.cos(a)*b.speed*1.05*dt, Math.sin(a)*b.speed*1.05*dt);
         // 贴墙逃不掉时先沿墙侧移，再不行就换一个随机方向挣扎一会儿
@@ -1382,13 +1453,16 @@ Object.assign(Raid, {
         const dz=M.dist(b.x,b.y,cx,cy);
         if(dz>64){
           const a=M.angle(b.x,b.y,cx,cy);
-          b.angle=M.lerpAngle(b.angle,a,0.12);
+          this._face(b, a, 0.12, dt);
           this._moveOp(b, Math.cos(a)*b.speed*0.9*dt, Math.sin(a)*b.speed*0.9*dt);
           b.state="move"; continue;
         }
         b.state="guard";
         b.roamT-=dt;
-        if(b.roamT<=0){ b.angle=RNG.fr(0,6.28); b.roamT=RNG.fr(1.5,3); }
+        /* v0.29.0：驻守时的「东张西望」不再瞬间跳到随机角 —— 改成平滑转向目标角，
+           否则每天 1.5~3 秒视角会硬跳一下（这就是玩家看到的「视角跳动」之一）。 */
+        if(b.roamT<=0){ b._guardLook=RNG.fr(0,6.28); b.roamT=RNG.fr(1.5,3); }
+        if(b._guardLook!==undefined) this._face(b, b._guardLook, 0.10, dt);
         continue;
       }
 
@@ -1401,7 +1475,7 @@ Object.assign(Raid, {
           const ad=M.dist(b.x,b.y,ax,ay);
           if(ad>150){
             const a=M.angle(b.x,b.y,ax,ay);
-            b.angle=M.lerpAngle(b.angle,a,0.10);
+            this._face(b, a, 0.10, dt);
             this._moveOp(b, Math.cos(a)*b.speed*0.85*dt, Math.sin(a)*b.speed*0.85*dt);
             b.state="move"; continue;
           }
@@ -1416,7 +1490,7 @@ Object.assign(Raid, {
           const dl=M.dist(b.x,b.y,b.lastSeen.x,b.lastSeen.y);
           if(dl>70){
             const a=M.angle(b.x,b.y,b.lastSeen.x,b.lastSeen.y);
-            b.angle=M.lerpAngle(b.angle,a,0.14);
+            this._face(b, a, 0.14, dt);
             const ox=b.x, oy=b.y;
             this._moveOp(b, Math.cos(a)*b.speed*dt, Math.sin(a)*b.speed*dt);
             // 目标在墙后就放弃，避免顶着掩体原地抽搐
@@ -1436,7 +1510,7 @@ Object.assign(Raid, {
           const di=M.dist(b.x,b.y,iv.x,iv.y);
           if(di>64){
             const a=M.angle(b.x,b.y,iv.x,iv.y);
-            b.angle=M.lerpAngle(b.angle,a,0.13);
+            this._face(b, a, 0.13, dt);
             const ox=b.x, oy=b.y;
             this._moveOp(b, Math.cos(a)*b.speed*dt, Math.sin(a)*b.speed*dt);
             if(Math.hypot(b.x-ox,b.y-oy) < b.speed*dt*0.35){ b.investigate=null; }
@@ -1468,7 +1542,7 @@ Object.assign(Raid, {
       }
       if(b.roamPt){
         const a=M.angle(b.x,b.y,b.roamPt.x,b.roamPt.y);
-        b.angle=M.lerpAngle(b.angle, a, 0.08);
+        this._face(b, a, 0.08, dt);
         const ox=b.x, oy=b.y;
         this._moveOp(b, Math.cos(a)*b.speed*0.8*dt, Math.sin(a)*b.speed*0.8*dt);
         if(Math.hypot(b.x-ox,b.y-oy) < b.speed*0.8*dt*0.25){
@@ -1498,7 +1572,7 @@ Object.assign(Raid, {
     const dd=M.dist(b.x,b.y,c.x,c.y);
     if(dd>54){
       const a=M.angle(b.x,b.y,c.x,c.y);
-      b.angle=M.lerpAngle(b.angle,a,0.14);
+      this._face(b, a, 0.14, dt);
       // 卡住绕行：撞墙时先侧移一段，还是走不通才放弃这个箱子
       if(b._lootDetour && b._lootDetour.t>0){
         b._lootDetour.t-=dt;
