@@ -1484,6 +1484,11 @@ const Raid = {
       round:!!RAID_ROUND_KINDS[t.kind] && (typeof raidRoundShape==="function" ? raidRoundShape(t.w,t.h) : true),
       fill:t.fill, edge:t.edge };
     this.props.push(p);
+    /* v0.33.1（用户反馈）：scrap 是散落在地上的废料堆（椭圆底 + 几个碎块），
+       视觉上就是杂物，不该挡路。只留在 props 供渲染与摆放避让，
+       不进 walls —— 移动 / 子弹 / AI 视线 / 手电光锥全部可以穿过。
+       对应地，右侧那种六边形岩石（rock）反过来要按六边形挡，见 RAID_COMPOUND_KINDS。 */
+    if(t.kind==="scrap") return p;
     /* v0.31.0：复合装饰按三个矩形登记碰撞 —— navCell（光线 / 子弹 / 移动）
        与 losCell（AI 视线）都只认这三个子矩形，缝隙是真正空的。 */
     if(typeof raidCompoundBoxes==="function" && RAID_COMPOUND_KINDS[t.kind]){

@@ -3552,6 +3552,22 @@ check('3D 玩家打 AI 用准星判定、2D 仍随机',
 check('暴击判定读 this.aimHead（不是未定义的 R）',
   /this\.aimHead === target/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+/* ④ 两类装饰的碰撞（v0.33.1，用户反馈）
+ *    scrap（废料堆）→ 无碰撞；rock（六边形岩石）→ 三横带六边形碰撞 */
+check('scrap 不进 walls（杂物不挡路）',
+  /if\(t\.kind==="scrap"\) return p;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+const __deco = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Object.create(Raid);
+  R.props=[]; R.walls=[];
+  R._pushProp({kind:"scrap", w:60, h:60, fill:"#000"}, 0, 0);
+  const scrapWalls=R.walls.length;
+  R._pushProp({kind:"rock", w:80, h:80, fill:"#555"}, 100, 0);
+  const rockWalls=R.walls.filter(w=>w.kind==="rock").length;
+  return { scrapWalls, rockWalls, scrapProps:R.props.filter(p=>p.kind==="scrap").length };
+})())`));
+check('scrap 只留在 props、walls 里没有它', __deco.scrapWalls===0 && __deco.scrapProps===1 ? 1 : 0, 1, 0.001);
+check('rock 登记三条子矩形碰撞', __deco.rockWalls===3 ? 1 : 0, 1, 0.001);
+
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
  * 某段实现或文案是否仍在的「源码护栏」（对重命名、重构脆弱）。把两者的数量分开
