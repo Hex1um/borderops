@@ -207,20 +207,88 @@ function raidRailBridgeBoxes(rails, waterKind, half){
 }
 
 /* ---------------------------------------------------------------------------
- * 四、各 POI 的招牌地标（v0.34.1）
+ * 四、各 POI 的主题装饰（v0.35.0）
  * ---------------------------------------------------------------------------
- * 用户要求「每个建筑各具自己独特的特点和装饰」。这里给 8 个 POI 各配一个
- * 大尺寸招牌物，建图时由 raid-core 的 _pushProp 落地 —— 因为走的是同一条
- * 道具管线，2D 与 3D 的「看到 / 挡住 / 光线」自动一致，不需要额外渲染分支。
+ * 用户要求「每个建筑各具自己独特的特点和装饰」，且之前把单个大招牌放在 POI
+ * 合并框正中央 —— 而 rail / factory 这类 POI 是多个不相连建筑群的并集，几何
+ * 中心落在建筑之间的空地甚至马路上；再加上安全半径只按短边算，大件必然戳进墙里，
+ * 于是出现「建筑重叠 / 设施重叠」的观感。
+ *
+ * 改法：不再用「合并框中心 + 一个巨物」，而是给每个 POI 一套**主题装饰清单**
+ * （RAID_POI_DECOR），建图时由 raid-core 按**每个房间内部**做非重叠装箱摆放：
+ *   - 只在房间包围盒内、且避开墙体 / 门廊 / 已放装饰 / 战利品箱的位置落点
+ *   - 大件先放、小件后放，多个房间分摊，因此每个建筑都有自己的一套特征物
+ * 仍然走既有 _pushProp 管线，2D / 3D / 碰撞 / 视线 / 光照六处自动一致。
+ *
  * 放在 geometry 而不是 raid-data：raid-data 已经贴着 2000 行拆分上限。
  */
-const RAID_POI_LANDMARKS = {
-  dam:     { kind:"pipe",    w:250, h:66,  note:"泄洪主管道" },
-  prison:  { kind:"barrier", w:300, h:46,  note:"收容区隔离栏" },
-  town:    { kind:"shelf",   w:200, h:58,  note:"集市货架长阵" },
-  rail:    { kind:"railcar", w:220, h:80,  note:"待编组货车" },
-  quarry:  { kind:"rock",    w:190, h:170, note:"崩落的巨岩" },
-  factory: { kind:"shelf",   w:230, h:64,  note:"零件周转架" },
-  dock:    { kind:"railcar", w:210, h:86,  note:"堆叠集装箱" },
-  temple:  { kind:"archway", w:170, h:150, note:"坍塌的石拱门" },
+const RAID_POI_DECOR = {
+  /* 尺寸策略（v0.35.0）：房间内部大多已被墙体/家具切碎，超大件塞不进缝隙，
+     且随机种子不同会导致大件时而放下、时而放不下（方差大）。因此：
+     - 签名主件控制在「能进房间空档」的尺寸（宽 ≤172、高 ≤90）
+     - 额外配 1–2 件小件（≤64）兜底：哪怕最窄的房间（大坝闸室 200x170、
+       东码头集装箱堆场）也能稳定拿到 ≥2 件不重叠的主题装饰
+     - 配合 raid-core 的「按房间非重叠装箱 + 候选步长 10」保证不重叠且稳定出件 */
+  /* 大坝：水力枢纽 —— 泄洪管段 + 涡轮机房 + 备件箱 */
+  dam: [
+    { kind:"pipe",    w:104, h:36,  fill:"#3a4049", edge:"#14181d" },
+    { kind:"machine", w:64,  h:64,  fill:"#2f3a36", edge:"#14181d" },
+    { kind:"crate",   w:52,  h:52,  fill:"#5a4d36", edge:"#14181d" },
+    { kind:"pipe",    w:76,  h:30,  fill:"#3a4049", edge:"#14181d" },
+    { kind:"crate",   w:44,  h:44,  fill:"#5a4d36", edge:"#14181d" },
+    { kind:"pipe",    w:64,  h:28,  fill:"#3a4049", edge:"#14181d" },
+    { kind:"crate",   w:40,  h:40,  fill:"#5a4d36", edge:"#14181d" },
+    { kind:"crate",   w:36,  h:36,  fill:"#5a4d36", edge:"#14181d" },
+  ],
+  /* 监狱：收容区 —— 隔离栏 + 囚室储物柜 + 讯问台 */
+  prison: [
+    { kind:"barrier", w:180, h:30,  fill:"#b6362f", edge:"#14181d" },
+    { kind:"locker",  w:44,  h:82,  fill:"#3c4a52", edge:"#14181d" },
+    { kind:"barrier", w:150, h:28,  fill:"#b6362f", edge:"#14181d" },
+    { kind:"table",   w:100, h:54,  fill:"#4a3f33", edge:"#14181d" },
+  ],
+  /* 小镇：市集 —— 货摊货架 + 长椅 + 行道树 + 木箱 */
+  town: [
+    { kind:"shelf",   w:170, h:50,  fill:"#5a4a32", edge:"#14181d" },
+    { kind:"table",   w:92,  h:50,  fill:"#4a3f33", edge:"#14181d" },
+    { kind:"tree",    w:62,  h:62,  fill:"#2f4a2a", edge:"#14181d" },
+    { kind:"crate",   w:52,  h:52,  fill:"#5a4d36", edge:"#14181d" },
+    { kind:"shelf",   w:140, h:46,  fill:"#5a4a32", edge:"#14181d" },
+  ],
+  /* 铁路调度场：编组 —— 货车 + 信号机械 + 集装箱 + 木箱 */
+  rail: [
+    { kind:"railcar", w:172, h:62,  fill:"#33383f", edge:"#14181d" },
+    { kind:"machine", w:76,  h:76,  fill:"#2f3a36", edge:"#14181d" },
+    { kind:"container", w:100, h:84, fill:"#3a4a44", edge:"#14181d" },
+    { kind:"crate",   w:52,  h:52,  fill:"#5a4d36", edge:"#14181d" },
+  ],
+  /* 采石场：爆破区 —— 崩落巨岩 + 碎石堆 + 钻机 + 小岩 */
+  quarry: [
+    { kind:"scrap",   w:104, h:78,  fill:"#4a4a44", edge:"#14181d" },
+    { kind:"machine", w:76,  h:76,  fill:"#2f3a36", edge:"#14181d" },
+    { kind:"rock",    w:84,  h:78,  fill:"#5a5e5a", edge:"#14181d" },
+    { kind:"rock",    w:60,  h:56,  fill:"#5a5e5a", edge:"#14181d" },
+  ],
+  /* 机械工厂：车间 —— 机床 + 零件架 + 工作台 + 木箱 + 小机床 */
+  factory: [
+    { kind:"machine", w:90,  h:90,  fill:"#2f3a36", edge:"#14181d" },
+    { kind:"shelf",   w:170, h:50,  fill:"#5a4a32", edge:"#14181d" },
+    { kind:"table",   w:100, h:56,  fill:"#4a3f33", edge:"#14181d" },
+    { kind:"crate",   w:52,  h:52,  fill:"#5a4d36", edge:"#14181d" },
+    { kind:"machine", w:64,  h:64,  fill:"#2f3a36", edge:"#14181d" },
+  ],
+  /* 东码头：集装箱码头 —— 围栏 + 木箱（大件堆场里只塞得进小件） */
+  dock: [
+    { kind:"crate",    w:52,  h:52,  fill:"#5a4d36", edge:"#14181d" },
+    { kind:"barrier",  w:120, h:26,  fill:"#8a7a4a", edge:"#14181d" },
+    { kind:"crate",    w:44,  h:44,  fill:"#5a4d36", edge:"#14181d" },
+    { kind:"sandbag",  w:60,  h:40,  fill:"#6a6048", edge:"#14181d" },
+  ],
+  /* 古神庙：遗迹 —— 断柱（rock）+ 倒下的门梁（barrier）+ 祭品箱 + 小岩 */
+  temple: [
+    { kind:"barrier", w:170, h:32,  fill:"#8a7a4a", edge:"#14181d" },
+    { kind:"crate",   w:56,  h:56,  fill:"#6a5a3a", edge:"#14181d" },
+    { kind:"rock",    w:78,  h:74,  fill:"#6a6452", edge:"#14181d" },
+    { kind:"rock",    w:60,  h:56,  fill:"#6a6452", edge:"#14181d" },
+  ],
 };

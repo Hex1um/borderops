@@ -479,16 +479,28 @@ const Raid = {
     for(const poi of RAID_POI){
       const spec=RAID_ARCH[poi.elite];
       if(!spec || !poi.box) continue;
-      /* v0.34.1（用户要求「每个建筑各具特点」）：招牌地标。
-         走 _pushProp → 自动进 walls / navCell / losCell，2D 与 3D 天然一致；
-         各类用不同 kind 与尺寸：大坝泄洪管、监狱隔离栏、小镇货架、铁路货车、
-         采石场巨岩、工厂周转架、码头集装箱、神庙石拱门。 */
-      const L=(typeof RAID_POI_LANDMARKS!=="undefined") ? RAID_POI_LANDMARKS[poi.id] : null;
-      if(L){
-        const cx=poi.box.x+poi.box.w/2, cy=poi.box.y+poi.box.h/2;
-        const spot=this._spawnSafePoint(cx, cy, Math.max(26, Math.min(L.w, L.h)*0.28));
-        this._pushProp({ kind:L.kind, w:L.w, h:L.h, fill:"#4a4f57", edge:"#14181d" },
-                       spot.x-L.w/2, spot.y-L.h/2);
+      /* v0.35.0（用户反馈「建筑/设施重叠、要更具特色」）：
+         不再把单个巨物放在 POI 合并框中心（rail/factory 是多个不相连建筑群的并集，
+         中心会落在建筑之间的空地），改为按**每个房间内部**做非重叠装箱，
+         把该 POI 的主题装饰清单（RAID_POI_DECOR）一件件摆进去。
+         大件先放、小件后放、多个房间分摊 —— 每个建筑因此都有自己的一套特征物，
+         且彼此/与墙体/与战利品箱都不会重叠。仍走 _pushProp，2D/3D/碰撞/视线/光照一致。 */
+      const DECOR=(typeof RAID_POI_DECOR!=="undefined") ? RAID_POI_DECOR[poi.id] : null;
+      if(DECOR && poi.rooms){
+        for(const rid of poi.rooms){
+          const rm=RAID_ROOMS.find(r=>r.id===rid);
+          if(!rm) continue;
+          // placed 按房间独立：不同房间是各自独立的建筑，彼此不该互相挡位
+          // （damCtrl 与 damGate 只隔 ~50px，共享 placed 会把隔壁房间的装饰误判成遮挡）
+          const placed=[];
+          for(const item of DECOR){
+            const pos=this._fitDecorInRoom(rm, item, placed, 12);
+            if(!pos) continue;
+            this._pushProp({ kind:item.kind, w:item.w, h:item.h, fill:item.fill, edge:item.edge, decor:true },
+                           pos.x, pos.y);
+            placed.push({x:pos.x, y:pos.y, w:item.w, h:item.h});
+          }
+        }
       }
       const n=poi.elites||1;
       for(let i=0;i<n;i++){
@@ -663,6 +675,55 @@ const Raid = {
       }
     }
     return {x:x,y:y};
+  },
+  /* v0.35.0：主题装饰落点校验。矩形 (x,y,w,h) 是否已避开墙体 / 门廊走廊。
+   * 旧版只对内缩 pad 的 9 个角点 + 长边中线做点采样（_blockedAt 还是 <r² 严格小于），
+   * 墙若戳进外层 pad 环带就会漏判，导致 railcar 等贴墙大件与墙相交。
+   * 改版：把候选矩形按 pad 外扩成 AABB，与每面墙 / 门廊做严格相交测试
+   * （相交 ⟺ 净距 < pad，正好贴边放行），并复用 _nearWalls 空间索引保持构建速度。 */
+  _rectClear(x,y,w,h,pad){
+    pad=pad||12;
+    const RX=x-pad, RY=y-pad, RW=w+2*pad, RH=h+2*pad;
+    const cx=x+w*0.5, cy=y+h*0.5, rad=Math.max(w,h)*0.5+pad+30;
+    const list=this._nearWalls?this._nearWalls(cx,cy,rad):this.walls;
+    for(let i=0;i<list.length;i++){
+      const wll=list[i];
+      if(RX < wll.x+wll.w && RX+RW > wll.x && RY < wll.y+wll.h && RY+RH > wll.y) return false;
+    }
+    if(this.doorLanes) for(const L of this.doorLanes){
+      if(RX < L.x+L.w && RX+RW > L.x && RY < L.y+L.h && RY+RH > L.y) return false;
+    }
+    // 水面：采样矩形 5 点，避免装饰压在水里（桥面/河流不布景）
+    if(this._inWater(cx,cy) || this._inWater(x+4,y+4) || this._inWater(x+w-4,y+4) ||
+       this._inWater(x+4,y+h-4) || this._inWater(x+w-4,y+h-4)) return false;
+    return true;
+  },
+  /* v0.35.0：在单个房间内为一件装饰找不重叠的落点。
+   * 候选点网格乱序后逐个试，避开：墙/门廊（_rectClear）、已放装饰、战利品箱。 */
+  _fitDecorInRoom(rm, item, placed, pad){
+    pad=pad||12;
+    const inset=26;
+    const x0=rm.x+inset, y0=rm.y+inset;
+    const x1=rm.x+rm.w-inset-item.w, y1=rm.y+rm.h-inset-item.h;
+    if(x1<x0 || y1<y0) return null;            // 房间装不下这件装饰
+    const cands=[];
+    for(let gy=y0; gy<=y1; gy+=10) for(let gx=x0; gx<=x1; gx+=10) cands.push([gx,gy]);
+    for(let i=cands.length-1;i>0;i--){ const j=RNG.ri(0,i), t=cands[i]; cands[i]=cands[j]; cands[j]=t; }
+    for(const c of cands){
+      const gx=c[0], gy=c[1];
+      if(!this._rectClear(gx,gy,item.w,item.h,pad)) continue;
+      let clash=false;
+      for(const r of placed){
+        if(gx < r.x+r.w+pad && gx+item.w > r.x-pad && gy < r.y+r.h+pad && gy+item.h > r.y-pad){ clash=true; break; }
+      }
+      if(clash) continue;
+      for(const ct of (this.containers||[])){
+        if(gx < ct.x+44 && gx+item.w > ct.x-44 && gy < ct.y+44 && gy+item.h > ct.y-44){ clash=true; break; }
+      }
+      if(clash) continue;
+      return {x:gx, y:gy};
+    }
+    return null;
   },
   _openPointInRoom(rm, inset){
     inset=inset||60;
@@ -1491,7 +1552,7 @@ const Raid = {
      * v0.25.0：长条形的（长宽比 > 1.7）一律不标 round —— 椭圆的直边会让光锥
      * 沿着一条不存在的弧线收边，与渲染出的矩形对不上。 */
     const p={ x:x, y:y, w:t.w, h:t.h, kind:t.kind, sight:t.sight!==false,
-      soft:!t.sight,
+      soft:!t.sight, decor:!!t.decor,
       round:!!RAID_ROUND_KINDS[t.kind] && (typeof raidRoundShape==="function" ? raidRoundShape(t.w,t.h) : true),
       fill:t.fill, edge:t.edge };
     this.props.push(p);
