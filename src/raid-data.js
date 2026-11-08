@@ -211,23 +211,23 @@ const RAID_BIOMES = {
 const RAID_EXTRACT_RULES = {
   extA: { need:7, cost:0,    openChance:0.5,  note:"每局随机开放" },
   extB: { need:7, cost:0,    openChance:1.0,  note:"常驻开放" },
-  extC: { need:4, cost:1600, feeRate:0.020, openChance:1.0, note:"V-EX 雇车 · 按带入装备估价" },
+  extC: { need:4, cost:1600, feeRate:0.020, openChance:1.0, note:"V-EX 雇车，按带入装备估价" },
   extD: { need:9, cost:0,    openChance:0.65, note:"每局随机开放" },
   extE: { need:8, cost:0,    openChance:0.55, note:"每局随机开放" },
   extF: { need:7, cost:0,    openChance:0.6,  note:"每局随机开放" },
   extG: { need:10,cost:0,    openChance:0.5,  note:"每局随机开放" },
-  extH: { need:4, cost:1400, feeRate:0.016, openChance:1.0, note:"北关雇车 · 按带入装备估价" },
-  extI: { need:9, cost:0,    openChance:0.55, note:"东岭索道 · 每局随机开放" },
-  extJ: { need:8, cost:2000, feeRate:0.024, openChance:1.0, note:"南港货轮 · 按带入装备估价" },
-  extK: { need:6, cost:0,    openChance:0.6,  note:"医院天台 · 每局随机开放" },
-  extL: { need:8, cost:0,    openChance:0.55, note:"林间空投 · 每局随机开放" },
-  extM: { need:9, cost:0,    openChance:0.6,  note:"山顶缆车 · 每局随机开放" },
-  extN: { need:7, cost:0,    openChance:1.0,  note:"河港渡轮 · 常驻开放" },
-  extO: { need:9, cost:0,    openChance:0.6,  note:"火车站台 · 每局随机开放" },
-  extP: { need:4, cost:1200, feeRate:0.014, openChance:1.0, note:"北桥栈道 · 按带入装备估价" },
-  extQ: { need:8, cost:0,    openChance:0.6,  note:"货运专线 · 每局随机开放" },
-  extR: { need:9, cost:0,    openChance:0.55, note:"南岭索道 · 每局随机开放" },
-  extS: { need:8, cost:0,    openChance:0.75, note:"大坝坝顶 · 每局随机开放" },
+  extH: { need:4, cost:1400, feeRate:0.016, openChance:1.0, note:"北关雇车，按带入装备估价" },
+  extI: { need:9, cost:0,    openChance:0.55, note:"东岭索道，每局随机开放" },
+  extJ: { need:8, cost:2000, feeRate:0.024, openChance:1.0, note:"南港货轮，按带入装备估价" },
+  extK: { need:6, cost:0,    openChance:0.6,  note:"医院天台，每局随机开放" },
+  extL: { need:8, cost:0,    openChance:0.55, note:"林间空投，每局随机开放" },
+  extM: { need:9, cost:0,    openChance:0.6,  note:"山顶缆车，每局随机开放" },
+  extN: { need:7, cost:0,    openChance:1.0,  note:"河港渡轮，常驻开放" },
+  extO: { need:9, cost:0,    openChance:0.6,  note:"火车站台，每局随机开放" },
+  extP: { need:4, cost:1200, feeRate:0.014, openChance:1.0, note:"北桥栈道，按带入装备估价" },
+  extQ: { need:8, cost:0,    openChance:0.6,  note:"货运专线，每局随机开放" },
+  extR: { need:9, cost:0,    openChance:0.55, note:"南岭索道，每局随机开放" },
+  extS: { need:8, cost:0,    openChance:0.75, note:"大坝坝顶，每局随机开放" },
 };
 
 /* 撤离费 = (基础价×0.28 + 带入装备估值×费率) × 轻装折扣
@@ -438,7 +438,7 @@ const RAID_RARITY_VAL   = RAID_TIERS.map(t=>t.val);
 
 // 9 阶品质图例（配装大厅 / 商店展示用）
 function raidTierLegend(){
-  if(weaponQualityHidden()) return `<b style="color:#cfcabb">精简显示（品质 / 前后缀 / 厂商已隐藏 · 设置里切换到「完整」即可查看）</b>`;
+  if(weaponQualityHidden()) return `<b style="color:#cfcabb">精简显示（品质 / 前后缀 / 厂商已隐藏，设置里切换到「完整」即可查看）</b>`;
   return RAID_TIERS.map(t=>`<b style="color:${t.color}">${t.name}</b>`).join(" / ");
 }
 
@@ -1321,7 +1321,7 @@ const RAID_MEDS = [
   { id:"bandage", name:"绷带",   tier:0, value:180,  heal:0,   bleed:true,  cast:2.2, desc:"止血，移动会打断" },
   { id:"hemo",    name:"止血针", tier:1, value:680,  heal:15,  bleed:true,  cast:1.2, desc:"瞬间止血 + 少量回血" },
   { id:"medkit",  name:"急救包", tier:2, value:1900, heal:65,  bleed:false, cast:3.0, desc:"回复 65 生命" },
-  { id:"stim",    name:"强心针", tier:3, value:4300, heal:35,  bleed:false, cast:1.0, boost:true, desc:"回血 35 · 8 秒加速" },
+  { id:"stim",    name:"强心针", tier:3, value:4300, heal:35,  bleed:false, cast:1.0, boost:true, desc:"回血 35，8 秒加速" },
   { id:"surgery", name:"手术包", tier:4, value:9500, heal:100, bleed:true,  cast:4.0, desc:"回满血并止血（耗时最长）" },
 ];
 const RAID_MED_BY_ID={}; for(const m of RAID_MEDS) RAID_MED_BY_ID[m.id]=m;
@@ -1526,7 +1526,7 @@ const RAID_RECIPES = [
       return raidMakeMed((pool.length?RNG.pick(pool):RAID_MEDS[0]).id);
     } },
   { id:"r_part", name:"枪械配件", kind:"part", tag:"配件", slots:2,
-    desc:"产出与材料同档的配件 · 槽位随机 · 带前后缀",
+    desc:"产出与材料同档的配件，槽位随机，带前后缀",
     make:(mats,q)=>rollPart(RNG.pick(GUN_SLOTS).id, 10+q*3, RAID_TIER_TO_RARITY[q]) },
   { id:"r_armor", name:"护甲板", kind:"armor", tag:"装备", slots:16,
     desc:"产出与材料同档的护甲（品质在档位内浮动）",
@@ -1535,7 +1535,7 @@ const RAID_RECIPES = [
     desc:"产出与材料同档的头盔（品质在档位内浮动）",
     make:(mats,q)=>raidMakeHelmet(M.clamp(q+1,1,9), M.clamp(q,0,8)) },
   { id:"r_shield", name:"护盾发生器", kind:"shield", tag:"装备", slots:32,
-    desc:"投入 32 份材料 → 与材料同档的护盾 · 4 个配件 + 前后缀 + 独特加成",
+    desc:"投入 32 份材料 → 与材料同档的护盾，4 个配件 + 前后缀 + 独特加成",
     make:(mats,q)=>raidMakeShield(M.clamp(q+1,1,9), M.clamp(q,0,8)) },
 ];
 // 底材按枪型定投料量——枪越大结构越复杂，要的材料越多
@@ -1543,7 +1543,7 @@ const RAID_RECV_SLOTS = { rifle:16, sniper:20, smg:6, shotgun:12, pistol:2, laun
 for(const r of RAID_RECEIVERS){
   const slots = RAID_RECV_SLOTS[r.type] || 3;
   RAID_RECIPES.push({ id:"r_"+r.id, name:r.name, kind:"receiver", tag:"底材", slots:slots,
-    desc:`组装枪的底材 · ${WEAPON_TYPES[r.type]?WEAPON_TYPES[r.type].name:r.type} · 需 ${slots} 份材料 · 等级由材料决定`,
+    desc:`组装枪的底材，${WEAPON_TYPES[r.type]?WEAPON_TYPES[r.type].name:r.type}，需 ${slots} 份材料，等级由材料决定`,
     make:(mats,q)=>raidMakeReceiver(r, M.clamp(q,0,8)) });
 }
 
@@ -1555,7 +1555,7 @@ for(const cal of AMMO_CAL_LIST){
   const slots = AMMO_CRAFT_SLOTS[cal] || 3;
   RAID_RECIPES.push({
     id:"r_ammo_"+cal, name:AMMO_CALS[cal].name+"（30 发）", kind:"ammo", tag:"弹药", slots:slots,
-    desc:`产出 ${AMMO_CALS[cal].spec} · 适用 ${AMMO_CALS[cal].types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")} · 每次 ${slots} 份材料 → ${RAID_AMMO_STACK} 发 · 级别由材料品质决定`,
+    desc:`产出 ${AMMO_CALS[cal].spec}，适用 ${AMMO_CALS[cal].types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")}，每次 ${slots} 份材料 → ${RAID_AMMO_STACK} 发，级别由材料品质决定`,
     make:(mats,q)=>({ kind:"ammo", id:ammoItemId(cal, M.clamp(1+Math.floor(q*0.62),1,5)), n:RAID_AMMO_STACK }),
   });
 }
@@ -1620,9 +1620,9 @@ function raidWeaponCard(w, opts){
   const head=(opts.prefix||"")+gunNameOf(w);
   return `<div class="shop-item" style="border-left-color:${col}${opts.margin?';margin:12px 0':''}">
     <div class="si-name" style="color:${col}">${head}</div>
-    <div class="si-meta">${tname} · ${parts.length} 个配件${w.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}${w.pellets>1?` · <b style="color:#ffd54a">${w.pellets} ${w.type==="shotgun"?"弹片":"发/次"}</b>`:''}</div>
+    <div class="si-meta">${tname}，${parts.length} 个配件${w.uniqPerk?'，<b style="color:#ffd23f">具名装备</b>':''}${w.pellets>1?`，<b style="color:#ffd54a">${w.pellets} ${w.type==="shotgun"?"弹片":"发/次"}</b>`:''}</div>
     ${w.uniqPerk?`<div class="uniq-perk">✦ ${w.uniqPerk}</div>`:''}
-    <div class="si-stats">${gunDamageLabel(w)} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 估值 ₽${priceTextShort(w.value)}
+    <div class="si-stats">${gunDamageLabel(w)}，弹匣 ${w.mag}，射速 ${w.rpm}，估值 ₽${priceTextShort(w.value)}
       ${parts.length?`<br><span class="part-row">${parts.slice(0,4).map(partChip).join("")}</span>`:''}</div>
     ${opts.sell?`<div class="si-buy"><span class="si-price">₽ ${priceTextShort(sellP)}</span>
         <button class="btn ghost" data-sell="w:${w.uid}">售卖</button>

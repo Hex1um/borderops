@@ -4,7 +4,7 @@
 
 class Game {
   constructor(){
-    document.title = CFG.name + " · " + CFG.en;
+    document.title = CFG.name + "，" + CFG.en;
     this.canvas=document.getElementById('game');
     this.ctx=this.canvas.getContext('2d');
     this.view={w:0,h:0,dpr:1};
@@ -156,7 +156,7 @@ class Game {
     this.camera.x=p.x-(this.view.w/z)/2; this.camera.y=p.y-(this.view.h/z)/2;
     this.state="playing"; this.mode="endless";
     UI.hide(); this._showHUD();
-    this.toast("无尽试炼 · 第 1 波即将开始");
+    this.toast("无尽试炼，第 1 波即将开始");
   }
 
   /* ----------------------------- 沙二模式 ----------------------------- */
@@ -291,7 +291,7 @@ class Game {
     p.hp=p.stats.maxHP; p.shield=p.stats.maxShield;
     for(const k in AMMO_MAX) p.ammo[k]=AMMO_MAX[k];
     this.state="playing"; UI.hide(); this._showHUD();
-    this.toast(`改装 ${p.mayhem} · 怪物生命 ×${p.mayhemHpMul().toFixed(1)} · 掉落 ilvl +${p.mayhem}`);
+    this.toast(`改装 ${p.mayhem}，怪物生命 ×${p.mayhemHpMul().toFixed(1)}，掉落 ilvl +${p.mayhem}`);
     Save.save(this);
   }
 

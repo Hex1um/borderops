@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.34.1",
+  version: "0.34.2",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -140,7 +140,7 @@ function ammoDef(cal, lv){
   const c=AMMO_CALS[cal]||AMMO_CALS.mid, g=ammoGradeOf(lv);
   return {
     id: ammoItemId(c.id, g.lv), kind:"ammo", cal:c.id, lv:g.lv,
-    name: c.name+" · "+g.name, short:c.short+" "+g.name, elem:g.elem,
+    name: c.name+"，"+g.name, short:c.short+" "+g.name, elem:g.elem,
     power:g.power, dotK:g.dotK, value:ammoValue(c.id, g.lv),
     color:c.color, spec:c.spec, types:c.types,
   };
@@ -403,12 +403,12 @@ const AFFIXES = {
 
 // 顶级品级专属的「出厂精调」词条（原「出厂精调威能」）
 const POWERS = [
-  { nm:"出厂精调 · 膛压", mods:[{stat:"dmgPct",     min:25, max:45}] },
-  { nm:"出厂精调 · 扳机", mods:[{stat:"critDmg",    min:60, max:110}] },
-  { nm:"出厂精调 · 枪机", mods:[{stat:"fireRatePct",min:20, max:35}] },
-  { nm:"出厂精调 · 弹匣", mods:[{stat:"magPct",     min:40, max:80}] },
-  { nm:"出厂精调 · 瞄具", mods:[{stat:"critChance", min:8,  max:16}] },
-  { nm:"出厂精调 · 穿深", mods:[{stat:"pierce",     min:2,  max:2}] },
+  { nm:"出厂精调，膛压", mods:[{stat:"dmgPct",     min:25, max:45}] },
+  { nm:"出厂精调，扳机", mods:[{stat:"critDmg",    min:60, max:110}] },
+  { nm:"出厂精调，枪机", mods:[{stat:"fireRatePct",min:20, max:35}] },
+  { nm:"出厂精调，弹匣", mods:[{stat:"magPct",     min:40, max:80}] },
+  { nm:"出厂精调，瞄具", mods:[{stat:"critChance", min:8,  max:16}] },
+  { nm:"出厂精调，穿深", mods:[{stat:"pierce",     min:2,  max:2}] },
 ];
 
 /* ----------------------------- 改装等级（原「改装等级」） -----------------------------
@@ -478,7 +478,7 @@ const SHOPS = {
     ilvlBonus:11,
   },
   gamble: {
-    id:"gamble", name:"黑市赌博机", icon:"✦", tag:"盲盒 · 仅此处出特供/珍藏/孤品",
+    id:"gamble", name:"黑市赌博机", icon:"✦", tag:"盲盒，仅此处出特供/珍藏/孤品",
     desc:"黑市地下的封存赌博机：投入金币开箱，只有这里能开出【特供 / 珍藏 / 孤品】三档神兵——其余所有掉落与商店都不再出产。",
     basePrice:4, lvPrice:2,
     // v0.21.8：最高三档（特供/珍藏/孤品）的唯一产出表；其余渠道权重已归零
@@ -507,14 +507,14 @@ const DROP = {
  * elemChance 语义改为「特种弹适配率」（对弹种加成的适配倾向），不再产生制式效果。
  */
 const MANUFACTURERS = {
-  Jakobs:  { name:"图拉兵工厂", color:"#8a6a4a", dmg:1.30, fireRate:0.82, accuracy:1.20, mag:0.8,  reload:1.05, crit:1.6, elemChance:0,    style:"高初速 · 栓动 · 精密", throwable:false },
-  Maliwan: { name:"伊热夫斯克", color:"#5d7885", dmg:0.95, fireRate:0.85, accuracy:1.15, mag:0.9,  reload:1.1,  crit:1.0, elemChance:0,    style:"冷锻枪管 · 高精度",   throwable:false },
-  Tediore: { name:"莫洛特工厂", color:"#6b7452", dmg:0.95, fireRate:1.05, accuracy:0.95, mag:1.0,  reload:0.55, crit:1.0, elemChance:0,    style:"快拆弹匣 · 短换弹",   throwable:false },
-  Vladof:  { name:"卡拉什尼科夫", color:"#9a5a3a", dmg:0.95, fireRate:1.35, accuracy:0.9,  mag:1.3,  reload:1.0,  crit:1.0, elemChance:0,    style:"高射速 · 大容量",     throwable:false },
-  Hyperion:{ name:"赫克勒-科赫", color:"#4a5158", dmg:1.0,  fireRate:0.95, accuracy:1.35, mag:0.95, reload:1.05, crit:1.1, elemChance:0,    style:"滚柱闭锁 · 稳定连发", throwable:false },
-  Torgue:  { name:"捷格加廖夫厂", color:"#85704c", dmg:1.1,  fireRate:0.8,  accuracy:0.95, mag:0.7,  reload:1.2,  crit:1.0, elemChance:0,    style:"重弹头 · 大口径",     throwable:false, forceExplosive:false },
-  Dahl:    { name:"FN 赫斯塔尔", color:"#4e6350", dmg:1.0,  fireRate:1.05, accuracy:1.05, mag:1.05, reload:1.0,  crit:1.05,elemChance:0,    style:"导气式 · 均衡",       throwable:false },
-  Atlas:   { name:"西格绍尔",   color:"#455873", dmg:1.02, fireRate:1.0,  accuracy:1.1,  mag:1.0,  reload:1.0,  crit:1.1, elemChance:0,    style:"模块化 · 通用件",     throwable:false, homing:false },
+  Jakobs:  { name:"图拉兵工厂", color:"#8a6a4a", dmg:1.30, fireRate:0.82, accuracy:1.20, mag:0.8,  reload:1.05, crit:1.6, elemChance:0,    style:"高初速，栓动，精密", throwable:false },
+  Maliwan: { name:"伊热夫斯克", color:"#5d7885", dmg:0.95, fireRate:0.85, accuracy:1.15, mag:0.9,  reload:1.1,  crit:1.0, elemChance:0,    style:"冷锻枪管，高精度",   throwable:false },
+  Tediore: { name:"莫洛特工厂", color:"#6b7452", dmg:0.95, fireRate:1.05, accuracy:0.95, mag:1.0,  reload:0.55, crit:1.0, elemChance:0,    style:"快拆弹匣，短换弹",   throwable:false },
+  Vladof:  { name:"卡拉什尼科夫", color:"#9a5a3a", dmg:0.95, fireRate:1.35, accuracy:0.9,  mag:1.3,  reload:1.0,  crit:1.0, elemChance:0,    style:"高射速，大容量",     throwable:false },
+  Hyperion:{ name:"赫克勒-科赫", color:"#4a5158", dmg:1.0,  fireRate:0.95, accuracy:1.35, mag:0.95, reload:1.05, crit:1.1, elemChance:0,    style:"滚柱闭锁，稳定连发", throwable:false },
+  Torgue:  { name:"捷格加廖夫厂", color:"#85704c", dmg:1.1,  fireRate:0.8,  accuracy:0.95, mag:0.7,  reload:1.2,  crit:1.0, elemChance:0,    style:"重弹头，大口径",     throwable:false, forceExplosive:false },
+  Dahl:    { name:"FN 赫斯塔尔", color:"#4e6350", dmg:1.0,  fireRate:1.05, accuracy:1.05, mag:1.05, reload:1.0,  crit:1.05,elemChance:0,    style:"导气式，均衡",       throwable:false },
+  Atlas:   { name:"西格绍尔",   color:"#455873", dmg:1.02, fireRate:1.0,  accuracy:1.1,  mag:1.0,  reload:1.0,  crit:1.1, elemChance:0,    style:"模块化，通用件",     throwable:false, homing:false },
 };
 
 /* ----------------------------- 枪型 ----------------------------- */
@@ -588,7 +588,7 @@ function gunDamageLabel(g){
   const p = Math.max(1, Math.round(g.pellets || (g.stats && g.stats.pellets) || 1));
   const raw = g.dmg!==undefined ? g.dmg : ((g.stats && g.stats.damage)||0);
   const d = Math.round(raw*10)/10;
-  if(p>1) return "伤害 " + d + " × " + p + " 弹片 · 单发 " + (Math.round(raw*p*10)/10);
+  if(p>1) return "伤害 " + d + " × " + p + " 弹片，单发 " + (Math.round(raw*p*10)/10);
   return "伤害 " + d;
 }
 

@@ -93,20 +93,20 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;">
         <h1 class="title-big">边境行动</h1>
-        <div class="subtitle">BORDER OPS · WEB · v${CFG.version} · 撤离突袭 · 词缀枪械 · 黑市经济</div>
+        <div class="subtitle">BORDER OPS，WEB，v${CFG.version}，撤离突袭，词缀枪械，黑市经济</div>
 
         <div class="mode-hero" data-mode="raid" role="button" tabindex="0" aria-label="进入塔科夫模式">
           <div class="hero-top">
-            <span class="hero-kicker"><span class="kick-full">主模式 · MAIN MODE</span><span class="kick-short">主模式</span></span>
+            <span class="hero-kicker"><span class="kick-full">主模式，MAIN MODE</span><span class="kick-short">主模式</span></span>
             <span class="hero-live"><span class="live-full">2~4 人联机</span><span class="live-short">联机</span></span>
           </div>
           <h2>塔科夫模式</h2>
-          <div class="hero-tag">ESCAPE FROM TARKOV · 硬核撤离射击</div>
+          <div class="hero-tag">ESCAPE FROM TARKOV，硬核撤离射击</div>
           <p>PMC 与 Scav 同场，流血、包扎、条件撤离点与装备保险——<b>只有活着撤离，装备才会入库</b>。
             配装大厅内含军火超市 / 枪匠台 / 仓库 / 拍卖行，进图后还有枪械店、材料店、回收超市与黑市。</p>
           <div class="hero-chips">
             <span>13000×9600 大地图</span>
-            <span>密林 · 河谷 · 铁路枢纽</span>
+            <span>密林，河谷，铁路枢纽</span>
             <span>五级钥匙金库</span>
             <span>◈ GP 币</span>
           </div>
@@ -116,7 +116,7 @@ const UI = {
         <div class="title-actions">
           ${onlyRaid?'':`<button class="btn ghost small" id="btn-more-modes" aria-expanded="${more?"true":"false"}" aria-controls="more-modes">
             ${more?'▴ <span class="mm-full">收起其他模式</span><span class="mm-short">收起</span>'
-                   :'▾ <span class="mm-full">其他模式 · 战役 / 无尽 / 沙二 / 大逃杀</span><span class="mm-short">其他模式</span>'}
+                   :'▾ <span class="mm-full">其他模式，战役 / 无尽 / 沙二 / 大逃杀</span><span class="mm-short">其他模式</span>'}
           </button>`}
           ${!onlyRaid&&hasSave?`<button class="btn ghost small" id="btn-continue">继续战役存档</button>`:''}
           <button class="btn ghost small" id="btn-export">导出存档码</button>
@@ -126,7 +126,7 @@ const UI = {
 
         ${armed?`<div class="wipe-box">
           确认删除本机全部存档？<br>
-          ${onlyRaid?'':'战役进度 · '}塔科夫仓库（枪械/护甲/材料/改装模块）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
+          ${onlyRaid?'':'战役进度，'}塔科夫仓库（枪械/护甲/材料/改装模块）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
           <div class="row">
             <button class="btn small danger" id="btn-wipe-yes">确认删除</button>
             <button class="btn small ghost" id="btn-wipe-no">取消</button>
@@ -172,13 +172,13 @@ const UI = {
             <div class="mode-card" data-mode="dust2" role="button" tabindex="0">
               <div class="mode-ico">✦</div>
               <h3>沙二模式</h3>
-              <div class="mode-tag">DUST II · 5V5</div>
+              <div class="mode-tag">DUST II，5V5</div>
               <p>CS2 竞技规则：爆破、经济、五列购买菜单。可选原版枪械或旧刷宝体系枪械。</p>
             </div>
             <div class="mode-card" data-mode="br" role="button" tabindex="0">
               <div class="mode-ico">✦</div>
               <h3>大逃杀</h3>
-              <div class="mode-tag">BATTLE ROYALE · 绝地岛</div>
+              <div class="mode-tag">BATTLE ROYALE，绝地岛</div>
               <p>PUBG 式缩圈生存：空降绝地岛，搜枪搜甲，安全区不断收缩，活到最后一人吃鸡。</p>
             </div>
           </div>
@@ -186,15 +186,15 @@ const UI = {
 
         <div class="hint">
           ${onlyRaid?'':`<span class="hint-desk">
-            桌面：<span class="kbd">W A S D</span> 移动 · <span class="kbd">鼠标</span> 瞄准 · <span class="kbd">左键</span> 开火 ·
-            <span class="kbd">R</span> 换弹 · <span class="kbd">空格</span> 技能 · <span class="kbd">F</span> 近战 ·
-            <span class="kbd">Q</span> 切枪 · <span class="kbd">K</span> 技能树 · <span class="kbd">Tab</span> 装备 · <span class="kbd">Esc</span> 暂停<br>
-            沙二：<span class="kbd">B</span> 购买 · <span class="kbd">E</span> 下包/拆包 · <span class="kbd">G</span> 手雷 ·
-            大逃杀：<span class="kbd">E</span> 用医疗 · 活到最后吃鸡<br>
+            桌面：<span class="kbd">W A S D</span> 移动，<span class="kbd">鼠标</span> 瞄准，<span class="kbd">左键</span> 开火 ·
+            <span class="kbd">R</span> 换弹，<span class="kbd">空格</span> 技能，<span class="kbd">F</span> 近战 ·
+            <span class="kbd">Q</span> 切枪，<span class="kbd">K</span> 技能树，<span class="kbd">Tab</span> 装备，<span class="kbd">Esc</span> 暂停<br>
+            沙二：<span class="kbd">B</span> 购买，<span class="kbd">E</span> 下包/拆包，<span class="kbd">G</span> 手雷 ·
+            大逃杀：<span class="kbd">E</span> 用医疗，活到最后吃鸡<br>
           </span>`}
-          塔科夫模式：<span class="kbd">WASD</span> 移动 · <span class="kbd">左键</span> 开火 · <span class="kbd">E</span> 搜索 ·
-          <span class="kbd">H</span> 绷带止血 · <span class="kbd">Q</span> 换枪 · <span class="kbd">Tab</span> 物品栏 · 站上撤离点坚守数秒<br>
-          移动端：左半屏拖动 · 右下扳机开火 · <span class="kbd">AUTO</span> 自动开火
+          塔科夫模式：<span class="kbd">WASD</span> 移动，<span class="kbd">左键</span> 开火，<span class="kbd">E</span> 搜索 ·
+          <span class="kbd">H</span> 绷带止血，<span class="kbd">Q</span> 换枪，<span class="kbd">Tab</span> 物品栏，站上撤离点坚守数秒<br>
+          移动端：左半屏拖动，右下扳机开火，<span class="kbd">AUTO</span> 自动开火
         </div>
       </div>`);
     this.overlay.querySelectorAll('.mode-card,.mode-hero').forEach(el=>{
@@ -346,7 +346,7 @@ const UI = {
     this._set(`
       <div class="panel">
         <h2 class="title-big" style="font-size:34px;">选择你的 PMC</h2>
-        <div class="subtitle">${mode==="endless"?"ENDLESS TRIAL · 无尽试炼":"CHOOSE YOUR VAULT HUNTER"}</div>
+        <div class="subtitle">${mode==="endless"?"ENDLESS TRIAL，无尽试炼":"CHOOSE YOUR VAULT HUNTER"}</div>
         <div class="grid-class">${cards}</div>
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
           <button class="btn ghost small" id="btn-back">返回</button>
@@ -373,8 +373,8 @@ const UI = {
   dustSetup(){
     this._set(`
       <div class="panel" style="text-align:center;max-width:760px;">
-        <h2 class="title-big" style="font-size:36px;">沙二 · 5V5</h2>
-        <div class="subtitle">DUST II · COMPETITIVE · MR12</div>
+        <h2 class="title-big" style="font-size:36px;">沙二，5V5</h2>
+        <div class="subtitle">DUST II，COMPETITIVE，MR12</div>
         <p style="color:var(--muted);max-width:600px;margin:0 auto 14px;">
           CS2 竞技规则：先拿 13 分获胜，半场换边。手枪局 $800 起手，
           击杀有奖励、连败有补偿，冻结时间打开购买菜单。</p>
@@ -397,11 +397,11 @@ const UI = {
           <h4>初始阵营</h4>
           <div class="opt-row">
             <div class="opt-card on" data-side="ct">
-              <b>CT · 防守方</b>
+              <b>CT，防守方</b>
               <span>守点、拆包，默认 USP-S</span>
             </div>
             <div class="opt-card" data-side="t">
-              <b>T · 进攻方</b>
+              <b>T，进攻方</b>
               <span>下包、抢点，默认 Glock-18</span>
             </div>
           </div>
@@ -437,7 +437,7 @@ const UI = {
     const idx=(z.index||0)+1, total=z.total||(typeof ZONES!=="undefined"?ZONES.length:4);
     this._set(`
       <div class="panel story-panel" style="max-width:640px;text-align:left;">
-        <div class="story-tag">区域 ${idx} / ${total} · 推荐等级 ${z.level}</div>
+        <div class="story-tag">区域 ${idx} / ${total}，推荐等级 ${z.level}</div>
         <h2 class="title-big" style="font-size:36px;margin:6px 0 12px;">${z.name}</h2>
         <p class="story-text">${z.story}</p>
         <div class="row" style="margin-top:20px;justify-content:flex-end;">
@@ -462,7 +462,7 @@ const UI = {
     this._set(`
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <h2 class="title-big" style="font-size:30px;">${CLASSES[p.classId].name} · 技能树</h2>
+          <h2 class="title-big" style="font-size:30px;">${CLASSES[p.classId].name}，技能树</h2>
           <div style="color:var(--green);font-weight:800;">可用技能点：${p.skillPoints}</div>
         </div>
         <div class="subtitle">主动技能：${p.abilityName}（冷却 ${p.abilityBaseCD}s）</div>
@@ -487,8 +487,8 @@ const UI = {
       const qid=weaponRarityId(w), qnm=weaponRarityName(w);
       return `<div class="inv-item loot-${qid} ${i===p.wi?'sel':''}" data-i="${i}">
         <div class="iname c-${qid}">${escHtml(gunNameOf(w))}</div>
-        <div class="si-meta">${qnm?qnm+" · ":""}Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
-        <div class="istat">${w.statLines().join(' · ')}</div>
+        <div class="si-meta">${qnm?qnm+"，":""}Lv.${w.ilvl}，${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name}，`}${w.elemName}${w.mayhem>0?`，<b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
+        <div class="istat">${w.statLines().join('，')}</div>
         ${this._affixHtml(w)}
         <div class="si-buy">
           <button class="btn small ghost" data-sell="${i}">卖出 <span class="cur-gp">◈</span>${sell}${eri?` <span class="cur-eri">◆</span>${eri}`:''}</button>
@@ -500,37 +500,37 @@ const UI = {
     const shieldItems=p.shields.length ? p.shields.map((s,i)=>{
       const eff=shieldEffectText(s);
       return `<div class="inv-item loot-${s.rarity} ${i===p.shieldIdx?'sel':''}" data-shield="${i}">
-        <div class="iname c-${s.rarity}">${escHtml(s.name)}${i===p.shieldIdx?' · 装备中':''}</div>
-        <div class="si-meta">${(RARITY_BY_ID[s.rarity]||RARITIES[0]).name} · Lv.${s.ilvl} · 护甲</div>
-        <div class="istat">${plateShieldLines(s).join(' · ')}</div>
+        <div class="iname c-${s.rarity}">${escHtml(s.name)}${i===p.shieldIdx?'，装备中':''}</div>
+        <div class="si-meta">${(RARITY_BY_ID[s.rarity]||RARITIES[0]).name}，Lv.${s.ilvl}，护甲</div>
+        <div class="istat">${plateShieldLines(s).join('，')}</div>
         ${eff?`<div class="affix-row"><span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span></div>`:''}
         <div class="si-buy">
           <button class="btn small ghost" data-ssell="${i}">卖出 <span class="cur-gp">◈</span>${itemSellGold(s)}${itemSellEridium(s)?` <span class="cur-eri">◆</span>${itemSellEridium(s)}`:''}</button>
           <span class="si-price">${i===p.shieldIdx?'已装备':'点击装备'}</span>
         </div>
       </div>`;
-    }).join('') : `<div class="empty-hint">没有护甲 · 护甲只能靠掉落或在黑市用美元购买</div>`;
+    }).join('') : `<div class="empty-hint">没有护甲，护甲只能靠掉落或在黑市用美元购买</div>`;
 
     const relicItems=p.relics.length ? p.relics.map((r,i)=>`
       <div class="inv-item loot-${r.rarity} ${i===p.relicIdx?'sel':''}" data-relic="${i}">
-        <div class="iname c-${r.rarity}">${escHtml(r.name)}${i===p.relicIdx?' · 装备中':''}</div>
-        <div class="si-meta">${(RARITY_BY_ID[r.rarity]||RARITIES[0]).name} · Lv.${r.ilvl} · 随身装备</div>
-        <div class="istat">${relicLines(r).join(' · ')}</div>
+        <div class="iname c-${r.rarity}">${escHtml(r.name)}${i===p.relicIdx?'，装备中':''}</div>
+        <div class="si-meta">${(RARITY_BY_ID[r.rarity]||RARITIES[0]).name}，Lv.${r.ilvl}，随身装备</div>
+        <div class="istat">${relicLines(r).join('，')}</div>
         <div class="si-buy">
           <button class="btn small ghost" data-rsell="${i}">卖出 <span class="cur-gp">◈</span>${itemSellGold(r)}${itemSellEridium(r)?` <span class="cur-eri">◆</span>${itemSellEridium(r)}`:''}</button>
           <span class="si-price">${i===p.relicIdx?'已装备':'点击装备'}</span>
         </div>
-      </div>`).join('') : `<div class="empty-hint">没有随身装备 · 随身装备提供纯被动词条，一个槽位</div>`;
+      </div>`).join('') : `<div class="empty-hint">没有随身装备，随身装备提供纯被动词条，一个槽位</div>`;
 
     const sh=p.shieldItem;
-    const ammo=Object.keys(p.ammo).map(k=>`${k}: ${p.ammo[k]}`).join(' · ');
+    const ammo=Object.keys(p.ammo).map(k=>`${k}: ${p.ammo[k]}`).join('，');
     this._set(`
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <h2 class="title-big" style="font-size:30px;margin:0;">装备库</h2>
           <div class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>　<span style="font-size:12px;color:var(--muted);">搜集效率 +${p.mf}</span></div>
         </div>
-        <div class="subtitle">护甲：${sh?`${escHtml(sh.name)}（延迟 ${sh.delay.toFixed(1)}s · ${sh.rate.toFixed(1)}/s）`:"无"}</div>
+        <div class="subtitle">护甲：${sh?`${escHtml(sh.name)}（延迟 ${sh.delay.toFixed(1)}s，${sh.rate.toFixed(1)}/s）`:"无"}</div>
 
         <div class="inv-sec">
           <h4>武器 <span class="meta-cap">${p.weapons.length}/24</span></h4>
@@ -538,7 +538,7 @@ const UI = {
         </div>
 
         <div class="inv-sec">
-          <h4>护甲 <span class="meta-cap">${p.shields.length}/12 · 受击后需等充能延迟才会恢复</span></h4>
+          <h4>护甲 <span class="meta-cap">${p.shields.length}/12，受击后需等充能延迟才会恢复</span></h4>
           <div class="inv-list">${shieldItems}</div>
         </div>
 
@@ -655,7 +655,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">军火市场</h2>
           <div class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span></div>
         </div>
-        <div class="subtitle">MARKET · 金币买军火，美元才能进黑市</div>
+        <div class="subtitle">MARKET，金币买军火，美元才能进黑市</div>
         <div class="shop-tabs">${tabs}</div>
         ${body}
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
@@ -711,17 +711,17 @@ const UI = {
     const isGear = w.kind==="shield" || w.kind==="relic";
     let meta, stats, affix;
     if(w.kind==="shield"){
-      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name} · Lv.${w.ilvl} · 护甲装备`;
-      stats=plateShieldLines(w).slice(0,3).join(' · ');
+      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name}，Lv.${w.ilvl}，护甲装备`;
+      stats=plateShieldLines(w).slice(0,3).join('，');
       const eff=shieldEffectText(w);
       affix = eff?`<span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span>`:'<span class="affix">无特效</span>';
     } else if(w.kind==="relic"){
-      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name} · Lv.${w.ilvl} · 随身装备`;
-      stats=relicLines(w).join(' · ');
+      meta=`${(RARITY_BY_ID[w.rarity]||RARITIES[0]).name}，Lv.${w.ilvl}，随身装备`;
+      stats=relicLines(w).join('，');
       affix='<span class="affix suffix">纯被动加成</span>';
     } else {
-      meta=`${weaponRarityName(w)?weaponRarityName(w)+" · ":""}Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
-      stats=`${gunDamageLabel(w)} · ${w.stats.fireRate.toFixed(1)}/s · ${w.magSizeBase} 弹匣 · ${(w.stats.accuracy*100|0)}% 精准`;
+      meta=`${weaponRarityName(w)?weaponRarityName(w)+"，":""}Lv.${w.ilvl}，${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name}，`}${w.elemName}${w.mayhem>0?`，<b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
+      stats=`${gunDamageLabel(w)}，${w.stats.fireRate.toFixed(1)}/s，${w.magSizeBase} 弹匣，${(w.stats.accuracy*100|0)}% 精准`;
       affix = (typeof weaponQualityHidden==="function" && !weaponQualityHidden())
         ? (w.affixLines().map(a=>`<span class="affix ${a.kind}">${a.nm} ${a.txt}</span>`).join('')||'<span class="affix">无词缀</span>')
         : '';
@@ -753,8 +753,8 @@ const UI = {
         <button class="btn small" data-mh="1" ${p.mayhem>=cap?'disabled style="opacity:.35"':''}>＋</button>
       </div>
       <div class="meta-num">
-        怪物生命 <b>×${p.mayhemHpMul().toFixed(2)}</b> · 伤害 <b>×${p.mayhemDmgMul().toFixed(2)}</b> ·
-        经验 <b>+${Math.round((p.mayhemXpMul()-1)*100)}%</b> · 金币与掉落 <b>+${Math.round((p.mayhemLootMul()-1)*100)}%</b>
+        怪物生命 <b>×${p.mayhemHpMul().toFixed(2)}</b>，伤害 <b>×${p.mayhemDmgMul().toFixed(2)}</b> ·
+        经验 <b>+${Math.round((p.mayhemXpMul()-1)*100)}%</b>，金币与掉落 <b>+${Math.round((p.mayhemLootMul()-1)*100)}%</b>
       </div>
       <div class="meta-num">
         掉落物品等级 <b>+${p.mayhem}</b>，每件装备再按 <b>w(m)=m≥n?1:2^(n-1-m)</b> 抽取改装等级 m，
@@ -767,7 +767,7 @@ const UI = {
       return `<div class="perm-row">
         <div>
           <b>${u.name}</b> <span class="meta-cap">Lv.${lv}</span>
-          <div class="meta-num">当前 +${lv*u.per}${u.unit} · 下一级 <span style="color:var(--accent)">${cost} 功勋</span></div>
+          <div class="meta-num">当前 +${lv*u.per}${u.unit}，下一级 <span style="color:var(--accent)">${cost} 功勋</span></div>
         </div>
         <button class="btn small" data-perm="${u.id}" ${p.souls<cost?'disabled style="opacity:.35"':''}>+1</button>
       </div>`;
@@ -781,7 +781,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">改装与重新部署</h2>
           <div class="shop-gold">功勋 ${p.souls.toLocaleString()}　<span style="font-size:12px;color:var(--muted);">重新部署 ${p.rebirths} 次</span></div>
         </div>
-        <div class="subtitle">MAYHEM &amp; REBIRTH · 用强度换收益，用等级换永久</div>
+        <div class="subtitle">MAYHEM &amp; REBIRTH，用强度换收益，用等级换永久</div>
 
         <div class="meta-sec">
           <h4>改装等级（改装）</h4>
@@ -797,7 +797,7 @@ const UI = {
           <h4>重新部署（Rebirth）</h4>
           <div class="meta-row">
             <div>
-              <div class="meta-num">等级 <b>Lv.${p.level}</b> · 装备评分 <b>${p.gearScore().toLocaleString()}</b> · 改装 <b>${p.mayhem}</b></div>
+              <div class="meta-num">等级 <b>Lv.${p.level}</b>，装备评分 <b>${p.gearScore().toLocaleString()}</b>，改装 <b>${p.mayhem}</b></div>
               <div class="meta-num">本次重新部署可得 <b style="color:var(--accent);font-size:15px;">${gain} 功勋</b></div>
               <div class="meta-num" style="margin-top:4px;">
                 重置：等级 / 技能 / 武器库与护甲随身装备 / 金币。
@@ -809,7 +809,7 @@ const UI = {
         </div>
 
         <div class="meta-sec">
-          <h4>永久升级 · 跨重新部署保留</h4>
+          <h4>永久升级，跨重新部署保留</h4>
           <div class="perm-list">${permRows}</div>
         </div>
 
@@ -859,15 +859,15 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;max-width:480px;">
         <h2 class="title-big" style="font-size:36px;">暂停</h2>
-        <div class="subtitle">${endless?`ENDLESS · 第 ${this.game.world?this.game.world.wave:1} 波`:"PAUSED"}</div>
+        <div class="subtitle">${endless?`ENDLESS，第 ${this.game.world?this.game.world.wave:1} 波`:"PAUSED"}</div>
         <div class="row" style="justify-content:center;margin-bottom:12px;">
           <span class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}</span>
           <span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>
-          <span style="color:var(--muted);font-size:13px;">Lv.${p.level} · 搜集效率 +${p.mf}${p.mayhem>0?` · 改装${p.mayhem}`:''}${p.souls>0?` · 功勋 ${p.souls}`:''}</span>
+          <span style="color:var(--muted);font-size:13px;">Lv.${p.level}，搜集效率 +${p.mf}${p.mayhem>0?`，改装${p.mayhem}`:''}${p.souls>0?`，功勋 ${p.souls}`:''}</span>
         </div>
         <div class="row" style="flex-direction:column;gap:10px;align-items:stretch;">
           <button class="btn" id="btn-resume">继续</button>
-          <button class="btn ghost" id="btn-meta">改装与重新部署${p.mayhem>0?` · 改装${p.mayhem}`:''}</button>
+          <button class="btn ghost" id="btn-meta">改装与重新部署${p.mayhem>0?`，改装${p.mayhem}`:''}</button>
           <button class="btn ghost" id="btn-shop">军火市场</button>
           <button class="btn ghost" id="btn-skill">技能树 (K)</button>
           <button class="btn ghost" id="btn-inv">装备库 (Tab)</button>
@@ -894,17 +894,17 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;max-width:520px;">
         <h2 class="title-big" style="font-size:34px;">比赛暂停</h2>
-        <div class="subtitle">DE_DUST2 · ${Dust2.playerSide()==="t"?"T":"CT"} · 第 ${Dust2.round} 回合</div>
+        <div class="subtitle">DE_DUST2，${Dust2.playerSide()==="t"?"T":"CT"}，第 ${Dust2.round} 回合</div>
         <div class="dust-score" style="justify-content:center;margin:12px 0;">
           <span class="sc-a">${Dust2.score.A}</span><span class="sc-sep">:</span><span class="sc-b">${Dust2.score.B}</span>
         </div>
         <div class="row" style="justify-content:center;margin-bottom:12px;">
           <span class="shop-gold">$ ${p.money.toLocaleString()}</span>
-          <span style="color:var(--muted);font-size:13px;">击杀 ${p.kills} · 死亡 ${p.deaths}</span>
+          <span style="color:var(--muted);font-size:13px;">击杀 ${p.kills}，死亡 ${p.deaths}</span>
         </div>
         <div class="row" style="flex-direction:column;gap:10px;align-items:stretch;">
           <button class="btn" id="btn-resume">继续</button>
-          <button class="btn ghost" id="btn-buy" ${canBuy?"":'disabled style="opacity:.35"'}>购买菜单 (B)${canBuy?"":" · 仅冻结时间"}</button>
+          <button class="btn ghost" id="btn-buy" ${canBuy?"":'disabled style="opacity:.35"'}>购买菜单 (B)${canBuy?"":"，仅冻结时间"}</button>
           <button class="btn ghost" id="btn-quit">退出比赛</button>
         </div>
       </div>`);
@@ -1009,7 +1009,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;max-width:640px;">
         <h2 class="title-big" style="font-size:42px;color:${win?"var(--accent)":"var(--hp)"};">${win?"比赛胜利":"比赛失败"}</h2>
-        <div class="subtitle">${r.gunSet==="bl"?"BORDERLANDS ARSENAL":"CS2 ARSENAL"} · ${r.rounds} 回合</div>
+        <div class="subtitle">${r.gunSet==="bl"?"BORDERLANDS ARSENAL":"CS2 ARSENAL"}，${r.rounds} 回合</div>
         <div class="dust-score" style="justify-content:center;margin:18px 0;">
           <span class="sc-a">${r.score.A}</span><span class="sc-sep">:</span><span class="sc-b">${r.score.B}</span>
         </div>
@@ -1031,7 +1031,7 @@ const UI = {
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:34px;">区域肃清！</h2>
         <div class="subtitle">${zone.name} 已清除</div>
-        <p style="color:var(--muted);">等级 Lv.${p.level} · 技能点 ${p.skillPoints} · 金币 <b class="cur-gp">◈${p.gold.toLocaleString()}</b> · 美元 <b style="color:#b061ff">◆${p.eridium}</b></p>
+        <p style="color:var(--muted);">等级 Lv.${p.level}，技能点 ${p.skillPoints}，金币 <b class="cur-gp">◈${p.gold.toLocaleString()}</b>，美元 <b style="color:#b061ff">◆${p.eridium}</b></p>
         <p style="color:var(--muted);font-size:13px;">${last?'前方就是军械库':'下一片区域等级更高，先去军火市场补一补？'}</p>
         <div class="row" style="justify-content:center;">
           <button class="btn ghost" id="btn-shop-zone">军火市场</button>
@@ -1050,10 +1050,10 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:40px;color:var(--hp);">你倒下了</h2>
-        <div class="subtitle">${endless?`ENDLESS · 第 ${wave} 波`:"GAME OVER"}</div>
+        <div class="subtitle">${endless?`ENDLESS，第 ${wave} 波`:"GAME OVER"}</div>
         ${endless
-          ? `<p style="color:var(--muted);">${CLASSES[p.classId].name} · 撑到第 <b style="color:var(--accent);font-size:22px;">${wave}</b> 波 · Lv.${p.level}</p>`
-          : `<p style="color:var(--muted);">${CLASSES[p.classId].name} · 到达 Lv.${p.level} · ${this.game.zoneIndex+1}/${ZONES.length} 区域</p>`}
+          ? `<p style="color:var(--muted);">${CLASSES[p.classId].name}，撑到第 <b style="color:var(--accent);font-size:22px;">${wave}</b> 波，Lv.${p.level}</p>`
+          : `<p style="color:var(--muted);">${CLASSES[p.classId].name}，到达 Lv.${p.level}，${this.game.zoneIndex+1}/${ZONES.length} 区域</p>`}
         <p style="color:var(--muted);font-size:13px;">功勋、美元、永久升级与改装上限已保留</p>
         <div class="row" style="justify-content:center;">
           <button class="btn" id="btn-retry">再来一次</button>
@@ -1077,8 +1077,8 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:40px;color:var(--orange);">军械库已开启</h2>
-        <div class="subtitle">VICTORY · 改装等级已解锁</div>
-        <p style="color:var(--muted);">${CLASSES[p.classId].name} · Lv.${p.level} · 击杀军械库守卫</p>
+        <div class="subtitle">VICTORY，改装等级已解锁</div>
+        <p style="color:var(--muted);">${CLASSES[p.classId].name}，Lv.${p.level}，击杀军械库守卫</p>
         <div class="meta-sec" style="text-align:left;">
           <h4>接下来的路</h4>
           <div class="meta-num">

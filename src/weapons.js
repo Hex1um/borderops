@@ -263,7 +263,7 @@ function partsAsAffixes(parts){
 
 // 配件文案（给 UI 用）
 function partText(p){
-  return (p.mods||[]).map(m=>affixText(m)).join(" · ");
+  return (p.mods||[]).map(m=>affixText(m)).join("，");
 }
 /* ----------------------------- 配件显示（v0.21.7） -----------------------------
  * 与枪械同一套「精简 / 完整」分层：
@@ -355,9 +355,9 @@ class Weapon {
     return [
       `伤害 ${s.damage.toFixed(1)}`,
       `射速 ${s.fireRate.toFixed(1)}/s`,
-      `弹匣 ${this.magSizeBase} · 精准 ${(s.accuracy*100|0)}%`,
+      `弹匣 ${this.magSizeBase}，精准 ${(s.accuracy*100|0)}%`,
       `换弹 ${s.reload.toFixed(2)}s`,
-      `要害命中 ${cc}% · x${s.crit.toFixed(2)}`,
+      `要害命中 ${cc}%，x${s.crit.toFixed(2)}`,
     ];
   }
 
@@ -598,7 +598,7 @@ function weaponName(man, base, R, element, affixes, model){
    * 精简 / 完整只是显示层的事（gunNameOf → compactGunName 负责剥掉厂商与前后缀）。
    * 以前的写法在生成时就把厂商抹掉了，切回完整模式也补不回来。 */
   const manTag = M0.name;
-  const ammoTag = element!=="none" && AMMO_TYPES[element] ? " · "+AMMO_TYPES[element].short : "";
+  const ammoTag = element!=="none" && AMMO_TYPES[element] ? "，"+AMMO_TYPES[element].short : "";
   const head = (manTag ? manTag+" " : "") + mdl;
   const pre = affixes.find(a=>a.kind==="prefix");
   const suf = affixes.find(a=>a.kind==="suffix");
@@ -765,7 +765,7 @@ function blGunGen(ilvl, opts){
   if(typeof CFG!=="undefined" && CFG.display!=="full") w.short=compactGunName(w.name, w);
   // Scav 等低阶配装可强制指定塔科夫实装型号，避免生成「兵工厂+枪型+词缀」的泛称。
   if(opts && opts.model){
-    const ammo=(w.element && w.element!=="none" && AMMO_TYPES[w.element]) ? " · "+AMMO_TYPES[w.element].short : "";
+    const ammo=(w.element && w.element!=="none" && AMMO_TYPES[w.element]) ? "，"+AMMO_TYPES[w.element].short : "";
     w.name=String(opts.model)+ammo;
   }
   return w;

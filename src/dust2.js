@@ -486,7 +486,7 @@ const Dust2 = {
         }
         this.lossStreak[tid]=0;
       }
-      this.roundMsg={ title:"换边", sub:"半场结束 · 攻守互换 · 经济重置", color:"#ffd23f" };
+      this.roundMsg={ title:"换边", sub:"半场结束，攻守互换，经济重置", color:"#ffd23f" };
       this.roundMsgT=4;
       SFX.levelup();
     }
@@ -518,7 +518,7 @@ const Dust2 = {
     winTeam.score=this.score[winTeam.id];
     this.lastResult={ winner:winnerSide, winTeam:winTeam.id, reason };
     const label = reason==="explode" ? "炸弹爆炸" : reason==="defuse" ? "拆包成功" : reason==="time" ? "时间耗尽" : "全歼对手";
-    this.roundMsg={ title:`${winnerSide==="t"?"T":"CT"} 获胜`, sub:`${label} · ${winTeam.id==="A"?"你的队伍":"敌方队伍"}拿下一分`, color:winnerSide==="t"?"#ffb020":"#5ea9ff" };
+    this.roundMsg={ title:`${winnerSide==="t"?"T":"CT"} 获胜`, sub:`${label}，${winTeam.id==="A"?"你的队伍":"敌方队伍"}拿下一分`, color:winnerSide==="t"?"#ffb020":"#5ea9ff" };
     this.roundMsgT=4.5;
     SFX.levelup();
     if(this.player.alive===false) this.spectate=null;
@@ -1142,7 +1142,7 @@ const Dust2 = {
     const b=this.bomb;
     b.planted=true; b.site=site; b.x=who.x; b.y=who.y; b.timer=CS2.bombTime;
     b.planter=who; b.carrier=null; who.hasBomb=false;
-    this.roundMsg={ title:"炸弹已安放", sub:`C4 在 ${site} 点 · 40 秒`, color:"#ff6b3d" };
+    this.roundMsg={ title:"炸弹已安放", sub:`C4 在 ${site} 点，40 秒`, color:"#ff6b3d" };
     this.roundMsgT=2.2;
     game.toast(`C4 已安放在 ${site} 点`);
     game.shake(6); SFX.boom();
@@ -1309,14 +1309,14 @@ const Dust2 = {
       gear.push({ id:"blg_s"+i, kind:"shield", item:s, cat:"gear", name:s.name,
         price:Math.max(500, Math.round(itemPrice(s)/50)*50*0.6),
         color:RARITY_BY_ID[s.rarity]?RARITY_BY_ID[s.rarity].color:"#4ad6ff",
-        desc:`容量 ${s.capacity} · 延迟 ${s.delay}s · 回充 ${s.rate}/s` });
+        desc:`容量 ${s.capacity}，延迟 ${s.delay}s，回充 ${s.rate}/s` });
     }
     for(let i=0;i<2;i++){
       const r=generateRelic(Math.round(ql), { weights });
       gear.push({ id:"blg_r"+i, kind:"relic", item:r, cat:"gear", name:r.name,
         price:Math.max(800, Math.round(itemPrice(r)/50)*50*0.7),
         color:RARITY_BY_ID[r.rarity]?RARITY_BY_ID[r.rarity].color:"#b061ff",
-        desc:relicLines(r).join(" · ") });
+        desc:relicLines(r).join("，") });
     }
     this.blGear=gear;
   },

@@ -195,7 +195,7 @@ const Input = {
   toggleAutoFire(){
     this.autoFire=!this.autoFire;
     this._syncAutoBtn();
-    if(this.game) this.game.toast(this.autoFire ? "自动开火" : "手动开火 · 按住扳机");
+    if(this.game) this.game.toast(this.autoFire ? "自动开火" : "手动开火，按住扳机");
     SFX.ui();
   },
   _syncAutoBtn(){

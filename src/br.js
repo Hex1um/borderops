@@ -938,7 +938,7 @@ const RenderBR = {
       ctx.fillStyle="#fff"; ctx.font="bold 64px system-ui,sans-serif";
       ctx.fillText("跳 伞 ！", BR_MAP_W/2, BR_MAP_H/2-10);
       ctx.font="20px system-ui,sans-serif"; ctx.fillStyle="rgba(220,230,240,0.9)";
-      ctx.fillText("空降到绝地岛 · "+Math.ceil(R.pregame)+" 秒后开战", BR_MAP_W/2, BR_MAP_H/2+40);
+      ctx.fillText("空降到绝地岛，"+Math.ceil(R.pregame)+" 秒后开战", BR_MAP_W/2, BR_MAP_H/2+40);
     }
   },
 
@@ -1005,8 +1005,8 @@ const RenderBR = {
     for(const k of R.killfeed){
       const alpha=M.clamp(k.t/6,0,1); ctx.globalAlpha=alpha;
       let text;
-      if(k.type==="zone") text=`${k.a} · ${k.v}`;
-      else if(k.type==="info") text=`${k.a} · ${k.v}`;
+      if(k.type==="zone") text=`${k.a}，${k.v}`;
+      else if(k.type==="info") text=`${k.a}，${k.v}`;
       else text=`${k.a}  ▸  ${k.v}`;
       const col = k.mine ? "#ffd23f" : (k.type==="zone"?"#ff8a5a":k.type==="info"?"#8fd0ff":"#cfd8e2");
       let w=ctx.measureText(text).width + (k.type==="kill"?62:16);
@@ -1052,12 +1052,12 @@ const RenderBR = {
     ctx.fillStyle="#e8eef4"; ctx.font=mob?"bold 16px system-ui,sans-serif":"bold 18px system-ui,sans-serif";
     ctx.fillText(`${p.mag} / ${p.reserve}`, bx, by+56);
     ctx.font=mob?"11px system-ui,sans-serif":"12px system-ui,sans-serif"; ctx.fillStyle="rgba(180,195,210,0.85)";
-    ctx.fillText(p.gun.name + (p.reloadT>0?" · 换弹中…":(p.secondary?" · Q 切枪":"")), bx, by+74);
+    ctx.fillText(p.gun.name + (p.reloadT>0?"，换弹中…":(p.secondary?"，Q 切枪":"")), bx, by+74);
 
     /* --- 圈外警告 --- */
     if(R.outOfZone && p.alive){
       ctx.textAlign="center"; ctx.font="bold 18px system-ui,sans-serif"; ctx.fillStyle="#ff6a5a";
-      ctx.fillText("⚠ 你在安全区外 · 持续掉血", v.w/2, mob?v.h*0.55:(v.h-150));
+      ctx.fillText("⚠ 你在安全区外，持续掉血", v.w/2, mob?v.h*0.55:(v.h-150));
     }
 
     /* --- 小地图 --- */
@@ -1081,7 +1081,7 @@ const RenderBR = {
     ctx.fillStyle="#e8eef6"; ctx.font="bold 16px system-ui,sans-serif";
     ctx.fillText("物品栏", x+18, y+28);
     ctx.fillStyle="rgba(150,170,190,0.8)"; ctx.font="11px system-ui,sans-serif";
-    ctx.fillText(mob?"点背包键关闭 · 靠近自动拾取":"Tab 关闭 · Q 切换主副武器", x+72, y+27);
+    ctx.fillText(mob?"点背包键关闭，靠近自动拾取":"Tab 关闭，Q 切换主副武器", x+72, y+27);
 
     let ly=y+58;
     const line=(label,val,col,sub)=>{
@@ -1104,20 +1104,20 @@ const RenderBR = {
     guns.forEach((g,i)=>{
       const gy=ly;
       const col=gunRarColor(g.rarity);
-      const elem=g.element&&g.element!=="none"&&ELEMENTS[g.element]?(" · "+ELEMENTS[g.element].name):"";
+      const elem=g.element&&g.element!=="none"&&ELEMENTS[g.element]?("，"+ELEMENTS[g.element].name):"";
       line(i===0?"主武器":"副武器", g.name, col,
-        `伤害 ${g.dmg} · 弹匣 ${i===0?p.mag:"-"} · 备弹 ${i===0?p.reserve:"-"}${elem}`);
+        `伤害 ${g.dmg}，弹匣 ${i===0?p.mag:"-"}，备弹 ${i===0?p.reserve:"-"}${elem}`);
       icon(g, gy);
     });
     const arName = p.armorTier ? BR_ARMORS["vest"+p.armorTier] : null;
     line("护甲", arName?arName.name:"（无护甲）", arName?"#7ab4ff":"#8b95a5",
-      arName?`${p.armorTier} 级 · 耐久 ${Math.ceil(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%`:"");
+      arName?`${p.armorTier} 级，耐久 ${Math.ceil(p.armor)}/${Math.round(p.maxArmor)}，减伤 ${Math.round(p.dr*100)}%`:"");
     const hmName = p.helmetTier ? BR_HELMETS["helm"+p.helmetTier] : null;
     line("头盔", hmName?hmName.name:"（无头盔）", hmName?"#8fd0ff":"#8b95a5",
-      hmName?`${p.helmetTier} 级 · 耐久 ${Math.ceil(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 爆头减伤 ${Math.round(p.helmetDr*100)}%`:"");
+      hmName?`${p.helmetTier} 级，耐久 ${Math.ceil(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)}，爆头减伤 ${Math.round(p.helmetDr*100)}%`:"");
     line("医疗", "⚕ "+Math.round(p.heal), "#7dff9a", "E 键 / 医疗键使用");
     const aliveN=(BR.ops||[]).filter(o=>o.alive).length;
-    line("战绩", `${p.kills} 杀 · 剩余 ${aliveN} 人`, "#ffd23f");
+    line("战绩", `${p.kills} 杀，剩余 ${aliveN} 人`, "#ffd23f");
   },
 
   minimap(ctx, v){
@@ -1153,8 +1153,8 @@ UI.brSetup=function(){
   const lobby=UI._brLobby;
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:34px;">大逃杀 · 绝地岛</h2>
-      <div class="subtitle">BATTLE ROYALE · 最后一人存活</div>
+      <h2 class="title-big" style="font-size:34px;">大逃杀，绝地岛</h2>
+      <div class="subtitle">BATTLE ROYALE，最后一人存活</div>
       <p style="color:var(--muted);max-width:680px;margin:0 0 14px;">
         你与另外 <b style="color:#ffd23f">${lobby-1}</b> 名玩家空降同一张绝地岛。落地搜刮武器护甲，
         在安全区（白圈）收缩中活到最后——<b style="color:#8fe07a">吃鸡</b>即胜利，阵亡即淘汰。</p>
@@ -1170,17 +1170,17 @@ UI.brSetup=function(){
         <div class="raid-col">
           <h4>玩法要点</h4>
           <div class="empty-hint" style="line-height:1.9;">
-            · 空手跳伞，地面拾取枪械 / 护甲 / 医疗<br>
-            · 蓝圈为当前安全区，白圈为下一处<br>
-            · 圈外持续掉血，越早进圈越安全<br>
-            · 左上角实时播报全图淘汰<br>
-            · 仅剩你一人 → 吃鸡（第 1 名）
+           ，空手跳伞，地面拾取枪械 / 护甲 / 医疗<br>
+           ，蓝圈为当前安全区，白圈为下一处<br>
+           ，圈外持续掉血，越早进圈越安全<br>
+           ，左上角实时播报全图淘汰<br>
+           ，仅剩你一人 → 吃鸡（第 1 名）
           </div>
         </div>
       </div>
 
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:10px;">
-        <div class="raid-tip">操作：<span class="kbd">WASD</span> 移动 · <span class="kbd">鼠标</span> 瞄准 · <span class="kbd">左键</span> 开火 · <span class="kbd">Q</span> 切枪 · <span class="kbd">R</span> 换弹 · <span class="kbd">E</span> 用医疗</div>
+        <div class="raid-tip">操作：<span class="kbd">WASD</span> 移动，<span class="kbd">鼠标</span> 瞄准，<span class="kbd">左键</span> 开火，<span class="kbd">Q</span> 切枪，<span class="kbd">R</span> 换弹，<span class="kbd">E</span> 用医疗</div>
         <div class="row">
           <button class="btn ghost" id="btn-br-back">返回</button>
           <button class="btn" id="btn-br-start">开始跳伞</button>
@@ -1196,7 +1196,7 @@ UI.brSetup=function(){
 
 UI.brResult=function(res){
   const win=res.win;
-  const medal = win ? "🏆 大吉大利 · 今晚吃鸡！" : `第 ${res.placement} 名 / ${res.total}`;
+  const medal = win ? "🏆 大吉大利，今晚吃鸡！" : `第 ${res.placement} 名 / ${res.total}`;
   UI._set(`
     <div class="panel" style="text-align:center;max-width:620px;">
       <h2 class="title-big" style="font-size:38px;color:${win?"#8fe07a":"#ff6a5a"};">${win?"胜利":"淘汰"}</h2>
@@ -1219,7 +1219,7 @@ UI.brPause=function(){
   UI._set(`
     <div class="panel" style="text-align:center;max-width:460px;">
       <h2 class="title-big" style="font-size:32px;">已暂停</h2>
-      <div class="subtitle">大逃杀 · 绝地岛</div>
+      <div class="subtitle">大逃杀，绝地岛</div>
       <p style="color:var(--muted);">安全区收缩已暂停。继续作战，或退出返回大厅。</p>
       <div class="row" style="justify-content:center;margin-top:16px;">
         <button class="btn ghost" id="btn-br-quit">退出对局</button>

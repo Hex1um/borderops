@@ -228,7 +228,7 @@ const Net = {
     if(this._hostNotified) return;
     try{
       const n=R.promoteGhostsForHost();
-      if(n>0){ this._hostNotified=true; this._toast("房主已离开 · 你已接管 AI 模拟"); }
+      if(n>0){ this._hostNotified=true; this._toast("房主已离开，你已接管 AI 模拟"); }
     }catch(e){ console.warn("promote ghosts failed", e); }
   },
 

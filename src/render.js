@@ -1078,7 +1078,7 @@ const RenderDust = {
     ctx.fillText(timeStr, px+panelW/2, py+24);
     ctx.font='700 10px "Trebuchet MS",sans-serif';
     ctx.fillStyle="rgba(200,190,170,0.7)";
-    ctx.fillText(`第 ${D.round} 回合 · ${mySide==="t"?"T 进攻":"CT 防守"}`, px+panelW/2, py+38);
+    ctx.fillText(`第 ${D.round} 回合，${mySide==="t"?"T 进攻":"CT 防守"}`, px+panelW/2, py+38);
 
     // 左右小字
     ctx.font='700 11px "Trebuchet MS",sans-serif'; ctx.textAlign="left";
@@ -1119,7 +1119,7 @@ const RenderDust = {
     }
     // 手雷 / 拆弹器
     ctx.fillStyle="rgba(220,200,160,0.75)"; ctx.font='700 10px "Trebuchet MS",sans-serif';
-    ctx.fillText(`手雷 ${p.nades.length}${p.kit?" · 拆弹器":""}`, bx+10, by+panH-8);
+    ctx.fillText(`手雷 ${p.nades.length}${p.kit?"，拆弹器":""}`, bx+10, by+panH-8);
     ctx.restore();
 
     /* 弹药 / 金钱 */
@@ -1187,7 +1187,7 @@ const RenderDust = {
       ctx.font='900 16px "Trebuchet MS",sans-serif';
       ctx.fillStyle="rgba(255,210,63,0.95)";
       const ty = touch ? 172 : 120;
-      ctx.fillText(touch?"购买时间 · 点 BUY 打开菜单":"购买时间 · 按 B 打开购买菜单", v.w/2, ty);
+      ctx.fillText(touch?"购买时间，点 BUY 打开菜单":"购买时间，按 B 打开购买菜单", v.w/2, ty);
       ctx.font='700 12px "Trebuchet MS",sans-serif';
       ctx.fillStyle="rgba(220,210,190,0.7)";
       ctx.fillText("冻结时间内可以购买，回合开始后关闭", v.w/2, ty+18);

@@ -527,7 +527,7 @@ const Raid = {
     this.camera.y=py-game.view.h/(2*(game.zoom||1));
     this._updateCamera(game);
 
-    this._feed("系统", "PMC 已进入战区 · 小心 Scav 出没", "部署", false, "info");
+    this._feed("系统", "PMC 已进入战区，小心 Scav 出没", "部署", false, "info");
     /* v0.22.2：本局开放的撤离点进图就告知（房主 seed 决定，两端一致），
        不用横穿大图到跟前才知道哪个出口没开。 */
     const openEx=(this.extracts||[]).filter(e=>!e.closed);
@@ -537,10 +537,10 @@ const Raid = {
     }
     // 让玩家看懂「携带价值 → 战利品品质」的关系
     const lk=this.lootLuck;
-    const lkTxt = !carriedAny ? "裸装进场 · 箱子多为低阶物资" :
-                  lk<0.10 ? "轻装进场 · 战利品以低阶为主" :
-                  lk<0.25 ? "轻装进场 · 战利品品质一般" :
-                  lk<0.40 ? "重装进场 · 战利品略好一点" : "满配进场 · 战利品小幅提升";
+    const lkTxt = !carriedAny ? "裸装进场，箱子多为低阶物资" :
+                  lk<0.10 ? "轻装进场，战利品以低阶为主" :
+                  lk<0.25 ? "轻装进场，战利品品质一般" :
+                  lk<0.40 ? "重装进场，战利品略好一点" : "满配进场，战利品小幅提升";
     this._feed("战利品", lkTxt+"（携带估值 ₽"+priceText(this.carriedValue)+"）", "", false, lk>=0.40?"info":"warn");
     if(this.online && typeof Net!=="undefined") Net.attach(this, opts);
   },
@@ -759,7 +759,7 @@ const Raid = {
           const closed = RNG.f() >= rule.openChance;
           this.extracts.push({ x:rm.x+30, y:rm.y+30, w:rm.w-60, h:rm.h-60,
             name:rm.name, id:rm.id, need:rule.need, cost:rule.cost, feeRate:rule.feeRate||0, closed,
-            note:closed?("已关闭 · "+rule.note):rule.note });
+            note:closed?("已关闭，"+rule.note):rule.note });
         }
         continue;
       }
@@ -839,7 +839,7 @@ const Raid = {
         const closed = RNG.f() >= rule.openChance;   // 铁路隧道每局掷签
         this.extracts.push({ x:rm.x+30, y:rm.y+30, w:rm.w-60, h:rm.h-60,
           name:rm.name, id:rm.id, need:rule.need, cost:rule.cost, feeRate:rule.feeRate||0, closed,
-          note:closed?("已关闭 · "+rule.note):rule.note });
+          note:closed?("已关闭，"+rule.note):rule.note });
       }
     }
 
@@ -1631,8 +1631,8 @@ const Raid = {
       p.hp=Math.min(p.maxHP, p.hp+45);
       if(p.bleed) p.bleed=0;
       g.used=true;
-      this._float(p.x,p.y-56,"+45 生命 · 已止血","#8fe07a");
-      this._feed("设施", g.label+" · 完成急救","",false,"info");
+      this._float(p.x,p.y-56,"+45 生命，已止血","#8fe07a");
+      this._feed("设施", g.label+"，完成急救","",false,"info");
       SFX.pickup();
     } else if(g.kind==="ammo"){
       /* v0.20.0：弹药柜直接往背包里塞两条同口径子弹（口径跟手上的枪走） */
@@ -1643,7 +1643,7 @@ const Raid = {
       g.used=true;
       if(add>0){
         this._float(p.x,p.y-56,"+ "+add+" 发 "+((ammoDefFromId(ammoItemId(cal,lv))||{}).short||"弹药"),"#ffd36a");
-        this._feed("设施", g.label+" · 补给了 "+add+" 发弹药","",false,"info");
+        this._feed("设施", g.label+"，补给了 "+add+" 发弹药","",false,"info");
         SFX.reload();
       } else {
         this._float(p.x,p.y-56,"弹药已满","#ff8a5a");
@@ -1651,7 +1651,7 @@ const Raid = {
     } else if(g.kind==="siren"){
       const now=M.now();
       if((g.cdUntil||0)>now){
-        this._float(g.x,g.y-70,`警报冷却中 · 还需 ${Math.ceil((g.cdUntil-now)/1000)} 秒`,"#ffb44a");
+        this._float(g.x,g.y-70,`警报冷却中，还需 ${Math.ceil((g.cdUntil-now)/1000)} 秒`,"#ffb44a");
         return;
       }
       g.cdUntil=now+25000;
@@ -1660,8 +1660,8 @@ const Raid = {
         if(o.alive && !o.isPlayer && !o.remote && !o.ghost)
           o.investigate={ x:g.x, y:g.y, t:12 };
       }
-      this._float(g.x,g.y-70,"警报拉响 · 附近 AI 正在赶来","#ff8a5a");
-      this._feed("设施", g.label+" · 已拉响，AI 被引向该区域","",false,"warn");
+      this._float(g.x,g.y-70,"警报拉响，附近 AI 正在赶来","#ff8a5a");
+      this._feed("设施", g.label+"，已拉响，AI 被引向该区域","",false,"warn");
       SFX.hurt();
     } else if(g.kind==="dam"){
       // 关闸前确认玩家不在库区里，否则会被水困住
@@ -1672,7 +1672,7 @@ const Raid = {
       }
       this.damOpen=!this.damOpen;
       if(this.damOpen){
-        this._float(g.x, g.y-70, "泄洪闸开启 · 水库放空中","#8fd0ff");
+        this._float(g.x, g.y-70, "泄洪闸开启，水库放空中","#8fd0ff");
         this._feed("系统","泄洪闸开启：水库底露出两个高级保险箱（巨响会引来 AI）","事件",false,"info");
         this._noise(g.x, g.y, 2400, this.player);
         SFX.boom();

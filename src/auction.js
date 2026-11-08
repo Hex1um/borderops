@@ -62,11 +62,11 @@ function auctionItemInfo(kind, it){
     const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:(w.cat||w.type||"枪械");
     /* v0.21.6：精简显示不摊词缀；完整显示才把词条列出来 */
     const hide=weaponQualityHidden();
-    const aff=hide? "" : (w.affixes||[]).map(a=>a.nm).join(" · ");
+    const aff=hide? "" : (w.affixes||[]).map(a=>a.nm).join("，");
     const qn=raidGunName(w);
     return {
       name:gunNameOf(w), color:col, value:w.value||0,
-      meta:`${tname}${qn?" · "+qn:""} · ${gunDamageLabel(w)} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}${w.uniqPerk?" · 传奇":""}`,
+      meta:`${tname}${qn?"，"+qn:""}，${gunDamageLabel(w)}，弹匣 ${w.mag}，射速 ${w.rpm}，配件 ${(w.parts||[]).length}${w.uniqPerk?"，传奇":""}`,
       stats:(hide? "" : (w.uniqPerk?`✦ ${w.uniqPerk}<br>词条：${aff}`:(aff?`词条：${aff}`:"无词条"))),
       perk:w.uniqPerk||"",
     };
@@ -74,11 +74,11 @@ function auctionItemInfo(kind, it){
   if(kind==="armor"||kind==="helmet"){
     const rar=it.rarity|0, col=RAID_RARITY_COLOR[rar];
     const isH=kind==="helmet";
-    const aff=(it.affixes||[]).map(a=>a.nm).join(" · ");
+    const aff=(it.affixes||[]).map(a=>a.nm).join("，");
     return {
       name:it.name, color:col, value:it.value||0,
-      meta:`T${it.tier} ${isH?"头盔":"护甲"} · ${RAID_RARITY_NAME[rar]} · ${isH?"爆头减伤":"减伤"} ${Math.round((it.dr||0)*100)}%${it.armorRegen?(" · 待维修 "+it.armorRegen+"/s"):""}${it.uniqPerk?" · 传奇":""}`,
-      stats:(it.uniqPerk?`✦ ${it.uniqPerk}`:`${isH?"耐久":"护甲值"} ${it.maxArmor}${aff?(" · 词条："+aff):""}`),
+      meta:`T${it.tier} ${isH?"头盔":"护甲"}，${RAID_RARITY_NAME[rar]}，${isH?"爆头减伤":"减伤"} ${Math.round((it.dr||0)*100)}%${it.armorRegen?("，待维修 "+it.armorRegen+"/s"):""}${it.uniqPerk?"，传奇":""}`,
+      stats:(it.uniqPerk?`✦ ${it.uniqPerk}`:`${isH?"耐久":"护甲值"} ${it.maxArmor}${aff?("，词条："+aff):""}`),
       perk:it.uniqPerk||"",
     };
   }
@@ -86,9 +86,9 @@ function auctionItemInfo(kind, it){
     if(it.slot==="core" || it.core){
       const cname=raidCoreName(it);
       let meta, stats;
-      if(it.core==="chaos"){ meta=`改装模块 · 改装 · [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，决定改装等级（1.12^m 指数放大）"; }
-      else if(it.core==="elem"){ const E=ELEMENTS[it.elem]||ELEMENTS.fire; meta=`弹种适配组件 · ${E.name} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，更换适配弹药并提升弹药效能"; }
-      else { const d=BOOST_CORE_TYPES[it.boost]; meta=`改装模块 · 强化 · ${d?d.name:"强化"} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，提供属性增益"; }
+      if(it.core==="chaos"){ meta=`改装模块，改装，[${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，决定改装等级（1.12^m 指数放大）"; }
+      else if(it.core==="elem"){ const E=ELEMENTS[it.elem]||ELEMENTS.fire; meta=`弹种适配组件，${E.name} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，更换适配弹药并提升弹药效能"; }
+      else { const d=BOOST_CORE_TYPES[it.boost]; meta=`改装模块，强化，${d?d.name:"强化"} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，提供属性增益"; }
       return { name:cname, color:it.color||"#8fd0ff", value:it.value||0, meta, stats };
     }
     /* v0.21.7：配件与枪械同一套显示分层 —— 精简只留槽位名，完整才给词缀名 / 品质 / iLv */
@@ -97,7 +97,7 @@ function auctionItemInfo(kind, it){
     const qn=partQualityName(it);
     return {
       name:partNameOf(it), color:col, value:partValue(it),
-      meta:`配件 · ${sn}槽位${qn?" · "+qn:""}${weaponQualityHidden()?"":` · iLv ${it.ilvl||1}`}`,
+      meta:`配件，${sn}槽位${qn?"，"+qn:""}${weaponQualityHidden()?"":`，iLv ${it.ilvl||1}`}`,
       stats:weaponQualityHidden()? "" : partText(it),
     };
   }
@@ -106,8 +106,8 @@ function auctionItemInfo(kind, it){
     const base=RAID_MAT_BY_ID[it.id];
     return {
       name:it.name, color:it.color||RAID_RARITY_COLOR[t], value:it.value||0,
-      meta:`原材料 · ${RAID_RARITY_NAME[t]} · ${base?base.tag:"材料"}`,
-      stats:`合成 / 组装枪械的消耗品 · 估值 ₽${priceText(it.value||0)}`,
+      meta:`原材料，${RAID_RARITY_NAME[t]}，${base?base.tag:"材料"}`,
+      stats:`合成 / 组装枪械的消耗品，估值 ₽${priceText(it.value||0)}`,
     };
   }
 }
@@ -432,7 +432,7 @@ const Auction = {
       }
     }
     RaidStash.save(stash); this.save(d);
-    return { ok:true, msg:`出价 ₽${priceText(bid)} · ${L.outbidAt?"暂时领先，小心被抬价":"看起来稳了"}` };
+    return { ok:true, msg:`出价 ₽${priceText(bid)}，${L.outbidAt?"暂时领先，小心被抬价":"看起来稳了"}` };
   },
 
   buyout(id){
@@ -515,7 +515,7 @@ const Auction = {
     const d=this.load();
     this.save(d);
     const left=auctionBucketEnd(auctionBucket())-Date.now();
-    return { ok:true, msg:`已同步本期货架 · 本期还剩 ${auctionCdText(left)}` };
+    return { ok:true, msg:`已同步本期货架，本期还剩 ${auctionCdText(left)}` };
   },
 
   counts(){
@@ -574,10 +574,10 @@ UI.raidAuction=function(opts){
       <div class="si-meta">${info.meta}</div>
       <div class="si-stats">${info.stats}</div>
       <div class="auc-line">
-        <span>卖家 <b>${L.seller}</b> · ${L.bids} 次出价</span>
+        <span>卖家 <b>${L.seller}</b>，${L.bids} 次出价</span>
         <span>当前 <b class="auc-money">₽${priceText(L.price)}</b></span>
       </div>
-      ${lead?`<div class="auc-tag ok">你已出价 ₽${priceText(L.yourBid)} · 领先中</div>`:""}
+      ${lead?`<div class="auc-tag ok">你已出价 ₽${priceText(L.yourBid)}，领先中</div>`:""}
       <div class="auc-acts">
         <button class="btn small" data-bid="${L.id}" ${cantBid?'disabled style="opacity:.4"':''}>
           ${lead?"领先中":`出价 ₽${priceTextShort(nextBid)}`}</button>
@@ -585,7 +585,7 @@ UI.raidAuction=function(opts){
           一口价 ₽${priceTextShort(L.buyout)}</button>
       </div>
     </div>`;
-  }).join('') : `<div class="empty-hint">${d.listings.length? "这个分类暂时没货 · 换个分类看看":"本期货架的货已被抢空 · 等下一期（10 分钟一轮）刷新"}</div>`;
+  }).join('') : `<div class="empty-hint">${d.listings.length? "这个分类暂时没货，换个分类看看":"本期货架的货已被抢空，等下一期（10 分钟一轮）刷新"}</div>`;
 
   /* ----------------------------- 出售 ----------------------------- */
   const sellTabs=["weapon","armor","helmet","part","material","core"];
@@ -594,7 +594,7 @@ UI.raidAuction=function(opts){
     // 改装模块现已并入配件池：出售时按 kind="part" 走，但只列出 slot:"core" 的配件
     const kind = tab==="core" ? "part" : tab;
     const arr = tab==="core" ? stash.parts.filter(p=>p.core) : (stash[AUCTION_KIND_MAP[tab]]||[]);
-    if(!arr.length) return `<div class="empty-hint">仓库里没有${AUCTION_KIND_NAME[tab]}可卖 · 先去突袭搜刮</div>`;
+    if(!arr.length) return `<div class="empty-hint">仓库里没有${AUCTION_KIND_NAME[tab]}可卖，先去突袭搜刮</div>`;
     // 相同物品合并成一张卡（×N），挂单按钮每次售出其中一件
     const groups={};
     arr.forEach(it=>{
@@ -612,7 +612,7 @@ UI.raidAuction=function(opts){
       return `<div class="auc-card" style="border-left-color:${info.color}">
         <div class="auc-head">
           <div class="si-name" style="color:${info.color}">${info.name}${n>1?` <span class="stk">×${n}</span>`:""}</div>
-          <span class="auc-val">估值 ₽${priceTextShort(info.value)}${n>1?` · 共 ₽${priceTextShort(info.value*n)}`:""}</span>
+          <span class="auc-val">估值 ₽${priceTextShort(info.value)}${n>1?`，共 ₽${priceTextShort(info.value*n)}`:""}</span>
         </div>
         <div class="si-meta">${info.meta}</div>
         <div class="si-stats">${info.stats}</div>
@@ -643,17 +643,17 @@ UI.raidAuction=function(opts){
         <span class="auc-cd" data-cd="${L.endsAt}">${auctionCdText(left)}</span>
       </div>
       <div class="auc-line">
-        <span>挂单价 <b class="auc-money">₽${priceTextShort(L.price)}</b> · 佣金 5%</span>
+        <span>挂单价 <b class="auc-money">₽${priceTextShort(L.price)}</b>，佣金 5%</span>
         <span>到手 <b style="color:#8fe07a">₽${priceTextShort(net)}</b></span>
       </div>
       <div class="auc-tag ${L.soldAt?'ok':'warn'}">
-        ${L.soldAt?`已有买家接盘 · 预计 ${auctionCdText(L.soldAt-now)} 后入账`:"等待买家 · 到期未售出会退回仓库"}
+        ${L.soldAt?`已有买家接盘，预计 ${auctionCdText(L.soldAt-now)} 后入账`:"等待买家，到期未售出会退回仓库"}
       </div>
       <div class="auc-acts">
         <button class="btn small ghost" data-cancel="${L.id}">撤单</button>
       </div>
     </div>`;
-  }).join('') : `<div class="empty-hint">还没有挂单 · 去「出售」页把战利品挂上去，比商人回收多赚不少</div>`;
+  }).join('') : `<div class="empty-hint">还没有挂单，去「出售」页把战利品挂上去，比商人回收多赚不少</div>`;
 
   const mailRows = d.mail.length ? d.mail.slice(0,12).map(m=>{
     const t=new Date(m.ts);
@@ -688,7 +688,7 @@ UI.raidAuction=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">拍卖行</h2>
-      <div class="subtitle">AUCTION HOUSE · <b style="color:#ffd36a">全网同一份货</b> · 每 10 分钟一期 · 卢布结算 · 5% 成交佣金</div>
+      <div class="subtitle">AUCTION HOUSE，<b style="color:#ffd36a">全网同一份货</b>，每 10 分钟一期，卢布结算，5% 成交佣金</div>
       <div class="shop-bar">
         <div class="shop-desc"><b style="color:#ffd36a">这一期货架对所有人一样</b>：挂在货上的枪 / 甲 / 配件 / 材料由<b>期号</b>算出，同一期里谁打开都是同一批货、同一个一口价、同一结束时间（<b>本期还剩 <span id="auc-period-left" style="color:#8fe07a">${auctionCdText(auctionBucketEnd(auctionBucket(now))-now)}</span></b>）。<br>
         <b style="color:#ffd23f">竞拍</b>可以低于估值捡漏（但可能被抬价），<b style="color:#ffd23f">一口价</b>直接拿下；自己的战利品挂上去，成交价比商人回收（六折）高得多——挂单<b style="color:#8fe07a"> 4 分钟</b>，到期未售出自动退回仓库，上架费不退。<br>

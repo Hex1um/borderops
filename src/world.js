@@ -168,7 +168,7 @@ class Loot {
         const gold=Math.max(10, Math.floor(itemPrice(this.item)*0.25));
         const eri=itemSellEridium(this.item);
         pl.gold+=gold; pl.eridium+=eri;
-        game.toast(`背包已满 · 分解 +${gold} 金${eri?` +${eri} 美元`:""}`);
+        game.toast(`背包已满，分解 +${gold} 金${eri?` +${eri} 美元`:""}`);
         game.addFloatText(this.x,this.y-20,"+"+gold,"#ffd23f",12);
       }
       SFX.pickup();

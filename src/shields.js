@@ -117,28 +117,28 @@ const SHIELD_PERK_KEYS = Object.keys(SHIELD_PERKS);
 /* 高品质专属：现实军工型号式命名，固定词条与固定独特加成，同档数值显著高于随机件。 */
 const SHIELD_UNIQUES = [
   { id:"s_bastion", name:"堡垒-MK2 单兵护盾", tier:5, qTier:4,
-    perk:"加固框架 · 破盾无敌 +0.4s，护甲耐久损耗 -35%",
+    perk:"加固框架，破盾无敌 +0.4s，护甲耐久损耗 -35%",
     perks:["bulwark","plate"], affix:["加固型","·缓冲内衬"], bonus:{capacity:1.20, invuln:0.20} },
   { id:"s_sentry",  name:"哨兵-6 拦截护盾", tier:6, qTier:5,
-    perk:"双路充能模块 · 充能速度 +35%，静止时再翻倍",
+    perk:"双路充能模块，充能速度 +35%，静止时再翻倍",
     perks:["still","quickstart"], affix:["高功率型","·快充模块"], bonus:{rate:1.35, delay:-0.6} },
   { id:"s_curtain", name:"铁幕-9 全向阵列", tier:7, qTier:6,
-    perk:"全向拦截面板 · 容量 +45%，破盾冲击迟滞周围目标",
+    perk:"全向拦截面板，容量 +45%，破盾冲击迟滞周围目标",
     perks:["overcharge","surge"], affix:["全向型","·出厂封存"], bonus:{capacity:1.45} },
   { id:"s_vanguard",name:"先锋-4 快反护盾", tier:5, qTier:5,
-    perk:"低滞后继电器 · 充能延迟 -1.2s，击杀立即回充",
+    perk:"低滞后继电器，充能延迟 -1.2s，击杀立即回充",
     perks:["quickstart","siphon"], affix:["快反型","·低滞后"], bonus:{delay:-1.2} },
   { id:"s_bulwark", name:"壁垒-7 复合防护组", tier:7, qTier:6,
-    perk:"双层缓冲框架 · 无敌 +0.3s，护盾吸伤 +8%",
+    perk:"双层缓冲框架，无敌 +0.3s，护盾吸伤 +8%",
     perks:["bulwark","emitter"], affix:["缓冲型","·缓冲内衬"], bonus:{invuln:0.30} },
   { id:"s_aegis",   name:"铁穹-8 高功率系统", tier:8, qTier:7,
-    perk:"高功率拦截系统 · 容量 +60%，四条独特加成齐备",
+    perk:"高功率拦截系统，容量 +60%，四条独特加成齐备",
     perks:["overcharge","siphon","surge","plate"], affix:["竞赛型","·高规格"], bonus:{capacity:1.60} },
   { id:"s_watch",   name:"守望-3 便携拦截件", tier:3, qTier:4,
-    perk:"轻量化封装 · 充能速度 +40%，破盾后立即整备",
+    perk:"轻量化封装，充能速度 +40%，破盾后立即整备",
     perks:["still","quickstart"], affix:["轻载型","·快充模块"], bonus:{rate:1.40} },
   { id:"s_ironveil",name:"铁幕-12 竞赛级阵列", tier:9, qTier:8,
-    perk:"出厂封存全向阵列 · 容量 +80%，全部独特加成",
+    perk:"出厂封存全向阵列，容量 +80%，全部独特加成",
     perks:["overcharge","siphon","surge","plate","bulwark","emitter"],
     affix:["竞赛型","·出厂封存"], bonus:{capacity:1.80, rate:1.30, delay:-0.7, invuln:0.30} },
 ];
@@ -169,7 +169,7 @@ function shieldPartText(pt){
     if(m.stat==="delay"||m.stat==="invuln") out.push(`${nm} ${m.value>0?"+":""}${m.value}s`);
     else out.push(`${nm} ${m.value>0?"+":""}${m.value}%`);
   }
-  return out.join(" · ")||"标准件";
+  return out.join("，")||"标准件";
 }
 
 /* ----------------------------- 整件词缀 ----------------------------- */
@@ -290,7 +290,7 @@ function shieldLines(s){
     `破盾无敌 ${s.invuln.toFixed(2)}s ×${Math.pow(2, M.clamp(Math.round(s.tier||1),1,9))} 次/局`,
   ];
   const names=(s.perks||[]).map(k=>SHIELD_PERKS[k]?SHIELD_PERKS[k].name:k);
-  if(names.length) out.push("加成："+names.join(" · "));
+  if(names.length) out.push("加成："+names.join("，"));
   return out;
 }
 function shieldAffixText(a){
@@ -299,7 +299,7 @@ function shieldAffixText(a){
     return (m.stat==="delay"||m.stat==="invuln")
       ? `${nm} ${m.value>0?"+":""}${m.value}s`
       : `${nm} ${m.value>0?"+":""}${m.value}%`;
-  }).join(" · ");
+  }).join("，");
 }
 /* 物品栏 / 商店 / 配装 / 融合结果卡共用的一张卡 */
 function shieldCard(s,opts){
@@ -307,10 +307,10 @@ function shieldCard(s,opts){
   const col=shieldColor(s), g=shieldGrade(s.qTier!==undefined?s.qTier:s.rarity);
   const parts=(s.parts||[]).map(p=>`<span class="part-chip" style="border-color:${col};color:${col}">${p.name}<em>${shieldPartText(p)}</em></span>`).join("");
   return `<div class="shop-item" style="border-left-color:${col}${opts.margin?';margin:12px 0':''}">
-    <div class="si-name" style="color:${col}">${opts.prefix||""}${s.name}<span style="font-size:11px;opacity:.9"> · ${g.name}</span></div>
-    <div class="si-meta">T${s.tier} 护盾 · ${(s.parts||[]).length} 个配件 · ${(s.affixes||[]).length} 条前后缀${s.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}</div>
+    <div class="si-name" style="color:${col}">${opts.prefix||""}${s.name}<span style="font-size:11px;opacity:.9">，${g.name}</span></div>
+    <div class="si-meta">T${s.tier} 护盾，${(s.parts||[]).length} 个配件，${(s.affixes||[]).length} 条前后缀${s.uniqPerk?'，<b style="color:#ffd23f">具名装备</b>':''}</div>
     ${s.uniqPerk?`<div class="uniq-perk">✦ ${s.uniqPerk}</div>`:''}
-    <div class="si-stats">${shieldLines(s).slice(0,4).join(" · ")} · 估值 ₽${(typeof priceTextShort==="function"?priceTextShort(s.value):s.value)}
+    <div class="si-stats">${shieldLines(s).slice(0,4).join("，")}，估值 ₽${(typeof priceTextShort==="function"?priceTextShort(s.value):s.value)}
       ${parts?`<br><span class="part-row">${parts}</span>`:''}
       <br><span style="color:#9fd0ff">${(s.affixes||[]).map(shieldAffixText).join(" ； ")}</span></div>
     ${opts.sell?`<div class="si-buy"><span class="si-price">₽ ${(typeof priceTextShort==="function"?priceTextShort(Math.round((s.value||0)*(typeof RAID_VENDOR_RATE!=="undefined"?RAID_VENDOR_RATE:0.5))):0)}</span>

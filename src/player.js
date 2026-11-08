@@ -223,7 +223,7 @@ class Player {
     this.computeStats();
     if(keep) keep.mag=keep.getMagSize(this);
     this.hp=this.stats.maxHP; this.shield=this.stats.maxShield;
-    return { ok:true, msg:`重新部署完成 · +${gain} 功勋`, gain };
+    return { ok:true, msg:`重新部署完成，+${gain} 功勋`, gain };
   }
   buyPerm(id){
     const u=PERM_UPGRADES.find(x=>x.id===id);

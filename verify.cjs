@@ -528,7 +528,7 @@ for (let i = 0; i < 200; i++) {
   if ((g.ilvl || 0) > SCAV_MAX) badIlvl++;
   const ri = RAR.findIndex(r => r.id === g.rarity);
   if (ri > 2) badRarity++;
-  if (!/^(PM|PB|MP-443 Grach|GSh-18|TT|MP-133|TOZ-106|M870|MP-153|KS-23M|PP-91 Kedr|PP-9 Klin|PP-19-01 Vityaz|MP5)( · (PS|T|RIP))?$/.test(g.name)) badName++;
+  if (!/^(PM|PB|MP-443 Grach|GSh-18|TT|MP-133|TOZ-106|M870|MP-153|KS-23M|PP-91 Kedr|PP-9 Klin|PP-19-01 Vityaz|MP5)(，(PS|T|RIP))?$/.test(g.name)) badName++;
   const sh = g.element === 'none' ? 'PS' : (ELEMENTS[g.element] || {}).short;
   if (!/^(PS|T|RIP)$/.test(sh)) badAmmo++;
 }
@@ -3292,8 +3292,8 @@ const __t54 = JSON.parse(G(`JSON.stringify((()=>{
 })())`));
 check('霰弹枪 5 个型号弹片基数互不相同',
   (!__t54.err && new Set(__t54.bases).size===5 && __t54.bases[0]===4 && __t54.bases[2]===8 && __t54.bases[3]===10)?1:0, 1, 0.001);
-check('面板写明「伤害 7 × 8 弹片 · 单发 56」',
-  (!__t54.err && __t54.label==="伤害 7 × 8 弹片 · 单发 56")?1:0, 1, 0.001);
+check('面板写明「伤害 7 × 8 弹片，单发 56」',
+  (!__t54.err && __t54.label==="伤害 7 × 8 弹片，单发 56")?1:0, 1, 0.001);
 check('复合装饰拆成 3 个矩形且 walls 只登记子矩形',
   (!__t54.err && __t54.nBoxes===3 && __t54.nWalls===3 && __t54.wallIsProp===false)?1:0, 1, 0.001);
 check('三矩形缝隙：视线索引无碰撞体 / 实体段已登记',

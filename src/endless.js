@@ -29,8 +29,8 @@ class EndlessWorld {
   }
 
   objective(){
-    if(this.state==="intermission") return `第 ${this.wave+1} 波即将到来 · 准备`;
-    return `第 ${this.wave} 波 · 剩余 ${this.quota + 0} 只待刷${this.bossWave?" · 首领波":""}`;
+    if(this.state==="intermission") return `第 ${this.wave+1} 波即将到来，准备`;
+    return `第 ${this.wave} 波，剩余 ${this.quota + 0} 只待刷${this.bossWave?"，首领波":""}`;
   }
   remaining(){ return this.quota; }
 
@@ -107,7 +107,7 @@ class EndlessWorld {
     this.spawned=0;
     this.spawnTimer=0.2;
     this.level=this.waveLevel(this.wave);
-    game.toast(this.bossWave ? `第 ${this.wave} 波 · 首领来袭` : `第 ${this.wave} 波`);
+    game.toast(this.bossWave ? `第 ${this.wave} 波，首领来袭` : `第 ${this.wave} 波`);
     if(this.bossWave) game.shake(6);
     SFX.levelup();
   }

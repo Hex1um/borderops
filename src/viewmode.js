@@ -337,25 +337,25 @@ const ViewMode = {
     const html = `
       <div class="panel" style="max-width:540px;text-align:center;">
         <h2 class="title-big" style="font-size:30px;">设置</h2>
-        <div class="subtitle">显示与操作 · 仅在战局内可调（ESC 暂停 → 设置，或直接按 V） · 保存在本机浏览器</div>
+        <div class="subtitle">显示与操作，仅在战局内可调（ESC 暂停 → 设置，或直接按 V），保存在本机浏览器</div>
 
         <h3 style="margin:22px 0 4px;">视图维度</h3>
         <div class="subtitle" style="margin-bottom:12px;">切换后立刻生效，战局数据与操作逻辑共用同一套模拟</div>
         <div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap;">
-          ${btn("vm-2d", !is3, "2D · 俯视角")}
-          ${btn("vm-3d", is3, "3D · 第一人称")}
+          ${btn("vm-2d", !is3, "2D，俯视角")}
+          ${btn("vm-3d", is3, "3D，第一人称")}
         </div>
         <div style="margin:14px 0 4px;padding:12px 14px;border:1px solid rgba(160,180,200,0.18);border-radius:10px;text-align:left;color:var(--muted);font-size:13px;line-height:1.75;">
           ${is3
             ? `<b style="color:var(--accent);">第一人称模式</b><br>
                鼠标<b style="color:var(--accent);">锁定在屏幕中心</b>（像 Minecraft）：直接移动鼠标转向，光标不会飘出窗口<br>
-               <span class="kbd">ESC</span> 打开菜单，此时鼠标自动放开、可自由点选 · <span class="kbd">W A S D</span> 移动 ·
+               <span class="kbd">ESC</span> 打开菜单，此时鼠标自动放开、可自由点选，<span class="kbd">W A S D</span> 移动 ·
                <span class="kbd">左键</span> 开火<br>
-               <span class="kbd">[</span> <span class="kbd">]</span> 键盘转向 · <span class="kbd">V</span> 快速切换维度 ·
-               <span class="kbd">E</span> 交互 / 搜索 · <span class="kbd">Tab</span> 物品栏<br>
+               <span class="kbd">[</span> <span class="kbd">]</span> 键盘转向，<span class="kbd">V</span> 快速切换维度 ·
+               <span class="kbd">E</span> 交互 / 搜索，<span class="kbd">Tab</span> 物品栏<br>
                3D 视图由同一份地图 / 墙 / 单位数据实时投射渲染，拾取、AI、撤离等规则完全不变。`
             : `<b style="color:var(--accent);">俯视角模式</b><br>
-               原有的 2D 俯视渲染：<span class="kbd">W A S D</span> 移动 · 鼠标瞄准 · 左键开火。<br>
+               原有的 2D 俯视渲染：<span class="kbd">W A S D</span> 移动，鼠标瞄准，左键开火。<br>
                这是游戏默认状态，切换维度不会丢失任何战局进度。`}
         </div>
 
@@ -365,7 +365,7 @@ const ViewMode = {
             <button class="btn ghost small ${disp==="compact"?'on':''}" data-disp="compact" style="padding:2px 10px;font-size:12px;">精简</button>
             <button class="btn ghost small ${disp==="full"?'on':''}" data-disp="full" style="padding:2px 10px;font-size:12px;">完整</button>
           </span>　<span style="font-size:12px;color:var(--muted);">${disp==="full"?"厂商 + 型号 + 前后缀，信息最全":"只显示型号 / 枪型，界面更干净"}</span></div>
-          <label style="cursor:pointer;"><input id="vm-lock" type="checkbox" ${this.pointerLock?"checked":""} style="vertical-align:middle;"> 3D 下锁定鼠标（推荐 · 关掉则靠鼠标相对位移转向，光标会跑到屏幕边缘）</label>
+          <label style="cursor:pointer;"><input id="vm-lock" type="checkbox" ${this.pointerLock?"checked":""} style="vertical-align:middle;"> 3D 下锁定鼠标（推荐，关掉则靠鼠标相对位移转向，光标会跑到屏幕边缘）</label>
         </div>
 
         <div class="row" style="justify-content:center;margin-top:8px;">

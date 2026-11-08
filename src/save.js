@@ -268,7 +268,7 @@ const Save = {
     const code=await this.exportCode();
     if(!code) return null;
     return "BORDER OPS 存档备份\n"+
-      "版本 "+CFG.version+" · 导出时间 "+new Date().toISOString()+"\n"+
+      "版本 "+CFG.version+"，导出时间 "+new Date().toISOString()+"\n"+
       "导入方法：大厅 →「导入存档码」→ 把下面整段粘贴进去，或直接用「导入存档文件」。\n\n"+
       code+"\n";
   },
