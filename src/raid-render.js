@@ -759,7 +759,7 @@ const RenderRaid = {
       ctx.fillStyle=blockedNow?"#ff8a80":(paid?"#e8d48a":"#8fe0a8"); ctx.font="bold 20px system-ui,sans-serif"; ctx.textAlign="center";
       ctx.fillText((blockedNow?"⛔ ":"▲ ")+e.name, e.x+e.w/2, e.y+e.h/2-6);
       ctx.font="12px system-ui,sans-serif"; ctx.fillStyle=`rgba(${col},0.8)`;
-      ctx.fillText(blockedNow?"被封锁 · 清除封锁者":(paid?`雇车费 ${raidExtractFee(e, R.carryVal||0)} 卢布（按带入装备）· 坚守 ${e.need} 秒`:`坚守 ${e.need} 秒`), e.x+e.w/2, e.y+e.h/2+18);
+      ctx.fillText(blockedNow?"被封锁，清除封锁者":(paid?`雇车费 ${raidExtractFee(e, R.carryVal||0)} 卢布（按带入装备）· 坚守 ${e.need} 秒`:`坚守 ${e.need} 秒`), e.x+e.w/2, e.y+e.h/2+18);
     }
 
     // 局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
@@ -833,8 +833,8 @@ const RenderRaid = {
       ctx.textAlign="center"; ctx.font="bold 12px system-ui,sans-serif";
       ctx.fillStyle=dim?"rgba(180,190,190,0.6)":`rgb(${rgb})`;
       const cdLeft=g.kind==="siren" ? Math.max(0, Math.ceil(((g.cdUntil||0)-M.now())/1000)) : 0;
-      const glabel = g.kind==="dam" ? (R.damOpen?"泄洪闸 · 已开":"泄洪闸 · 已关")
-                   : g.kind==="siren" ? (cdLeft>0?g.label+" · "+cdLeft+"s":g.label)
+      const glabel = g.kind==="dam" ? (R.damOpen?"泄洪闸，已开":"泄洪闸，已关")
+                   : g.kind==="siren" ? (cdLeft>0?g.label+"，"+cdLeft+"s":g.label)
                    : (g.label+(dim?"（已用）":""));
       ctx.fillText(glabel, 0, -36);
       ctx.restore();
@@ -1352,7 +1352,7 @@ const RenderRaid = {
     ctx.font="10px system-ui,sans-serif"; ctx.fillStyle="rgba(180,195,210,0.75)";
     ctx.fillText(cur
       ? (kind==="weapon"?"左：地上 / 右：手持":"左：地上 / 右：已穿戴")
-      : (kind==="weapon"?"手持为空 · 直接拾取":"当前未装备 · 可直接穿戴"), x+10, y+32);
+      : (kind==="weapon"?"手持为空，直接拾取":"当前未装备，可直接穿戴"), x+10, y+32);
     ctx.font="11px system-ui,sans-serif";
     for(let i=0;i<rows.length;i++){
       const r=rows[i], ry=y+50+i*20;
@@ -1396,7 +1396,7 @@ const RenderRaid = {
       ctx.globalAlpha=alpha;
       let text;
       if(k.type==="extract") text=`${k.a}  已撤离`;
-      else if(k.type==="info") text=`${k.a} · ${k.v}`;
+      else if(k.type==="info") text=`${k.a}，${k.v}`;
       else if(k.type==="warn") text=`⚠ ${k.v}`;
       else text=`${k.a}  ▸  ${k.v}`;
       text=fit(text);
@@ -1448,7 +1448,7 @@ const RenderRaid = {
       ctx.fillStyle=lootN>=capN?"#ff8a5a":"#c9a13a"; ctx.fillText(`物品栏 ${lootN}/${capN}`, v.w-12, 102);
       if(mateN){
         ctx.font="bold 10px system-ui,sans-serif"; ctx.fillStyle="#7ee08a";
-        ctx.fillText(`联机 ${Net.code} · 队友 ${mateN}`, v.w-12, 118);
+        ctx.fillText(`联机 ${Net.code}，队友 ${mateN}`, v.w-12, 118);
       }
     } else {
       ctx.textAlign="right"; ctx.font="bold 14px system-ui,sans-serif";
@@ -1460,7 +1460,7 @@ const RenderRaid = {
       ctx.fillText(`物品栏 ${lootN}/${capN}`, v.w-20, 70);
       if(mateN){
         ctx.font="bold 11px system-ui,sans-serif"; ctx.fillStyle="#7ee08a";
-        ctx.fillText(`联机 ${Net.code} · 队友 ${mateN}`, v.w-20, 90);
+        ctx.fillText(`联机 ${Net.code}，队友 ${mateN}`, v.w-20, 90);
       }
     }
 
@@ -1474,7 +1474,7 @@ const RenderRaid = {
       ctx.fillStyle=(p.shieldInvuln>0)?"#bdefff":"#4fd6ff";
       ctx.fillRect(bx,by-18,bw*M.clamp((p.shield||0)/p.maxShield,0,1),12);
       ctx.fillStyle="#04141a"; ctx.font="bold 10px system-ui,sans-serif";
-      ctx.fillText(`护盾 ${Math.ceil(p.shield)} / ${Math.round(p.maxShield)}${p.shieldInvuln>0?" · 无敌":""}`, bx+8, by-9);
+      ctx.fillText(`护盾 ${Math.ceil(p.shield)} / ${Math.round(p.maxShield)}${p.shieldInvuln>0?"，无敌":""}`, bx+8, by-9);
     }
     ctx.font="bold 12px system-ui,sans-serif";
     ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.fillRect(bx,by,bw,16);
@@ -1485,7 +1485,7 @@ const RenderRaid = {
       ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.fillRect(bx,by+20,bw,12);
       // v0.16.0：护甲条改琥珀 / 黄色，蓝色只留给上方那条独立护盾条，避免两条蓝条混淆
       ctx.fillStyle=(p.armorTier>=RAID_ARMOR_TYPE_TIER && p.armor>0)?"#ffd23f":"#d8b26a"; ctx.fillRect(bx,by+20,bw*M.clamp(p.armor/p.maxArmor,0,1),12);
-      ctx.fillStyle="#04141a"; ctx.fillText(`护甲 ${Math.ceil(p.armor)} · 减伤 ${Math.round(p.dr*100)}%`, bx+8, by+30);
+      ctx.fillStyle="#04141a"; ctx.fillText(`护甲 ${Math.ceil(p.armor)}，减伤 ${Math.round(p.dr*100)}%`, bx+8, by+30);
     }
     // 弹药 / 武器（空手时给出引导）
     if(p.gun){
@@ -1497,22 +1497,22 @@ const RenderRaid = {
       ctx.fillText(`${magN} / ${backN}`, bx, by+56);
       ctx.font=mob?"11px system-ui,sans-serif":"12px system-ui,sans-serif";
       ctx.fillStyle=dry?"#ff9a8a":"rgba(180,195,210,0.85)";
-      ctx.fillText(gunNameOf(p.gun)+" · "+(ad?ad.short:"未装填")
-        +(p.reloadT>0?" · 换弹中…":(dry?" · 没有子弹":(magN<=0?" · 弹匣空（R 换弹）":""))), bx, by+74);
+      ctx.fillText(gunNameOf(p.gun)+"，"+(ad?ad.short:"未装填")
+        +(p.reloadT>0?"，换弹中…":(dry?"，没有子弹":(magN<=0?"，弹匣空（R 换弹）":""))), bx, by+74);
     } else {
       ctx.fillStyle="#ffb35a"; ctx.font=mob?"bold 15px system-ui,sans-serif":"bold 17px system-ui,sans-serif";
-      ctx.fillText("空手 · 跑刀（+"+Math.round((RAID_BAREHAND_SPEED-1)*100)+"% 移速）", bx, by+56);
+      ctx.fillText("空手，跑刀（+"+Math.round((RAID_BAREHAND_SPEED-1)*100)+"% 移速）", bx, by+56);
       ctx.font=mob?"10px system-ui,sans-serif":"11px system-ui,sans-serif"; ctx.fillStyle="rgba(200,180,150,0.9)";
-      ctx.fillText(Input.isTouch?"靠近补给箱点「★」搜索 · 受伤点「+」包扎":"翻箱搜刮捡枪，捡到即自动上手", bx, by+74);
+      ctx.fillText(Input.isTouch?"靠近补给箱点「★」搜索，受伤点「+」包扎":"翻箱搜刮捡枪，捡到即自动上手", bx, by+74);
     }
 
     // 流血 / 绷带状态（塔科夫式医疗）
     if(p.bleed>0){
       ctx.font=mob?"bold 12px system-ui,sans-serif":"bold 13px system-ui,sans-serif";
       ctx.fillStyle=Math.sin(M.now()*8)>0?"#ff5a4a":"#ff8a5a";
-      ctx.fillText(`⚠ 流血 x${p.bleed} · 每秒掉血`, bx, by-8);
+      ctx.fillText(`⚠ 流血 x${p.bleed}，每秒掉血`, bx, by-8);
     }
-    /* v0.19.0：只显示「身上真有」的医疗品，0 件不再占位（旧版固定显示「绷带 x0 · 医疗 x0」）。
+    /* v0.19.0：只显示「身上真有」的医疗品，0 件不再占位（旧版固定显示「绷带 x0，医疗 x0」）。
      * 每件按品级着色，换行绘制；一件都没有时给一句获取提示。 */
     const mdx=mob?bx:(bx+bw+14), mdy=mob?(by+94):(by+14);
     ctx.textAlign="left";
@@ -1521,7 +1521,7 @@ const RenderRaid = {
     let medY=mdy;
     if(!owned.length){
       ctx.fillStyle="rgba(205,175,175,0.72)";
-      ctx.fillText(Input.isTouch?"无医疗用品 · 搜箱点「★」":"无医疗用品 · 翻箱搜刮", mdx, mdy);
+      ctx.fillText(Input.isTouch?"无医疗用品，搜箱点「★」":"无医疗用品，翻箱搜刮", mdx, mdy);
     } else {
       const limit = mob ? (v.w-mdx-14) : Math.min(v.w-mdx-260, 620);
       let cx=mdx;
@@ -1568,7 +1568,7 @@ const RenderRaid = {
       ctx.fillStyle=blocked?(money?"#ffe9b8":"#ffe0dc"):"#04140c";
       const exLabel = blocked ? ((money?"⛕ ":"⛔ ")+blocked)
         : (mob ? `撤离中 ${(R.extractT).toFixed(1)} / ${inZone.need.toFixed(0)} 秒`
-               : `撤离中 · ${inZone.name}  ${(R.extractT).toFixed(1)} / ${inZone.need.toFixed(0)} 秒`);
+               : `撤离中，${inZone.name}  ${(R.extractT).toFixed(1)} / ${inZone.need.toFixed(0)} 秒`);
       ctx.fillText(exLabel, v.w/2, cy+18);
     }
 
@@ -1576,8 +1576,8 @@ const RenderRaid = {
     if(R.wadeT>0.5 && R.player.alive){
       const safe=Math.max(0, 4.5-R.wadeT);
       const warn=safe<=0;
-      const txt=warn ? "⚠ 失温 · 立刻上岸！"
-                     : `涉水中 · 流速拖慢 · 再过 ${safe.toFixed(1)} 秒开始失温`;
+      const txt=warn ? "⚠ 失温，立刻上岸！"
+                     : `涉水中，流速拖慢，再过 ${safe.toFixed(1)} 秒开始失温`;
       ctx.font=mob?"bold 12px system-ui,sans-serif":"bold 13px system-ui,sans-serif";
       const tw=ctx.measureText(txt).width;
       const ty=mob?v.h*0.70:(v.h-196);
@@ -1611,7 +1611,7 @@ const RenderRaid = {
       const it=R._interactTarget();
       if(it && it.kind==="shop"){
         const sh=it.ref;
-        hintAt(Input.isTouch?"点「★」进入 "+sh.name:"按 E 进入 "+sh.name+" · "+sh.tag, sh.color, 14);
+        hintAt(Input.isTouch?"点「★」进入 "+sh.name:"按 E 进入 "+sh.name+"，"+sh.tag, sh.color, 14);
       } else if(it && it.kind==="gadget"){
         const gd=it.ref;
         const cdLeft=gd.kind==="siren" ? Math.max(0, Math.ceil(((gd.cdUntil||0)-M.now())/1000)) : 0;
@@ -1632,19 +1632,19 @@ const RenderRaid = {
         if(c.ground){
           const n=(c.drops||[]).length;
           const tail=R._groundEquipItem(c)
-            ? (Input.isTouch?" · 长按 ★ 替换手上":" · 按住 E 替换手上") : "";
+            ? (Input.isTouch?"，长按 ★ 替换手上":"，按住 E 替换手上") : "";
           hintAt((Input.isTouch?`点「★」拾取地面物资 ×${n}`:`按 E 拾取地面物资 ×${n}`)+tail, "#ffe08a");
         } else if(c.locked && !c.searched){
           const lv=M.clamp(c.lockLv||1,1,5);
           const has=R._hasKeyFor(lv);
           hintAt(has
-            ? `保险箱 · ${RAID_LOCK_NAME[lv]} · 按住 E 开锁（消耗 1 次钥匙）`
-            : `保险箱 · ${RAID_LOCK_NAME[lv]} · 缺「${raidKeyDef(lv).name}」（商店有售 / 箱内掉落）`,
+            ? `保险箱，${RAID_LOCK_NAME[lv]}，按住 E 开锁（消耗 1 次钥匙）`
+            : `保险箱，${RAID_LOCK_NAME[lv]}，缺「${raidKeyDef(lv).name}」（商店有售 / 箱内掉落）`,
             has?"#8fe07a":"#ff8a5a");
         } else if(!c.searched){
           const tail=R._groundEquipItem(c)
-            ? (Input.isTouch?" · 长按 ★ 替换":" · 按住 E 替换") : "";
-          hintAt((Input.isTouch?"点「★」搜索补给 · 点「+」包扎":"按 E 搜索补给 · H 包扎")+tail, "#ffe08a");
+            ? (Input.isTouch?"，长按 ★ 替换":"，按住 E 替换") : "";
+          hintAt((Input.isTouch?"点「★」搜索补给，点「+」包扎":"按 E 搜索补给，H 包扎")+tail, "#ffe08a");
         }
       }
     }
@@ -1763,7 +1763,7 @@ const RenderRaid = {
     ctx.fillStyle="#e8eef6"; ctx.font="bold 16px system-ui,sans-serif";
     ctx.fillText("物品栏", x+18, y+28);
     ctx.fillStyle="rgba(150,170,190,0.8)"; ctx.font="11px system-ui,sans-serif";
-    ctx.fillText(mob?"点背包键关闭 · 撤离成功才带回仓库":"Tab 关闭 · 撤离成功才带回仓库", x+72, y+27);
+    ctx.fillText(mob?"点背包键关闭，撤离成功才带回仓库":"Tab 关闭，撤离成功才带回仓库", x+72, y+27);
 
     let ly=y+56;
     const line=(label,val,col,sub)=>{
@@ -1791,27 +1791,27 @@ const RenderRaid = {
     guns.forEach((g,i)=>{
       const gy=ly;
       const col=raidGunColor(g);
-      const elem=g.element&&g.element!=="none"&&ELEMENTS[g.element]?(" · "+ELEMENTS[g.element].name):"";
+      const elem=g.element&&g.element!=="none"&&ELEMENTS[g.element]?("，"+ELEMENTS[g.element].name):"";
       line(i===0?"主武器":"副武器", gunNameOf(g), col,
-        `伤害 ${g.dmg} · 穿甲 ${Math.round((g.armorPen||0)*100)}% · 弹药 ${g.ammoMag}/${g.mag} · 背包 ${g.ammoRes} · ${g.loaded?(ammoDefFromId(g.loaded)||{}).short||"未装填":"未装填"}${elem}`);
+        `伤害 ${g.dmg}，穿甲 ${Math.round((g.armorPen||0)*100)}%，弹药 ${g.ammoMag}/${g.mag}，背包 ${g.ammoRes}，${g.loaded?(ammoDefFromId(g.loaded)||{}).short||"未装填":"未装填"}${elem}`);
       icon(g, gy);
     });
     if(guns.length){
       const bagN=(R._gunBag?R._gunBag():[]).length;   // 多枪 = 手持 + 副手 + 背包
-      line("切换", "[Q] 循环 · [1~4] 直选", "#8fd0ff",
-        `手持 ${p.gun?p.gun.name:"空手"} · 副手 ${p.secondary?p.secondary.name:"—"} · 背包 ${bagN} 把`);
+      line("切换", "[Q] 循环，[1~4] 直选", "#8fd0ff",
+        `手持 ${p.gun?p.gun.name:"空手"}，副手 ${p.secondary?p.secondary.name:"—"}，背包 ${bagN} 把`);
     }
     // 护甲 / 头盔
     const ar=p.armorTier?RAID_ARMORS[p.armorTier]:null;
     line("护甲", ar?ar.name:"（未穿戴）", ar?(ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0"):"#8b95a5",
-      ar?`T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorRegen?(' · 待维修 '+p.armorRegen+'/s'):''}`:"无防护");
+      ar?`T${p.armorTier}，耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)}，减伤 ${Math.round(p.dr*100)}%${p.armorRegen?('，待维修 '+p.armorRegen+'/s'):''}`:"无防护");
     // v0.16.0：护盾装备三数值 + 破盾无敌 / 独特加成
     if(p.maxShield>0){
       const sg=p.shieldGear||null;
-      const _ps=(sg&&sg.perks||[]).map(k=>(SHIELD_PERKS[k]?SHIELD_PERKS[k].name:k)).join(" · ")||"无";
+      const _ps=(sg&&sg.perks||[]).map(k=>(SHIELD_PERKS[k]?SHIELD_PERKS[k].name:k)).join("，")||"无";
       line("护盾", sg?sg.name:"（未装备）", "#4fd6ff",
-        `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s${p.shieldInvuln>0?(' · 无敌 '+p.shieldInvuln.toFixed(1)+'s'):''}`);
-      if(sg) line("护盾加成", _ps, "#8fd0ff", "破盾后短暂无敌 · 充能延迟 = 不受伤害多久后开始回盾");
+        `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)}，充能 ${p.shieldRate}/s，延迟 ${p.shieldDelay}s${p.shieldInvuln>0?('，无敌 '+p.shieldInvuln.toFixed(1)+'s'):''}`);
+      if(sg) line("护盾加成", _ps, "#8fd0ff", "破盾后短暂无敌，充能延迟 = 不受伤害多久后开始回盾");
     }
     // 防护类型与弹种终点效应：提示按当前数值表动态生成，不再写死倍率
     const _at=raidArmorType(p);
@@ -1823,23 +1823,23 @@ const RenderRaid = {
       else if(m<=0.85) _hints.push(E.short+" ×"+m.toFixed(2));
     }
     line("防护类型", ARMOR_TYPE_NAME[_at]+(_at==="armor"?"（黄色血条）":""), ARMOR_TYPE_COLOR[_at],
-      "当前弹种终点效应："+(_hints.length?_hints.join(" · "):"各弹种均在 ×0.85~1.15 之间"));
+      "当前弹种终点效应："+(_hints.length?_hints.join("，"):"各弹种均在 ×0.85~1.15 之间"));
     // 身上的弹种终点效应状态（拟真命名）
     const _es=[];
     if((p.burnT||0)>0)    _es.push("引燃 "+p.burnT.toFixed(1)+"s");
     if((p.corrodeT||0)>0) _es.push("撕裂 "+p.corrodeT.toFixed(1)+"s");
     if((p.shockT||0)>0)   _es.push("失能 "+p.shockT.toFixed(1)+"s");
     if((p.freezeT||0)>0)  _es.push("迟滞 "+p.freezeT.toFixed(1)+"s");
-    if(_es.length) line("弹种状态", _es.join(" · "), "#ff9a5a", "引燃持续掉血 · 撕裂降低防护 · 失能拉长开火间隔");
+    if(_es.length) line("弹种状态", _es.join("，"), "#ff9a5a", "引燃持续掉血，撕裂降低防护，失能拉长开火间隔");
     const hm=p.helmetTier?RAID_HELMETS[p.helmetTier]:null;
     line("头盔", hm?hm.name:"（未佩戴）", hm?(ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0"):"#8b95a5",
-      hm?`T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`:"无减免");
+      hm?`T${p.helmetTier}，耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)}，躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`:"无减免");
     // 医疗 / 卢布（v0.19.0：只列实际拥有的医疗品，没有就明确写「无」）
     const ownedMed=R._medOwnedList();
-    line("医疗", ownedMed.length ? ownedMed.map(m=>`${m.name} ×${m.n}`).join(" · ") : "（无 · 翻箱或到医疗站补给）",
+    line("医疗", ownedMed.length ? ownedMed.map(m=>`${m.name} ×${m.n}`).join("，") : "（无，翻箱或到医疗站补给）",
       ownedMed.length?"#ff9a9a":"#8b95a5", "H 键 / 医疗键：流血自动止血，缺血自动回血；物品栏可逐件使用");
     line("卢布", "₽ "+R.creds, "#8fe07a", "撤离后结算进仓库");
-    if((R.tokens||0)>0) line("GP 币", "◈ "+R.tokens, "#ffd23f", "黑市专用货币 · 撤离才落袋");
+    if((R.tokens||0)>0) line("GP 币", "◈ "+R.tokens, "#ffd23f", "黑市专用货币，撤离才落袋");
 
     // 物品栏汇总（含容量上限，超出将无法继续拾取）
     const cap = (label, n, capN, col) => {
@@ -1859,7 +1859,7 @@ const RenderRaid = {
     for(const m of R.inv.materials.slice(0,4)){
       ctx.textAlign="left";
       ctx.fillStyle=m.color||"#dfe7f0"; ctx.font="10px system-ui,sans-serif";
-      ctx.fillText(`· ${m.name} · ₽${priceText(m.value)}`, x+86, ly); ly+=13;
+      ctx.fillText(`· ${m.name}，₽${priceText(m.value)}`, x+86, ly); ly+=13;
       if(ly>y+h-20) break;
     }
     // 改装模块 / 底材（改装模块现已并入配件栏，单独列出便于查看）

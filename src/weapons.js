@@ -875,9 +875,15 @@ function gunModelSpec(gun){
     barrel: base.barrel + (has("barrel")?7:0),
     stock:  base.stock || has("stock"),
     optic:  has("optic"),
+    /* v0.34.0（用户要求「枪械模型由配件组合」）：补齐此前只算不画的槽位。
+       10 个槽位现在**每一个都体现在模型上**：枪管加长、枪托、瞄具、瞄准镜、
+       枪口装置、下挂、握把、弹匣、扳机、机匣、改装模块。 */
+    scope:  has("scope"),
     muzzle: has("muzzle"),
     underbarrel: has("underbarrel"),
     grip:   has("grip"),
+    mag:    has("mag"),
+    trigger:has("trigger"),
     body:   has("body"),
     core:   has("core"),
     color,
@@ -913,6 +919,26 @@ function drawGunCanvas(ctx, spec, scale, bodyC, accC){
   }
   // 握把 / 弹匣井
   ctx.fillStyle=bodyC; ctx.fillRect(-L*0.12, 5*scale, 5.5*scale, 8*scale); stroke(-L*0.12, 5*scale, 5.5*scale, 8*scale);
+  /* v0.34.0：以下四件此前只影响数值、不影响外观，现在都画出来 */
+  if(spec.mag){                       // 弹匣：握把前方一段更长的匣体
+    ctx.fillStyle="#232830"; ctx.fillRect(-L*0.05, 5*scale, 6*scale, 11*scale);
+    stroke(-L*0.05, 5*scale, 6*scale, 11*scale);
+  }
+  if(spec.trigger){                   // 扳机：机体下缘的小护圈
+    ctx.fillStyle="#3a3f47"; ctx.fillRect(-L*0.02, 6.4*scale, 3.2*scale, 3*scale);
+  }
+  if(spec.body){                      // 机匣强化：主体上沿加一层，枪看起来更厚重
+    ctx.fillStyle="#2a2f38"; ctx.fillRect(-L*0.28, -6.8*scale, L*0.58, 3*scale);
+  }
+  if(spec.core){                      // 改装模块：顶部凸块
+    ctx.fillStyle=accC; ctx.fillRect(-L*0.20, -8.4*scale, 6*scale, 2.6*scale);
+    stroke(-L*0.20, -8.4*scale, 6*scale, 2.6*scale);
+  }
+  if(spec.scope){                     // 瞄准镜：比普通瞄具更高更长
+    ctx.fillStyle="#15181e"; ctx.fillRect(-L*0.07, -13*scale, 14*scale, 6*scale);
+    stroke(-L*0.07, -13*scale, 14*scale, 6*scale);
+    ctx.fillStyle=accC; ctx.fillRect(L*0.01, -11.6*scale, 3.4*scale, 3.2*scale);
+  }
   ctx.restore();
 }
 
@@ -930,5 +956,11 @@ function gunSvg(gun, size){
   if(spec.muzzle) g += `<rect x="${(28+Math.min(spec.barrel,36))*s}" y="${17*s}" width="${3.4*s}" height="${7*s}" fill="#333a44" stroke="${dark}"/>`;
   if(spec.underbarrel) g += `<rect x="${18*s}" y="${24*s}" width="${10*s}" height="${3.4*s}" fill="${c}" stroke="${dark}" stroke-width="1"/>`;
   g += `<rect x="${10*s}" y="${24*s}" width="${5*s}" height="${7*s}" rx="1" fill="${c}" stroke="${dark}" stroke-width="1"/>`;
+  /* v0.34.0：弹匣 / 扳机 / 机匣 / 改装模块 / 瞄准镜也进缩略图 */
+  if(spec.mag)     g += `<rect x="${16*s}" y="${24*s}" width="${5*s}" height="${9.5*s}" rx="1" fill="#232830" stroke="${dark}" stroke-width="1"/>`;
+  if(spec.trigger) g += `<rect x="${13*s}" y="${24.6*s}" width="${3*s}" height="${2.6*s}" fill="#3a3f47"/>`;
+  if(spec.body)    g += `<rect x="${8.6*s}" y="${15.4*s}" width="${21*s}" height="${2.6*s}" fill="#2a2f38"/>`;
+  if(spec.core)    g += `<rect x="${9*s}" y="${13.6*s}" width="${5*s}" height="${2.2*s}" fill="${c}" stroke="${dark}" stroke-width="1"/>`;
+  if(spec.scope)   g += `<rect x="${12*s}" y="${7.5*s}" width="${11*s}" height="${4.6*s}" rx="1" fill="#15181e" stroke="${c}" stroke-width="1"/>`;
   return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
 }

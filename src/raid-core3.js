@@ -1,5 +1,5 @@
 /* =========================================================================
- * raid-core3.js — 主控 Raid（方法续接 · 第 3 段）
+ * raid-core3.js — 主控 Raid（方法续接，第 3 段）
  * v0.22.0：由 raid.js 按自然边界物理拆分，逻辑零改写。经典脚本按 index.html 顺序加载，
  * 共享同一全局词法作用域。verify 的 raidSrc 会聚合全部 raid-*.js 做源码断言。
  * ========================================================================= */
@@ -358,11 +358,11 @@ Object.assign(Raid, {
           if(target.isPlayer && target.shieldGear) this._shieldQuotaUse(target.shieldGear);
         }
         target.shieldInvuln=Math.max(target.shieldInvuln||0,iv);
-        const leftTxt=maxIv>0 ? ("（剩 "+(maxIv-(target.shieldInvulnLeft|0))+"/"+maxIv+" 已用 · 余 "+(target.shieldInvulnLeft|0)+"）") : "";
+        const leftTxt=maxIv>0 ? ("（剩 "+(maxIv-(target.shieldInvulnLeft|0))+"/"+maxIv+" 已用，余 "+(target.shieldInvulnLeft|0)+"）") : "";
         this._float(target.x,target.y-70,
-          iv>0 ? ("护盾破裂 · 无敌 "+iv.toFixed(2)+"s"+leftTxt) : "护盾破裂 · 无敌次数已用尽",
+          iv>0 ? ("护盾破裂，无敌 "+iv.toFixed(2)+"s"+leftTxt) : "护盾破裂，无敌次数已用尽",
           "#4fd6ff");
-        if(target.isPlayer && iv>0) this._feed("防护","护盾破裂 · "+iv.toFixed(2)+"s 无敌"+leftTxt,"",false,"info");
+        if(target.isPlayer && iv>0) this._feed("防护","护盾破裂，"+iv.toFixed(2)+"s 无敌"+leftTxt,"",false,"info");
         if((target.shieldPerks||[]).includes("surge")) this._shieldSurge(target);
       }
     }
@@ -428,8 +428,8 @@ Object.assign(Raid, {
      * 一次性提示，避免连发刷屏；HUD 的防护类型行会同步变成「无防护」。 */
     if(_armorAtHit>0 && (target.armor||0)<=0 && (target.armorTier||0)>=RAID_ARMOR_TYPE_TIER){
       target.armorBroken=true;   // 报废后不再纳米自愈，类型稳定停留在血肉
-      this._float(target.x,target.y-72,"护甲击穿 · 转为无防护","#ffd23f");
-      if(target.isPlayer) this._feed("防护", "护甲耐久耗尽 · 已转为无防护", "", false, "warn");
+      this._float(target.x,target.y-72,"护甲击穿，转为无防护","#ffd23f");
+      if(target.isPlayer) this._feed("防护", "护甲耐久耗尽，已转为无防护", "", false, "warn");
     }
     const absorbedAll=hadShield && d<=0;
     d=absorbedAll?0:Math.max(1,Math.round(d));
@@ -583,8 +583,8 @@ Object.assign(Raid, {
       if(!killer.netKiller && !this._firstKillToken){
         this._firstKillToken=true;
         this.tokens=(this.tokens||0)+1;
-        this._float(victim.x, victim.y-72, "◈ 首杀 · GP 币 +1", "#ffd23f");
-        this._feed("黑市", "首杀确认 · GP 币 +1（撤离才落袋）", "奖励", false, "info");
+        this._float(victim.x, victim.y-72, "◈ 首杀，GP 币 +1", "#ffd23f");
+        this._feed("黑市", "首杀确认，GP 币 +1（撤离才落袋）", "奖励", false, "info");
       }
       this._feed(killer.netKiller?(killer.name||"队友"):"你", victim.name, killer.gun?gunNameOf(killer.gun):"徒手", !killer.netKiller, "kill");
       const drops=this._dropFromBot(victim);
@@ -678,7 +678,7 @@ Object.assign(Raid, {
         c.drops=rest;
         if(rest.length){
           c.searched=false;
-          this._float(c.x, c.y-38, `背包已满 · 还有 ${rest.length} 件留在地上`, "#ff8a5a");
+          this._float(c.x, c.y-38, `背包已满，还有 ${rest.length} 件留在地上`, "#ff8a5a");
           SFX.ui();
         } else {
           c.searched=true;
@@ -913,7 +913,7 @@ Object.assign(Raid, {
     if(kind==="weapon"){
       if((this.inv.weapons||[]).indexOf(item)<0){
         if(this.inv.weapons.length>=RAID_INV_CAP.weapons){
-          this._pick(p.x,p.y-34,"武器栏已满 · 先腾出空间","#ff8a5a"); return false;
+          this._pick(p.x,p.y-34,"武器栏已满，先腾出空间","#ff8a5a"); return false;
         }
         this.inv.weapons.push(item);       // _stowGun / _gunBag 依赖物品栏里有这条
       }
@@ -957,7 +957,7 @@ Object.assign(Raid, {
     const key=isSh?"shields":which==="helmet"?"helmets":"armors";
     const arr=(this.inv[key]=this.inv[key]||[]);
     if(arr.length>=RAID_INV_CAP[key]){
-      this._pick(p.x,p.y-34,key+"栏已满 · 先腾出空间","#ff8a5a"); return false;
+      this._pick(p.x,p.y-34,key+"栏已满，先腾出空间","#ff8a5a"); return false;
     }
     arr.push(old);
     if(isSh){
@@ -976,7 +976,7 @@ Object.assign(Raid, {
       p.armorRegen=0; p.armorBroken=false;
     }
     this._invDirty=false;
-    this._pick(p.x,p.y-34,"放回背包 · "+old.name,"#8fd0ff");
+    this._pick(p.x,p.y-34,"放回背包，"+old.name,"#8fd0ff");
     SFX.ui();
     return true;
   },
@@ -1002,8 +1002,8 @@ Object.assign(Raid, {
     const px=x!==undefined?x:this.player.x, py=(y!==undefined?y:this.player.y)-24;
     const spill=(label)=>{
       if(!fromGround) this._dropGround(item, x, y, "spill");
-      this._pick(px, py, fromGround ? label+"已满 · 先腾出空间"
-                                     : label+"已满 · 物品掉在脚下", "#ff8a5a");
+      this._pick(px, py, fromGround ? label+"已满，先腾出空间"
+                                     : label+"已满，物品掉在脚下", "#ff8a5a");
       return false;
     };
     /* 弹药：按发堆进弹药栏（不占物品格，但总发数有上限） */
@@ -1112,7 +1112,7 @@ Object.assign(Raid, {
         M.dist(o.x,o.y, zone.x+zone.w/2, zone.y+zone.h/2) < 300);
       if(blocker){
         this.extractT=Math.max(0, this.extractT-dt*2.2);
-        this._extractBlockReason="撤离点被封锁 · 清除封锁者";
+        this._extractBlockReason="撤离点被封锁，清除封锁者";
         return;
       }
       // 付费撤离点：费用随带入装备估值浮动；余额不足时不计时
@@ -1304,9 +1304,9 @@ Object.assign(Raid, {
     const squadId = isSquad ? ("sq"+(this._squadN++)) : null;
     const n = isSquad ? RNG.ri(2,3) : 1;
     /* 约 45% 的小队会去封锁某个开放的撤离点。三条约束（v0.19.2）：
-     *   · 付费撤离点永不封锁 —— 它是「花钱买路」的保底出口，堵了就真没路走了
-     *   · 同一个点不重复挂封锁者（否则杀一个还有下一个，永远清不完）
-     *   · 全图同时存在的封锁者最多 2 个，避免后期所有撤离点全红 */
+     *  ，付费撤离点永不封锁 —— 它是「花钱买路」的保底出口，堵了就真没路走了
+     *  ，同一个点不重复挂封锁者（否则杀一个还有下一个，永远清不完）
+     *  ，全图同时存在的封锁者最多 2 个，避免后期所有撤离点全红 */
     let blockZone=null;
     const liveBlockers=this.ops.filter(o=>o.alive && o.blockZone).length;
     if(isSquad && RNG.chance(0.45) && liveBlockers < 2){
@@ -1362,7 +1362,7 @@ Object.assign(Raid, {
       const pt=this._spawnSafePoint(b.x+Math.cos(a)*rad, b.y+Math.sin(a)*rad, 16);
       const gun=blGunGen(RNG.ri(11,15), {type:RNG.pick(["rifle","smg","shotgun"])});
       const op=new RaidOperator({
-        id:"cal"+(this.uidN++)+"-"+i, cls:"scav", name:"增援 · 小队",
+        id:"cal"+(this.uidN++)+"-"+i, cls:"scav", name:"增援，小队",
         x:pt.x, y:pt.y, angle:RNG.fr(0,6.2832),
         speed:RNG.fr(120,142), hp:RNG.ri(70,95), color:"#d0a0e0",
         gun, smart:false, creds:RNG.ri(20,60), lootLimit:1, squadId:sid,
@@ -1400,9 +1400,9 @@ Object.assign(Raid, {
       this.containers.push({ x, y, tier:2, kind:"weapon", airdrop:true,
         searched:false, drop:null, poi:poi.id });
       this.airdrops.push({ x, y, name:poi.name, poi:poi.id, life:150 });
-      this._feed("空投", "补给空投落点 · "+poi.name+"（"+Math.round(x)+" / "+Math.round(y)+"）", "", false, "info");
+      this._feed("空投", "补给空投落点，"+poi.name+"（"+Math.round(x)+" / "+Math.round(y)+"）", "", false, "info");
     }
-    if(picked.length) this._toast("补给空投已落地 · 小地图可见", "#ffd23f");
+    if(picked.length) this._toast("补给空投已落地，小地图可见", "#ffd23f");
   },
 
   /* ----------------------------- 火箭弹 ----------------------------- */
@@ -1649,31 +1649,31 @@ Object.assign(Raid, {
 
     /* 装备中（不可丢，防止误操作把手上的枪/盔甲扔掉） */
     sec("装备中","撤离成功才带回仓库");
-    line("主武器 · "+(p.gun?gunNameOf(p.gun):
+    line("主武器，"+(p.gun?gunNameOf(p.gun):
       "空手（跑刀 +"+Math.round((RAID_BAREHAND_SPEED-1)*100)+"% 移速）"), p.gun?raidGunColor(p.gun):"#8b95a5",
-      p.gun?`${p.gun.ammoMag}/${p.gun.mag} 发 · 背包 ${p.gun.ammoRes} · ${p.gun.loaded?(ammoDefFromId(p.gun.loaded)||{}).short||"?" : "未装填"}`
+      p.gun?`${p.gun.ammoMag}/${p.gun.mag} 发，背包 ${p.gun.ammoRes}，${p.gun.loaded?(ammoDefFromId(p.gun.loaded)||{}).short||"?" : "未装填"}`
            :"按 Q 从背包取枪", null, null, null, p.gun?"main":null);
-    if(p.secondary) line("副武器 · "+gunNameOf(p.secondary), raidGunColor(p.secondary),
-      `${p.secondary.ammoMag}/${p.secondary.mag} 发 · 背包 ${p.secondary.ammoRes} · ${p.secondary.loaded?(ammoDefFromId(p.secondary.loaded)||{}).short||"?" : "未装填"}`,
+    if(p.secondary) line("副武器，"+gunNameOf(p.secondary), raidGunColor(p.secondary),
+      `${p.secondary.ammoMag}/${p.secondary.mag} 发，背包 ${p.secondary.ammoRes}，${p.secondary.loaded?(ammoDefFromId(p.secondary.loaded)||{}).short||"?" : "未装填"}`,
       null, null, null, "secondary");
     /* v0.26.0：三类防具也能「放回背包」，与枪的 stow 按钮一致；名称前缀明确区分穿戴中。 */
-    if(p.armorTier) line("[穿戴中] 护甲 · "+RAID_ARMORS[p.armorTier].name, ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0",
-      `T${p.armorTier} · 耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)} · 减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?(' · 硬质插板（HP ×'+elemMult('corrosive','armor').toFixed(2)+'）'):' · 已击穿（无防护）'):''}`,
+    if(p.armorTier) line("[穿戴中] 护甲，"+RAID_ARMORS[p.armorTier].name, ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0",
+      `T${p.armorTier}，耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)}，减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?('，硬质插板（HP ×'+elemMult('corrosive','armor').toFixed(2)+'）'):'，已击穿（无防护）'):''}`,
       null, null, null, "armor");
-    if(p.helmetTier) line("[穿戴中] 头盔 · "+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
-      `T${p.helmetTier} · 耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)} · 躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`,
+    if(p.helmetTier) line("[穿戴中] 头盔，"+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
+      `T${p.helmetTier}，耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)}，躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`,
       null, null, null, "helmet");
-    if(p.maxShield>0) line("[穿戴中] 护盾 · "+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
-      `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)} · 充能 ${p.shieldRate}/s · 延迟 ${p.shieldDelay}s · 破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`
-        +((p.shieldInvulnMax|0)>0 ? (" · 本局剩余 "+(p.shieldInvulnLeft|0)+"/"+(p.shieldInvulnMax|0)+" 次") : ""),
+    if(p.maxShield>0) line("[穿戴中] 护盾，"+(p.shieldGear?p.shieldGear.name:"护盾模块"), "#4fd6ff",
+      `容量 ${Math.round(p.shield)}/${Math.round(p.maxShield)}，充能 ${p.shieldRate}/s，延迟 ${p.shieldDelay}s，破盾无敌 ${(p.shieldInvulnBase||0).toFixed(2)}s`
+        +((p.shieldInvulnMax|0)>0 ? ("，本局剩余 "+(p.shieldInvulnLeft|0)+"/"+(p.shieldInvulnMax|0)+" 次") : ""),
       null, null, null, "shield");
     /* v0.24.0：负重反馈。减速是隐性的，玩家必须能在物品栏里看到「为什么跑不动」。 */
     const load=raidLoadOf(R);
     line("背包负重", load>0.6?"#ff8a5a":"#8fd0ff",
-      Math.round(load*100)+"% · 移速 ×"+raidSpeedMul(R).toFixed(2)+
-      " · 满载 -"+Math.round(RAID_LOAD_PENALTY*100)+"%");
-    line("卢布", "#8fe07a", "₽ "+priceText(R.creds)+" · 撤离后结算进仓库");
-    if((R.tokens||0)>0) line("GP 币", "#ffd23f", "◈ "+R.tokens+" · 撤离才落袋");
+      Math.round(load*100)+"%，移速 ×"+raidSpeedMul(R).toFixed(2)+
+      "，满载 -"+Math.round(RAID_LOAD_PENALTY*100)+"%");
+    line("卢布", "#8fe07a", "₽ "+priceText(R.creds)+"，撤离后结算进仓库");
+    if((R.tokens||0)>0) line("GP 币", "#ffd23f", "◈ "+R.tokens+"，撤离才落袋");
 
     /* 弹药栏（v0.20.0）：按口径 × 级别堆叠，总发数有上限 */
     {
@@ -1682,7 +1682,7 @@ Object.assign(Raid, {
         const A=ammoParseId(a), B=ammoParseId(b);
         return (AMMO_CAL_LIST.indexOf(A.cal)-AMMO_CAL_LIST.indexOf(B.cal)) || (B.lv-A.lv);
       });
-      sec("弹药 · "+R._ammoTotal()+"/"+RAID_AMMO_CAP+" 发","换弹时自动扣这里的子弹");
+      sec("弹药，"+R._ammoTotal()+"/"+RAID_AMMO_CAP+" 发","换弹时自动扣这里的子弹");
       if(!ids.length){
         rows.push(`<div class="inv-row"><div class="ir-main"><div class="ir-name" style="color:#8b95a5">没有子弹</div>
           <div class="ir-meta">搜箱 / 商店 / 工坊合成都能拿到弹药</div></div></div>`);
@@ -1691,15 +1691,15 @@ Object.assign(Raid, {
         const d=ammoDefFromId(id), n=R.inv.ammo[id];
         const E=AMMO_TYPES[d.elem]||AMMO_TYPES.none;
         const onGun=(p.gun&&p.gun.loaded===id)||(p.secondary&&p.secondary.loaded===id);
-        line(d.name+(onGun?" · 已装填":""), d.color,
-          `${d.spec} · T${d.lv} ${(AMMO_GRADE_BY_LV[d.lv]||{}).name||""} · 穿深 ${E.pen} · ${n} 发 · ${money(d.value*n)}`,
+        line(d.name+(onGun?"，已装填":""), d.color,
+          `${d.spec}，T${d.lv} ${(AMMO_GRADE_BY_LV[d.lv]||{}).name||""}，穿深 ${E.pen}，${n} 发，${money(d.value*n)}`,
           `ammo:${id}`);
       }
     }
 
     /* 背包战利品（全部可丢，丢在脚下还能捡回来） */
-    const capTxt=`武器 ${R.inv.weapons.length}/${RAID_INV_CAP.weapons} · 材料 ${R.inv.materials.length}/${RAID_INV_CAP.materials} · 钥匙 ${(R.inv.keys||[]).length}/${RAID_INV_CAP.keys}`;
-    sec("背包 · 战利品","✕ 丢在脚下，之后还能捡回来");
+    const capTxt=`武器 ${R.inv.weapons.length}/${RAID_INV_CAP.weapons}，材料 ${R.inv.materials.length}/${RAID_INV_CAP.materials}，钥匙 ${(R.inv.keys||[]).length}/${RAID_INV_CAP.keys}`;
+    sec("背包，战利品","✕ 丢在脚下，之后还能捡回来");
     rows.push(`<div class="inv-sec" style="margin:0 4px 6px;color:#6f8296">${capTxt}</div>`);
 
     let any=false;
@@ -1710,23 +1710,23 @@ Object.assign(Raid, {
       any=true;
       const rtg=R._rtGun(w);
       line(gunNameOf(w), raidGunColor(w),
-        `${gunDamageLabel(w)} · 弹匣 ${rtg?rtg.ammoMag:0}/${w.mag} · 装填 ${rtg&&rtg.loaded?((ammoDefFromId(rtg.loaded)||{}).short||"?"):"未装填"} · 估值 ${money(w.value)}`,
+        `${gunDamageLabel(w)}，弹匣 ${rtg?rtg.ammoMag:0}/${w.mag}，装填 ${rtg&&rtg.loaded?((ammoDefFromId(rtg.loaded)||{}).short||"?"):"未装填"}，估值 ${money(w.value)}`,
         `weapons:${i}`, `weapons:${i}`);
     }
     for(let i=0;i<R.inv.armors.length;i++){
       const a=R.inv.armors[i]; any=true;
       line("[背包] "+a.name, RAID_RARITY_COLOR[a.rarity|0]||"#dfe7f0",
-        `T${a.tier} · ${RAID_RARITY_NAME[a.rarity|0]||""} · 耐久 ${a.maxArmor} · ${money(a.value)}`, `armors:${i}`, `armors:${i}`);
+        `T${a.tier}，${RAID_RARITY_NAME[a.rarity|0]||""}，耐久 ${a.maxArmor}，${money(a.value)}`, `armors:${i}`, `armors:${i}`);
     }
     for(let i=0;i<R.inv.helmets.length;i++){
       const h=R.inv.helmets[i]; any=true;
       line("[背包] "+h.name, RAID_RARITY_COLOR[h.rarity|0]||"#dfe7f0",
-        `T${h.tier} · ${RAID_RARITY_NAME[h.rarity|0]||""} · 耐久 ${h.maxArmor} · ${money(h.value)}`, `helmets:${i}`, `helmets:${i}`);
+        `T${h.tier}，${RAID_RARITY_NAME[h.rarity|0]||""}，耐久 ${h.maxArmor}，${money(h.value)}`, `helmets:${i}`, `helmets:${i}`);
     }
     for(let i=0;i<(R.inv.shields||[]).length;i++){
       const s=R.inv.shields[i]; any=true;
       line("[背包] "+s.name, shieldColor(s),
-        `T${s.tier} 护盾 · ${shieldLines(s).slice(0,3).join(" · ")} · ${money(s.value)}`, `shields:${i}`, `shields:${i}`);
+        `T${s.tier} 护盾，${shieldLines(s).slice(0,3).join("，")}，${money(s.value)}`, `shields:${i}`, `shields:${i}`);
     }
     for(let i=0;i<R.inv.parts.length;i++){
       const pt=R.inv.parts[i]; any=true;
@@ -1738,33 +1738,33 @@ Object.assign(Raid, {
       const slotName=pt.core?"改装模块":((GUN_SLOT_BY_ID[pt.slot]||{}).name||pt.slot||"配件");
       const sv = raidSalvageYield(pt);
       const eff = partText(pt) || slotName;
-      const meta = `${eff} · ${slotName}${qn?" · "+qn:""}${weaponQualityHidden()?"":` · iLv ${pt.ilvl||1}`} · 估值 ${money(pt.value||partValue(pt))}`;
+      const meta = `${eff}，${slotName}${qn?"，"+qn:""}${weaponQualityHidden()?"":`，iLv ${pt.ilvl||1}`}，估值 ${money(pt.value||partValue(pt))}`;
       line(partNameOf(pt), col, meta, `parts:${i}`, null, null, null, sv?`parts:${i}`:null);
     }
     for(let i=0;i<R.inv.materials.length;i++){
       const m=R.inv.materials[i]; any=true;
-      line(m.name, m.color||"#dfe7f0", `T${m.tier} · 估值 ${money(m.value)}`, `materials:${i}`);
+      line(m.name, m.color||"#dfe7f0", `T${m.tier}，估值 ${money(m.value)}`, `materials:${i}`);
     }
     for(let i=0;i<R.inv.receivers.length;i++){
       const r=R.inv.receivers[i]; any=true;
-      line(r.name, r.color||"#8fd0ff", `底材 · 估值 ${money(r.value)}`, `receivers:${i}`);
+      line(r.name, r.color||"#8fd0ff", `底材，估值 ${money(r.value)}`, `receivers:${i}`);
     }
     for(let i=0;i<(R.inv.keys||[]).length;i++){
       const k=R.inv.keys[i]; any=true;
       line(k.name, k.color||"#ffd23f",
-        `${RAID_LOCK_NAME[M.clamp(k.lv||1,1,5)]} · 剩 ${k.uses}/${k.maxUses||k.uses} 次 · 估值 ${money(raidKeyValue(k))}（按耐久折旧）`, `keys:${i}`);
+        `${RAID_LOCK_NAME[M.clamp(k.lv||1,1,5)]}，剩 ${k.uses}/${k.maxUses||k.uses} 次，估值 ${money(raidKeyValue(k))}（按耐久折旧）`, `keys:${i}`);
     }
     for(let i=0;i<R.inv.meds.length;i++){
       const m=R.inv.meds[i]; any=true;
       const md=RAID_MED_BY_ID[m.id]||{};
       line(m.name+(m.n>1?" ×"+m.n:""), m.color||"#ff9a9a",
-        `${md.desc||"医疗品"} · 丢弃 1 件`, `meds:${i}`, null, `meds:${i}`);
+        `${md.desc||"医疗品"}，丢弃 1 件`, `meds:${i}`, null, `meds:${i}`);
     }
-    if(R.bandages>0){ any=true; line("绷带 ×"+R.bandages, "#ff9a9a", "止血 · 丢弃 1 卷", "bandage:0", null, "bandage:0"); }
-    if(!any) rows.push(`<div class="inv-empty">背包是空的 · 去翻箱、摸尸体，撤离前记得清点。</div>`);
+    if(R.bandages>0){ any=true; line("绷带 ×"+R.bandages, "#ff9a9a", "止血，丢弃 1 卷", "bandage:0", null, "bandage:0"); }
+    if(!any) rows.push(`<div class="inv-empty">背包是空的，去翻箱、摸尸体，撤离前记得清点。</div>`);
 
     el.innerHTML=`<div class="inv-card">
-      <div class="inv-head"><b>物品栏</b><span class="inv-sub">${Input.isTouch?"点背包键关闭":"Tab 关闭"} · 游戏继续运行</span></div>
+      <div class="inv-head"><b>物品栏</b><span class="inv-sub">${Input.isTouch?"点背包键关闭":"Tab 关闭"}，游戏继续运行</span></div>
       <div class="inv-body">${rows.join("")}</div>
       <div class="inv-foot">背包枪点「拿在手上」可立即换枪（旧枪自动回背包）；丢弃会把物品放在脚下（发光小包裹），腾出格子后可以再捡回来；阵亡或超时则全部丢失。</div>
     </div>`;
@@ -1824,7 +1824,7 @@ Object.assign(Raid, {
       return false;
     }
     if((this.inv.materials||[]).length + y.length > RAID_INV_CAP.materials){
-      this._pick(p.x, p.y-34, "材料栏空间不足 · 先腾出格子", "#ff8a5a");
+      this._pick(p.x, p.y-34, "材料栏空间不足，先腾出格子", "#ff8a5a");
       return false;
     }
     this.inv.parts.splice(idx,1);

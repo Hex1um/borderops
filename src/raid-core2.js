@@ -1,5 +1,5 @@
 /* =========================================================================
- * raid-core2.js — 主控 Raid（方法续接 · 第 2 段）
+ * raid-core2.js — 主控 Raid（方法续接，第 2 段）
  * v0.22.0：由 raid.js 按自然边界物理拆分，逻辑零改写。经典脚本按 index.html 顺序加载，
  * 共享同一全局词法作用域。verify 的 raidSrc 会聚合全部 raid-*.js 做源码断言。
  * ========================================================================= */
@@ -455,7 +455,7 @@ Object.assign(Raid, {
     if(k.uses<=0){
       const i=this.inv.keys.indexOf(k);
       if(i>=0) this.inv.keys.splice(i,1);
-      if(this.player) this._float(this.player.x, this.player.y-56, k.name+" 用尽 · 报废", "#ff8a5a");
+      if(this.player) this._float(this.player.x, this.player.y-56, k.name+" 用尽，报废", "#ff8a5a");
     }
     return k;
   },
@@ -710,9 +710,9 @@ Object.assign(Raid, {
     let cleansed="";
     if(u.heal>0 && ((p.burnT||0)>0 || (p.freezeT||0)>0 || (p.shockT||0)>0)){
       p.burnT=0; p.burnDps=0; p.burnSrc=null; p.freezeT=0; p.shockT=0;
-      cleansed=" · 清除弹种状态";
+      cleansed="，清除弹种状态";
     }
-    this._float(p.x,p.y-30, (u.bleed?"已止血":"") + (u.heal>0?(" +"+u.heal+" HP"):"") + (u.boost?" · 加速":"") + cleansed, "#8fe07a");
+    this._float(p.x,p.y-30, (u.bleed?"已止血":"") + (u.heal>0?(" +"+u.heal+" HP"):"") + (u.boost?"，加速":"") + cleansed, "#8fe07a");
     SFX.pickup();
     this.medUse=null; this.medT=0;
   },
@@ -801,12 +801,12 @@ Object.assign(Raid, {
     if(!g){ this._pick(p.x, p.y-34, sec?"副手没有枪":"手上没有枪", "#ff8a5a"); return false; }
     /* 安全校验：物品栏里必须真有这把枪的条目，否则一放回就等于凭空消失了 */
     const tracked=(this.inv.weapons||[]).some(it=>this._rtGun(it)===g);
-    if(!tracked){ this._pick(p.x, p.y-34, "这把枪不在物品栏里 · 无法放回", "#ff8a5a"); return false; }
+    if(!tracked){ this._pick(p.x, p.y-34, "这把枪不在物品栏里，无法放回", "#ff8a5a"); return false; }
     if(sec) p.secondary=null; else p.gun=null;
     p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
     this._invDirty=true;
     this._pick(p.x, p.y-34, sec?"副手收进背包":
-      "收进背包 · 空手（+"+Math.round((RAID_BAREHAND_SPEED-1)*100)+"% 移速）", "#8fd0ff");
+      "收进背包，空手（+"+Math.round((RAID_BAREHAND_SPEED-1)*100)+"% 移速）", "#8fd0ff");
     SFX.ui();
     return true;
   },
@@ -1049,7 +1049,7 @@ Object.assign(Raid, {
     this._noAmmoT=now;
     const d=gun&&gun.loaded ? ammoDefFromId(gun.loaded) : null;
     this._float(this.player.x, this.player.y-40,
-      d ? (d.name+" 打空了 · 去搜刮或买弹药") : "没有子弹 · 去搜刮或买弹药", "#ff8a5a");
+      d ? (d.name+" 打空了，去搜刮或买弹药") : "没有子弹，去搜刮或买弹药", "#ff8a5a");
   },
 
   /* v0.25.0：破盾无敌配额（一局内每件护盾各自 2^i 次，i = 底材等级）
@@ -1166,7 +1166,7 @@ Object.assign(Raid, {
     this.grounds.push({ x:spot.x, y:spot.y, tier:0, ground:true, searched:false,
       drops, cash:0, support:true });
     this._supportDropped=true;
-    this._feed("装备包", "已支付 ₽"+this.supportPaid+" · 出生点已投放初始装备包", "", false, "info");
+    this._feed("装备包", "已支付 ₽"+this.supportPaid+"，出生点已投放初始装备包", "", false, "info");
   },
 
   /* 进场装填：按配装大厅的选择把子弹搬进本局，给手上的枪上膛 */
@@ -1412,8 +1412,8 @@ Object.assign(Raid, {
       /* v0.29.0：感知迟滞（消除「视角跳动」）。
        * 手电锥边缘 + 掩体拐角会让 seenNow 逐帧翻转 —— 状态在 engage/chase/roam 之间来回切，
        * 目标朝向每帧换一个来源，观感就是视角乱跳。这里给「已经看见」加 0.6s 保持窗：
-       *   · aware = 严格看见 或 保持窗内 → 维持交战姿态、朝向连续；
-       *   · 开火仍然只认严格 canSee（不许隔墙开枪）。
+       *  ，aware = 严格看见 或 保持窗内 → 维持交战姿态、朝向连续；
+       *  ，开火仍然只认严格 canSee（不许隔墙开枪）。
        * 丢失视线期间朝向 / 移动都指向 lastSeen（最后已知位置），不拿目标的实时坐标作弊。 */
       if(seenNow) b._seenHold = 0.6;
       else b._seenHold = Math.max(0, (b._seenHold||0) - dt);

@@ -996,7 +996,8 @@ check('手上这把枪没弹时投放出生补给', starter.dry.n === 1 ? 1 : 0,
 check('补给是 60 发同口径民用弹', starter.dry.id === "ammo_mid_1" && starter.dry.n2 === 60 ? 1 : 0, 1, 0.001);
 check('已经带弹就不投放', starter.fed.n, 0, 0.001);
 check('HUD 无弹时标红告警', /const dry=magN<=0 && backN<=0/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('回收超市可以卖弹药', /key==="am"/.test(raidSrc) && /弹药 · "\+d\.spec/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* v0.34.0：分隔符从「·」改为「，」后，断言改成只校验分支与文案存在 */
+check('回收超市可以卖弹药', /key==="am"/.test(raidSrc) && /弹药，/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* v0.21.2：初始装备包（明码 ₽512，勾选并付款才投放）/ 护盾即穿 / 弹药回收价 / 弹级单调 */
 const support = JSON.parse(G(`JSON.stringify((()=>{
@@ -1096,7 +1097,7 @@ check('勾选框默认未选中', /UI\._raidSupport===undefined\) UI\._raidSuppo
 check('弹药携带改为滑动条', /id="rc-ammo-\$\{cal\}" type="range"/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('弹药滑动条有数值回显', /id="rc-ammo-val-\$\{cal\}"/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('弹药「买 / 补货」按钮已移除', /data-ammobuy=/.test(raidSrc) ? 0 : 1, 1, 0.001);
-check('军火超市护甲与头盔合并成一栏', /id:'armor',name:'护甲 · 头盔'/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('军火超市护甲与头盔合并成一栏', /id:'armor',name:'护甲，头盔'/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('军火超市新增子弹一栏', /id:'ammo',name:'子弹'/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('超市子弹按 30 发一条卖', /RAID_AMMO_STACK/.test(raidSrc) && /data-buy="ammo:/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('超市护甲 / 头盔分区标题', /gridHead\("护甲 T1~T9/.test(raidSrc) && /gridHead\("头盔 T1~T9/.test(raidSrc) ? 1 : 0, 1, 0.001);
@@ -1684,7 +1685,7 @@ check('GP 币统一使用金色 ◈', (__uiCopy.match(/◈\s*GP 币/g)||[]).leng
 check('GP 币金色 #ffd23f 已接线', (__uiCopy.match(/#ffd23f/g)||[]).length>=8?1:0, 1, 0.001);
 check('token 结算价格统一 ◈', !/payKind==="token"\?"◆"/.test(__uiCopy) && /payKind==="token"\?"◈"/.test(__uiCopy)?1:0, 1, 0.001);
 check('标题页 chip 标注 ◈ GP 币', /<span>◈ GP 币<\/span>/.test(__uiCopy)?1:0, 1, 0.001);
-check('融合台统一「品阶」标签', /· 品阶 <b/.test(__uiCopy) && !/· 稀有度 <b/.test(__uiCopy)?1:0, 1, 0.001);
+check('融合台统一「品阶」标签', /，品阶 <b/.test(__uiCopy) && !/· 稀有度 <b/.test(__uiCopy)?1:0, 1, 0.001);
 check('Raider 标记改用 ★ 消除 ◆ 多义', /smart\?"★ ":""/.test(__coreCopy) && !/smart\?"◆ ":""/.test(__coreCopy)?1:0, 1, 0.001);
 check('黑市摊位统一金色品牌色', (__coreCopy.match(/kind:"black"[^\n]*color:"#ffd23f"/g)||[]).length===2?1:0, 1, 0.001);
 check('黑市地图图标统一 ◈', /"♻":"◈"/.test(__uiCopy)?1:0, 1, 0.001);
@@ -1769,7 +1770,7 @@ check('房间地面改纯黑 #010203', /rm\.extract\?"#25452f":"#010203"/.test(_
 
 /* --- 地面枪械对比面板 / 局时常量 / 撤离保底 --- */
 check('地面枪械对比面板存在', /_groundGunPanel\(ctx, R, c, v/.test(__rd2)?1:0, 1, 0.001);
-check('面板画出 ▲▼ 优劣与「手持为空」提示', /▲":worse\?" ▼/.test(__rd2) && /手持为空 · 直接拾取/.test(__rd2)?1:0, 1, 0.001);
+check('面板画出 ▲▼ 优劣与「手持为空」提示', /▲":worse\?" ▼/.test(__rd2) && /手持为空，直接拾取/.test(__rd2)?1:0, 1, 0.001);
 check('手持为空时不误标成「提升」', /better=!!cur && r\.a>r\.b/.test(__rd2)?1:0, 1, 0.001);
 check('估值用 M/k 紧凑格式（不撑破面板）', /"₽"\+\(n\/1000000\)\.toFixed\(2\)\+"M"/.test(__rd2)?1:0, 1, 0.001);
 check('局时长抽成 raidDuration=480', G('Raid.raidDuration'), 480, 0.001);
@@ -2243,7 +2244,7 @@ check('护盾对比行（容量/充能/延迟）',
 check('防具对比行（耐久/减伤/品阶）',
   /k:"耐久"/.test(__rd2) && /k:"减伤%"/.test(__rd2) && /k:"品阶"/.test(__rd2) ? 1 : 0, 1, 0.001);
 check('面板保留 ▲▼ 与空手提示（旧断言不回归）',
-  /better=!!cur && r\.a>r\.b/.test(__rd2) && /手持为空 · 直接拾取/.test(__rd2) &&
+  /better=!!cur && r\.a>r\.b/.test(__rd2) && /手持为空，直接拾取/.test(__rd2) &&
   /▲":worse\?" ▼/.test(__rd2) ? 1 : 0, 1, 0.001);
 check('溢出堆标出「背包溢出」',
   /c\.spill/.test(__rd2) && /背包溢出/.test(__rd2) ? 1 : 0, 1, 0.001);
