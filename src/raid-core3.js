@@ -329,7 +329,13 @@ Object.assign(Raid, {
     const pen = (gun && gun.armorPen!==undefined) ? gun.armorPen : 0.10;
     const penMul = 1 - pen*0.90;
     // 头部命中（15%）：伤害 ×1.8，头盔对爆头全额生效
-    const headshot=RNG.chance(0.15);
+    /* v0.33.0（用户要求「3D 有且仅有爆头会暴击」）：3D 里玩家打 AI 时，
+       暴击完全取决于「准星是否压在头部带」（fpview 每帧算好存在 R.aimHead）；
+       2D 俯视角没有垂直瞄准，沿用随机 15%；AI 打玩家也仍按随机。 */
+    const _in3D = (typeof ViewMode!=="undefined" && ViewMode.is3D && ViewMode.is3D());
+    const headshot = (_in3D && target.isPlayer!==true && attacker && attacker.isPlayer)
+      ? (this.aimHead === target)
+      : RNG.chance(0.15);
     if(headshot) d*=1.8;
     // 能量护盾优先于护甲吸收（护盾型 → 蓝色血条，被电击克制）。护盾破了才轮到护甲 / 头盔。
     const hadShield=(target.shield||0)>0;

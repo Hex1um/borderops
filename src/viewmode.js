@@ -10,6 +10,9 @@ const ViewMode = {
   KEY: "borderops_viewmode_v1",
   mode: "2d",          // "2d" 俯视角（原版） | "3d" 第一人称
   yaw: 0,              // 3D 视角朝向（弧度），等于玩家开火方向
+  /* v0.33.0：俯仰（弧度）。旧版 3D 只能左右看，「瞄头」在物理上不可能，
+     爆头只能靠随机 —— 用户要求「3D 有且仅有爆头会暴击」，必须先有纵向瞄准。 */
+  pitch: 0,
   sensitivity: 1.0,
   minimap: false,      // v0.19.1：3D 不再提供小地图（已在设置里移除入口）
   /* v0.21.4：3D 默认锁定鼠标 —— Minecraft / FPS 那样的「鼠标永远锁在屏幕中心」。
@@ -79,6 +82,7 @@ const ViewMode = {
     this._yawFor = null;
     if(mode === "3d"){
       this.yaw = p ? p.angle : this.yaw;
+      this.pitch = 0;
       if(R && R.active && p) this._yawFor = null;   // 让 ensureYaw 在下一帧接手
     } else {
       try{
@@ -163,8 +167,10 @@ const ViewMode = {
   },
 
   /* ----------------------------- 输入 ----------------------------- */
-  _turn(dx){
+  _turn(dx, dy){
     this.yaw += dx * 0.0022 * this.sensitivity;
+    /* v0.33.0：纵轴 → 俯仰，限 ±0.30rad（约 ±17°）：能抬头看天、低头看脚前，不会翻过去 */
+    if(dy) this.pitch = Math.max(-0.30, Math.min(0.30, this.pitch - dy*0.0018*this.sensitivity));
     if(this.yaw > Math.PI*4 || this.yaw < -Math.PI*4) this.yaw %= Math.PI*2;
   },
 
@@ -239,10 +245,10 @@ const ViewMode = {
     window.addEventListener("mousemove", (e)=>{
       if(!this.is3D()) return;
       if(typeof UI !== "undefined" && UI.overlay && !UI.overlay.classList.contains("hidden")) return;
-      let dx = e.movementX || 0;
+      const dx = e.movementX || 0, dy = e.movementY || 0;
       // 刚锁上 / 刚解锁那一下浏览器会给一个巨大的位移，丢掉，否则视角瞬移
-      if(Math.abs(dx) > 260) return;
-      if(dx) this._turn(dx);
+      if(Math.abs(dx) > 260 || Math.abs(dy) > 260) return;
+      if(dx || dy) this._turn(dx, dy);
     });
 
     /* 键盘备用：V 在局内战局里随时切换维度（设置面板只在局内出现，所以给一个快捷键）；

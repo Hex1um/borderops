@@ -62,7 +62,10 @@ const FPView = {
     const yaw = ViewMode.yaw;
     const ca = Math.cos(yaw), sa = Math.sin(yaw);
     const proj = (w/2) / Math.tan(this.FOV/2);
-    const horizon = h*0.5;
+    /* v0.33.0：俯仰直接移动地平线 —— 天空/墙/地面/精灵/光照全以 horizon 为垂直基准，
+       所以一处改动就能让整个 3D 世界跟着抬头/低头。 */
+    const pitch = (typeof ViewMode!=="undefined" && ViewMode.pitch) ? ViewMode.pitch : 0;
+    const horizon = h*0.5 + pitch*proj;
     const step = w > 1100 ? 3 : 2;
     const n = Math.ceil(w/step);
     if(!this._zbuf || this._zbuf.length < n){
@@ -997,6 +1000,9 @@ const FPView = {
     }
     projList.sort((a,b)=> b.depth - a.depth);   // 远 → 近
 
+    /* v0.33.0：3D 准星爆头 —— 准星固定在屏幕中心，判断它是否压在某个**可见**单位的
+       头部带（贴片上缘往下 28%）。只有它成立时才允许暴击（见 raid-core3 的 _damage）。 */
+    let aimHead=null, aimHeadDepth=Infinity;
     for(const it of projList){
       const {s, depth, sx, size} = it;
       if(size < 0.8) continue;
@@ -1017,12 +1023,29 @@ const FPView = {
           seg=-1;
         }
       }
+      /* 头部命中判定：只看可见单位（准星那一列没有被更近的墙挡住） */
+      if(s.kind==="unit" && s.obj && s.obj.isPlayer!==true && s.obj.alive!==false){
+        const top=it.footY - size, bot=top + size*0.28;
+        const hw=Math.max(4, size*0.20);
+        const col=Math.max(0, Math.min(n-1, Math.floor(sx/step)));
+        const visible=(this._zbuf[col] > depth) && Math.abs(sx - w/2) <= hw;
+        if(visible && h/2 >= top && h/2 <= bot && depth < aimHeadDepth){
+          aimHead=s.obj; aimHeadDepth=depth;
+        }
+      }
     }
+    if(R) R.aimHead = aimHead;
   },
 
   _sprite(ctx, s, cx, foot, size, depth, kw){
-    const fog = Math.max(0.16, 1-depth/this.MAX_D);
-    ctx.globalAlpha = fog;
+    /* v0.33.0（用户反馈「3D 仍能透视、墙后东西锯齿」）：旧版给**所有**精灵设了
+       globalAlpha = 雾衰减（最远 0.16），于是建筑 / 箱子 / 树干 / 岩石全体半透明 ——
+       背后已经画过的内容会透出来，看起来就是「能透视」，边缘还会因反复 alpha 混合
+       出现毛边（像锯齿）。
+       正解：**实体必须不透明**，距离感交给颜色（远雾色）而不是透明度。
+       unit 仍留一点点雾（远处人影朦胧），但不低于 0.82，不会透出背后的墙。 */
+    const fog = Math.max(0.82, 1-depth/this.MAX_D*0.18);
+    ctx.globalAlpha = (s.kind === "prop") ? 1 : fog;
     const k = size;
 
     if(s.kind === "unit"){

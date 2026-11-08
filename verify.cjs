@@ -3522,6 +3522,36 @@ check('连败 3 把起给 pity（封顶 6 层）',
 check('pity 同时作用于箱子运气与敌人血量',
   /\(this\.pity\|\|0\)\*0\.08/.test(raidSrc) && /this\.pity\*0\.035/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
+/* ==========================================================================
+ * 51. 3D 实体不透明 / 俯仰 / 准星爆头（v0.33.0）
+ * ========================================================================== */
+console.log('\n=== 51. 3D 不透明 / 俯仰 / 准星爆头（v0.33.0）===');
+
+/* ① 实体必须不透明：旧版对**所有**精灵设 globalAlpha = 雾衰减，导致建筑/箱子/树干半透明 */
+check('prop 精灵不透明（不再继承雾 alpha）',
+  /\(s\.kind === "prop"\) \? 1 : fog/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('unit 雾下限 0.82（不会透出背后的墙）',
+  /Math\.max\(0\.82, 1-depth\/this\.MAX_D\*0\.18\)/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('不再有 0.16 的最远透明度',
+  !/Math\.max\(0\.16, 1-depth\/this\.MAX_D\)/.test(fpSrc) ? 1 : 0, 1, 0.001);
+
+/* ② 俯仰 */
+check('ViewMode 有 pitch 字段', G('typeof ViewMode.pitch')==='number' ? 1 : 0, 1, 0.001);
+check('鼠标纵轴驱动俯仰', /_turn\(dx, dy\)/m.test(vmSrc) && /movementY/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('俯仰限制 ±0.30rad', /Math\.max\(-0\.30, Math\.min\(0\.30/.test(vmSrc) ? 1 : 0, 1, 0.001);
+check('地平线随俯仰偏移（一处改全图层跟随）',
+  /const horizon = h\*0\.5 \+ pitch\*proj/.test(fpSrc) ? 1 : 0, 1, 0.001);
+
+/* ③ 准星爆头 */
+check('每帧算准星是否压在头部带', /R\.aimHead = aimHead/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('头部带取贴片上缘 28%', /top \+ size\*0\.28/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('头部判定要求该列没被更近的墙挡住', /this\._zbuf\[col\] > depth/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('3D 玩家打 AI 用准星判定、2D 仍随机',
+  /_in3D && target\.isPlayer!==true && attacker && attacker\.isPlayer/.test(raidSrc) &&
+  /RNG\.chance\(0\.15\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('暴击判定读 this.aimHead（不是未定义的 R）',
+  /this\.aimHead === target/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
  * 某段实现或文案是否仍在的「源码护栏」（对重命名、重构脆弱）。把两者的数量分开
