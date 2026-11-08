@@ -91,6 +91,12 @@ function rate(key, limit, windowMs){
   b.n++;
   return b.n <= limit;
 }
+/* v0.31.1：只看额度不消耗，用于「失败率已达上限就直接拒绝」的场景 */
+function ratePeek(key, limit, windowMs){
+  const t = now(), b = RL.get(key);
+  if(!b || t >= b.reset) return true;
+  return b.n < limit;
+}
 
 function newCode(){
   const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -186,7 +192,13 @@ setInterval(gc, 5000).unref?.();
 setInterval(()=>{
   const t=now();
   for(const [k,b] of RL){ if(t>b.reset+60000) RL.delete(k); }
-  if(COMPRESS_CACHE.size>120) COMPRESS_CACHE.clear();
+  /* v0.31.1：超上限只淘汰最久未用，不要整表清空 —— 全清会让下一波请求
+     同时重新读盘 + 重新 gzip/br，形成压缩风暴。 */
+  while(COMPRESS_CACHE.size>120){
+    const oldest=COMPRESS_CACHE.keys().next().value;
+    if(oldest===undefined) break;
+    COMPRESS_CACHE.delete(oldest);
+  }
 }, 60000).unref?.();
 
 /* ----------------------------- 数据裁剪 ----------------------------- */
@@ -437,6 +449,7 @@ function serveStatic(req, res, rawUrl){
     const enc=pickEncoding(req);
     const key=file+'|'+st.mtimeMs+'|'+st.size+'|'+enc;
     let body=COMPRESS_CACHE.get(key);
+    if(body){ COMPRESS_CACHE.delete(key); COMPRESS_CACHE.set(key, body); }  // 命中提升为最近使用
     if(!body){
       try{ body=fs.readFileSync(file); }
       catch(e){ return sendText(req,res,404,'not found'); }
@@ -500,13 +513,20 @@ async function handleApi(req, res, urlPath){
   if(urlPath==='/api/join'){
     if(!rate(ip+':join',60,60000))
       return json(req,res,{ok:false,msg:'加入过于频繁，请稍后再试'},429);
+    /* v0.31.1：4 位房间码只有 32^4≈105 万种，60/min 的通用限速足够让扫描者
+       在约一小时内撞进别人的房间。失败 join 单独按 IP 严限速（10/min），
+       成功 join 不占这个额度，正常分享房间码不受影响。 */
+    if(!ratePeek(ip+':joinfail',10,60000))
+      return json(req,res,{ok:false,msg:'尝试次数过多，请稍后再试'},429);
+    const fail=()=>rate(ip+':joinfail',10,60000);
     const code=String(body.code||'').toUpperCase().trim();
-    if(!/^[A-Z0-9]{4,8}$/.test(code))
-      return json(req,res,{ok:false,msg:'房间码格式不正确'},400);
+    if(!/^[A-Z0-9]{4,8}$/.test(code)){
+      fail(); return json(req,res,{ok:false,msg:'房间码格式不正确'},400);
+    }
     const room=ROOMS.get(code);
-    if(!room) return json(req,res,{ok:false,msg:'房间不存在或已解散'},404);
-    if(room.started) return json(req,res,{ok:false,msg:'这一局已经开始了'},409);
-    if(room.peers.size>=MAX_PEERS) return json(req,res,{ok:false,msg:'房间已满（最多 4 人）'},409);
+    if(!room){ fail(); return json(req,res,{ok:false,msg:'房间不存在或已解散'},404); }
+    if(room.started){ fail(); return json(req,res,{ok:false,msg:'这一局已经开始了'},409); }
+    if(room.peers.size>=MAX_PEERS){ fail(); return json(req,res,{ok:false,msg:'房间已满（最多 4 人）'},409); }
     const peer=makePeer(body.name);
     room.peers.set(peer.id, peer);
     room.touched=now();

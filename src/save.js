@@ -214,7 +214,14 @@ const Save = {
       const keys=this.exportKeys(); let n=0;
       for(const k of Object.keys(bag.data)){
         if(keys.indexOf(k)<0) continue;                 // 只写白名单 key，拒绝注入任意 localStorage 键
-        Store.set(k, String(bag.data[k])); n++;
+        /* v0.31.1：校验和只说明「没损坏」，不说明「没恶意」。三个白名单 key
+         * （战役存档 / 塔科夫仓库 / 拍卖行）的 JSON 里所有字符串先剥危险字符，
+         * 再落盘 —— 顺带挡住「导入后绕过 getJSON 直接 Store.get」的未来代码。 */
+        let raw;
+        try{ raw=JSON.stringify(cleanSaveStrings(JSON.parse(String(bag.data[k])))); }
+        catch(e){ continue; }   // 合法存档必然是 Store.setJSON 写出的 JSON
+        if(raw===undefined) continue;
+        Store.set(k, raw); n++;
       }
       return n ? { ok:true, msg:"已导入 "+n+" 项存档", count:n }
                : { ok:false, msg:"存档码里没有可导入的数据" };

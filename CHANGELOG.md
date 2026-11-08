@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.31.1 — 2026-11-08
+
+**外部评审复核后的安全加固：堵住存档码 XSS，压缩缓存改 LRU，失败 join 单独限速。**
+
+### 1. 存档码 XSS（评审 #1，最高优先级）
+
+- **事实修正**：评审点名的 `ui.js:660` 是抽奖结果（武器由 `Shop.gamble` 本地生成，不经存档），
+  不是实际注入点。真正入口是 `ui.js:458` 的 `gunNameOf(w)`、472 / 485 的护甲 / 遗物名、
+  502 的护甲摘要、699 的商店物品名；`Weapon` 构造器 `Object.assign(this, spec)` 不净化 `name`。
+- **评审漏掉的面**：存档码白名单有 **3 个 key**（战役 `borderlands_web_save_v1`、
+  塔科夫仓库 `raid_stash_v2`、拍卖行 `raid_auction_v1`），后两者的 load 只校验结构；
+  只改 `Save._repair` 会漏掉三分之二。
+- **部署差异**：`server.js` 同源部署下发 `script-src 'self'` 能挡内联脚本；
+  **GitHub Pages 纯静态部署没有该响应头**（`index.html` 也没有 meta CSP），
+  那里 `<img onerror>` 是可执行 XSS。评审未区分这两种部署。
+- **修法（两道防线）**：
+  1. `src/util.js` 新增 `cleanSaveStrings(v)`：递归剥危险字符，**只动字符串**，不削数值 /
+     不改结构 / 原地返回，剔除 `__proto__` 等原型污染键，限深度 16 / 20 万节点。
+     刻意不复用 `Sanitize.cleanValue` —— 它会按 `NUM_CAPS` 削装备属性、按深度裁词条。
+  2. `src/store.js` 的 `getJSON` 是全项目 localStorage 读取的**唯一出口**，返回前统一净化，
+     Save / RaidStash / 拍卖行 / 未来新增 key 全覆盖；`save.js` 的 `importCode` 落盘前再净化一次
+     （并跳过非 JSON 数据），恶意串根本不进 localStorage。
+  3. `escHtml()` 提升到 `util.js` 全局，老战役 UI 6 处装备名插值走转义；塔科夫 UI 原本已有局部 `esc`。
+- FNV-1a 校验和仍只保完整性、不保真实性 —— 设计如此，靠净化而不是靠签名解决。
+
+### 2. 压缩缓存 LRU（评审 #5）
+
+- `server.js`：缓存命中时 `delete + set` 提升为最近使用；`gc()` 超 120 条改成 `while` 淘汰最久未用，
+  不再 `COMPRESS_CACHE.clear()` 整表清空（全清会让下一波请求同时重读盘 + 重压缩）。
+
+### 3. 失败 join 严限速（评审 #4，部分采纳）
+
+- 4 位房间码仅 32^4≈105 万种，通用 `60/min` 限速足以让扫描者约 1h 撞进随机房间。
+- 新增 `ratePeek()`（只查额度不消耗）+ `ip+':joinfail'` 独立桶 **10/min**：格式错 /
+  房间不存在 / 已开始 / 已满四种失败各计一次，连续失败达上限后该 IP 的 join 直接 429；
+  **成功 join 不占这个额度**，正常分享房间码不受影响。
+- 暂不升 6 位：会改变所有已分享房间码的长度，收益不如上述限速直接；仍不放心可一行改 `newCode()`。
+
+### 4. 其余评审结论：核查后暂不改动
+
+- `#2 全局作用域 → ES modules`：`verify.cjs` 靠 `vm.runInContext` 按 `<script>` 顺序加载 34 个模块，
+  迁移要同时重写测试加载器、给每个模块加 import/export、把 `index.html` 改成 `type=module`，
+  是数天级工程而非补丁。保留 zero-build 经典脚本。
+- `#3 checkJs`：可行，但 27k 行一次性开 `checkJs` 会爆出成百上千错误；现实做法是逐文件
+  `// @ts-check` + JSDoc 按模块渐进。
+- `#6 存档 KEY 遗留名`：`exportKeys()` 白名单、`__bad` 隔离后缀、verify 断言、拍卖行 key 全耦合，
+  改名会碰老用户存档，风险 > 收益；要做必须双 key 读旧写新 + 迁移测试。
+- `#7 CI 不跑 lint`：属实，但 ci.yml 明确「零 npm 依赖、刻意不跑 npm install」，加 lint 就要引入
+  `npm ci`，与项目哲学冲突，先保持另议。
+- 评审把「ESLint 零告警」列为实测基线，但当前 checkout 没有 `node_modules`，本轮未复现该结果
+  （CHANGELOG 历史里记录过 `npm run lint` 0 error）。
+
+### 门禁
+
+`check_version` 全过 · `verify` **1086/1086（55 组，新增第 55 组 17 条）** · 全量 `node --check` 通过 ·
+浏览器冒烟 42/42 · 实机 XSS 攻防探针 **10/10**（恶意存档码导入 → 落盘 / 读档 / DOM 出口全链路）。
 ## v0.31.0 — 2026-11-07
 
 **弹片按型号分化 · 改编传奇枪与具名配件 · 三矩形装饰碰撞 · 建筑与铁路布局重做。**

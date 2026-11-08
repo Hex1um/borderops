@@ -3323,6 +3323,117 @@ check('新分片 raid-legends / raid-geometry 已接入 HTML',
 check('房间表含 >=15 处非矩形结构',
   (fs.readFileSync(path.join(SRC,'raid-data.js'),'utf8').match(/shape:"/g)||[]).length>=15 ? 1 : 0, 1, 0.001);
 
+/* ==========================================================================
+ * 55. v0.31.1：存档码 XSS 纵深防御 / 压缩缓存 LRU / 失败 join 严限速
+ * ========================================================================== */
+console.log('\n=== 55. 存档码净化·LRU·join 限速（v0.31.1）===');
+
+const __u55  = fs.readFileSync(path.join(SRC,'ui.js'),'utf8');
+const __st55 = fs.readFileSync(path.join(SRC,'store.js'),'utf8');
+const __s55  = fs.readFileSync(path.join(ROOT,'server.js'),'utf8');
+const __rd55 = fs.readFileSync(path.join(SRC,'raid-data.js'),'utf8');
+const __t55 = JSON.parse(G(`JSON.stringify((()=>{
+  try{
+    const Q=String.fromCharCode(34), A=String.fromCharCode(39);
+    const EV='<img src=x onerror='+Q+'alert(1)'+Q+'>&'+A+';';
+
+    /* 出口转义 */
+    const es=escHtml(EV), plain=escHtml('AK-74 中文 12');
+
+    /* 入口净化：只动字符串，不动数值 / 结构 / 引用 */
+    const obj={ name:EV, dmg:6830, neg:-13.3,
+      weapons:[{name:EV, affixes:[{n:EV}]}], deep:{a:{b:{c:EV}}} };
+    Object.defineProperty(obj,'__proto__',{value:{polluted:1},enumerable:true,writable:true,configurable:true});
+    const after=cleanSaveStrings(obj);
+    let deep=null; for(let i=0;i<20;i++) deep={x:deep||EV};
+    let deepThrew=false; try{ cleanSaveStrings(deep); }catch(e){ deepThrew=true; }
+
+    /* Store.getJSON 是所有 localStorage 读取的唯一出口 */
+    const mem={}, oldLS=globalThis.localStorage;
+    globalThis.localStorage={
+      getItem:k=>(k in mem?mem[k]:null),
+      setItem:(k,v)=>{ mem[k]=String(v); },
+      removeItem:k=>{ delete mem[k]; }
+    };
+    Store.setJSON('__t55_x', {name:EV, dmg:6830, nest:{s:EV}, arr:[EV,-13.3]});
+    const back=Store.getJSON('__t55_x', null);
+    globalThis.localStorage=oldLS;
+
+    /* 存档码：三个白名单 key + 一个伪造 key + 一段非 JSON */
+    const bag={ app:"borderops", v:2, ver:CFG.version, data:{
+      "borderlands_web_save_v1": JSON.stringify({name:EV, weapons:[{name:EV}]}),
+      "raid_stash_v2": JSON.stringify({weapons:[{name:EV}], gunVer:3}),
+      "raid_auction_v1": JSON.stringify({listings:[{name:EV}]}),
+      "evil_key": JSON.stringify({x:EV})
+    }};
+    const body=_b64enc(JSON.stringify(bag));
+    const code="BOPS1-"+_b64hash(body)+"-"+body;
+    const cap={}, oldSet=Store.set;
+    Store.set=function(k,v){ cap[k]=v; return true; };
+    const imp=Save.importCode(code);
+    const cap2={};
+    Store.set=function(k,v){ cap2[k]=v; return true; };
+    const bag2={ app:"borderops", data:{ "borderlands_web_save_v1":"not-json" } };
+    const b2=_b64enc(JSON.stringify(bag2));
+    const imp2=Save.importCode("BOPS1-"+_b64hash(b2)+"-"+b2);
+    Store.set=oldSet;
+    const keys=["borderlands_web_save_v1","raid_stash_v2","raid_auction_v1"];
+
+    return {
+      escaped:es, plain,
+      sameRef:after===obj, dmg:after.dmg, neg:after.neg,
+      nameClean:after.name.indexOf('<')<0,
+      nestedClean:after.weapons[0].affixes[0].n.indexOf('<')<0 && after.deep.a.b.c.indexOf('<')<0,
+      noProto:!Object.prototype.hasOwnProperty.call(after,'__proto__'),
+      deepThrew,
+      readClean:!!back && back.name.indexOf('<')<0 && back.nest.s.indexOf('<')<0 && back.arr[0].indexOf('<')<0,
+      readNums:!!back && back.dmg===6830 && back.arr[1]===-13.3,
+      importCount:imp.count,
+      allKeysClean:keys.every(k=>typeof cap[k]==="string" && cap[k].indexOf('<')<0),
+      evilRejected:!("evil_key" in cap),
+      nonJsonSkipped:imp2.ok===false && Object.keys(cap2).length===0,
+    };
+  }catch(e){ return {err:String(e)}; }
+})())`));
+check('escHtml 把 5 种危险字符转成实体（无裸 <）',
+  (!__t55.err && __t55.escaped.indexOf('<')<0 && __t55.escaped.indexOf('&lt;img')>=0
+   && __t55.escaped.indexOf('&amp;')>=0 && __t55.escaped.indexOf('&quot;')>=0
+   && __t55.escaped.indexOf('&#39;')>=0)?1:0, 1, 0.001);
+check('escHtml 不改普通中文 / 数字文本',
+  (!__t55.err && __t55.plain==='AK-74 中文 12')?1:0, 1, 0.001);
+check('cleanSaveStrings 原地返回且不削数值（含负值词条）',
+  (!__t55.err && __t55.sameRef===true && __t55.dmg===6830 && __t55.neg===-13.3)?1:0, 1, 0.001);
+check('cleanSaveStrings 递归净化武器名 / 词条 / 深层字符串',
+  (!__t55.err && __t55.nameClean===true && __t55.nestedClean===true)?1:0, 1, 0.001);
+check('cleanSaveStrings 剔除 __proto__ 原型污染键',
+  (!__t55.err && __t55.noProto===true)?1:0, 1, 0.001);
+check('cleanSaveStrings 超深对象不抛错（深度上限生效）',
+  (!__t55.err && __t55.deepThrew===false)?1:0, 1, 0.001);
+check('Store.getJSON 读回的字符串已净化（单源收口覆盖三个存档 key）',
+  (!__t55.err && __t55.readClean===true)?1:0, 1, 0.001);
+check('Store.getJSON 净化不误伤装备数值',
+  (!__t55.err && __t55.readNums===true)?1:0, 1, 0.001);
+check('importCode 三个白名单 key 落盘前全部剥掉危险字符',
+  (!__t55.err && __t55.importCount===3 && __t55.allKeysClean===true)?1:0, 1, 0.001);
+check('importCode 拒绝白名单外的 localStorage 键',
+  (!__t55.err && __t55.evilRejected===true)?1:0, 1, 0.001);
+check('importCode 跳过非 JSON 数据（不落盘）',
+  (!__t55.err && __t55.nonJsonSkipped===true)?1:0, 1, 0.001);
+check('老战役 UI 至少 6 处装备名插值走 escHtml',
+  (__u55.match(/\$\{escHtml\(/g)||[]).length>=6 ? 1 : 0, 1, 0.001);
+check('store.js 在 getJSON 返回前调用 cleanSaveStrings',
+  /cleanSaveStrings\(parsed\)/.test(__st55) ? 1 : 0, 1, 0.001);
+check('RaidStash.load 走 Store.getJSON（自动享受净化）',
+  /Store\.getJSON\(this\.KEY/.test(__rd55) ? 1 : 0, 1, 0.001);
+check('server.js 新增 ratePeek（只查额度不消耗）',
+  /function ratePeek\(/.test(__s55) ? 1 : 0, 1, 0.001);
+check('server.js 失败 join 独立严限速 10/min',
+  /ratePeek\(ip\+':joinfail',10,60000\)/.test(__s55) && /const fail=\(\)=>rate\(ip\+':joinfail',10,60000\)/.test(__s55) ? 1 : 0, 1, 0.001);
+check('server.js 压缩缓存超上限用 LRU 淘汰而非整表 clear',
+  /while\(COMPRESS_CACHE\.size>120\)/.test(__s55) && /COMPRESS_CACHE\.keys\(\)\.next\(\)/.test(__s55)
+   && /COMPRESS_CACHE\.delete\(key\); COMPRESS_CACHE\.set\(key, body\)/.test(__s55)
+   && !/COMPRESS_CACHE\.clear\(\)/.test(__s55) ? 1 : 0, 1, 0.001);
+
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
  * 某段实现或文案是否仍在的「源码护栏」（对重命名、重构脆弱）。把两者的数量分开
@@ -3330,7 +3441,7 @@ check('房间表含 >=15 处非矩形结构',
  * 运行时条数含循环内动态生成，两者不一定相等。 */
 const SELF_SRC = fs.readFileSync(__filename, 'utf8');
 const CHECK_LINES = SELF_SRC.split('\n').filter(l => /^\s*check\(/.test(l));
-const SRC_MARK = /(raidSrc|__rd2|__fp2|netSrc|__uiCopy|__coreCopy|vmSrc|allNameSrc|__inp\b|\bhtml\b|__rd\b)/;
+const SRC_MARK = /(raidSrc|__rd2|__fp2|netSrc|__uiCopy|__coreCopy|vmSrc|allNameSrc|__inp\b|\bhtml\b|__rd\b|__u55|__st55|__s55|__rd55)/;
 const nSrc = CHECK_LINES.filter(l => SRC_MARK.test(l)).length;
 const nExpr = CHECK_LINES.filter(l => !SRC_MARK.test(l) && /\bG\(/.test(l)).length;
 const nBeh = CHECK_LINES.length - nSrc - nExpr;

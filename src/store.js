@@ -198,7 +198,10 @@ const Store = (function () {
           return _default(def);
         }
       }
-      return parsed;
+      /* v0.31.1：本项目所有 localStorage 读取都走这一个出口，因此在这里统一
+       * 净化是最短路径 —— Save / RaidStash / 拍卖行 / 未来新增的 key 全覆盖。
+       * 原地进行（返回同一个对象引用），调用方的 _repair / 迁移逻辑不受影响。 */
+      return typeof cleanSaveStrings==="function" ? cleanSaveStrings(parsed) : parsed;
     },
 
     /** 序列化并写入。循环引用 / 含 undefined 之外不可序列化值时返回 false，不抛错。 */

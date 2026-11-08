@@ -455,7 +455,7 @@ const UI = {
       const eri=itemSellEridium({rarity:weaponRarityId(w)});
       const qid=weaponRarityId(w), qnm=weaponRarityName(w);
       return `<div class="inv-item loot-${qid} ${i===p.wi?'sel':''}" data-i="${i}">
-        <div class="iname c-${qid}">${gunNameOf(w)}</div>
+        <div class="iname c-${qid}">${escHtml(gunNameOf(w))}</div>
         <div class="si-meta">${qnm?qnm+" · ":""}Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}</div>
         <div class="istat">${w.statLines().join(' · ')}</div>
         ${this._affixHtml(w)}
@@ -469,7 +469,7 @@ const UI = {
     const shieldItems=p.shields.length ? p.shields.map((s,i)=>{
       const eff=shieldEffectText(s);
       return `<div class="inv-item loot-${s.rarity} ${i===p.shieldIdx?'sel':''}" data-shield="${i}">
-        <div class="iname c-${s.rarity}">${s.name}${i===p.shieldIdx?' · 装备中':''}</div>
+        <div class="iname c-${s.rarity}">${escHtml(s.name)}${i===p.shieldIdx?' · 装备中':''}</div>
         <div class="si-meta">${(RARITY_BY_ID[s.rarity]||RARITIES[0]).name} · Lv.${s.ilvl} · 护甲</div>
         <div class="istat">${plateShieldLines(s).join(' · ')}</div>
         ${eff?`<div class="affix-row"><span class="affix power" style="color:${eff.color}">${eff.name}${eff.extra}</span></div>`:''}
@@ -482,7 +482,7 @@ const UI = {
 
     const relicItems=p.relics.length ? p.relics.map((r,i)=>`
       <div class="inv-item loot-${r.rarity} ${i===p.relicIdx?'sel':''}" data-relic="${i}">
-        <div class="iname c-${r.rarity}">${r.name}${i===p.relicIdx?' · 装备中':''}</div>
+        <div class="iname c-${r.rarity}">${escHtml(r.name)}${i===p.relicIdx?' · 装备中':''}</div>
         <div class="si-meta">${(RARITY_BY_ID[r.rarity]||RARITIES[0]).name} · Lv.${r.ilvl} · 随身装备</div>
         <div class="istat">${relicLines(r).join(' · ')}</div>
         <div class="si-buy">
@@ -499,7 +499,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">装备库</h2>
           <div class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>　<span style="font-size:12px;color:var(--muted);">搜集效率 +${p.mf}</span></div>
         </div>
-        <div class="subtitle">护甲：${sh?`${sh.name}（延迟 ${sh.delay.toFixed(1)}s · ${sh.rate.toFixed(1)}/s）`:"无"}</div>
+        <div class="subtitle">护甲：${sh?`${escHtml(sh.name)}（延迟 ${sh.delay.toFixed(1)}s · ${sh.rate.toFixed(1)}/s）`:"无"}</div>
 
         <div class="inv-sec">
           <h4>武器 <span class="meta-cap">${p.weapons.length}/24</span></h4>
@@ -657,7 +657,7 @@ const UI = {
       if(r.ok){
         const w=r.weapon;
         const el=document.getElementById('gamble-result');
-        if(el) el.innerHTML=`<span class="c-${weaponRarityId(w)}">${w.name}</span>`;
+        if(el) el.innerHTML=`<span class="c-${weaponRarityId(w)}">${escHtml(w.name)}</span>`;
         SFX.levelup(); this.game.shake(4);
       } else SFX.hurt();
       const goldEl=this.overlay.querySelector('.shop-gold');
@@ -696,7 +696,7 @@ const UI = {
         : '';
     }
     return `<div class="shop-item loot-${weaponRarityId(w)} ${it.sold?'sold':''}">
-      <div class="si-name c-${weaponRarityId(w)}">${w.name}</div>
+      <div class="si-name c-${weaponRarityId(w)}">${escHtml(w.name)}</div>
       <div class="si-meta">${meta}</div>
       <div class="si-stats">${stats}</div>
       <div class="affix-row">${affix}</div>

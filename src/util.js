@@ -252,3 +252,42 @@ function moveSpreadCap(cat){
   const c = MOVE_SPREAD_CAP[cat];
   return (c===undefined) ? 0.98 : c;
 }
+
+/* ---------------- v0.31.1：存档字符串净化 / HTML 出口转义 ----------------
+ * 存档码 BOPS1-<FNV-1a>-<base64> 的校验和只保完整性，不保真实性：
+ * 任何人都能重算 8 位哈希，把 <img onerror=...> 塞进武器名 / 挂单名，
+ * 再把这个码分享给别人。server.js 同源部署有 CSP 的 script-src 'self'
+ * 挡住内联脚本，但 GitHub Pages 纯静态部署没有该响应头，一旦被 innerHTML
+ * 插值就是可执行 XSS。两道防线：
+ *   cleanSaveStrings —— 读档入口递归剥离危险字符（只动字符串，不动数值）
+ *   escHtml          —— 显示出口转义（保留原字符，只是不再被当成标签）
+ * 不能复用 Sanitize.cleanValue：它会按 NUM_CAPS 削装备属性、按深度裁词条。 */
+function escHtml(v){
+  const MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+  return String(v==null?"":v).replace(/[&<>"']/g, c=>MAP[c]);
+}
+function cleanSaveStrings(v){
+  const DANGER=["__proto__","prototype","constructor"];
+  const st={n:0};
+  function strip(s){
+    return (typeof Sanitize!=="undefined" && typeof Sanitize.stripHtml==="function")
+      ? Sanitize.stripHtml(s)
+      : String(s).replace(/[\u0000-\u001f\u007f]/g," ").replace(/[<>&"'`]/g," ");
+  }
+  function walk(x, d){
+    if(++st.n>200000) return null;
+    if(typeof x==="string") return strip(x);
+    if(x===null || typeof x!=="object") return x;
+    if(d>=16) return Array.isArray(x) ? [] : {};
+    if(Array.isArray(x)){
+      for(let i=0;i<Math.min(x.length,20000);i++) x[i]=walk(x[i], d+1);
+      return x;
+    }
+    for(const k of Object.keys(x)){
+      if(DANGER.indexOf(k)>=0){ delete x[k]; continue; }
+      x[k]=walk(x[k], d+1);
+    }
+    return x;
+  }
+  return walk(v, 0);
+}
