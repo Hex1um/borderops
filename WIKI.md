@@ -1,6 +1,6 @@
 # 边境行动 BORDER OPS · 中文 Wiki
 
-> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.31.2**（由 `npm run check` 校验，升版必须同步）。
+> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.31.3**（由 `npm run check` 校验，升版必须同步）。
 > 代码与实现细节见 [README.md](README.md)，逐版改动见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
@@ -30,7 +30,7 @@
 | --- | --- |
 | 1 | 打开页面，点主菜单的**塔科夫模式**入口 |
 | 2 | 在配装大厅选择要携带的枪械 / 护甲 / 头盔 / 护盾 / 医疗品 / 弹药（滑动条） / 钥匙 |
-| 3 | 点**开始突袭**进图 |
+| 3 | 点**进入海关流域**进图（联机房间里是**开始突袭**） |
 | 4 | 搜刮箱子、打 Scav、去商店买卖 |
 | 5 | 走到绿色**撤离点**站住读条，撤离成功即入库 |
 
@@ -283,12 +283,12 @@
 
 ### 9.1 撤离费与封锁（v0.19.2）
 
-全图 20 个撤离点，分三类：
+全图 19 个撤离点，分三类：
 
 | 类型 | 代表 | 门票 | 开放 |
 | --- | --- | --- | --- |
-| 常驻免费点 | 旧卡车 / 河港渡轮 | 免费，坚守 7~10 秒 | 每局必开 |
-| 随机免费点 | 铁路隧道 / 沼泽小径 / 山顶缆车… | 免费，坚守 7~10 秒 | 每局掷签（50%~75%） |
+| 常驻免费点 | 旧卡车 / 河港渡轮 | 免费，坚守 6~10 秒 | 每局必开 |
+| 随机免费点 | 铁路隧道 / 沼泽小径 / 山顶缆车… | 免费，坚守 6~10 秒 | 每局掷签（50%~75%） |
 | 付费雇车点 | V-EX 雇车 / 北关检查 / 南港货轮 / 北桥栈道 | 收卢布，坚守 4~8 秒 | **每局必开，且永不被封锁** |
 
 **撤离费 = (基础价×0.28 + 带入装备估值×费率) × 折扣**，折扣 `0.2 + 0.8 × v/(v+90000)`：
@@ -339,7 +339,7 @@
 | --- | --- | --- | --- | --- | --- |
 | ★ 潜行侦察兵 | 400 | 1.60× | 0.35s | 188 | 视距很短但听力极强，会绕弧线贴上来；你多半是先听见他 |
 | ★ 防盾手 | 780 | 1.00× | 0.30s | 78 | 正面挡弹，绕后或用爆炸 / 穿甲弹才打得动 |
-| ★ 呼叫员 | 1100 | 1.30× | 0.15s | 64 | 血量过半会当场叫一支 2 人小队，拖住就被包 |
+| ★ 呼叫员 | 1100 | 1.30× | 0.15s | 64 | 血量降到 60% 以下会当场叫一支 2 人小队，拖住就被包 |
 
 - 三只怪各自绑定 8 个核心地点之一（大坝 / 采石场 / 监狱各 1 个防盾手，码头 / 神庙 / 小镇各 1 个侦察兵，机械工厂 1 个、铁路调度场 2 个呼叫员，合计 10 只）。
 - 感知档写在 `RAID_ARCH` 覆盖表里，**不是**第四档 `RAID_AI_SENSE` —— 见「维护者速查」。
@@ -412,7 +412,7 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 ```
 
 - **零构建**：原生 HTML / CSS / JS 经典脚本，无 ES modules、无打包器。
-- **脚本顺序敏感**：`sanitize → config → util → store → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.23.1 共 30 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
+- **脚本顺序敏感**：`sanitize → config → util → store → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-legends → raid-geometry → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`（v0.31.3 共 32 个）。`raid-core2/3` 是 `Object.assign(Raid, {` 续接，顺序不可换。
 - **巨型文件拆分**：`src/raid.js`（9750 行）已拆为 7 个 `raid-*.js`（最大 1621 行）；verify 的 `RAID_PARTS` 会把分片拼回全文再做源码正则断言，新增分片记得同步 `index.html` / `check_version.js` / `README.md`。
 - **CI**：`main` 分支由 `.github/workflows/ci.yml` 自动跑 `check` + `verify` + 全量 `node --check`；仓库零 npm 依赖，CI 不跑 `npm install`。**v0.23.2 起已启用**：本机 OAuth App 凭据缺 `workflow` scope（`git push` 会被服务端拒 `refusing to allow an OAuth App to create or update workflow`），最终由合作者在 GitHub 网页创建该文件绕过；首次运行 `conclusion: success`。**别用 `git add -A` 把 `.github/` 带进普通提交**（现在已在版本控制里，不再有此问题）。
 - **合并护栏**：v0.22.0 已并入合作者 v0.21.9 的 15 处 bug 修复（原 `raid.js` 的 8 组改动映射到 7 个 `raid-*.js` 分片）。verify 组 35 的 18 条断言会逐项锁定这些修复（撤离费组合扣款 / 终局事件保底 / 权重方向 / 价格单调 / 插板函数改名 / 限速 XFF 等），后续重构若误覆盖会直接红灯。

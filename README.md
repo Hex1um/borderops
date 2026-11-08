@@ -18,7 +18,7 @@
 
 - **撤离射击循环**：9 阶军规品质战利品 + 12 阶枪械品质、5 级钥匙与上锁箱、9 家随机商店（枪械/材料/回收/黑市）、GP 币经济、装备保险与撤离费
 - **品质显示分层**：`CFG.display = "compact"`（默认）隐藏品质名 / 前后缀 / 厂商，只留真枪型号，数值照常生效；`"full"` 全显示。`CFG.weaponQuality` 是总开关（默认 `true`，设 `false` 时新枪统一按标准品质生成、不吃品质倍率与具名）
-- **塔科夫制式弹药**：`5.45×39mm PS gs` / `T gs` / `7.62×39mm BP gzh` / `9×19mm RIP` / `9×39mm SP-6 gs` / `40mm VOG-25` / `5.45×39mm BT gs`，
+- **塔科夫制式弹药**：`5.45×39mm PS gs` / `5.45×39mm T gs` / `7.62×39mm BP gzh` / `9×19mm RIP` / `9×39mm SP-6 gs` / `40mm VOG-25` / `5.45×39mm BT gs`，
   按「无防护 / 护盾 / 硬质插板」三系终点效应区分；引燃、撕裂、钝击失能、跳弹、迟滞均为可解释的弹道效应
 - **改装词条**：兵工厂 × 枪型 × 品级 × 改装词条 × 部件组合生成；词条全部为可解释的工艺参数（冷锻枪管、浮置枪管、精磨扳机、制退器、后坐控制、有效射程……）
 - **真实型号**：8 家兵工厂（图拉、伊热夫斯克、卡拉什尼科夫、赫克勒-科赫、FN 赫斯塔尔等）与 AK-74N / HK 416A5 / PP-19-01 Vityaz / SV-98 / MP-153 / KS-23M 等塔科夫实装型号；具名枪带口径后缀，护具为 6B43、Altyn、Vulkan-5 等现实装备
@@ -63,8 +63,8 @@ python -m http.server 8132
 ## 技术约束（给后续维护者）
 
 1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载，许可原文见 `vendor/peerjs.LICENSE`）；项目自身许可见 `LICENSE`（MIT，版权归属待与合作者确认）。
-2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载（v0.25.0 共 30 个）：
-   `sanitize → config → util → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`
+2. **脚本顺序敏感**：所有 `src/*.js` 为经典脚本、共享全局作用域，靠 `index.html` 的 `<script>` 顺序加载（v0.31.3 共 32 个）：
+   `sanitize → config → util → store → weapons → items → shields → skills → player → enemies → combat → lazy-legacy → shop → input → render → ui → viewmode → fpview → raid-data → raid-legends → raid-geometry → raid-core → raid-core2 → raid-core3 → raid-render → raid-ui → raid-ui2 → net → net-p2p → auction → save → main`
    其中 `raid-core2` / `raid-core3` 用 `Object.assign(Raid, {` 续接主控对象，**顺序不可调换**；`lazy-legacy.js` 在 `CFG.onlyRaid=true` 时不请求 `world` / `endless` / `dust2` / `br` 四个旧模式脚本。
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
 4. **兼容旧存档**：v0.15.0 保留了全部内部键名（`element` / `mayhem` / `elemPct` / `core` 等）与 localStorage 存档结构，仅改变语义与显示；`ELEMENTS` 是 `AMMO_TYPES` 的兼容别名。新代码请优先使用 `AMMO_TYPES`。

@@ -179,7 +179,7 @@ UI.raidSetup=function(){
       <details class="tarkov-intro">
         <summary>塔科夫模式 · 玩法说明（点此展开 / 折叠）</summary>
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
-          与 30 名 <b style="color:#e0b84a">PMC / Scav</b> 加 3 名 <b style="color:#ffd23f">Boss</b>同场。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">★</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
+          开局与 <b style="color:#e0b84a">30 名 PMC / Scav</b>、<b style="color:#ffd23f">3 名 Boss</b>，以及 8 个核心地点的 <b style="color:#8fe07a">10 名精英</b>同场（共 43 名）。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">★</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
           ${weaponQualityHidden()
             ? `<b style="color:#ffd23f">当前是精简显示</b>：枪名只显示型号，<b>品质 / 前后缀 / 厂商都隐藏</b>（数值照常生效）。想看成色就去 <b style="color:#8fd0ff">设置 → 显示 → 完整</b>。箱子仍以原材料与配件为主，想拿到好枪要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料）。<b style="color:#8fd0ff">携带装备总估值</b>会影响高阶物资权重。<br>`
             : `<b style="color:#ffd23f">战利品 9 阶品质</b>：${raidTierLegend()}。箱子<b style="color:#ffd76a">绝大多数是原材料与配件</b>，整枪 / 护甲只是少数——想拿到好枪，要靠<b style="color:#8fd0ff">工坊组装</b>（底材 + 配件 + 材料，名字与品质由它们决定）。任意品质都可能刷出，但<b style="color:#8fd0ff">携带装备总估值</b>会显著抬高高阶物资的权重。<br>`}
@@ -204,7 +204,7 @@ UI.raidSetup=function(){
       <div class="raid-launch">
         <div class="rl-text">
           <div class="rl-title">${carryVal>0?`${gearVal>0?'已配装':'只带现金'} · 总价值 ₽${priceText(carryVal)}`:'裸装跑刀'}</div>
-          <div class="rl-sub">${carryVal>0?`装备 ₽${priceText(gearVal)}${cashVal>0?` + 带入现金 ₽${priceText(cashVal)}（卢布 ₽${priceText(cashIn)}${tokWorth>0?` · GP 币 ◈${tokIn}≈₽${priceText(tokWorth)}`:''}）`:''} · `:''}撤离费按装备估值浮动：雇车撤离约 <b style="color:#ffd36a">₽${priceText(feeMin)} ~ ${priceText(feeMax)}</b> · 免费撤离点需坚守 7~10 秒</div>
+          <div class="rl-sub">${carryVal>0?`装备 ₽${priceText(gearVal)}${cashVal>0?` + 带入现金 ₽${priceText(cashVal)}（卢布 ₽${priceText(cashIn)}${tokWorth>0?` · GP 币 ◈${tokIn}≈₽${priceText(tokWorth)}`:''}）`:''} · `:''}撤离费按装备估值浮动：雇车撤离约 <b style="color:#ffd36a">₽${priceText(feeMin)} ~ ${priceText(feeMax)}</b> · 免费撤离点需坚守 6~10 秒</div>
         </div>
         <div class="rl-btns">
           <button class="btn ghost" id="btn-raid-online" style="border-color:#7ee08a66;color:#9fe0a8;">联机突袭 · 2~4 人</button>
@@ -804,7 +804,7 @@ UI.raidShop=function(opts){
       <div class="shop-bar">
         <div class="shop-desc">这里只卖<b style="color:#ffd23f">成品</b>：枪械 / 护甲与头盔（同栏分区）/ 护盾 / 配件 / <b style="color:#ffd36a">子弹</b> / 医疗品，
           护盾按<b style="color:#4fd6ff">容量 / 充能速度 / 充能延迟</b>三数值与配件、前后缀、独特加成区分；<b style="color:#ffd23f">全场统一按「估价 × 2.0（±0.5）」结算</b>——外场买贵，局内摊位便宜得多；<b style="color:#ff9a3a">原材料、底材、改装模块一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">改装模块完全不能合成</b>，只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
-        护甲等级 T1~T9 与品质一一对应；<b style="color:#8fe07a">枪械与配件大多只有 1 条词缀，少数带 2 条以上</b>（护甲 / 头盔固定 1 前缀 + 1 后缀），买之前先看词条。仅撤离成功才会真正带走。<br>
+        护甲等级 T1~T9；品质另按稀有度预算掷出，只受等级封顶（上限 = 等级 - 1），二者并非一一对应。<b style="color:#8fe07a">枪械与配件大多只有 1 条词缀，少数带 2 条以上</b>（护甲 / 头盔固定 1 前缀 + 1 后缀），买之前先看词条。仅撤离成功才会真正带走。<br>
         <b style="color:#ffd36a">子弹</b>按 <b>30 发</b> 一条卖，4 个弹族 × 5 个级别（民用 → 特种，威力与弹种不同）；配装大厅里只决定「带多少发」，买子弹统一来这里，局内摊位更便宜。<br>
         <span style="color:var(--muted)">${weaponQualityHidden()?"显示密度：":"品质阶梯（低 → 高）："}</span>${raidTierLegend()}</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>

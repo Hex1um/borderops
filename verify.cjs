@@ -765,7 +765,7 @@ try {
 } catch(e){ hwErr = e.message; }
 check('2D 手持模型三种状态均无异常', hwErr ? 0 : 1, 1, 0.001);
 if (hwErr) console.log('  handWeapon error:', hwErr);
-check('文案：同场 AI 数量与实际一致', /与 30 名 <b style="color:#e0b84a">PMC \/ Scav<\/b> 加 3 名/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('文案：同场 AI 数量与实际一致', /开局与 <b style="color:#e0b84a">30 名 PMC \/ Scav<\/b>/.test(raidSrc) && /共 43 名/.test(raidSrc) && /10 名精英/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 console.log('\n=== 24. 放弃确认 / 价格波动 / 弹种正态 / 建筑重叠（v0.19.4）===');
 const wpnSrc = fs.readFileSync(path.join(SRC, 'weapons.js'), 'utf8');
