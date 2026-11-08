@@ -38,7 +38,16 @@ const RenderRaid = {
 
   /* 户外掩体绘制：按类型区分轮廓，避免整张图全是“灰色方块” */
   prop(ctx,p){
-    const k=p.kind, x=p.x, y=p.y, w=p.w, h=p.h;
+    /* v0.31.0：复合装饰按「与碰撞完全一致」的三个矩形分别绘制，
+       中间缝隙留空 —— 画面上能钻过去的地方，碰撞里也真的能钻过去。 */
+    if(p.compound && p.boxes && p.boxes.length){
+      for(const b of p.boxes) this._propBox(ctx,p,b.x,b.y,b.w,b.h);
+      return;
+    }
+    this._propBox(ctx,p,p.x,p.y,p.w,p.h);
+  },
+  _propBox(ctx,p,x,y,w,h){
+    const k=p.kind;
     /* v0.25.0：长条形（长宽比 > 1.7）的装饰改画长方形。
      * 椭圆投影只有在近似各向同性时才像「一丛草 / 一块石头」；拉长之后
      * 两端收尖，反而比矩形更假，而且和「整块走不过去」的碰撞体对不上。 */
@@ -533,6 +542,23 @@ const RenderRaid = {
       for(const b of R.bridges){
         if(b.x-b.w/2>cam.x+vw||b.x+b.w/2<cam.x-40||b.y-b.h/2>cam.y+vh||b.y+b.h/2<cam.y-40) continue;
         const bw=b.w, bh=b.h, x0=b.x-bw/2, y0=b.y-bh/2;
+        if(b.rail){
+          /* 铁路桥：深色钢桥面 + 两侧桁架斜撑，轨道随后画在桥面上 */
+          ctx.fillStyle="#1e252a"; ctx.fillRect(x0,y0,bw,bh);
+          ctx.fillStyle="rgba(140,162,172,0.16)"; ctx.fillRect(x0,y0,bw,5);
+          ctx.strokeStyle="rgba(150,172,182,0.42)"; ctx.lineWidth=2;
+          ctx.beginPath();
+          if(bw>=bh){ for(let px=x0+16;px<x0+bw-20;px+=46){ ctx.moveTo(px,y0+4); ctx.lineTo(px+34,y0+bh-4); } }
+          else      { for(let py=y0+16;py<y0+bh-20;py+=46){ ctx.moveTo(x0+4,py); ctx.lineTo(x0+bw-4,py+34); } }
+          ctx.stroke();
+          ctx.strokeStyle="#0d0f12"; ctx.lineWidth=3; ctx.strokeRect(x0,y0,bw,bh);
+          ctx.strokeStyle="rgba(180,196,205,0.7)"; ctx.lineWidth=4;
+          ctx.beginPath();
+          if(bw>=bh){ ctx.moveTo(x0,y0+2);ctx.lineTo(x0+bw,y0+2);ctx.moveTo(x0,y0+bh-2);ctx.lineTo(x0+bw,y0+bh-2); }
+          else      { ctx.moveTo(x0+2,y0);ctx.lineTo(x0+2,y0+bh);ctx.moveTo(x0+bw-2,y0);ctx.lineTo(x0+bw-2,y0+bh); }
+          ctx.stroke();
+          continue;
+        }
         ctx.fillStyle=b.big?"#2b3036":"#25282c"; ctx.fillRect(x0,y0,bw,bh);
         ctx.fillStyle="rgba(150,160,170,0.14)"; ctx.fillRect(x0,y0,bw,4);
         // 混凝土桥墩（沿桥面中段）
@@ -595,6 +621,35 @@ const RenderRaid = {
       ctx.strokeStyle="rgba(170,200,180,0.06)"; ctx.lineWidth=1;
       for(let gx=rm.x+40;gx<rm.x+rm.w;gx+=60){ ctx.beginPath();ctx.moveTo(gx,rm.y);ctx.lineTo(gx,rm.y+rm.h);ctx.stroke(); }
       for(let gy=rm.y+40;gy<rm.y+rm.h;gy+=60){ ctx.beginPath();ctx.moveTo(rm.x,gy);ctx.lineTo(rm.x+rm.w,gy);ctx.stroke(); }
+      /* v0.31.0：按结构画出内院 / 装卸区 / 瓦砾 / 连廊地坪，
+         让 L 形、U 形、回字形在俯视图里一眼可辨，而不是一色的黑盒子。 */
+      if(rm._shape && R.roomDecor){
+        for(const d of R.roomDecor){
+          if(d.room!==rm.id) continue;
+          ctx.fillStyle = d.t==="courtyard" ? "rgba(46,62,50,0.52)"
+                        : d.t==="rubble"    ? "rgba(62,54,44,0.50)"
+                        : d.t==="walkway"   ? "rgba(72,80,78,0.46)"
+                        : "rgba(58,66,62,0.42)";
+          ctx.fillRect(d.x,d.y,d.w,d.h);
+          ctx.strokeStyle="rgba(190,205,185,0.12)"; ctx.lineWidth=1;
+          ctx.strokeRect(d.x,d.y,d.w,d.h);
+        }
+      }
+    }
+
+    /* ---- 屋顶连廊：架空窄桥（纯视觉，带投影） ---- */
+    if(R.skybridges){
+      for(const s of R.skybridges){
+        if(s.x>cam.x+vw||s.x+s.w<cam.x||s.y>cam.y+vh||s.y+s.h<cam.y) continue;
+        ctx.fillStyle="rgba(0,0,0,0.42)"; ctx.fillRect(s.x+5,s.y+7,s.w,s.h);
+        ctx.fillStyle="rgba(30,36,38,0.92)"; ctx.fillRect(s.x,s.y,s.w,s.h);
+        ctx.fillStyle="rgba(150,170,160,0.12)"; ctx.fillRect(s.x+3,s.y+3,s.w-6,s.h-6);
+        ctx.strokeStyle="rgba(190,205,190,0.28)"; ctx.lineWidth=2;
+        ctx.beginPath();
+        if(s.horiz){ ctx.moveTo(s.x,s.y+3);ctx.lineTo(s.x+s.w,s.y+3);ctx.moveTo(s.x,s.y+s.h-3);ctx.lineTo(s.x+s.w,s.y+s.h-3); }
+        else       { ctx.moveTo(s.x+3,s.y);ctx.lineTo(s.x+3,s.y+s.h);ctx.moveTo(s.x+s.w-3,s.y);ctx.lineTo(s.x+s.w-3,s.y+s.h); }
+        ctx.stroke();
+      }
     }
 
     /* ---- 房间踢脚板：沿房间内侧一圈深色墙裙 + 极淡高光，让室内边界更立体 ---- */

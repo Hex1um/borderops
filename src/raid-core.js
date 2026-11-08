@@ -718,6 +718,7 @@ const Raid = {
 
   _buildMap(){
     this.walls=[]; this.props=[]; this.extracts=[]; this.roomRects=[];
+    this.roomDecor=[]; this.skybridges=[]; this.railBridges=[];   // v0.31.0 建筑结构 / 连廊 / 铁路桥
     this.doorLanes=[]; this.doorInner=[];     this.roads=[]; this.yards=[]; this.sheds=[]; this._navQ=0;
     this.shops=[];   // 局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
     this.gadgets=[]; // 可互动设施（医疗站 / 弹药箱 / 泄洪闸）
@@ -800,6 +801,19 @@ const Raid = {
       };
 
       side("top"); side("bottom"); side("left"); side("right");
+      /* v0.31.0：非矩形建筑结构（L 形 / U 形 / 回字中庭 / 十字 / 废墟 / 角楼 / 附楼）。
+         只往房间里加「带通道的内墙」，外墙与门洞仍由 side() 全权负责，
+         因此 doorLanes / 刷怪 / 商店选点 / AI 寻路全部不受影响。 */
+      const st=(typeof raidRoomStructure==="function") ? raidRoomStructure(rm) : null;
+      if(st){
+        for(const b of (st.walls||[])){
+          let blocked=false;
+          for(const L of this.doorInner){ if(this._hitRect(b,L,8)){ blocked=true; break; } }
+          if(!blocked) addWall(b.x,b.y,b.w,b.h);
+        }
+        for(const d of (st.deco||[])) this.roomDecor.push(Object.assign({ room:rm.id }, d));
+        rm._shape=rm.shape||"rect";
+      }
       this.roomRects.push(rm);
       if(rm.extract){
         const rule=RAID_EXTRACT_RULES[rm.id]||{ need:7, cost:0, openChance:1 };
@@ -845,6 +859,7 @@ const Raid = {
     this._buildPrisonCell();// 监狱牢房隔断
     this._clipRoads();
     this._buildYards();
+    this._buildSkybridges();
     this._buildSheds();
     this._fillProps();
     this._buildScenes();   // 室外场景化（集装箱堆场 / 车辆残骸群 / 铁丝网带 / 杂物堆）
@@ -856,6 +871,33 @@ const Raid = {
     this._buildDecals();   // 地表细节（油渍/血迹/裂缝/草簇/停车线/涂鸦），纯视觉、确定性生成
     this._buildFloodlights();   // 探照灯（确定性位置，强化氛围）
     this._buildAmbient();       // 区域明暗分级（暗斑，确定性生成）
+  },
+
+  /* -------------------- 屋顶连廊（v0.31.0） --------------------
+     《消逝的光芒》式街区层次：相邻楼之间架一条窄的空中通道（纯视觉，不碰撞）。
+     只在两栋中心相距 260~760px、且中点不在河面上时生成，最多 14 条，
+     避免整张图变成蜘蛛网。 */
+  _buildSkybridges(){
+    const rooms=RAID_ROOMS.filter(r=>!r.open && !r.extract);
+    const out=[];
+    for(let i=0;i<rooms.length && out.length<14;i++){
+      const a=rooms[i], ax=a.x+a.w/2, ay=a.y+a.h/2;
+      let best=null, bd=1e9;
+      for(let j=i+1;j<rooms.length;j++){
+        const b=rooms[j], bx=b.x+b.w/2, by=b.y+b.h/2;
+        const d=Math.hypot(bx-ax,by-ay);
+        if(d<260||d>760||d>=bd) continue;
+        if(this._inWater((ax+bx)/2,(ay+by)/2)) continue;
+        bd=d; best=b;
+      }
+      if(!best) continue;
+      const bx=best.x+best.w/2, by=best.y+best.h/2;
+      const horiz=Math.abs(bx-ax)>=Math.abs(by-ay);
+      out.push(horiz
+        ? { x:Math.min(ax,bx), y:(ay+by)/2-24, w:Math.abs(bx-ax), h:48, horiz:true }
+        : { x:(ax+bx)/2-24, y:Math.min(ay,by), w:48, h:Math.abs(by-ay), horiz:false });
+    }
+    this.skybridges=out;
   },
 
   /* -------------------- 监狱牢房隔断 --------------------
@@ -948,6 +990,12 @@ const Raid = {
 
     /* ③ 铁路：记录轨道折线（纯视觉，可通行）；货运列车以车厢形式作为硬掩体 */
     this.rails=B.rails;
+    /* v0.31.0：轨道不能再直接泡在河里 —— 沿轨道采样出每段过河区间，
+       架一座钢桁架铁路桥；桥面同时进 bridges，玩家在桥上按干地处理。 */
+    if(typeof raidRailBridgeBoxes==="function"){
+      const rb=raidRailBridgeBoxes(this.rails, (x,y)=>this._waterKind(x,y), RAID_BIOMES.river.half);
+      for(const b of rb){ this.railBridges.push(b); this.bridges.push(b); }
+    }
     const trains = B.trains || (B.train?[B.train]:[]);
     for(const T of trains){
       const CW=64, CH=150, GAP=18, n=T.cars, horiz=(T.dir==="h");
@@ -1428,7 +1476,19 @@ const Raid = {
       round:!!RAID_ROUND_KINDS[t.kind] && (typeof raidRoundShape==="function" ? raidRoundShape(t.w,t.h) : true),
       fill:t.fill, edge:t.edge };
     this.props.push(p);
-    this.walls.push(p);
+    /* v0.31.0：复合装饰按三个矩形登记碰撞 —— navCell（光线 / 子弹 / 移动）
+       与 losCell（AI 视线）都只认这三个子矩形，缝隙是真正空的。 */
+    if(typeof raidCompoundBoxes==="function" && RAID_COMPOUND_KINDS[t.kind]){
+      p.compound=RAID_COMPOUND_KINDS[t.kind];
+      p.boxes=raidCompoundBoxes(p);
+      for(const b of p.boxes){
+        this.walls.push({ x:b.x, y:b.y, w:b.w, h:b.h, kind:t.kind,
+          sight:p.sight, soft:p.soft, round:false, fill:p.fill, edge:p.edge,
+          compoundOf:p, compound:p.compound });
+      }
+    } else {
+      this.walls.push(p);
+    }
     return p;
   },
 

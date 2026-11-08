@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.30.2",
+  version: "0.31.0",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -546,6 +546,51 @@ const WEAPON_TYPES = {
              named:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","GP-25"],
              models:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","M320 GLM","Milkor MGL","RG-6","Hawk MM-1"] },
 };
+
+/* ---------------------------------------------------------------------------
+ * v0.31.0 —— 霰弹枪弹片数按型号区分
+ * ---------------------------------------------------------------------------
+ * 旧版所有霰弹枪共用 WEAPON_TYPES.shotgun.pellets = 8：双管 TOZ-106 和
+ * 弹鼓 Saiga-12 打出来是同一团弹丸，「型号」只剩一个名字。
+ * 这里按型号给出「每发弹片数 / 单弹片伤害系数 / 散布」三元组；生成管线在
+ * model 确定之后再套用（不能提前：gunModelFor 会消耗 RNG，前移会打乱词条与
+ * 配件的随机序列，联机同种子就生成不出同一把枪）。
+ * 单弹片伤害对片数做温和反比，使各枪「单发总伤」落在同一带宽内，避免
+ * 10 片枪直接碾压 4 片枪；差异体现在散布、射速与破甲手感上。
+ */
+const SHOTGUN_MODELS = {
+  "MP-133":            { pellets:6,  dmg:1.14, spread:0.20 },
+  "MP-153":            { pellets:7,  dmg:1.07, spread:0.20 },
+  "MP-155":            { pellets:8,  dmg:1.00, spread:0.21 },
+  "TOZ-106":           { pellets:4,  dmg:1.42, spread:0.26 },
+  "TOZ-34":            { pellets:2,  dmg:1.85, spread:0.17 },
+  "KS-23M":            { pellets:3,  dmg:1.68, spread:0.24 },
+  "M870":              { pellets:8,  dmg:1.00, spread:0.22 },
+  "M590A1":            { pellets:8,  dmg:1.00, spread:0.22 },
+  "Saiga-12":          { pellets:10, dmg:0.88, spread:0.24 },
+  "Saiga-12K":         { pellets:9,  dmg:0.93, spread:0.25 },
+  "Vepr-12":           { pellets:10, dmg:0.88, spread:0.23 },
+  "S12K":              { pellets:9,  dmg:0.93, spread:0.24 },
+  "Benelli M4":        { pellets:9,  dmg:0.94, spread:0.21 },
+  "SPAS-12":           { pellets:8,  dmg:1.00, spread:0.22 },
+  "Remington 11-87":   { pellets:7,  dmg:1.07, spread:0.20 },
+  _default:            { pellets:8,  dmg:1.00, spread:0.22 },
+};
+function shotgunModelSpec(model){
+  return (typeof SHOTGUN_MODELS!=="undefined" && SHOTGUN_MODELS[model]) || SHOTGUN_MODELS._default;
+}
+
+/* 统一的「伤害」显示：霰弹枪写清 单弹片伤害 × 弹片数（并给单发合计）。
+ * 旧面板只写「伤害 7」，玩家不知道那是每颗弹丸的伤害，误以为霰弹枪很弱。
+ * 全项目所有武器卡 / 仓库 / 商店 / 拍卖行 / 检视面板共用这一个函数。 */
+function gunDamageLabel(g){
+  if(!g) return "伤害 0";
+  const p = Math.max(1, Math.round(g.pellets || (g.stats && g.stats.pellets) || 1));
+  const raw = g.dmg!==undefined ? g.dmg : ((g.stats && g.stats.damage)||0);
+  const d = Math.round(raw*10)/10;
+  if(p>1) return "伤害 " + d + " × " + p + " 弹片 · 单发 " + (Math.round(raw*p*10)/10);
+  return "伤害 " + d;
+}
 
 /* ----------------------------- Scav 低阶武器池 -----------------------------
  * 塔科夫 Scav 是拾荒者，不是 PMC：只配发廉价、老旧、短射程的枪械。

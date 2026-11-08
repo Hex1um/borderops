@@ -690,7 +690,7 @@ const UI = {
       affix='<span class="affix suffix">纯被动加成</span>';
     } else {
       meta=`${weaponRarityName(w)?weaponRarityName(w)+" · ":""}Lv.${w.ilvl} · ${CFG.display!=="full"?"":`${MANUFACTURERS[w.manufacturer].name} · `}${w.elemName}${w.mayhem>0?` · <b class="c-mayhem">改装${w.mayhem}</b>`:''}`;
-      stats=`${w.stats.damage.toFixed(1)} 伤害 · ${w.stats.fireRate.toFixed(1)}/s · ${w.magSizeBase} 弹匣 · ${(w.stats.accuracy*100|0)}% 精准`;
+      stats=`${gunDamageLabel(w)} · ${w.stats.fireRate.toFixed(1)}/s · ${w.magSizeBase} 弹匣 · ${(w.stats.accuracy*100|0)}% 精准`;
       affix = (typeof weaponQualityHidden==="function" && !weaponQualityHidden())
         ? (w.affixLines().map(a=>`<span class="affix ${a.kind}">${a.nm} ${a.txt}</span>`).join('')||'<span class="affix">无词缀</span>')
         : '';

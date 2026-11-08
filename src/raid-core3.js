@@ -128,7 +128,7 @@ Object.assign(Raid, {
     if(sh.fireCd>0 || sh.reloadT>0) return;
     if(!sh.gun) return;
     if(sh.gun.ammoMag<=0){ this._startReload(sh); return; }
-    sh.gun.ammoMag--;
+    if(!sh.gun.noAmmo) sh.gun.ammoMag--;   // v0.31.0「永动机构」闭合供弹不耗弹
     sh.fireCd = 60/Math.max(40, sh.gun.rpm);
     /* v0.21.2：开火动画状态 —— 2D 手持模型与 3D 视图模型共用
      *   muzzleT：枪口火光剩余时间（很短，打一枪闪一下）
@@ -1664,7 +1664,7 @@ Object.assign(Raid, {
       any=true;
       const rtg=R._rtGun(w);
       line(gunNameOf(w), raidGunColor(w),
-        `伤害 ${w.dmg} · 弹匣 ${rtg?rtg.ammoMag:0}/${w.mag} · 装填 ${rtg&&rtg.loaded?((ammoDefFromId(rtg.loaded)||{}).short||"?"):"未装填"} · 估值 ${money(w.value)}`,
+        `${gunDamageLabel(w)} · 弹匣 ${rtg?rtg.ammoMag:0}/${w.mag} · 装填 ${rtg&&rtg.loaded?((ammoDefFromId(rtg.loaded)||{}).short||"?"):"未装填"} · 估值 ${money(w.value)}`,
         `weapons:${i}`, `weapons:${i}`);
     }
     for(let i=0;i<R.inv.armors.length;i++){

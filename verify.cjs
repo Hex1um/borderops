@@ -53,7 +53,7 @@ vm.createContext(sandbox);
  * verify 用「聚合清单」加载：拆分后自动改用分片，未拆分时回退单文件 raid.js。
  * 懒加载模块（world/endless/dust2/br 等）在生产 HTML 里延迟注入，但 vm 逻辑回归
  * 仍全量加载，保证断言覆盖不因懒加载而缩水。 */
-const RAID_PARTS = ['raid-data','raid-core','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
+const RAID_PARTS = ['raid-data','raid-legends','raid-geometry','raid-core','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
 const hasParts = RAID_PARTS.every(n => fs.existsSync(path.join(SRC, n + '.js')));
 const raidModules = hasParts ? RAID_PARTS : ['raid'];
 const LAZY_PARTS = ['world', 'endless', 'dust2', 'br'];   // 生产环境按需加载，vm 里始终加载
@@ -1591,7 +1591,7 @@ check('npm bench:fps 已注册', !!JSON.parse(fs.readFileSync(path.join(ROOT,'pa
 const __fp = fs.readFileSync(path.join(SRC,'fpview.js'),'utf8');
 check('3D 墙体走 _paintWalls 按面绘制', /_paintWalls\(ctx/.test(__fp) && /fillRect/.test(__fp)?1:0, 1, 0.001);
 check('3D 渐变对象数量受控（<=6）', (__fp.match(/ctx\.createLinearGradient\(/g)||[]).length<=6?1:0, 1, 0.001);
-const __parts = ['raid-data','raid-core','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
+const __parts = ['raid-data','raid-legends','raid-geometry','raid-core','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
 const __maxLines = Math.max(...__parts.map(n => fs.readFileSync(path.join(SRC,n+'.js'),'utf8').split('\n').length));
 check('raid 分片全部 <=2000 行', (__maxLines<=2000 && __maxLines>1000)?1:0, 1, 0.001);
 check('原巨型 raid.js 已移除', !fs.existsSync(path.join(SRC,'raid.js'))?1:0, 1, 0.001);
@@ -3230,6 +3230,98 @@ check('未进光锥时转身对焦（suspect，不开火）',
   /b\.state="suspect"/.test(raidSrc) && /if\(!aware && !grace && b\.gun && b\._noticeHold>0/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('开火仍只认窄锥 _aiAware',
   /if\(canSee && b\.fireCd<=0 && b\.reloadT<=0\)/.test(raidSrc) && /this\._aiAware\(b,tgt\.x,tgt\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 54. v0.31.0：弹片按型号 / 改编传奇 / 三矩形碰撞 / 建筑与铁路
+ * ========================================================================== */
+console.log('\n=== 54. 弹片·传奇·三矩形·建筑轨道（v0.31.0）===');
+
+const __rc3 = fs.readFileSync(path.join(SRC,'raid-core3.js'),'utf8');
+const __rr  = fs.readFileSync(path.join(SRC,'raid-render.js'),'utf8');
+const __t54 = JSON.parse(G(`JSON.stringify((()=>{
+  try{
+    /* 弹片按型号 */
+    const models=["TOZ-106","KS-23M","M870","Saiga-12","MP-133"];
+    const bases=models.map(m=>shotgunModelSpec(m).pellets);
+    const label=gunDamageLabel({dmg:7,pellets:8});
+    /* 三矩形：三块 + 缝隙透光 */
+    const fake={props:[],walls:[]};
+    Raid._pushProp.call(fake,{kind:"barrier",w:206,h:38,sight:true,fill:"#111",edge:"#000"},100,200);
+    const p=fake.props[0];
+    const bx=p.boxes.map(b=>({x:b.x,w:b.w}));
+    const gap=(bx[0].x+bx[0].w+bx[1].x)/2;
+    Raid._buildNavGrid.call(fake);
+    /* 沙箱第 260 行把 Raid._rayWall 桩成 ()=>null；这里直接验 losCell 索引，
+       等价于「缝隙里没有视线碰撞体 / 实体段里有」，且不受打桩影响。
+       真实 _rayWall 的双向行为由浏览器探针 probe_v0310.py 覆盖。 */
+    const cellAt=(x,y)=>{ const CS=fake.navCS; const gx=Math.floor(x/CS), gy=Math.floor(y/CS);
+      return fake.losCell[gy*fake.navCols+gx]||[]; };
+    const inBox=(arr,x,y)=>arr.some(w=>x>=w.x&&x<=w.x+w.w&&y>=w.y&&y<=w.y+w.h);
+    const gapClear=!inBox(cellAt(gap,219),gap,219)&&!inBox(cellAt(gap,150),gap,150);
+    const solidBlock=inBox(cellAt(bx[0].x+10,219),bx[0].x+10,219);
+    const lightGap=Raid._rayLight.call(fake,gap,150,0,1,200);
+    const lightSolid=Raid._rayLight.call(fake,bx[0].x+10,150,0,1,200);
+    /* 改编传奇 + 具名配件 */
+    const bl=RAID_UNIQUES.filter(u=>u.legend==="bl");
+    const made=bl.map(u=>{ const w=raidMakeUnique(u);
+      return {id:u.id,pellets:w.pellets,noAmmo:!!w.noAmmo,rpm:w.rpm,splash:w.splash,
+              tier:w.qTier,named:(w.parts||[]).filter(q=>q.named).length,
+              bind:(w.parts||[]).filter(q=>q.named).map(q=>q.bindTo)}; });
+    const conf=raidMakeUnique(bl.find(u=>u.id==="bl_conference"));
+    const kept=installPartOnGun(conf,{slot:"optic",name:"测试镜",mods:[{stat:"accPct",value:5}],rarity:"blue",ilvl:30});
+    /* 建筑结构 + 铁路桥 */
+    const room={x:0,y:0,w:400,h:300,shape:"courtyard"};
+    const st=raidRoomStructure(room);
+    const bridges=raidRailBridgeBoxes(
+      [{pts:[[0,0],[1200,0]]}],
+      (x,y)=>(x>400&&x<800)?1:0, 220);
+    return {
+      bases, label, nBoxes:p.boxes.length, nWalls:fake.walls.length,
+      wallIsProp:fake.walls[0]===p, gapClear, solidBlock, lightGap, lightSolid,
+      nBl:bl.length, nParts:RAID_NAMED_PARTS.length, made,
+      keptPellets:kept.pellets, keptUnique:kept.unique, keptNamed:(kept.parts||[]).filter(q=>q.named).length,
+      nShapeKinds:Object.keys(RAID_ROOM_SHAPES).length, nStructWalls:(st.walls||[]).length,
+      nBridges:bridges.length, bridgeRail:bridges.length?bridges[0].rail:false,
+    };
+  }catch(e){ return {err:String(e)}; }
+})())`));
+check('霰弹枪 5 个型号弹片基数互不相同',
+  (!__t54.err && new Set(__t54.bases).size===5 && __t54.bases[0]===4 && __t54.bases[2]===8 && __t54.bases[3]===10)?1:0, 1, 0.001);
+check('面板写明「伤害 7 × 8 弹片 · 单发 56」',
+  (!__t54.err && __t54.label==="伤害 7 × 8 弹片 · 单发 56")?1:0, 1, 0.001);
+check('复合装饰拆成 3 个矩形且 walls 只登记子矩形',
+  (!__t54.err && __t54.nBoxes===3 && __t54.nWalls===3 && __t54.wallIsProp===false)?1:0, 1, 0.001);
+check('三矩形缝隙：视线索引无碰撞体 / 实体段已登记',
+  (!__t54.err && __t54.gapClear===true && __t54.solidBlock===true)?1:0, 1, 0.001);
+check('三矩形缝隙：手电光线不被掐断 / 实体段仍截光',
+  (!__t54.err && __t54.lightGap===200 && __t54.lightSolid<200)?1:0, 1, 0.001);
+check('改编传奇 6 把 + 具名配件 6 件',
+  (!__t54.err && __t54.nBl===6 && __t54.nParts===6)?1:0, 1, 0.001);
+check('6 把传奇全部 T8 且各带 1 件绑定具名配件',
+  (!__t54.err && __t54.made.every(m=>m.tier===8 && m.named>=1 && m.bind[0]===m.id))?1:0, 1, 0.001);
+check('调度总机 14 弹片 / 三向审查 3 分裂',
+  (!__t54.err && __t54.made.find(m=>m.id==="bl_conference").pellets===14
+              && __t54.made.find(m=>m.id==="bl_lyuda").pellets===3)?1:0, 1, 0.001);
+check('永动机构不耗弹且射速封顶 900rpm',
+  (!__t54.err && __t54.made.find(m=>m.id==="bl_infinity").noAmmo===true
+              && __t54.made.find(m=>m.id==="bl_infinity").rpm<=900)?1:0, 1, 0.001);
+check('双联裁决 / 空爆幕带爆裂溅射',
+  (!__t54.err && __t54.made.find(m=>m.id==="bl_harold").splash===96
+              && __t54.made.find(m=>m.id==="bl_flakker").splash===148)?1:0, 1, 0.001);
+check('装配件后传奇 14 弹片与具名身份不丢',
+  (!__t54.err && __t54.keptPellets===14 && __t54.keptUnique==="bl_conference" && __t54.keptNamed>=1)?1:0, 1, 0.001);
+check('7 种非矩形建筑原型 + 回字中庭 >=4 段内墙',
+  (!__t54.err && __t54.nShapeKinds===7 && __t54.nStructWalls>=4)?1:0, 1, 0.001);
+check('轨道跨河自动架铁路桥（桥面按干地）',
+  (!__t54.err && __t54.nBridges>=1 && __t54.bridgeRail===true)?1:0, 1, 0.001);
+check('开火扣弹认 noAmmo（闭合供弹不耗弹）',
+  /if\(!sh\.gun\.noAmmo\) sh\.gun\.ammoMag--/.test(__rc3) ? 1 : 0, 1, 0.001);
+check('2D / 3D 都按三矩形绘制（与碰撞同源）',
+  /for\(const b of p\.boxes\) this\._propBox/.test(__rr) && /if\(q\.compound && q\.boxes/.test(__fp) ? 1 : 0, 1, 0.001);
+check('新分片 raid-legends / raid-geometry 已接入 HTML',
+  /src\/raid-legends\.js\?v=/.test(html) && /src\/raid-geometry\.js\?v=/.test(html) ? 1 : 0, 1, 0.001);
+check('房间表含 >=15 处非矩形结构',
+  (fs.readFileSync(path.join(SRC,'raid-data.js'),'utf8').match(/shape:"/g)||[]).length>=15 ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

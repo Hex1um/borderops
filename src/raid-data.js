@@ -55,26 +55,26 @@ function raidArmorType(o){
 const RAID_ROOMS = [
   { id:"dorm",   name:"宿舍楼",       x:140,  y:170,  w:340, h:250, tint:"#3a3550" },
   { id:"west",   name:"西侧检查站",   x:140,  y:660,  w:300, h:260, tint:"#3a3030" },
-  { id:"living", name:"宿舍二号楼",   x:520,  y:640,  w:340, h:300, tint:"#43363a" },
-  { id:"ctrl",   name:"工程部",       x:920,  y:110,  w:460, h:300, tint:"#39434f" },
-  { id:"core",   name:"海关办公室",   x:1000, y:720,  w:480, h:340, tint:"#33333f" },
-  { id:"hoist",  name:"三号仓库",     x:1720, y:150,  w:300, h:250, tint:"#43394a" },
-  { id:"assem",  name:"坦克修理厂",   x:2040, y:150,  w:320, h:250, tint:"#3a4a44" },
+  { id:"living", shape:"annex", name:"宿舍二号楼",   x:520,  y:640,  w:340, h:300, tint:"#43363a" },
+  { id:"ctrl", shape:"courtyard",   name:"工程部",       x:920,  y:110,  w:460, h:300, tint:"#39434f" },
+  { id:"core", shape:"U",   name:"海关办公室",   x:1000, y:720,  w:480, h:340, tint:"#33333f" },
+  { id:"hoist", shape:"ruin",  name:"三号仓库",     x:1720, y:150,  w:300, h:250, tint:"#43394a" },
+  { id:"assem", shape:"L",  name:"坦克修理厂",   x:2040, y:150,  w:320, h:250, tint:"#3a4a44" },
   { id:"print",  name:"加油站",       x:2040, y:450,  w:320, h:200, tint:"#3a4055" },
   { id:"hoist2", name:"二号仓库",     x:1560, y:640,  w:260, h:220, tint:"#43394a" },
   { id:"ebridge",name:"铁路桥",       x:1700, y:930,  w:300, h:150, tint:"#3a3a3a" },
   { id:"launch", name:"卡车停车场",   x:320,  y:1280, w:360, h:280, tint:"#3a3040" },
-  { id:"test",   name:"水泥厂",       x:1200, y:1140, w:440, h:320, tint:"#3a4242" },
+  { id:"test", shape:"cross",   name:"水泥厂",       x:1200, y:1140, w:440, h:320, tint:"#3a4242" },
   { id:"rope",   name:"工地",         x:1740, y:1340, w:320, h:260, tint:"#3a3a30" },
   // —— 扩建区（地图从 2480×2080 扩到 3500×2900）——
   { id:"dorm2",  name:"宿舍三号楼",   x:140,  y:1000, w:320, h:260, tint:"#3a3550" },
   { id:"gasS",   name:"加油站南站",   x:520,  y:1000, w:300, h:220, tint:"#3a4055" },
   { id:"cross",  name:"十字路口",     x:560,  y:1900, w:320, h:240, tint:"#3a3a3a" },
   { id:"yard",   name:"集装箱堆场",   x:960,  y:1860, w:420, h:280, tint:"#43394a" },
-  { id:"mill",   name:"锯木厂",       x:1180, y:2200, w:380, h:260, tint:"#4a3f30" },
-  { id:"farm",   name:"农庄",         x:1900, y:1900, w:380, h:260, tint:"#3a4a38" },
+  { id:"mill", shape:"L",   name:"锯木厂",       x:1180, y:2200, w:380, h:260, tint:"#4a3f30" },
+  { id:"farm", shape:"L",   name:"农庄",         x:1900, y:1900, w:380, h:260, tint:"#3a4a38" },
   { id:"depot",  name:"军械库",       x:1560, y:1660, w:360, h:240, tint:"#43394a" },
-  { id:"tower",  name:"瞭望塔",       x:2560, y:760,  w:260, h:240, tint:"#3a3a48" },
+  { id:"tower", shape:"tower",  name:"瞭望塔",       x:2560, y:760,  w:260, h:240, tint:"#3a3a48" },
   { id:"tunnel", name:"地下通道",     x:2560, y:1200, w:320, h:220, tint:"#2e2e38" },
   { id:"scrap",  name:"废料场",       x:2900, y:1700, w:340, h:260, tint:"#3f3a30" },
   // —— 撤离点 ——
@@ -86,7 +86,7 @@ const RAID_ROOMS = [
   // —— 扩建区（地图扩到 4400×3600，新增东部/南部据点）——
   { id:"factory",name:"机械工厂",   x:3360, y:380,  w:380, h:300, tint:"#3a4a44" },
   { id:"sawmill",name:"东锯木厂",   x:3360, y:1850, w:340, h:260, tint:"#4a3f30" },
-  { id:"village",name:"废弃村庄",   x:3500, y:1300, w:360, h:280, tint:"#3a4a38" },
+  { id:"village", shape:"annex",name:"废弃村庄",   x:3500, y:1300, w:360, h:280, tint:"#3a4a38" },
   { id:"dock",   name:"东码头",     x:3720, y:2250, w:420, h:300, tint:"#2e3a44" },
   { id:"ranch",  name:"南部牧场",   x:2020, y:2960, w:400, h:300, tint:"#3a4a38" },
   { id:"temple", name:"古神庙",     x:980,  y:3000, w:360, h:300, tint:"#43364a" },
@@ -96,19 +96,19 @@ const RAID_ROOMS = [
   { id:"extH",   name:"撤离点·北关检查", x:2450, y:200,  w:320, h:200, tint:"#22462f", extract:true },
   // —— 东部 / 南部大区（地图扩到 7000×5600）——
   { id:"nx1",  name:"北岭哨所",   x:4520, y:230,  w:360, h:270, tint:"#3a3030" },
-  { id:"nx2",  name:"炼油厂",     x:4980, y:180,  w:470, h:340, tint:"#3f3a30" },
+  { id:"nx2", shape:"courtyard",  name:"炼油厂",     x:4980, y:180,  w:470, h:340, tint:"#3f3a30" },
   { id:"nx3",  name:"铁路调度站", x:5570, y:240,  w:400, h:290, tint:"#3a3a3a" },
   { id:"nx4",  name:"东岭军营",   x:6110, y:200,  w:420, h:320, tint:"#3a4a44" },
   { id:"nx5",  name:"通讯塔",     x:4560, y:840,  w:300, h:250, tint:"#39434f" },
-  { id:"nx6",  name:"化学工厂",   x:5020, y:780,  w:480, h:330, tint:"#3a4a44" },
+  { id:"nx6", shape:"cross",  name:"化学工厂",   x:5020, y:780,  w:480, h:330, tint:"#3a4a44" },
   { id:"nx7",  name:"集装箱码头", x:5680, y:820,  w:420, h:290, tint:"#43394a" },
   { id:"nx8",  name:"海关大楼",   x:6240, y:760,  w:400, h:320, tint:"#33333f" },
   { id:"nx9",  name:"南部新村",   x:4600, y:1820, w:400, h:290, tint:"#3a4a38" },
-  { id:"nx10", name:"采石场",     x:5180, y:1780, w:460, h:330, tint:"#3a4242" },
+  { id:"nx10", shape:"cross", name:"采石场",     x:5180, y:1780, w:460, h:330, tint:"#3a4242" },
   { id:"nx11", name:"油罐区",     x:5800, y:1840, w:380, h:290, tint:"#3f3a30" },
   { id:"nx12", name:"东岭要塞",   x:6340, y:1800, w:440, h:350, tint:"#43394a" },
-  { id:"nx13", name:"废弃医院",   x:4680, y:2720, w:420, h:330, tint:"#3a4055" },
-  { id:"nx14", name:"地下掩体",   x:5300, y:2760, w:360, h:290, tint:"#2e2e38" },
+  { id:"nx13", shape:"U", name:"废弃医院",   x:4680, y:2720, w:420, h:330, tint:"#3a4055" },
+  { id:"nx14", shape:"ruin", name:"地下掩体",   x:5300, y:2760, w:360, h:290, tint:"#2e2e38" },
   { id:"nx15", name:"弹药库",     x:5920, y:2720, w:400, h:310, tint:"#43394a" },
   { id:"nx16", name:"南岭矿洞",   x:5200, y:3720, w:420, h:330, tint:"#3f3a30" },
   { id:"nx17", name:"东部农场",   x:5900, y:3720, w:440, h:310, tint:"#3a4a38" },
@@ -122,7 +122,7 @@ const RAID_ROOMS = [
   { id:"extK", name:"撤离点·医院天台", x:4900, y:3130, w:260, h:200, tint:"#22462f", extract:true },
   // —— 生态扩张：北境密林 / 中央河谷 / 铁路枢纽 ——
   { id:"fWatch", name:"林间哨站",     x:7100, y:700,  w:320, h:240, tint:"#2e3a2c" },
-  { id:"fMill",  name:"伐木场",       x:7400, y:2050, w:360, h:260, tint:"#3a3326" },
+  { id:"fMill", shape:"L",  name:"伐木场",       x:7400, y:2050, w:360, h:260, tint:"#3a3326" },
   { id:"fRanger",name:"护林站",       x:7100, y:5200, w:340, h:260, tint:"#2e3a2c" },
   { id:"fCamp",  name:"林间营地",     x:7300, y:7700, w:380, h:280, tint:"#343a2c" },
   { id:"fHunt",  name:"猎人小屋",     x:7100, y:8600, w:320, h:240, tint:"#2e3a2c" },
@@ -130,8 +130,8 @@ const RAID_ROOMS = [
   { id:"fNBridge",name:"北桥检查站",   x:7600, y:1700, w:300, h:210, tint:"#2e3a3a" },
   { id:"fSBridge",name:"南桥营地",     x:7700, y:8000, w:320, h:220, tint:"#2e3a3a" },
   { id:"rTower", name:"瞭望木塔",     x:10800,y:2300, w:260, h:240, tint:"#39434f" },
-  { id:"rHydro", name:"水电站",       x:9700, y:6000, w:380, h:280, tint:"#26323a" },
-  { id:"rStation",name:"火车站",      x:11400,y:5050, w:420, h:300, tint:"#33383e" },
+  { id:"rHydro", shape:"tower", name:"水电站",       x:9700, y:6000, w:380, h:280, tint:"#26323a" },
+  { id:"rStation", shape:"U",name:"火车站",      x:11400,y:5050, w:420, h:300, tint:"#33383e" },
   { id:"rFreight",name:"货运站",      x:11450,y:6900, w:400, h:300, tint:"#33383e" },
   { id:"rCtrl",  name:"调度中心",     x:11800,y:7400, w:360, h:260, tint:"#39434f" },
   { id:"rExpl",  name:"硝石炸药库",   x:11800,y:5400, w:320, h:240, tint:"#3a3030" },
@@ -152,7 +152,7 @@ const RAID_ROOMS = [
   { id:"prisonC", name:"监狱医务室",   x:1720, y:5250, w:240, h:200, tint:"#3a4055" },
   { id:"prisonT", name:"监狱岗楼",     x:2100, y:5620, w:180, h:180, tint:"#33333f" },
   { id:"townSq",  name:"小镇广场",     x:1750, y:7050, w:760, h:420, tint:"#30322e", open:true },
-  { id:"townHall",name:"镇政厅",       x:1700, y:6750, w:340, h:260, tint:"#3a4a44" },
+  { id:"townHall", shape:"courtyard",name:"镇政厅",       x:1700, y:6750, w:340, h:260, tint:"#3a4a44" },
   { id:"townShop",name:"杂货店",       x:2080, y:6750, w:220, h:180, tint:"#43394a" },
   { id:"townH1",  name:"民宅一号",     x:1700, y:7500, w:170, h:150, tint:"#3a3a34" },
   { id:"townH2",  name:"民宅二号",     x:1900, y:7500, w:170, h:150, tint:"#3a3a34" },
@@ -161,7 +161,7 @@ const RAID_ROOMS = [
   { id:"townChurch",name:"小镇教堂",   x:2340, y:6750, w:240, h:270, tint:"#43364a" },
   { id:"damCtrl", name:"大坝控制室",   x:3150, y:8520, w:280, h:200, tint:"#2e3a44" },
   { id:"damGate", name:"大坝闸室",     x:3480, y:8580, w:200, h:170, tint:"#39434f" },
-  { id:"quarry",  name:"采石场",       x:3520, y:6480, w:420, h:320, tint:"#3a4242" },
+  { id:"quarry", shape:"ruin",  name:"采石场",       x:3520, y:6480, w:420, h:320, tint:"#3a4242" },
   { id:"gasSW",   name:"西南加油站",   x:1260, y:6480, w:280, h:220, tint:"#3a4055" },
   { id:"extS",    name:"撤离点·大坝坝顶", x:3300, y:8180, w:300, h:220, tint:"#22462f", extract:true },
 ];
@@ -860,75 +860,14 @@ function raidScavGun(level, opts){
   return blGunGen(ilvl, { type, rarity, element, model:RNG.pick(pool) });
 }
 
-const RAID_UNIQUES = [
-  // —— 枪械：现实型号 + 出厂改装方案 ——
-  { id:"u_dawn", name:"AK-74N 5.45×39 战术型", kind:"weapon", type:"rifle", tier:5, elem:"fire", ilvl:30,
-    perk:"军规冷锻枪管 · 枪口动能 +30%，理论射速 +14%",
-    affixes:[ { kind:"prefix", nm:"冷锻枪管", mods:[{stat:"dmgPct",value:30},{stat:"projSpeed",value:20}] },
-              { kind:"suffix", nm:"·军用批次", mods:[{stat:"fireRatePct",value:14},{stat:"magPct",value:30}] } ] },
-  { id:"u_humming", name:"PP-19-01 Vityaz 9×19 短突型", kind:"weapon", type:"pistol", tier:5, elem:"none", ilvl:28,
-    perk:"轻量枪机 · 理论射速 +48%，换弹速度 +30%",
-    affixes:[ { kind:"prefix", nm:"轻量枪机", mods:[{stat:"fireRatePct",value:48}] },
-              { kind:"suffix", nm:"·快拔套", mods:[{stat:"magPct",value:35},{stat:"reloadPct",value:30}] } ] },
-  { id:"u_butcher", name:"Saiga-12K 12/70 破门型", kind:"weapon", type:"shotgun", tier:5, elem:"none", ilvl:30,
-    perk:"短管鹿弹配置 · 枪口动能 +46%，弹头初速 +18%",
-    affixes:[ { kind:"prefix", nm:"加重枪管", mods:[{stat:"dmgPct",value:46}] },
-              { kind:"suffix", nm:"·高初速", mods:[{stat:"projSpeed",value:18},{stat:"recoil",value:20}] } ] },
-  { id:"u_plague", name:"MP5 9×19 消音型", kind:"weapon", type:"smg", tier:6, elem:"cryo", ilvl:36,
-    perk:"一体消音器 + 亚音速弹 · 射击精度 +35%，有效射程 +20%",
-    affixes:[ { kind:"prefix", nm:"精磨枪管", mods:[{stat:"accPct",value:35},{stat:"range",value:20}] },
-              { kind:"suffix", nm:"·亚音速", mods:[{stat:"fireRatePct",value:16},{stat:"magPct",value:40}] } ] },
-  { id:"u_fox", name:"HK 416A5 5.56×45 侦察型", kind:"weapon", type:"rifle", tier:6, elem:"none", ilvl:36,
-    perk:"浮置枪管 + 光学座 · 射击精度 +40%，有效射程 +30%",
-    affixes:[ { kind:"prefix", nm:"浮置枪管", mods:[{stat:"accPct",value:40},{stat:"range",value:30}] },
-              { kind:"suffix", nm:"·归零", mods:[{stat:"dmgPct",value:22},{stat:"projSpeed",value:35}] } ] },
-  { id:"u_guillotine", name:"SV-98 7.62×54R 精确型", kind:"weapon", type:"sniper", tier:7, elem:"shock", ilvl:42,
-    perk:"比赛级枪管 + 钢芯弹 · 要害命中 +20%，要害伤害 +80%",
-    affixes:[ { kind:"prefix", nm:"比赛级膛线", mods:[{stat:"dmgPct",value:55},{stat:"critChance",value:20}] },
-              { kind:"suffix", nm:"·精修", mods:[{stat:"critDmg",value:80}] } ] },
-  { id:"u_thousand", name:"RPK-16 5.45×39 轻机枪型", kind:"weapon", type:"rifle", tier:7, elem:"radiation", ilvl:42,
-    perk:"重枪管 + 弹鼓 · 枪口动能 +35%，弹匣容量 +50%",
-    affixes:[ { kind:"prefix", nm:"重枪管", mods:[{stat:"dmgPct",value:35},{stat:"magPct",value:50}] },
-              { kind:"suffix", nm:"·大容量", mods:[{stat:"fireRatePct",value:12},{stat:"reloadPct",value:25}] } ] },
-  { id:"u_thor", name:"ORSIS T-5000 .338 LM 远程型", kind:"weapon", type:"sniper", tier:8, elem:"shock", ilvl:48,
-    perk:"加长枪管 + 高膛压装药 · 枪口动能 +70%，要害伤害 +100%",
-    affixes:[ { kind:"prefix", nm:"高膛压装药", mods:[{stat:"dmgPct",value:70},{stat:"critChance",value:15}] },
-              { kind:"suffix", nm:"·精选批次", mods:[{stat:"critDmg",value:100},{stat:"projSpeed",value:40}] } ] },
-  { id:"u_tsunami", name:"KS-23M 23×75 重型霰弹型", kind:"weapon", type:"shotgun", tier:8, elem:"none", ilvl:48,
-    perk:"23×75 重弹头 · 枪口动能 +65%，后坐控制 +30%",
-    affixes:[ { kind:"prefix", nm:"加重枪管", mods:[{stat:"dmgPct",value:65},{stat:"recoil",value:30}] },
-              { kind:"suffix", nm:"·低后坐", mods:[{stat:"dmgPct",value:35}] } ] },
-  // —— 护甲 / 头盔：现实装备型号 ——
-  { id:"u_ritual", name:"6B23-1 附加插板", kind:"armor", tier:5,
-    perk:"加装侧插板 · 减伤 +7%，耐久 +80%",
-    affixes:[ { kind:"prefix", nm:"加固的", mods:[{stat:"dr",value:0.07}] },
-              { kind:"suffix", nm:"·复合层压", mods:[{stat:"armor",value:80}] } ] },
-  { id:"u_valkyr", name:"Fort Redut-M", kind:"armor", tier:6,
-    perk:"全套插板 · 减伤 +8%，耐久 +100%",
-    affixes:[ { kind:"prefix", nm:"陶瓷的", mods:[{stat:"dr",value:0.08}] },
-              { kind:"suffix", nm:"·军用规格", mods:[{stat:"armor",value:100}] } ] },
-  { id:"u_obsidian", name:"Zhuk-6a", kind:"armor", tier:7,
-    perk:"多层陶瓷面板 · 减伤 +9%，耐久 +120%",
-    affixes:[ { kind:"prefix", nm:"复合的", mods:[{stat:"dr",value:0.09}] },
-              { kind:"suffix", nm:"·防弹插板", mods:[{stat:"armor",value:120}] } ] },
-  { id:"u_singular", name:"6B43 6A 重型防弹衣", kind:"armor", tier:8,
-    perk:"全防护配置 · 减伤 +10%，耐久 +140%",
-    affixes:[ { kind:"prefix", nm:"重装的", mods:[{stat:"dr",value:0.10}] },
-              { kind:"suffix", nm:"·重装规格", mods:[{stat:"armor",value:140}] } ] },
-  { id:"u_watch", name:"Altyn 全罩头盔", kind:"helmet", tier:6,
-    perk:"带面罩 · 爆头减伤 +8%，耐久 +100%",
-    affixes:[ { kind:"prefix", nm:"密封的", mods:[{stat:"dr",value:0.08}] },
-              { kind:"suffix", nm:"·钢制面罩", mods:[{stat:"armor",value:100}] } ] },
-  { id:"u_ironveil", name:"Vulkan-5 面罩头盔", kind:"helmet", tier:8,
-    perk:"钛合金面罩 · 爆头减伤 +10%，耐久 +130%",
-    affixes:[ { kind:"prefix", nm:"加固的", mods:[{stat:"dr",value:0.10}] },
-              { kind:"suffix", nm:"·钛合金", mods:[{stat:"armor",value:130}] } ] },
-];
+/* 具名装备表已迁至 raid-legends.js（本分片保持在 2000 行以内） */
 
 // 运气 → 可出的最高档（0 裸装最多到特种，1 满配可达竞赛）
 function raidUniqueMaxTier(luck){
   return M.clamp(5 + Math.round(M.clamp(luck||0, 0, 1)*3), 5, 8);
 }
+
+
 
 function raidMakeUnique(u){
   const stamp=Date.now().toString(36)+Math.floor(Math.random()*999).toString(36);
@@ -941,12 +880,28 @@ function raidMakeUnique(u){
       type:u.type,
       rarity:RAID_TIER_TO_RARITY[u.tier],
       element:u.elem||"none",
+      model:u.model||undefined,
       affixes:aff,
     });
     w.uid="uq"+stamp; w.kind="weapon";
     w.name="「"+u.name+"」";
     w.qTier=u.tier; w.qName=RAID_TIERS[u.tier].name; w.qColor=RAID_TIERS[u.tier].color;
     w.unique=u.id; w.uniqPerk=u.perk; w.uniqTitle=u.name;
+    /* v0.31.0：改编传奇的专属机制落地（面板数值与弹道共用同一份 gun 字段）。 */
+    const o=u.ov||{};
+    if(o.pellets!==undefined)      w.pellets=o.pellets;
+    if(o.dmgMul!==undefined)       w.dmg=Math.round(w.dmg*o.dmgMul*10)/10;
+    if(o.spread!==undefined)       w.spread=o.spread;
+    if(o.splash!==undefined)       w.splash=o.splash;
+    if(o.rpmMul!==undefined)       w.rpm=Math.round(w.rpm*o.rpmMul);
+    if(o.magMul!==undefined)       w.mag=Math.max(1,Math.round(w.mag*o.magMul));
+    if(o.armorPen!==undefined)     w.armorPen=o.armorPen;
+    if(o.noAmmo)                   w.noAmmo=true;
+    /* 不耗弹的枪必须限射速：词条叠加后能到 2500rpm，无限弹药 + 42 发/秒会失控。 */
+    if(o.noAmmo)                   w.rpm=Math.min(w.rpm, 900);
+    if(u.legend)                   w.legend=u.legend;
+    const np=raidNamedPartFor(u.id);
+    if(np){ w.parts=(w.parts||[]).filter(p=>p.slot!==np.slot); w.parts.push(np); w.bindPart=np.id; }
     w.value=Math.round((w.value||0)*1.8/10)*10;
     ensureGunAffixes(w);
     return w;
@@ -1177,8 +1132,9 @@ function raidBountyLoot(){
     color:RAID_RARITY_COLOR[mt], qName:RAID_TIERS[mt].name,
     uid:"bq"+Math.floor(Math.random()*1e9).toString(36) });
   // ② 配件：精选起，25% 直接给特种档
-  const pt=rollPart(RNG.pick(GUN_SLOTS).id, 18, RNG.chance(0.25)?"orange":"purple");
-  pt.kind="part"; pt.uid="bq"+Math.floor(Math.random()*1e9).toString(36);
+  const _npRoll=RNG.chance(0.08) ? raidMakeNamedPart(RNG.pick(RAID_NAMED_PARTS).id) : null;
+  const pt=_npRoll || rollPart(RNG.pick(GUN_SLOTS).id, 18, RNG.chance(0.25)?"orange":"purple");
+  pt.kind="part"; if(!pt.named) pt.uid="bq"+Math.floor(Math.random()*1e9).toString(36);
   out.push(pt);
   // ③ 装备三选一（护甲 / 头盔 / 整枪），品质至少 T3
   const qt=RNG.ri(3,4);
@@ -1610,7 +1566,8 @@ function raidGunName(g){
 function partChip(pt){
   const col=(RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color;
   const sn=GUN_SLOT_BY_ID[pt.slot]?GUN_SLOT_BY_ID[pt.slot].name:pt.slot;
-  return `<span class="part-chip" style="border-color:${col};color:${col}">${partNameOf(pt)}<em>${partText(pt)}</em></span>`;
+  const named=pt.named?' <b style="color:#ffd23f">✦具名</b>':"";
+  return `<span class="part-chip" style="border-color:${col};color:${col}${pt.named?';box-shadow:0 0 0 1px #ffd23f inset':''}">${partNameOf(pt)}${named}<em>${partText(pt)}</em></span>`;
 }
 
 /* 共享的武器卡片渲染：物品栏与融合台结果卡用同一套，保证显示完全一致
@@ -1626,9 +1583,9 @@ function raidWeaponCard(w, opts){
   const head=(opts.prefix||"")+gunNameOf(w);
   return `<div class="shop-item" style="border-left-color:${col}${opts.margin?';margin:12px 0':''}">
     <div class="si-name" style="color:${col}">${head}</div>
-    <div class="si-meta">${tname} · ${parts.length} 个配件${w.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}${w.pellets>1&&w.type!=="shotgun"?` · <b style="color:#ffd54a">${w.pellets} 发/次</b>`:''}</div>
+    <div class="si-meta">${tname} · ${parts.length} 个配件${w.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}${w.pellets>1?` · <b style="color:#ffd54a">${w.pellets} ${w.type==="shotgun"?"弹片":"发/次"}</b>`:''}</div>
     ${w.uniqPerk?`<div class="uniq-perk">✦ ${w.uniqPerk}</div>`:''}
-    <div class="si-stats">伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 估值 ₽${priceTextShort(w.value)}
+    <div class="si-stats">${gunDamageLabel(w)} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 估值 ₽${priceTextShort(w.value)}
       ${parts.length?`<br><span class="part-row">${parts.slice(0,4).map(partChip).join("")}</span>`:''}</div>
     ${opts.sell?`<div class="si-buy"><span class="si-price">₽ ${priceTextShort(sellP)}</span>
         <button class="btn ghost" data-sell="w:${w.uid}">售卖</button>

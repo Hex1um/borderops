@@ -45,7 +45,7 @@ UI.raidSetup=function(){
     const elem=w.element&&w.element!=="none"?(ELEMENTS[w.element]?ELEMENTS[w.element].name:""):"";
     return `<div class="raid-item ${on?'sel':''}" data-w="${w.uid}">
       <div class="ri-name" style="color:${col}">${gunNameOf(w)}</div>
-      <div class="ri-meta">${tname}${elem?(' · '+elem):''} · 伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}</div>
+      <div class="ri-meta">${tname}${elem?(' · '+elem):''} · ${gunDamageLabel(w)} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}</div>
       ${w.uniqPerk?`<div class="ri-meta" style="color:#ffd23f">✦ ${w.uniqPerk}</div>`:''}
       <div class="ri-val">估值 ₽${priceTextShort(w.value)}${on?' · 已携带':''}</div>
     </div>`;
@@ -584,7 +584,7 @@ UI._raidDailyDeal=function(branch){
       g.qTier=qt; g.qName=RAID_TIERS[qt].name; g.qColor=RAID_TIERS[qt].color;
       item=g; name=gunNameOf(g);
       meta=(WEAPON_TYPES[type]?WEAPON_TYPES[type].name:type)+" · "+RAID_TIERS[qt].name;
-      stats=`伤害 ${g.dmg} · 弹匣 ${g.mag} · 射速 ${g.rpm} · 穿甲 ${Math.round((g.armorPen||0)*100)}%`;
+      stats=`${gunDamageLabel(g)} · 弹匣 ${g.mag} · 射速 ${g.rpm} · 穿甲 ${Math.round((g.armorPen||0)*100)}%`;
     } else if(branch==="armor"){
       const t=RNG.ri(6,9), r=4+RNG.ri(0,2);
       const a=raidMakeArmor(t,r); item=a; name=a.name;
@@ -667,8 +667,8 @@ UI.raidShop=function(opts){
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-thumb">${gunSvg(g,46)}</div>
       <div class="si-name" style="color:${col}">${gunNameOf(g)}</div>
-      <div class="si-meta">${tname}${elem?(' · '+elem):''} · ${g.auto?'全自动':'半自动'}${g.pellets>1?(g.type==="shotgun"?(' · '+g.pellets+' 弹丸'):` · <b style="color:#ffd54a">${g.pellets} 发/次</b>`):''}</div>
-      <div class="si-stats">伤害 ${g.dmg} · 弹匣 ${g.mag} · 射速 ${g.rpm}<br>射程 ${g.range} · 穿甲 ${Math.round((g.armorPen||0)*100)}% · 备弹 ${g.reserve}${aff?(' · '+aff):''}</div>
+      <div class="si-meta">${tname}${elem?(' · '+elem):''} · ${g.auto?'全自动':'半自动'}${g.pellets>1?(g.type==="shotgun"?(' · '+g.pellets+' 弹片'):` · <b style="color:#ffd54a">${g.pellets} 发/次</b>`):''}</div>
+      <div class="si-stats">${gunDamageLabel(g)} · 弹匣 ${g.mag} · 射速 ${g.rpm}<br>射程 ${g.range} · 穿甲 ${Math.round((g.armorPen||0)*100)}% · 备弹 ${g.reserve}${aff?(' · '+aff):''}</div>
       <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(price)}</span>
         <button class="btn" data-buy="weapon:${g.uid}" ${can?'':'disabled'}>购买</button></div>
     </div>`;

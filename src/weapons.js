@@ -464,10 +464,10 @@ function generateWeapon(level, opts={}){
   let crit     = 1.5 * M0.crit;
   let critChance = 0.15;
   let speed    = base.speed;
-  let pellets  = base.pellets;
+  let pellets  = base.pellets;   // v0.31.0：霰弹枪随后按型号覆盖（见下方 model 段）
   let splash   = base.splash || 0;
   let pierce   = 0;
-  const spread = base.spread;
+  let   spread = base.spread;
 
   // 品质：低档词缀多、高档倍率猛
   // 枪匠台：可传入固定词缀（升阶/更换弹种时保留原词缀，只重算数值）
@@ -550,6 +550,14 @@ function generateWeapon(level, opts={}){
 
   /* 型号：重算时用枪上已有的 model（keepModel），保证枪名稳定 */
   const model = (opts.keepModel || opts.model || "").toString() || gunModelFor(base, man, ilvl, quality);
+  /* v0.31.0：霰弹枪弹片数 / 单弹片伤害 / 散布按型号区分。
+   * 必须放在 model 确定之后：gunModelFor 消耗 RNG，提前调用会改变词条与配件序列。 */
+  if(type==="shotgun" && typeof shotgunModelSpec==="function"){
+    const sp = shotgunModelSpec(model);
+    pellets = M.clamp(pellets + (sp.pellets - base.pellets), 2, 16);
+    dmg     = Math.round(dmg * sp.dmg * 10)/10;
+    spread  = sp.spread;
+  }
   const name = weaponName(man, base, R, element, affixes, model);
 
   return new Weapon({
@@ -736,6 +744,21 @@ function blGunConvert(w){
       : (MANUFACTURERS[w.manufacturer]?MANUFACTURERS[w.manufacturer].color:"#cfcabb"),
   };
 }
+/* v0.31.0：具名枪经过枪匠台重铸 / 换配件后要保留「传奇身份 + 专属机制」，
+ * 否则一旦走 generateWeapon 重算，改编传奇枪的特殊效果会被普通管线抹掉。 */
+const GUN_LEGEND_FIELDS = ["unique","uniqPerk","uniqTitle","qTier","qName","qColor",
+  "legend","legendLore","special","noAmmo","pellets","splash","bindPart"];
+function keepGunLegend(out, gun){
+  if(!out || !gun) return out;
+  /* 普通枪重铸要重算数值，只继承身份字段；具名枪连改编后的数值一起冻结，
+     否则装一个配件就把 14 弹片 / 不耗弹洗回普通枪了。 */
+  const fields = (gun.unique || gun.legend)
+    ? GUN_LEGEND_FIELDS.concat(["dmg","spread","rpm","mag","range","reserve","armorPen"])
+    : GUN_LEGEND_FIELDS;
+  for(const k of fields) if(gun[k]!==undefined) out[k]=gun[k];
+  return out;
+}
+
 function blGunGen(ilvl, opts){
   const w=blGunConvert(generateWeapon(ilvl, opts));
   // 精简名缓存（只用于显示，name 保持完整，切回完整模式即可恢复）
@@ -792,7 +815,7 @@ function reforgeBlGun(gun, op, arg){
   const out = blGunConvert(generateWeapon(gun.ilvl, base));
   out.uid = gun.uid;
   out.kind = gun.kind || "weapon";
-  return out;
+  return keepGunLegend(out, gun);
 }
 
 /* 把一个现成配件装到枪上（替换同槽位），重算属性 */
@@ -806,7 +829,7 @@ function installPartOnGun(gun, part){
     affixes: gun.affixes||[], parts,
   }));
   out.uid = gun.uid; out.kind = gun.kind || "weapon";
-  return out;
+  return keepGunLegend(out, gun);
 }
 
 /* 拆解：枪 → 配件数组（枪本身消失） */

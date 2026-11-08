@@ -30,7 +30,7 @@ UI.raidFieldShop=function(key){
     const qn=weaponQualityHidden() ? "" : ((RAID_TIERS[g.qTier]&&RAID_TIERS[g.qTier].name)||"");
     return `<div class="si">
       <div class="si-name" style="color:${col}">${gunNameOf(g)}</div>
-      <div class="si-stats">${tname}${qn?" · "+qn:""} · 伤害 ${g.dmg} · 弹匣 ${g.mag} · 射速 ${g.rpm}<br>
+      <div class="si-stats">${tname}${qn?" · "+qn:""} · ${gunDamageLabel(g)} · 弹匣 ${g.mag} · 射速 ${g.rpm}<br>
         配件 ${(g.parts||[]).length} 个 · 估值 ₽${priceTextShort(g.value||0)}</div>
       <div class="si-buy">
         <span class="si-price ${can?"":"cant"}">${payKind==="token"?"◈":"₽"} ${payKind==="token"?price:priceTextShort(price)}</span>
@@ -450,7 +450,7 @@ UI.raidForge=function(opts){
       <div class="si-thumb">${gunSvg(w,46)}</div>
       <div class="si-name" style="color:${col}">${gunNameOf(w)}</div>
       <div class="si-meta">${tname} · ${elem}${w.mayhem>0?' · <b class="c-mayhem">改装'+w.mayhem+'级</b>':''}</div>
-      <div class="si-stats">伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 射程 ${w.range}<br>配件 ${(w.parts||[]).length} 个 · 估值 ₽${priceTextShort(w.value)}</div>
+      <div class="si-stats">${gunDamageLabel(w)} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 射程 ${w.range}<br>配件 ${(w.parts||[]).length} 个 · 估值 ₽${priceTextShort(w.value)}</div>
     </div>`;
   }).join('') || `<div class="empty-hint">仓库暂无枪械 · 先去军火超市采购，或突袭搜刮并成功撤离</div>`;
 
@@ -661,7 +661,7 @@ UI.raidFusion=function(opts){
     const isMain=on && UI._fuseSel[0]===it.uid;
     const nAff=(it.affixes||[]).length;
     const stat=it.kind==="weapon"||it.dmg!==undefined
-      ? `伤害 ${it.dmg} · 配件 ${(it.parts||[]).length} · 词条 ${nAff}${it.mayhem>0?(' · 改装'+it.mayhem):''}`
+      ? `${gunDamageLabel(it)} · 配件 ${(it.parts||[]).length} · 词条 ${nAff}${it.mayhem>0?(' · 改装'+it.mayhem):''}`
       : it.kind==="shield" ? shieldLines(it).slice(0,3).join(" · ")
       : it.kind==="armor" ? `减伤 ${Math.round((it.dr||0)*100)}% · 耐久 ${it.maxArmor}`
       : it.kind==="helmet" ? `爆头减伤 ${Math.round((it.dr||0)*100)}% · 耐久 ${it.maxArmor}`

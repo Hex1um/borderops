@@ -66,7 +66,7 @@ function auctionItemInfo(kind, it){
     const qn=raidGunName(w);
     return {
       name:gunNameOf(w), color:col, value:w.value||0,
-      meta:`${tname}${qn?" · "+qn:""} · 伤害 ${w.dmg} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}${w.uniqPerk?" · 传奇":""}`,
+      meta:`${tname}${qn?" · "+qn:""} · ${gunDamageLabel(w)} · 弹匣 ${w.mag} · 射速 ${w.rpm} · 配件 ${(w.parts||[]).length}${w.uniqPerk?" · 传奇":""}`,
       stats:(hide? "" : (w.uniqPerk?`✦ ${w.uniqPerk}<br>词条：${aff}`:(aff?`词条：${aff}`:"无词条"))),
       perk:w.uniqPerk||"",
     };

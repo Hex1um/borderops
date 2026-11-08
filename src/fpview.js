@@ -955,6 +955,15 @@ const FPView = {
        与 2D 那边 `kind!=="wall"` 跳过的处理保持一致。 */
     for(const q of (R.props||[])){
       if((q.kind || "wall") === "wall") continue;
+      /* v0.31.0：复合装饰按碰撞用的三个子矩形分别立 billboard，
+         3D 里看到的缝隙和 2D / 碰撞 / 光线是同一处，不再是一整块灰片。 */
+      if(q.compound && q.boxes && q.boxes.length){
+        for(const b of q.boxes){
+          const sub={ x:b.x, y:b.y, w:b.w, h:b.h, kind:q.kind, fill:q.fill, edge:q.edge, compoundSub:true };
+          add(sub.x+sub.w/2, sub.y+sub.h/2, "prop", sub, this._propHeight(sub), "", sub.fill||"#6e6552");
+        }
+        continue;
+      }
       add(q.x+q.w/2, q.y+q.h/2, "prop", q, this._propHeight(q), "", q.fill||"#6e6552");
     }
 
