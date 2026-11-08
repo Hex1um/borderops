@@ -205,3 +205,22 @@ function raidRailBridgeBoxes(rails, waterKind, half){
   }
   return out;
 }
+
+/* ---------------------------------------------------------------------------
+ * 四、各 POI 的招牌地标（v0.34.1）
+ * ---------------------------------------------------------------------------
+ * 用户要求「每个建筑各具自己独特的特点和装饰」。这里给 8 个 POI 各配一个
+ * 大尺寸招牌物，建图时由 raid-core 的 _pushProp 落地 —— 因为走的是同一条
+ * 道具管线，2D 与 3D 的「看到 / 挡住 / 光线」自动一致，不需要额外渲染分支。
+ * 放在 geometry 而不是 raid-data：raid-data 已经贴着 2000 行拆分上限。
+ */
+const RAID_POI_LANDMARKS = {
+  dam:     { kind:"pipe",    w:250, h:66,  note:"泄洪主管道" },
+  prison:  { kind:"barrier", w:300, h:46,  note:"收容区隔离栏" },
+  town:    { kind:"shelf",   w:200, h:58,  note:"集市货架长阵" },
+  rail:    { kind:"railcar", w:220, h:80,  note:"待编组货车" },
+  quarry:  { kind:"rock",    w:190, h:170, note:"崩落的巨岩" },
+  factory: { kind:"shelf",   w:230, h:64,  note:"零件周转架" },
+  dock:    { kind:"railcar", w:210, h:86,  note:"堆叠集装箱" },
+  temple:  { kind:"archway", w:170, h:150, note:"坍塌的石拱门" },
+};

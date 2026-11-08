@@ -479,6 +479,17 @@ const Raid = {
     for(const poi of RAID_POI){
       const spec=RAID_ARCH[poi.elite];
       if(!spec || !poi.box) continue;
+      /* v0.34.1（用户要求「每个建筑各具特点」）：招牌地标。
+         走 _pushProp → 自动进 walls / navCell / losCell，2D 与 3D 天然一致；
+         各类用不同 kind 与尺寸：大坝泄洪管、监狱隔离栏、小镇货架、铁路货车、
+         采石场巨岩、工厂周转架、码头集装箱、神庙石拱门。 */
+      const L=(typeof RAID_POI_LANDMARKS!=="undefined") ? RAID_POI_LANDMARKS[poi.id] : null;
+      if(L){
+        const cx=poi.box.x+poi.box.w/2, cy=poi.box.y+poi.box.h/2;
+        const spot=this._spawnSafePoint(cx, cy, Math.max(26, Math.min(L.w, L.h)*0.28));
+        this._pushProp({ kind:L.kind, w:L.w, h:L.h, fill:"#4a4f57", edge:"#14181d" },
+                       spot.x-L.w/2, spot.y-L.h/2);
+      }
       const n=poi.elites||1;
       for(let i=0;i<n;i++){
         /* 内缩量按包围盒短边自适应：神庙这种 360×300 的小 POI 用 96 内缩只剩

@@ -3569,6 +3569,15 @@ const __deco = JSON.parse(G(`JSON.stringify((()=>{
 check('scrap 只留在 props、walls 里没有它', __deco.scrapWalls===0 && __deco.scrapProps===1 ? 1 : 0, 1, 0.001);
 check('rock 登记三条子矩形碰撞', __deco.rockWalls===3 ? 1 : 0, 1, 0.001);
 
+/* ⑤ 各 POI 招牌地标（v0.34.1） */
+check('8 个 POI 各有一个招牌地标',
+  G('Object.keys(RAID_POI_LANDMARKS).length')===8 &&
+  G('RAID_POI.every(p=>!!RAID_POI_LANDMARKS[p.id])') ? 1 : 0, 1, 0.001);
+check('地标走 _pushProp 落地（2D/3D 同源）',
+  /RAID_POI_LANDMARKS\[poi\.id\]/.test(raidSrc) && /this\._pushProp\(\{ kind:L\.kind/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('地标尺寸足够显眼（短边 ≥46）',
+  G('Object.values(RAID_POI_LANDMARKS).every(l=>Math.min(l.w,l.h)>=46)') ? 1 : 0, 1, 0.001);
+
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
  * 某段实现或文案是否仍在的「源码护栏」（对重命名、重构脆弱）。把两者的数量分开
