@@ -112,6 +112,12 @@ const FPView = {
        先用方位角把不在该列视锥里的墙剔掉，能砍掉九成以上。 */
     const near = [];
     const TAU = Math.PI*2;
+    /* v0.34.3（用户实机 profiling：_castWalls 最粗）：FOV 预筛。
+       旧版把 360° 内所有近墙都塞进 near，逐列循环时再靠 halfAng 一个个 continue ——
+       O(列数 × 墙数) 里约四分之三的墙根本不可能被任何一列命中（FOV 约 90°）。
+       这里先算整面墙的角区间，与视野完全不相交的直接整面跳过，near 能瘦一大圈。 */
+    const halfFov = Math.atan((w*0.5)/proj) + 0.02;
+    const yawN = Math.atan2(Math.sin(yaw), Math.cos(yaw));   // 归一化，便于环形比较
     for(let i=0;i<pool.length;i++){
       const wl = pool[i];
       /* 掩体（灌木 / 岩石 / 木箱 / 油桶 / 沙袋 / 卡车…）同时登记在 walls 与 props 里：
@@ -130,7 +136,13 @@ const FPView = {
       if(dist - rad > this.MAX_D) continue;
       // 包围圆含相机时不裁角度（贴墙时整面墙都在视野里）
       const halfAng = (dist <= rad + 1) ? Math.PI : Math.atan2(rad, dist-rad) + 0.02;
-      near.push({ wl, ac: Math.atan2(dy0, dx0), halfAng });
+      const ac = Math.atan2(dy0, dx0);
+      if(halfAng < Math.PI){
+        let da = ac - yawN;
+        if(da > Math.PI) da -= TAU; else if(da < -Math.PI) da += TAU;
+        if(da - halfAng > halfFov || da + halfAng < -halfFov) continue;   // 完全不在视野里
+      }
+      near.push({ wl, ac, halfAng });
     }
     const MAX = this.MAX_D, MIND = this.MIN_D;
 
@@ -579,8 +591,34 @@ const FPView = {
     else if(d2 < 0){ const t = d2/(d2-d1); bx = x2+(x1-x2)*t; by = y2+(y1-y2)*t; }
     const s1 = this._toScreen(ax, ay), s2 = this._toScreen(bx, by);
     if(!s1 || !s2) return;
+    /* v0.34.3：地面装饰线每帧 7000+ 条，逐条 beginPath+stroke 是 _floorLayer
+       的主要开销。按「颜色+线宽」累积端点，帧末一次 stroke。 */
+    const buf = this._lineBatch;
+    if(buf){
+      const key = style + "|" + (width || 1);
+      let arr = buf.get(key);
+      if(!arr){ arr = []; buf.set(key, arr); }
+      arr.push(s1[0], s1[1], s2[0], s2[1]);
+      return;
+    }
     ctx.strokeStyle = style; ctx.lineWidth = width || 1;
     ctx.beginPath(); ctx.moveTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.stroke();
+  },
+
+  _flushLines(ctx){
+    const buf = this._lineBatch;
+    if(!buf || !buf.size) return;
+    for(const [key, arr] of buf){
+      const i = key.lastIndexOf("|");
+      ctx.strokeStyle = key.slice(0, i);
+      ctx.lineWidth = Number(key.slice(i+1)) || 1;
+      ctx.beginPath();
+      for(let k=0;k<arr.length;k+=4){
+        ctx.moveTo(arr[k], arr[k+1]); ctx.lineTo(arr[k+2], arr[k+3]);
+      }
+      ctx.stroke();
+    }
+    buf.clear();
   },
 
   /* 把一条地面线段追加进当前 path（不 stroke），用于批量画网格 */
@@ -628,6 +666,8 @@ const FPView = {
     const MAX = this.MAX_D;
 
     ctx.save();
+    if(!this._lineBatch) this._lineBatch = new Map();
+    this._lineBatch.clear();
     /* ---- 1. 底面 ---- */
     ctx.fillStyle = "#0d1114"; ctx.fillRect(0, horizon-2, w, h-horizon+2);
 
@@ -829,7 +869,10 @@ const FPView = {
     const pfc = this._pf;
     for(const d of (R.decals||[])){
       const dep = (d.x-pfc.p.x)*pfc.ca + (d.y-pfc.p.y)*pfc.sa;
-      if(dep < 8 || dep > 900) continue;            // 贴花很小，900 之外看不见
+      /* v0.34.3：8544 个贴花，900px 外只有一两个像素却照样要画椭圆+渐变。
+         收到 480px（近处细节完全保留，远处地面本来就被雾吃掉），
+         _floorLayer 里 _flatEllipse 的调用能砍掉大半。 */
+      if(dep < 8 || dep > 480) continue;
       if(this._off(d.x, d.y, 60)) continue;
       switch(d.t){
         case "oil":
@@ -904,10 +947,11 @@ const FPView = {
     // 补一层极淡的环境光：2D 的画面是全场可见的，3D 不该压成纯夜景
     ctx.fillStyle = "rgba(150,172,184,0.045)"; ctx.fillRect(0, horizon, w, h-horizon);
 
+    this._flushLines(ctx);
     ctx.restore();
   },
 
-  /* ----------------------------- 精灵（单位 / 箱子 / 掩体 / 设施 / 探照灯） ----------------------------- */
+  /* ----------------------------- 精灵（单位 / 盒子 / 掩体 / 设施 / 探照灯） ----------------------------- */
   _propHeight(q){
     const k = q.kind || "";
     const base = {
@@ -960,7 +1004,8 @@ const FPView = {
       if((q.kind || "wall") === "wall") continue;
       /* v0.31.0：复合装饰按碰撞用的三个子矩形分别立 billboard，
          3D 里看到的缝隙和 2D / 碰撞 / 光线是同一处，不再是一整块灰片。 */
-      if(q.compound && q.boxes && q.boxes.length){
+      /* v0.34.3：hex（rock）的碰撞是三横带，但贴图只能有一张六边形 */
+      if(q.compound && q.compound!=="hex" && q.boxes && q.boxes.length){
         for(const b of q.boxes){
           const sub={ x:b.x, y:b.y, w:b.w, h:b.h, kind:q.kind, fill:q.fill, edge:q.edge, compoundSub:true };
           add(sub.x+sub.w/2, sub.y+sub.h/2, "prop", sub, this._propHeight(sub), "", sub.fill||"#6e6552");

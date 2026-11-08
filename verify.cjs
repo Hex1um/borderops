@@ -3321,8 +3321,10 @@ check('轨道跨河自动架铁路桥（桥面按干地）',
   (!__t54.err && __t54.nBridges>=1 && __t54.bridgeRail===true)?1:0, 1, 0.001);
 check('开火扣弹认 noAmmo（闭合供弹不耗弹）',
   /if\(!sh\.gun\.noAmmo\) sh\.gun\.ammoMag--/.test(__rc3) ? 1 : 0, 1, 0.001);
-check('2D / 3D 都按三矩形绘制（与碰撞同源）',
-  /for\(const b of p\.boxes\) this\._propBox/.test(__rr) && /if\(q\.compound && q\.boxes/.test(__fp) ? 1 : 0, 1, 0.001);
+/* v0.34.3：hex 是例外 —— 碰撞拆三横带，贴图保持单张六边形 */
+check('2D / 3D 均按子矩形绘制（hex 例外）',
+  /for\(const b of p\.boxes\) this\._propBox/.test(__rr) &&
+  /p\.compound!=="hex"/.test(__rr) && /q\.compound!=="hex"/.test(__fp) ? 1 : 0, 1, 0.001);
 check('新分片 raid-legends / raid-geometry 已接入 HTML',
   /src\/raid-legends\.js\?v=/.test(html) && /src\/raid-geometry\.js\?v=/.test(html) ? 1 : 0, 1, 0.001);
 check('房间表含 >=15 处非矩形结构',
@@ -3577,6 +3579,33 @@ check('地标走 _pushProp 落地（2D/3D 同源）',
   /RAID_POI_LANDMARKS\[poi\.id\]/.test(raidSrc) && /this\._pushProp\(\{ kind:L\.kind/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('地标尺寸足够显眼（短边 ≥46）',
   G('Object.values(RAID_POI_LANDMARKS).every(l=>Math.min(l.w,l.h)>=46)') ? 1 : 0, 1, 0.001);
+
+/* ⑥ v0.34.3：rock 贴图恢复单张（碰撞仍三横带） */
+check('2D 渲染排除 hex 拆分',
+  /p\.compound!=="hex"/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('3D 渲染排除 hex 拆分',
+  /q\.compound!=="hex"/.test(fpSrc) ? 1 : 0, 1, 0.001);
+const __rockDraw = JSON.parse(G(`JSON.stringify((()=>{
+  let calls=0;
+  const fake={}, q={kind:"rock",x:0,y:0,w:80,h:80,fill:"#555",
+    compound:"hex",boxes:[{x:0,y:0,w:60,h:20},{x:0,y:20,w:80,h:40},{x:0,y:60,w:64,h:20}]};
+  const orig=RenderRaid._propBox;
+  RenderRaid._propBox=function(){ calls++; };
+  try{ RenderRaid.prop(fake,q); }finally{ RenderRaid._propBox=orig; }
+  return { calls, wallsHex:RAID_COMPOUND_KINDS.rock };
+})())`));
+check('rock 只画一张贴图（_propBox 调用 1 次）', __rockDraw.calls===1 ? 1 : 0, 1, 0.001);
+check('rock 碰撞仍是 hex 三横带', __rockDraw.wallsHex==='hex' ? 1 : 0, 1, 0.001);
+
+/* ⑦ v0.34.3：3D 性能（用户实机 profiling 说 _castWalls 最粗） */
+check('_castWalls 有 FOV 预筛', /halfFov/.test(fpSrc) && /da - halfAng > halfFov/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('地面装饰线按颜色合批', /_lineBatch/.test(fpSrc) && /_flushLines/.test(fpSrc) ? 1 : 0, 1, 0.001);
+check('贴花距离从 900 收到 480', /dep > 480/.test(fpSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑧ 副标题分隔符恢复（v0.34.2 误改 ui.js 的标题） */
+check('大厅标题恢复 BORDER OPS · WEB',
+  /BORDER OPS · WEB/.test(uiSrc) ? 1 : 0, 1, 0.001);
+check('品牌·代号仍保留', /BEAR·铁砧/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

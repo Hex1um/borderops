@@ -1154,7 +1154,7 @@ UI.brSetup=function(){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:34px;">大逃杀，绝地岛</h2>
-      <div class="subtitle">BATTLE ROYALE，最后一人存活</div>
+      <div class="subtitle">BATTLE ROYALE · 最后一人存活</div>
       <p style="color:var(--muted);max-width:680px;margin:0 0 14px;">
         你与另外 <b style="color:#ffd23f">${lobby-1}</b> 名玩家空降同一张绝地岛。落地搜刮武器护甲，
         在安全区（白圈）收缩中活到最后——<b style="color:#8fe07a">吃鸡</b>即胜利，阵亡即淘汰。</p>
@@ -1219,7 +1219,7 @@ UI.brPause=function(){
   UI._set(`
     <div class="panel" style="text-align:center;max-width:460px;">
       <h2 class="title-big" style="font-size:32px;">已暂停</h2>
-      <div class="subtitle">大逃杀，绝地岛</div>
+      <div class="subtitle">大逃杀 · 绝地岛</div>
       <p style="color:var(--muted);">安全区收缩已暂停。继续作战，或退出返回大厅。</p>
       <div class="row" style="justify-content:center;margin-top:16px;">
         <button class="btn ghost" id="btn-br-quit">退出对局</button>

@@ -40,7 +40,8 @@ const RenderRaid = {
   prop(ctx,p){
     /* v0.31.0：复合装饰按「与碰撞完全一致」的三个矩形分别绘制，
        中间缝隙留空 —— 画面上能钻过去的地方，碰撞里也真的能钻过去。 */
-    if(p.compound && p.boxes && p.boxes.length){
+    /* v0.34.3：hex（rock）只在碰撞里拆三横带，画面仍是一整块六边形；triple / arch 才按子矩形分别画。 */
+    if(p.compound && p.compound!=="hex" && p.boxes && p.boxes.length){
       for(const b of p.boxes) this._propBox(ctx,p,b.x,b.y,b.w,b.h);
       return;
     }

@@ -93,7 +93,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;">
         <h1 class="title-big">边境行动</h1>
-        <div class="subtitle">BORDER OPS，WEB，v${CFG.version}，撤离突袭，词缀枪械，黑市经济</div>
+        <div class="subtitle">BORDER OPS · WEB · v${CFG.version} · 撤离突袭 · 词缀枪械 · 黑市经济</div>
 
         <div class="mode-hero" data-mode="raid" role="button" tabindex="0" aria-label="进入塔科夫模式">
           <div class="hero-top">
@@ -346,7 +346,7 @@ const UI = {
     this._set(`
       <div class="panel">
         <h2 class="title-big" style="font-size:34px;">选择你的 PMC</h2>
-        <div class="subtitle">${mode==="endless"?"ENDLESS TRIAL，无尽试炼":"CHOOSE YOUR VAULT HUNTER"}</div>
+        <div class="subtitle">${mode==="endless"?"ENDLESS TRIAL · 无尽试炼":"CHOOSE YOUR VAULT HUNTER"}</div>
         <div class="grid-class">${cards}</div>
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
           <button class="btn ghost small" id="btn-back">返回</button>
@@ -374,7 +374,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;max-width:760px;">
         <h2 class="title-big" style="font-size:36px;">沙二，5V5</h2>
-        <div class="subtitle">DUST II，COMPETITIVE，MR12</div>
+        <div class="subtitle">DUST II · COMPETITIVE · MR12</div>
         <p style="color:var(--muted);max-width:600px;margin:0 auto 14px;">
           CS2 竞技规则：先拿 13 分获胜，半场换边。手枪局 $800 起手，
           击杀有奖励、连败有补偿，冻结时间打开购买菜单。</p>
@@ -530,7 +530,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">装备库</h2>
           <div class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>　<span style="font-size:12px;color:var(--muted);">搜集效率 +${p.mf}</span></div>
         </div>
-        <div class="subtitle">护甲：${sh?`${escHtml(sh.name)}（延迟 ${sh.delay.toFixed(1)}s，${sh.rate.toFixed(1)}/s）`:"无"}</div>
+        <div class="subtitle">护甲：${sh?`${escHtml(sh.name)}（延迟 ${sh.delay.toFixed(1)}s · ${sh.rate.toFixed(1)}/s）`:"无"}</div>
 
         <div class="inv-sec">
           <h4>武器 <span class="meta-cap">${p.weapons.length}/24</span></h4>
@@ -655,7 +655,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">军火市场</h2>
           <div class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}　<span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span></div>
         </div>
-        <div class="subtitle">MARKET，金币买军火，美元才能进黑市</div>
+        <div class="subtitle">MARKET · 金币买军火，美元才能进黑市</div>
         <div class="shop-tabs">${tabs}</div>
         ${body}
         <div class="row" style="margin-top:16px;justify-content:flex-end;">
@@ -781,7 +781,7 @@ const UI = {
           <h2 class="title-big" style="font-size:30px;margin:0;">改装与重新部署</h2>
           <div class="shop-gold">功勋 ${p.souls.toLocaleString()}　<span style="font-size:12px;color:var(--muted);">重新部署 ${p.rebirths} 次</span></div>
         </div>
-        <div class="subtitle">MAYHEM &amp; REBIRTH，用强度换收益，用等级换永久</div>
+        <div class="subtitle">MAYHEM &amp; REBIRTH · 用强度换收益，用等级换永久</div>
 
         <div class="meta-sec">
           <h4>改装等级（改装）</h4>
@@ -859,7 +859,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;max-width:480px;">
         <h2 class="title-big" style="font-size:36px;">暂停</h2>
-        <div class="subtitle">${endless?`ENDLESS，第 ${this.game.world?this.game.world.wave:1} 波`:"PAUSED"}</div>
+        <div class="subtitle">${endless?`ENDLESS · 第 ${this.game.world?this.game.world.wave:1} 波`:"PAUSED"}</div>
         <div class="row" style="justify-content:center;margin-bottom:12px;">
           <span class="shop-gold"><span class="cur-gp">◈</span> ${p.gold.toLocaleString()}</span>
           <span class="cur-eri">◆ ${p.eridium.toLocaleString()}</span>
@@ -894,7 +894,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;max-width:520px;">
         <h2 class="title-big" style="font-size:34px;">比赛暂停</h2>
-        <div class="subtitle">DE_DUST2，${Dust2.playerSide()==="t"?"T":"CT"}，第 ${Dust2.round} 回合</div>
+        <div class="subtitle">DE_DUST2 · ${Dust2.playerSide()==="t"?"T":"CT"} · 第 ${Dust2.round} 回合</div>
         <div class="dust-score" style="justify-content:center;margin:12px 0;">
           <span class="sc-a">${Dust2.score.A}</span><span class="sc-sep">:</span><span class="sc-b">${Dust2.score.B}</span>
         </div>
@@ -1009,7 +1009,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;max-width:640px;">
         <h2 class="title-big" style="font-size:42px;color:${win?"var(--accent)":"var(--hp)"};">${win?"比赛胜利":"比赛失败"}</h2>
-        <div class="subtitle">${r.gunSet==="bl"?"BORDERLANDS ARSENAL":"CS2 ARSENAL"}，${r.rounds} 回合</div>
+        <div class="subtitle">${r.gunSet==="bl"?"BORDERLANDS ARSENAL":"CS2 ARSENAL"} · ${r.rounds} 回合</div>
         <div class="dust-score" style="justify-content:center;margin:18px 0;">
           <span class="sc-a">${r.score.A}</span><span class="sc-sep">:</span><span class="sc-b">${r.score.B}</span>
         </div>
@@ -1050,7 +1050,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:40px;color:var(--hp);">你倒下了</h2>
-        <div class="subtitle">${endless?`ENDLESS，第 ${wave} 波`:"GAME OVER"}</div>
+        <div class="subtitle">${endless?`ENDLESS · 第 ${wave} 波`:"GAME OVER"}</div>
         ${endless
           ? `<p style="color:var(--muted);">${CLASSES[p.classId].name}，撑到第 <b style="color:var(--accent);font-size:22px;">${wave}</b> 波，Lv.${p.level}</p>`
           : `<p style="color:var(--muted);">${CLASSES[p.classId].name}，到达 Lv.${p.level}，${this.game.zoneIndex+1}/${ZONES.length} 区域</p>`}
@@ -1077,7 +1077,7 @@ const UI = {
     this._set(`
       <div class="panel" style="text-align:center;">
         <h2 class="title-big" style="font-size:40px;color:var(--orange);">军械库已开启</h2>
-        <div class="subtitle">VICTORY，改装等级已解锁</div>
+        <div class="subtitle">VICTORY · 改装等级已解锁</div>
         <p style="color:var(--muted);">${CLASSES[p.classId].name}，Lv.${p.level}，击杀军械库守卫</p>
         <div class="meta-sec" style="text-align:left;">
           <h4>接下来的路</h4>

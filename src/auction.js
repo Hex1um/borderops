@@ -688,7 +688,7 @@ UI.raidAuction=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">拍卖行</h2>
-      <div class="subtitle">AUCTION HOUSE，<b style="color:#ffd36a">全网同一份货</b>，每 10 分钟一期，卢布结算，5% 成交佣金</div>
+      <div class="subtitle">AUCTION HOUSE · <b style="color:#ffd36a">全网同一份货</b> · 每 10 分钟一期 · 卢布结算 · 5% 成交佣金</div>
       <div class="shop-bar">
         <div class="shop-desc"><b style="color:#ffd36a">这一期货架对所有人一样</b>：挂在货上的枪 / 甲 / 配件 / 材料由<b>期号</b>算出，同一期里谁打开都是同一批货、同一个一口价、同一结束时间（<b>本期还剩 <span id="auc-period-left" style="color:#8fe07a">${auctionCdText(auctionBucketEnd(auctionBucket(now))-now)}</span></b>）。<br>
         <b style="color:#ffd23f">竞拍</b>可以低于估值捡漏（但可能被抬价），<b style="color:#ffd23f">一口价</b>直接拿下；自己的战利品挂上去，成交价比商人回收（六折）高得多——挂单<b style="color:#8fe07a"> 4 分钟</b>，到期未售出自动退回仓库，上架费不退。<br>
