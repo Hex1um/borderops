@@ -1,6 +1,6 @@
 # 边境行动 BORDER OPS · 中文 Wiki
 
-> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.31.1**（由 `npm run check` 校验，升版必须同步）。
+> 面向玩家的完整说明 + 面向维护者的速查。当前版本 **v0.31.2**（由 `npm run check` 校验，升版必须同步）。
 > 代码与实现细节见 [README.md](README.md)，逐版改动见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
@@ -472,3 +472,8 @@ python playwright_smoke.py   # 真浏览器冒烟（需先起服务）
 - **狙击枪的手感三件套（v0.28.0）**：`raidGunMoveMul` ×0.62（只看主手 `p.gun`）、`MOVE_SPREAD_CAP.sniper` 0.85（移动中几乎全向，站定才准）。改狙击平衡时这三个数要一起看：光锥越远 → 越容易被反打，移速和散布就是代价。
 - **护甲等级色（v0.28.0）**：`ARMOR_TIER_COLOR` 现在 = `["#9aa4b2", ...RAID_TIERS.map(t=>t.color)]`，T1 民用棕 → T9 定型青。军火超市护甲 / 头盔卡的**左边栏与 T 徽标都用它**（不要再退回 `RAID_RARITY_COLOR[0]`，那样九张卡又是一片棕）。护甲底材的品质仍是「民用」，等级色只表达 T 档，两者不冲突。
 - **每日特价（v0.28.0）**：种子 = `raidDealSeed(分支, 时间桶, 已买次数)`，1 小时一桶，和拍卖行期号同一套确定性思路。**生成前后必须把 `RNG.rng` 闭包换回去**（`const saved=RNG.rng … finally RNG.rng=saved`）—— 联机两端靠同种子推进，序列错位就分叉。玩家「买过几次」存 `RaidStash.dailyDeals[分支]={hour,seq}`，买走 seq+1 立即换下一件；没人买则换桶自然刷新。医疗品**不设**特价。时间桶函数用 `ms===undefined` 判断，别写 `ms||Date.now()`（时间戳 0 会被当假值，verify 组 49 有断言）。
+- **「要害命中 / crit 词缀」的语义边界（v0.31.2 核实）**：塔科夫模式的「爆头」是 `raid-core3.js` 里 `RNG.chance(0.15)` → 伤害 ×1.8 的**随机暴击**，与准星高度、命中部位无关；3D 第一人称里也不要按「瞄头必爆头」去理解。`w.stats.critChance` / `critDmg` **只在旧战役模式生效**（`combat.js` 的 `cc` 读它），塔科夫结算完全不读这两个字段 —— 配件 / 核心上的「要害命中 +N%」在撤离模式是**死词条**。要么把 `raid-core3.js` 的 0.15 改成 `0.15 + (gun.stats.critChance||0)/100`（会改战斗平衡，需重新验单调性断言），要么在塔科夫面板把这些词条标注 / 过滤。目前两者都未改，属已知待决项。
+- **局时是 480s（8 分钟），不是 30 分钟（v0.31.2 核实）**：`Raid.raidDuration=480` 是唯一来源；时间品质曲线 `raidTimeLuck` 前 1/3（0~160s）为 0、320s 到 +0.12、480s 到 +0.22；双波空投 `RAID_SURGE_AT=[210,330]`。讨论「中期人流事件」要按 8 分钟窗口算，别按半小时。
+- **掉落 / 撤离点的几个易错口径（v0.31.2 核实）**：`RAID_ROOMS` 103 个房间、`extract:true` **19 个**（不是 20）、`RAID_POI` 8 个核心地点。黑市赌博机 `SHOPS.gamble.weights.singularity=0.0018` 是**权重不是概率**，除以总权重 21.2088 后真实概率 ≈ 1/11783；塔科夫抽奖机的「极品 ≈0.2%」是另一套东西，别混。`RAID_TIER_W` 从 **T5** 起 ×1/4（不是 T3），`RAID_MAT_TIER_W` 从 T4 起，`RAID_PART_TIER_W` 从 T5 起。
+- **经济体检有实测工具（v0.31.2）**：`node tools/econ_probe.cjs --out <path.json>` 在 vm 里加载 34 个模块后**直接调用真实价格 / 撤离费 / 稀有度函数**，输出套利区间、撤离费曲线、10 万次稀有度预算、单趟净利。改 `RAID_*_RATE` / `RAID_BUDGET` / `RAID_FEE_*` 后先跑它，别靠手算：FNV 浮动让买价与卖价在「同一 uid」时同向，套利下限恒为 +14.3%。
+- **冒烟测试是确定性重播（v0.31.2）**：`playwright_smoke.py` 用 `BO_SEED`（默认 `20261107`）把 raid 整局生成固定下来，否则「护盾型单位存在」会因 PMC 22% 带盾概率偶发假失败。改护盾 / 伤害结算时注意两处口径：`hit(30)` 期间 `RNG.chance` 被固定为 false 以屏蔽 15% 爆头；`emitter` 加成 `shieldAbsorbMul=1.08` 时盾损是 `30/1.08≈27.78` 而不是 30。要换种子用 `BO_SEED=<int> python playwright_smoke.py`。

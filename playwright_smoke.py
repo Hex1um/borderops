@@ -14,6 +14,10 @@ from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("BO_BASE", "http://127.0.0.1:3211/")
 EDGE = os.environ.get("BO_EDGE", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+# raid 地图 / AI 生成默认用 Date.now() 与 Math.random() 现算种子。冒烟脚本里
+# 「护盾型单位存在」「T4+ 装甲型单位存在」都靠随机编成，会出现约 3% 的假失败。
+# 这里把整局种子固定成常量，让 44 个 AI 的编成可重播；换种子用 BO_SEED 环境变量。
+SEED = int(os.environ.get("BO_SEED", "20261107"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SHOTS = os.path.join(ROOT, "testshots")
 os.makedirs(SHOTS, exist_ok=True)
@@ -76,6 +80,19 @@ with sync_playwright() as pw:
     check("配装大厅渲染完成", lobby["startBtn"], "仓库枪 %d / 甲 %d / 钥匙 %d" %
           (lobby["weapons"], lobby["armors"], lobby["keys"]))
     shot(page, "02-lobby")
+    # 只在 Raid._start 同步执行期间冻结 Date.now / Math.random，把
+    #   this.seed = (Date.now() ^ (Math.random()*1e9)) >>> 0
+    # 固定成 BO_SEED。不改动游戏源码、也不污染之后的计时逻辑（finally 立即还原）。
+    page.evaluate("""(seed) => {
+        const orig = Raid._start;
+        Raid._start = function (g, opts) {
+            const om = Math.random, od = Date.now;
+            Math.random = () => 0;
+            Date.now = () => seed;
+            try { return orig.call(this, g, opts); }
+            finally { Math.random = om; Date.now = od; }
+        };
+    }""", SEED)
     page.locator("#btn-raid-start").click()
     page.wait_for_function("typeof Raid !== 'undefined' && Raid.active === true && game.mode === 'raid'",
                            timeout=20000)
@@ -330,7 +347,11 @@ with sync_playwright() as pw:
         const p = Raid.player, out = {};
         const atk = { isPlayer:false, remote:false, x:0, y:0, name:'Tester' };
         const gun = { element:'none', armorPen:0, name:'test' };
-        const hit = (d) => Raid._damage(p, d, atk, gun, {});
+        // _damage 内部有 15% 爆头（d *= 1.8）。不冻结随机数时 hit(30) 有 15% 概率
+        // 变成 54，下面的「盾损 == 30」断言就会偶发假失败。把 RNG.chance 仅在本次
+        // 伤害调用期间固定为 false，用完立刻还原，既保确定性也不污染 raid 主循环。
+        const hit = (d) => { const oc = RNG.chance; RNG.chance = () => false;
+          try { return Raid._damage(p, d, atk, gun, {}); } finally { RNG.chance = oc; } };
         // 隔离：raid 运行中 AI 可能已经打掉一截盾，直接拿 UI 读到的容量去比
         // afterHit.shield 会随机漂 30~150，导致这条断言偶发失败。先把盾补满，
         // 并把「补满时的容量」一起回传，让断言只检验「先扣盾」这一条语义。
@@ -338,7 +359,10 @@ with sync_playwright() as pw:
         p.shield = cap; p.shieldTimer = 0; p.shieldInvuln = 0;
         // (a) 先扣盾
         const hp0 = p.hp; hit(30);
-        out.afterHit = { hp:p.hp, shield:p.shield, timer:p.shieldTimer, hpLost:hp0-p.hp, capBefore:cap };
+        // emitter 独特加成让护盾每点吸收 1.08 伤害，盾损是 d/mul 而不是 d；
+        // 倍率回传给断言，避免把「盾更耐打」误判成「伤害没扣在盾上」。
+        out.afterHit = { hp:p.hp, shield:p.shield, timer:p.shieldTimer, hpLost:hp0-p.hp,
+                         capBefore:cap, mul:p.shieldAbsorbMul||1 };
         // (b) 延迟期间不回充 / 延迟结束后回充
         const s1 = p.shield;
         Raid._tickShield(p, p.shieldDelay * 0.5);
@@ -359,11 +383,13 @@ with sync_playwright() as pw:
         return out;
     }""")
     report["snapshots"]["shieldSeq"] = seq
-    # 只验「伤害先扣盾、HP 不掉」这条语义：raid 主循环在两次 evaluate 之间仍在跑，
-    # AI 命中与 _tickShield 回充会让盾值漂几滴，精确等于 capacity-30 会偶发失败。
+    # 只验「伤害先扣盾、HP 不掉」这条语义。evaluate 内已冻结爆头随机且同步执行，
+    # 不会与 AI 命中 / _tickShield 交错，因此盾损应当精确等于 30 / shieldAbsorbMul。
+    ah = seq["afterHit"]
     check("实机伤害先扣盾（HP 不掉）",
-          seq["afterHit"]["hpLost"] == 0 and 0 < seq["afterHit"]["capBefore"] - seq["afterHit"]["shield"] <= 32,
-          json.dumps(seq["afterHit"], ensure_ascii=False))
+          ah["hpLost"] == 0 and
+          abs(ah["capBefore"] - ah["shield"] - 30 / ah["mul"]) < 0.01,
+          json.dumps(ah, ensure_ascii=False))
     check("受击后重置充能延迟", seq["afterHit"]["timer"] > 0,
           "timer=%s" % seq["afterHit"]["timer"])
     check("延迟期间不回充 / 延迟后按 speed 回充",

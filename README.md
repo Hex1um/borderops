@@ -50,7 +50,10 @@ npm run check      # 校验版本号三处同步 + 脚本缓存串（无需安�
 # 真实浏览器冒烟（需系统 Edge + Python playwright，先起服务）：
 PORT=3211 node server.js
 python playwright_smoke.py      # 断言 + testshots/*.png + test-report.json
+                               # BO_SEED=20261107 固定整局生成（默认已固定），保证 42 项可重播
 python probe_mechanics.py      # 只读机制体检 → mechanics-probe.json
+node tools/econ_probe.cjs      # 零依赖经济体检：套利 / 撤离费 / 稀有度预算 / 单趟净利
+node tools/econ_probe.cjs --out _work/econ.json   # 可选：把实测结果存成 JSON
 # 或仅静态托管（自动切 WebRTC P2P 联机，无需 Node 后端）：
 python -m http.server 8132
 ```
