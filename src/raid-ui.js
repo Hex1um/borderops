@@ -177,10 +177,10 @@ UI.raidSetup=function(){
 
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:34px;">塔科夫模式，撤离突袭</h2>
-      <div class="subtitle">ESCAPE FROM TARKOV，硬核撤离射击，地图「海关流域」· 工业区 + 北境密林 + 中央河谷 + 铁路枢纽 + 西南监狱/小镇/大坝，支持 <b style="color:#7ee08a">2~4 人联机</b></div>
+      <h2 class="title-big" style="font-size:34px;">塔科夫模式 · 撤离突袭</h2>
+      <div class="subtitle">ESCAPE FROM TARKOV · 硬核撤离射击 · 地图「海关流域」· 工业区 + 北境密林 + 中央河谷 + 铁路枢纽 + 西南监狱/小镇/大坝，支持 <b style="color:#7ee08a">2~4 人联机</b></div>
       <details class="tarkov-intro">
-        <summary>塔科夫模式，玩法说明（点此展开 / 折叠）</summary>
+        <summary>塔科夫模式 · 玩法说明（点此展开 / 折叠）</summary>
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
           开局与 <b style="color:#e0b84a">30 名 PMC / Scav</b>、<b style="color:#ffd23f">3 名 Boss</b>，以及 8 个核心地点的 <b style="color:#8fe07a">10 名精英</b>同场（共 43 名）。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">★</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
           ${weaponQualityHidden()
@@ -539,7 +539,7 @@ UI.raidPause=function(confirmQuit){
   UI._set(`
     <div class="panel" style="text-align:center;max-width:460px;">
       <h2 class="title-big" style="font-size:32px;">已暂停</h2>
-      <div class="subtitle">塔科夫模式，地图「海关流域」（工业区 / 密林 / 河谷 / 铁路 / 监狱 / 小镇 / 大坝）</div>
+      <div class="subtitle">塔科夫模式 · 地图「海关流域」（工业区 / 密林 / 河谷 / 铁路 / 监狱 / 小镇 / 大坝）</div>
       <p style="color:var(--muted);">撤离倒计时已停止。继续行动，或放弃突袭返回大厅。</p>
       <div class="row" style="justify-content:center;margin-top:16px;">
         <button class="btn ghost" id="btn-raid-quit">放弃突袭（装备丢失）</button>
@@ -654,7 +654,7 @@ UI.raidShop=function(opts){
     const can=stash.creds>=d.price;
     const leftMin=Math.max(1, Math.ceil((raidDealBucketEnd(d.bucket)-Date.now())/60000));
     return `<div class="shop-item" style="border-left-color:#ffd23f;background:rgba(255,210,63,.06);">
-      <div class="si-name" style="color:#ffd23f">◈ 每日特价，${d.name}</div>
+      <div class="si-name" style="color:#ffd23f">◈ 每日特价 · ${d.name}</div>
       <div class="si-meta">${d.meta}，<b style="color:#ffd23f">全服同一件，先到先得</b></div>
       <div class="si-stats">${d.stats}<br><span style="color:#8fd0ff">${leftMin} 分钟后刷新，买走立即换下一件</span></div>
       <div class="si-buy"><span class="si-price ${can?'':'cant'}">₽ ${priceText(d.price)}</span>
@@ -805,7 +805,7 @@ UI.raidShop=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">军火超市</h2>
-      <div class="subtitle">ARMS SUPERMARKET，用卢布采购装备入库，带入下一局突袭</div>
+      <div class="subtitle">ARMS SUPERMARKET · 用卢布采购装备入库，带入下一局突袭</div>
       <div class="shop-bar">
         <div class="shop-desc">这里只卖<b style="color:#ffd23f">成品</b>：枪械 / 护甲与头盔（同栏分区）/ 护盾 / 配件 / <b style="color:#ffd36a">子弹</b> / 医疗品，
           护盾按<b style="color:#4fd6ff">容量 / 充能速度 / 充能延迟</b>三数值与配件、前后缀、独特加成区分；<b style="color:#ffd23f">全场统一按「估价 × 2.0（±0.5）」结算</b>——外场买贵，局内摊位便宜得多；<b style="color:#ff9a3a">原材料、底材、改装模块一律不卖</b>——原材料与底材可以在枪匠台「工坊」用材料合成；<b style="color:#ff9a3a">改装模块完全不能合成</b>，只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">局内枪械商店（低阶）与黑市（高阶）</b>购买。<br>
@@ -1289,8 +1289,8 @@ UI.raidWorkshop=function(opts){
 
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:32px;">枪匠台，工坊</h2>
-      <div class="subtitle">WORKSHOP，材料合成 / 用机匣与部件组装枪械</div>
+      <h2 class="title-big" style="font-size:32px;">枪匠台 · 工坊</h2>
+      <div class="subtitle">WORKSHOP · 材料合成 / 用机匣与部件组装枪械</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
         <div class="shop-desc"><b style="color:#7fd0ff">合成表改为自选材料</b>：投什么材料就出什么档的货——全用废金属只能做出普通货，投高阶材料才能出特种以上；材料越混搭，产物品质浮动越大。<b style="color:#ff9a3a">改装模块仍然不能合成</b>：只能从保险箱 / Raider 掉落，或在<b style="color:#7fd0ff">枪械商店与黑市</b>购买。钥匙可以在这里合成：<b style="color:#ffd76a">16 份原材料</b>做一把，级别由投料品质决定（I~V）。<b>弹药</b>在「弹药」页单独合成：轻弹 1 份 / 中弹 2 份 / 重弹 4 份 / 榴弹 8 份材料，每次出 30 发，产出的级别由材料品质决定（废金属出民用弹，高档材料才出特种弹）。<b>弹种适配组件</b>把武器更换弹种为对应弹种并加弹药效能，<b>膛压组件</b>决定<b style="color:#ff2ce0">改装等级</b>、<b>改装模块</b>提供属性增益——单枚增益已大幅提升，拿到就是质变。组装出的枪，名字与品质由底材、配件与材料共同决定${weaponQualityHidden()?"（当前精简显示，品质与前后缀不显示）":""}。</div>

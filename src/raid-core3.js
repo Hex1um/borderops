@@ -3,6 +3,21 @@
  * v0.22.0：由 raid.js 按自然边界物理拆分，逻辑零改写。经典脚本按 index.html 顺序加载，
  * 共享同一全局词法作用域。verify 的 raidSrc 会聚合全部 raid-*.js 做源码断言。
  * ========================================================================= */
+/* v0.35.1（用户反馈 #7）：撤离时**实际携带**的装备总估值 —— 手持/副手、穿戴中的甲/盔/盾，
+   以及背包里的枪 / 甲 / 盔 / 盾全部计入；用对象引用去重，避免「手持枪的条目也在
+   inv.weapons 里」被重复计值。付费撤离点按这个值浮动车费（含局内新捡到的装备）。 */
+function raidCarriedGearValue(R){
+  if(!R) return 0;
+  const p=R.player||{}, inv=R.inv||{}, car=R.carried||{}, seen=new Set();
+  let v=0;
+  const add=it=>{ if(it && typeof it==="object" && !seen.has(it)){ seen.add(it); v+=Math.max(0, Number(it.value)||0); } };
+  for(const k of ["weapons","armors","helmets","shields"]) for(const it of (inv[k]||[])) add(it);
+  for(const it of (car.weapons||[])) add(it);
+  add(car.armor); add(car.helmet); add(car.shield);
+  add(p.armorGear); add(p.helmetGear); add(p.shieldGear);
+  return v;
+}
+
 Object.assign(Raid, {
 
   _botTakeItem(b, it){
@@ -911,16 +926,38 @@ Object.assign(Raid, {
     if(!p || !item) return false;
     const kind=item.kind;
     if(kind==="weapon"){
-      if((this.inv.weapons||[]).indexOf(item)<0){
-        if(this.inv.weapons.length>=RAID_INV_CAP.weapons){
-          this._pick(p.x,p.y-34,"武器栏已满，先腾出空间","#ff8a5a"); return false;
-        }
-        this.inv.weapons.push(item);       // _stowGun / _gunBag 依赖物品栏里有这条
-      }
+      /* v0.35.1（用户反馈 #5/#6）：长按星键 = 与「当前手持的那把枪」直接交换，
+         不再把地上的枪塞进背包、又把旧枪留在背包里。
+         - 目标手：主手有枪就换主手，否则副手，都空则直接上手；
+         - 旧枪：从物品栏移除并落到脚下（可再捡回），背包条目数不变；
+         - 手持引用 p.gun / p.secondary 与物品栏条目同源 → 「装备中」与背包显示一致。 */
       const g=this._rtGun(item);
       if(!g) return false;
+      const slot = p.gun ? "main" : (p.secondary ? "secondary" : null);
+      const heldGun = slot==="main" ? p.gun : (slot==="secondary" ? p.secondary : null);
+      let heldItem=null;
+      if(heldGun){
+        const arr=this.inv.weapons||[];
+        for(let i=0;i<arr.length;i++){
+          if(arr[i]!==item && this._rtGun(arr[i])===heldGun){ heldItem=arr[i]; break; }
+        }
+      }
+      const inInv=(this.inv.weapons||[]).indexOf(item)>=0;
+      // 只有「新枪要占格、又没有旧枪可换出」时才真正卡容量
+      if(!inInv && !heldItem && this.inv.weapons.length>=RAID_INV_CAP.weapons){
+        this._pick(p.x,p.y-34,"武器栏已满，先腾出空间","#ff8a5a"); return false;
+      }
+      if(!inInv) this.inv.weapons.push(item);      // 新枪条目（_stowGun / _gunBag 依赖）
+      if(heldItem){
+        const hi=this.inv.weapons.indexOf(heldItem);
+        if(hi>=0) this.inv.weapons.splice(hi,1);   // 旧枪移出物品栏（背包不被撑大）
+        this._dropGround(heldItem, p.x, p.y, "swap"); // 旧枪落到脚下，可再捡回
+      }
       g.ammoMag=g.mag; g.ammoRes=Math.max(0,g.ammoRes|0);
-      this._equipGun(g, true);            // 长按 = 明确换到主手
+      if(slot==="secondary") p.secondary=g; else p.gun=g;   // 换到「正在用的那只手」
+      p.reloadT=0; p.fireCd=Math.max(p.fireCd,0.25);
+      this._invDirty=true;
+      this._pick(p.x,p.y-34,((p.secondary===g)?"副手 ":"手持 ")+gunNameOf(g), raidGunColor(g));
       return true;
     }
     if(kind==="shield") return !!this._wearShield(item);
@@ -1115,8 +1152,8 @@ Object.assign(Raid, {
         this._extractBlockReason="撤离点被封锁，清除封锁者";
         return;
       }
-      // 付费撤离点：费用随带入装备估值浮动；余额不足时不计时
-      const fee=raidExtractFee(zone, this.carryVal||0);
+      // 付费撤离点：费用随**撤离时实际携带**的装备总估值浮动（含局内新捡的枪/甲/盔/盾）；余额不足时不计时
+      const fee=raidExtractFee(zone, raidCarriedGearValue(this));
       const purse=this.creds + Math.max(0, (this.stash&&this.stash.creds)||0);
       if(fee>0 && purse<fee){
         this.extractT=Math.max(0, this.extractT-dt*1.6);

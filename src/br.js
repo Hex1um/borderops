@@ -1153,7 +1153,7 @@ UI.brSetup=function(){
   const lobby=UI._brLobby;
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:34px;">大逃杀，绝地岛</h2>
+      <h2 class="title-big" style="font-size:34px;">大逃杀 · 绝地岛</h2>
       <div class="subtitle">BATTLE ROYALE · 最后一人存活</div>
       <p style="color:var(--muted);max-width:680px;margin:0 0 14px;">
         你与另外 <b style="color:#ffd23f">${lobby-1}</b> 名玩家空降同一张绝地岛。落地搜刮武器护甲，

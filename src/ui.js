@@ -101,7 +101,7 @@ const UI = {
             <span class="hero-live"><span class="live-full">2~4 人联机</span><span class="live-short">联机</span></span>
           </div>
           <h2>塔科夫模式</h2>
-          <div class="hero-tag">ESCAPE FROM TARKOV，硬核撤离射击</div>
+          <div class="hero-tag">ESCAPE FROM TARKOV · 硬核撤离射击</div>
           <p>PMC 与 Scav 同场，流血、包扎、条件撤离点与装备保险——<b>只有活着撤离，装备才会入库</b>。
             配装大厅内含军火超市 / 枪匠台 / 仓库 / 拍卖行，进图后还有枪械店、材料店、回收超市与黑市。</p>
           <div class="hero-chips">
@@ -373,7 +373,7 @@ const UI = {
   dustSetup(){
     this._set(`
       <div class="panel" style="text-align:center;max-width:760px;">
-        <h2 class="title-big" style="font-size:36px;">沙二，5V5</h2>
+        <h2 class="title-big" style="font-size:36px;">沙二 · 5V5</h2>
         <div class="subtitle">DUST II · COMPETITIVE · MR12</div>
         <p style="color:var(--muted);max-width:600px;margin:0 auto 14px;">
           CS2 竞技规则：先拿 13 分获胜，半场换边。手枪局 $800 起手，
@@ -462,7 +462,7 @@ const UI = {
     this._set(`
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <h2 class="title-big" style="font-size:30px;">${CLASSES[p.classId].name}，技能树</h2>
+          <h2 class="title-big" style="font-size:30px;">${CLASSES[p.classId].name} · 技能树</h2>
           <div style="color:var(--green);font-weight:800;">可用技能点：${p.skillPoints}</div>
         </div>
         <div class="subtitle">主动技能：${p.abilityName}（冷却 ${p.abilityBaseCD}s）</div>
@@ -631,7 +631,7 @@ const UI = {
       body=`<div class="gamble-box">
         <div class="slot">?</div>
         <div style="color:var(--muted);font-size:13px;max-width:420px;line-height:1.6;">${def.desc}<br>
-          ${weaponQualityHidden()?"精简显示下不标品质，切到「完整」可查看；":"特供 / 珍藏 / 孤品 三档神兵只有这台机器能出，" }物品等级 = 你的等级 +3。</div>
+          ${weaponQualityHidden()?"精简显示下不标品质，切到「完整」可查看；":"定制 / 珍藏 / 孤品 三档神兵只有这台机器能出，" }物品等级 = 你的等级 +3。</div>
         <button class="btn" id="btn-gamble" ${Shop.balance("gamble",g)<cost?'disabled style="opacity:.4"':''}>投币 ${Shop.curIconHtml("gamble")}${cost.toLocaleString()}</button>
         <div class="gamble-result" id="gamble-result"></div>
       </div>`;

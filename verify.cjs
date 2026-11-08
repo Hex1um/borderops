@@ -1425,11 +1425,11 @@ check('完整模式图例按「从低到高」顺序列出',
   legendPlain.indexOf(tierNames9[0][0])>=0 &&
   legendPlain.indexOf(tierNames9[8][0]) > legendPlain.indexOf(tierNames9[0][0]) ? 1 : 0, 1, 0.001);
 
-console.log('\n=== 30. 完整模式显示前后缀 + T10 改名「特供」 + 最高三档仅黑市赌博机产出 ===');
+console.log('\n=== 30. 完整模式显示前后缀 + T10 改名「定制」 + 最高三档仅黑市赌博机产出 ===');
 // 完整模式：显示分层关闭（显示前后缀 / 品质）
 const prevD = G('CFG.display'); G('CFG.display="full"');
 check('完整模式 weaponQualityHidden=false', G('weaponQualityHidden()')?0:1, 1, 0.001);
-check('第10档品质改名 特供', G('RARITIES.find(r=>r.id==="primordial").name==="特供"')?1:0, 1, 0.001);
+check('第10档品质改名 定制', G('RARITIES.find(r=>r.id==="primordial").name==="定制"')?1:0, 1, 0.001);
 // 完整模式：枪名应含前后缀
 const preOk = G('(function(){ const w=generateWeapon(40,{rarity:"primordial"}); const a=w.affixes.find(x=>x.kind==="prefix")||w.affixes[0]; return a? gunNameOf(w).indexOf(a.nm)>=0 : false; })()');
 check('完整模式枪名含前后缀', preOk?1:0, 1, 0.001);
@@ -1440,17 +1440,17 @@ const preOkC = G('(function(){ const w=generateWeapon(40,{rarity:"primordial"});
 check('精简模式枪名不含前后缀', preOkC?0:1, 1, 0.001);
 G('CFG.display="'+prevD+'"');
 
-// 最高三档（特供/珍藏/孤品）默认权重归零
-check('默认权重 特供=0', G('RARITIES.find(r=>r.id==="primordial").weight'), 0, 0.001);
+// 最高三档（定制/珍藏/孤品）默认权重归零
+check('默认权重 定制=0', G('RARITIES.find(r=>r.id==="primordial").weight'), 0, 0.001);
 check('默认权重 珍藏=0', G('RARITIES.find(r=>r.id==="celestial").weight'), 0, 0.001);
 check('默认权重 孤品=0', G('RARITIES.find(r=>r.id==="singularity").weight'), 0, 0.001);
-check('黑市权重不再含特供', ("primordial" in G('SHOPS.black.weights'))?0:1, 1, 0.001);
+check('黑市权重不再含定制', ("primordial" in G('SHOPS.black.weights'))?0:1, 1, 0.001);
 check('赌博机改为金币(gold)结算', G('(SHOPS.gamble.currency||"gold")==="gold"')?1:0, 1, 0.001);
-check('赌博机权重含 特供', G('(SHOPS.gamble.weights.primordial||0)>0')?1:0, 1, 0.001);
+check('赌博机权重含 定制', G('(SHOPS.gamble.weights.primordial||0)>0')?1:0, 1, 0.001);
 check('赌博机权重含 珍藏', G('(SHOPS.gamble.weights.celestial||0)>0')?1:0, 1, 0.001);
 check('赌博机权重含 孤品', G('(SHOPS.gamble.weights.singularity||0)>0')?1:0, 1, 0.001);
 // rollQuality 默认表（无权重参数）绝不出最高三档
-check('rollQuality 默认不出特供', G('(function(){ for(let i=0;i<500;i++){ if(rollQuality(60,{})==="primordial") return false; } return true; })()')?1:0, 1, 0.001);
+check('rollQuality 默认不出定制', G('(function(){ for(let i=0;i<500;i++){ if(rollQuality(60,{})==="primordial") return false; } return true; })()')?1:0, 1, 0.001);
 check('rollQuality 默认不出孤品', G('(function(){ for(let i=0;i<500;i++){ if(rollQuality(60,{})==="singularity") return false; } return true; })()')?1:0, 1, 0.001);
 
 console.log('\n=== 31. 联机净化内核：corpse schema + text 剥 HTML + sanitizeEvent 单测（v0.22.0）===');
@@ -2284,7 +2284,7 @@ check('旧装备满栏时落地而非凭空消失',
   /this\._dropGround\(old, p\.x, p\.y, "spill"\)/.test(raidSrc) &&
   /arr\.length<RAID_INV_CAP\.shields/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('_swapEquip 四类走各自穿戴链路',
-  /_swapEquip\(item\)/.test(raidSrc) && /_equipGun\(g, true\)/.test(raidSrc) &&
+  /_swapEquip\(item\)/.test(raidSrc) && /this\._dropGround\(heldItem/.test(raidSrc) &&
   /this\._wearShield\(item\)/.test(raidSrc) && /this\._wearGear\(kind, item\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('长按只取这一件、其余留在原地',
   /drops\.splice\(i,1\)/.test(raidSrc) && /if\(!drops\.length\) c\.searched=true/.test(raidSrc) ? 1 : 0, 1, 0.001);
@@ -3473,8 +3473,8 @@ check('护甲 / 头盔 / 护盾底材都有 T12',
   G('!!RAID_ARMORS[12]') && G('!!RAID_HELMETS[12]') && G('!!SHIELD_BASES[12]') ? 1 : 0, 1, 0.001);
 check('商店与普通掉落仍封顶 T9',
   G('raidRollArmorTier(1.6)<=9') ? 1 : 0, 1, 0.001);
-check('抽奖机超极品档 0.04% 直取 T10-12',
-  /if\(r < 0\.0004\)/.test(raidSrc) && /gear\(10,12\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('抽奖机超极品档 0.04% 直取 T10-12（仅黑市 premium）',
+  /if\(premium && r < 0\.0004\)/.test(raidSrc) && /gear\(10,12\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('抽奖机文案改为「T10~T12 的枪械、装备和配件」',
   /T10~T12 的枪械、装备和配件/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
@@ -3608,6 +3608,46 @@ check('贴花距离从 900 收到 480', /dep > 480/.test(fpSrc) ? 1 : 0, 1, 0.00
 check('大厅标题恢复 BORDER OPS · WEB',
   /BORDER OPS · WEB/.test(uiSrc) ? 1 : 0, 1, 0.001);
 check('品牌·代号仍保留', /BEAR·铁砧/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ==================== 52. v0.35.1 十一项修复护栏 ==================== */
+console.log('\n=== 52. v0.35.1 修复护栏（品质显示 / 星键交换 / 撤离费 / 抽奖机分档 / 局内特价 / 拆解 / 排序）===');
+
+/* ① 图例只列前 9 阶，隐藏三档不出现 */
+const legendPlain2 = String(G(`(()=>{const p=CFG.display;CFG.display="full";const t=raidTierLegend();CFG.display=p;return t;})()`)).replace(/<[^>]*>/g,'');
+check('图例不含隐藏三档（定制 / 珍藏 / 孤品）', !/定制|珍藏|孤品/.test(legendPlain2) ? 1 : 0, 1, 0.001);
+check('图例仍含前 9 阶（民用…定型）', /民用/.test(legendPlain2) && /定型/.test(legendPlain2) ? 1 : 0, 1, 0.001);
+
+/* ② 第 10 阶名两表统一为「定制」 */
+check('第10阶品质两表同名「定制」',
+  (G('RARITIES.find(r=>r.id==="primordial").name')==="定制" && G('RAID_TIERS[9].name')==="定制") ? 1 : 0, 1, 0.001);
+
+/* ③ 新三档颜色两表同色 */
+check('定制/珍藏/孤品 两表同色',
+  [9,10,11].every(i=> G(`RARITIES[${i}].color`)===G(`RAID_TIERS[${i}].color`)) ? 1 : 0, 1, 0.001);
+
+/* ④ 星键长按 = 与正在用的手持枪交换（旧枪落地、背包不撑大、两处同源） */
+check('长按替换把旧枪落脚下并换到正在用的手',
+  /this\._dropGround\(heldItem/.test(raidSrc) && /if\(slot==="secondary"\) p\.secondary=g; else p\.gun=g;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑤ 撤离费纳入「撤离时携带」的装备总估值 */
+check('撤离费按携带装备总估值计算',
+  /raidExtractFee\(zone, raidCarriedGearValue\(this\)\)/.test(raidSrc) && /function raidCarriedGearValue/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑥ 抽奖机 T10-12 只在 premium（黑市 GP 机）出现，其余封顶 T9 */
+check('非黑市抽奖机封顶 T9（premium 门控）',
+  /if\(premium && r < 0\.0004\)/.test(raidSrc) && /gear\(8, premium\?9:8\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑦ 局内每个摊位都有每日特价 */
+check('局内商店每日特价（_fieldDailyDeal + data-fdeal）',
+  /UI\._fieldDailyDeal=function/.test(raidSrc) && /data-fdeal=/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑧ 拆解 T 级配件出同 T 级材料（高品阶低 ilvl 不再掉档） */
+const svHiTier = G(`(()=>{const y=raidSalvageYield({kind:'part',slot:'barrel',ilvl:4,rarity:'mythic'});let m=-1;for(const x of y){const t=(RAID_MAT_BY_ID[x.id]||{}).tier||0;if(t>m)m=t;}return m;})()`);
+check('高品阶低 ilvl 配件拆出高档料（同 T 级）', svHiTier>=6 ? 1 : 0, 1, 0.001);
+
+/* ⑨ 枪匠台装备列表按估值降序 */
+check('枪匠台装备列表按估值降序',
+  /stash\.weapons\.slice\(\)\.sort\(\(a,b\)=>\(b\.value\|\|0\)-\(a\.value\|\|0\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

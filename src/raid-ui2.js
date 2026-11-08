@@ -11,6 +11,65 @@
  *  ，黑市用「GP 币」——本局首杀必得 1 枚，之后靠上锁箱 / Raider 掉落与撤离结算，专门换高级武器
  *  ，回收超市收购价 1.2 ± 0.4，高于背包直售 0.5：想卖好价就得活着把货带进图
  * ========================================================================= */
+/* v0.35.1（用户反馈 #9）：局内每个摊位都加「每日特价」—— 与军火超市同一套确定性逻辑：
+   小时桶 + 摊位类型 + 已买次数 → FNV 种子 → RNG 重放；买走 seq+1 换下一件。
+   生成前后恢复 RNG 原闭包，绝不打乱游戏内随机序列（联机两端靠同种子推进）。
+   枪 / 材料 / 回收 = 卢布；黑市 = GP 币。各摊位只出自己卖的东西。 */
+UI._fieldDealCache={};
+UI._fieldDailyDeal=function(kind){
+  const bucket=raidDealBucket();
+  const st=RaidStash.load();
+  const rec=(st.fieldDeals && st.fieldDeals[kind])||null;
+  const seq=(rec && rec.hour===bucket)?(rec.seq|0):0;
+  const key=kind+"|"+bucket+"|"+seq;
+  const cache=UI._fieldDealCache;
+  if(cache && cache.key===key) return cache.deal;
+  const saved=RNG.rng;
+  let deal=null;
+  try{
+    RNG.setSeed(raidDealSeed("field-"+kind, bucket, seq));
+    if(kind==="gun"){
+      const type=RNG.pick(["rifle","sniper","smg","shotgun"]);
+      const qt=4+RNG.ri(0,1);                       // 精工 / 特种（保证局内买得起）
+      const g=blGunGen(20,{type, rarity:RAID_TIER_TO_RARITY[qt]});
+      ensureGunAffixes(g); g.uid=raidUniqueUid("fdeal-gun-"); g.kind="weapon";
+      g.qTier=qt; g.qName=RAID_TIERS[qt].name; g.qColor=RAID_TIERS[qt].color;
+      deal={ kind, pay:"cash", bucket:"weapons", item:g, col:raidGunColor(g),
+        name:gunNameOf(g), seq,
+        meta:(WEAPON_TYPES[type]?WEAPON_TYPES[type].name:type)+"，"+RAID_TIERS[qt].name,
+        stats:`${gunDamageLabel(g)}，弹匣 ${g.mag}，穿甲 ${Math.round((g.armorPen||0)*100)}%`,
+        price:Math.max(1,Math.round(raidShopPrice(g.value||1000, g.uid)*0.7)) };
+    } else if(kind==="mat"||kind==="rec"){
+      // 当日特供给高档材料（T4+），别拿脏布条糊弄
+      const pool=RAID_MATERIALS.filter(x=>x.tier>=4);
+      const pickPool=pool.length?pool:RAID_MATERIALS;
+      const m=Object.assign({}, pickPool[RNG.ri(0,pickPool.length-1)]);
+      const n=2;
+      deal={ kind, pay:"cash", bucket:"materials", item:m, n,
+        col:m.color||"#dfe7f0", name:m.name+" ×"+n, seq,
+        meta:"原材料，T"+(m.tier||0), stats:"当日特供原材料，带出仓库可再合成",
+        price:Math.max(1,Math.round(raidShopPrice((m.value||10)*n, m.id)*0.7)) };
+    } else {                                         // black
+      const t=8;                                     // 定型（旧编号 T8 = 第 9 阶）
+      const k=RNG.ri(0,2);
+      let it,bucket2,col;
+      if(k===0){ it=raidMakeArmor(t,t);  bucket2="armors";  col=ARMOR_TIER_COLOR[t]||"#ffd23f"; }
+      else if(k===1){ it=raidMakeHelmet(t,t); bucket2="helmets"; col=ARMOR_TIER_COLOR[t]||"#ffd23f"; }
+      else { it=raidMakeShield(t,t); bucket2="shields"; col="#4fd6ff"; }
+      it.qTier=t; it.qName=RAID_TIERS[t].name; it.qColor=RAID_TIERS[t].color;
+      const TOKEN_PRICE={ 5:45, 6:85, 7:160, 8:300 };   // 与黑市正价档一致，特价再打 8 折
+      deal={ kind, pay:"token", bucket:bucket2, item:it, col, seq,
+        name:it.name,
+        meta:(it.kind==="shield"?"护盾":it.kind==="helmet"?"头盔":"护甲")+"，T"+t+" "+RAID_TIERS[t].name,
+        stats:(it.kind==="shield"?`容量 ${it.capacity||0}，充能 ${it.rate||0}/s`
+                                :`耐久 ${it.maxArmor||0}，减伤 ${Math.round((it.dr||0)*100)}%`),
+        price:Math.max(8,Math.round((TOKEN_PRICE[t]||60)*0.8)) };
+    }
+  } finally { RNG.rng=saved; }
+  if(deal) UI._fieldDealCache={ key, deal };
+  return deal;
+};
+
 UI.raidFieldShop=function(key){
   const R=Raid;
   // 按**摊位 id** 打开，而不是按类型 —— 地图上有两处材料商店 / 回收超市，
@@ -219,6 +278,21 @@ UI.raidFieldShop=function(key){
     R._sellRows=rows;
   }
 
+  /* v0.35.1（#9）：每个摊位顶部一张「每日特价」卡（与军火超市同一套确定性逻辑） */
+  {
+    const fdeal=UI._fieldDailyDeal(kind);
+    if(fdeal){
+      const leftMin=Math.max(1, Math.ceil((raidDealBucketEnd(raidDealBucket())-Date.now())/60000));
+      const can=(fdeal.pay==="token") ? (tokens>=fdeal.price) : (money>=fdeal.price);
+      body = `<div class="si" style="grid-column:1/-1;border-left:3px solid #ffd23f;background:rgba(255,210,63,.06);">
+        <div class="si-name" style="color:#ffd23f">◈ 每日特价 · ${fdeal.name}</div>
+        <div class="si-stats">${fdeal.meta}，${fdeal.stats}<br><span style="color:#8fd0ff">全服同一件，${leftMin} 分钟后刷新，买走立即换下一件</span></div>
+        <div class="si-buy"><span class="si-price ${can?"":"cant"}">${fdeal.pay==="token"?"◈":"₽"} ${fdeal.pay==="token"?fdeal.price:priceTextShort(fdeal.price)}</span>
+          <button class="btn" data-fdeal="${sid}" ${can?"":"disabled"}>抢购</button></div>
+      </div>` + body;
+    }
+  }
+
   /* v0.29.0：抽奖机 —— 每种摊位都有一台。
    *   黑市（black）用 GP 币结算，其余（枪械 / 材料 / 回收）用局内卢布结算。
    *   概率与成本见 raid-data.js 的 RAID_GACHA / Raid._gachaRoll。 */
@@ -231,7 +305,7 @@ UI.raidFieldShop=function(key){
         <div>
           <div style="font-weight:800;font-size:15px;color:${sh.color};">抽奖机，LUCKY DRAW</div>
           <div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5;">
-            <b style="color:#ff5c8a">极小概率</b>抽得 <b style="color:#ffd23f">T10~T12 的枪械、装备和配件</b>；通常出 T5~T9 防护装备与高阶枪械，七成是普通原材料。每抽 <b>${gacha.costTxt}</b>（${gacha.label}），理性消费。
+            <b style="color:#ff5c8a">极小概率</b>抽得 <b style="color:#ffd23f">${gk==="token"?"T10~T12 的枪械、装备和配件":"T9 及以下的枪械、装备和配件"}</b>；通常出 T5~T9 防护装备与高阶枪械，七成是普通原材料。每抽 <b>${gacha.costTxt}</b>（${gacha.label}），理性消费。
           </div>
         </div>
         <button class="btn" data-gacha="1" ${gachaCan?"":"disabled"}>投入 ${gacha.costTxt} 抽一次</button>
@@ -251,7 +325,7 @@ UI.raidFieldShop=function(key){
     </style>
     <div class="panel raid-setup fieldshop">
       <h2 class="title-big" style="font-size:30px;color:${sh.color}">${sh.name}</h2>
-      <div class="subtitle">${tagLine}，局内交易，撤离成功才会把货带回仓库</div>
+      <div class="subtitle">${tagLine} · 局内交易，撤离成功才会把货带回仓库</div>
       <div class="shop-bar">
         <div class="shop-desc">${kind==="rec"
           ? `回收超市按装备估值的 <b style="color:#62c8ff">${Math.round(RAID_FIELD_SELL_RATE*100)}%（±${Math.round(RAID_FIELD_SELL_JITTER*100)}%）</b> 收购（背包直售只有 ${Math.round(RAID_VENDOR_RATE*100)}%）。带进图卖能多赚，但要先活着走到这里。`
@@ -372,7 +446,7 @@ UI.raidFieldShop=function(key){
     if(typeof R._gachaRoll!=="function") return;
     if(gk2==="token") R.tokens -= cfg.cost; else R.creds -= cfg.cost;
 
-    const res = R._gachaRoll();
+    const res = R._gachaRoll(gk2==="token");
     const it = res.item, bucket = res.bucket;
     const arr = R.inv[bucket] = R.inv[bucket] || [];
     const cap = RAID_INV_CAP[bucket] || 1;
@@ -424,6 +498,27 @@ UI.raidFieldShop=function(key){
     R._float(R.player.x, R.player.y-40, "+₽"+gain, "#8fe07a");
     SFX.ui(); UI.raidFieldShop(sid);
   });
+
+  /* v0.35.1（#9）：抢购每日特价（买走 seq+1 → 下一件，与其他摊位逻辑一致） */
+  UI.overlay.querySelectorAll("[data-fdeal]").forEach(el=>el.onclick=()=>{
+    const d=UI._fieldDailyDeal(kind); if(!d) return;
+    const arr=R.inv[d.bucket]=R.inv[d.bucket]||[];
+    const cap=RAID_INV_CAP[d.bucket]||1;
+    const need=(d.n||1);
+    if(arr.length+need>cap){ R._float(R.player.x,R.player.y-40,"背包已满，无法抢购","#ff8a5a"); return; }
+    if(d.pay==="token"){ if(R.tokens<d.price) return; R.tokens-=d.price; }
+    else { if(R.creds<d.price) return; R.creds-=d.price; }
+    if(d.bucket==="materials"){ for(let i=0;i<need;i++) arr.push(Object.assign({},d.item,{n:1})); }
+    else arr.push(d.item);
+    const st=RaidStash.load(); st.fieldDeals=st.fieldDeals||{};
+    st.fieldDeals[kind]={ hour:raidDealBucket(), seq:(d.seq|0)+1 };
+    RaidStash.save(st);
+    UI._fieldDealCache=null;
+    R._invDirty=true;
+    R._float(R.player.x,R.player.y-40,"抢购 "+d.name, d.col||"#ffd23f");
+    SFX.buy?SFX.buy():SFX.ui();
+    UI.raidFieldShop(sid);
+  });
 };
 
 function forgeTabsHTML(){  return `<div class="shop-tabs" style="margin-bottom:14px;">
@@ -441,7 +536,8 @@ UI.raidForge=function(opts){
   if(!stash.weapons.some(w=>w.uid===UI._forgeSel)) UI._forgeSel = stash.weapons[0]?stash.weapons[0].uid:null;
   const sel = stash.weapons.find(w=>w.uid===UI._forgeSel) || null;
 
-  const cards = stash.weapons.map(w=>{
+  // v0.35.1（用户反馈 #11）：枪匠台装备列表按估值降序，贵的好枪排前面
+  const cards = stash.weapons.slice().sort((a,b)=>(b.value||0)-(a.value||0)).map(w=>{
     const on = w.uid===UI._forgeSel;
     const col=raidGunColor(w);
     const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:w.cat;
@@ -525,8 +621,8 @@ UI.raidForge=function(opts){
   const backLabel = opts.from==='title' ? '返回主菜单' : '前往配装大厅';
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:32px;">枪匠台，精密改装</h2>
-      <div class="subtitle">GUNSMITH，用卢布重调改装词条，模块（弹种 / 膛压 / 工艺）装进改装槽即可换弹 / 提等级 / 加参数（部件只能实物换装）</div>
+      <h2 class="title-big" style="font-size:32px;">枪匠台 · 精密改装</h2>
+      <div class="subtitle">GUNSMITH · 用卢布重调改装词条，模块（弹种 / 膛压 / 工艺）装进改装槽即可换弹 / 提等级 / 加参数（部件只能实物换装）</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
         <div class="shop-desc">改造对象是塔科夫仓库中的枪械；改造后伤害、射速、弹匣、估值全部重算。改造不可撤销，谨慎升阶。<b style="color:#ff9a3a">配件槽位不支持重铸</b>——好配件只能从箱子里搜，或自己投料合成。</div>
@@ -736,8 +832,8 @@ UI.raidFusion=function(opts){
 
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:32px;">枪匠台，融合台</h2>
-      <div class="subtitle">FUSION，两件以上装备拆件重组，品级 / 改装词条 / 改装等级有概率跃升</div>
+      <h2 class="title-big" style="font-size:32px;">枪匠台 · 融合台</h2>
+      <div class="subtitle">FUSION · 两件以上装备拆件重组，品级 / 改装词条 / 改装等级有概率跃升</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
         <div class="shop-desc">选择 2~4 件材料（枪 / 配件 / 护甲 / 头盔可混搭）。第一件为「主物品」，决定产物类型；材料越多，跃升越大。融合会消耗全部材料。</div>
@@ -916,7 +1012,7 @@ UI.raidStash=function(opts){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">仓库</h2>
-      <div class="subtitle">STASH，售卖换卢布 / 拆解换配件</div>
+      <div class="subtitle">STASH · 售卖换卢布 / 拆解换配件</div>
       <div class="shop-bar">
         <div class="shop-desc">背包直售只按估值 <b style="color:#ff8a5a">50%</b> 回收卢布（<b style="color:#62c8ff">带进图卖给回收超市可得 120%（±40%）</b>）；拆解会把枪上的全部配件拆进配件池（枪本身消失），配件可装到别的枪上或在配件页卖掉。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
@@ -1153,7 +1249,7 @@ UI.raidOnline=function(){
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">联机突袭</h2>
-      <div class="subtitle">CO-OP RAID，2~4 人，${p2p?"WebRTC P2P 直连":"房主权威 AI"}，战利品各自带出</div>
+      <div class="subtitle">CO-OP RAID · 2~4 人，${p2p?"WebRTC P2P 直连":"房主权威 AI"}，战利品各自带出</div>
       <div class="shop-bar">
         <div class="shop-desc">和队友进入<b style="color:#7ee08a">同一张地图</b>：地图、箱子、撤离点、增援都一致；<b style="color:#ffd23f">AI 由房主统一模拟</b>，其他人实时同步。箱子<b>先到先得</b>，队友之间<b style="color:#8fe07a">没有友伤</b>，撤离与结算<b>各自独立</b>——你带出的东西只进你自己的仓库。</div>
         <button class="btn ghost" id="online-back">返回配装大厅</button>

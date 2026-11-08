@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.35.0",
+  version: "0.35.1",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -185,9 +185,9 @@ function elemMult(element, armorType){
  *   7   试验    #f2bd54  琥珀   · 试验批
  *   8   原型    #b6de19  黄绿   · 原型机
  *   9   定型    #76ebd7  青玉   · 定型批
- *   10  特供    #c7e1f4  冰蓝   · 特殊供应（黑市赌博机专供）
- *   11  珍藏    #f8e289  香槟金 · 珍藏品
- *   12  孤品    #fce0ee  虹彩粉 · 孤品
+ *   10  定制    #6ff65a  春绿   · 定制件（黑市赌博机专供）
+ *   11  珍藏    #f9cffc  淡品红 · 珍藏品
+ *   12  孤品    #f6ec5a  亮黄   · 孤品
  *
  * 注：`id` 是历史主键（存档里的 rarity / CSS 类名 loot-orange 等全靠它），**不要再改**；
  * 名字与颜色只是显示，两者已经和 id 的字面意思解耦（比如 orange 现在是品红）。
@@ -204,11 +204,11 @@ const RARITIES = [
   { id:"ancient",     name:"试验", color:"#f2bd54", weight:0.20,   mult:4.80, affixes:[6,6],   minLv:14, price:96,  named:true, power:true },
   { id:"rainbow",     name:"原型", color:"#b6de19", weight:0.06,   mult:5.60, affixes:[6,6],   minLv:18, price:280, named:true, power:true },
   { id:"mythic",      name:"定型", color:"#76ebd7", weight:0.030,  mult:6.20, affixes:[7,7],   minLv:22, price:620, named:true, power:true },
-  /* v0.21.8：最高三档（特供 / 珍藏 / 孤品 = 第 10/11/12 阶）默认权重归零，
+  /* v0.21.8：最高三档（定制 / 珍藏 / 孤品 = 第 10/11/12 阶）默认权重归零，
    * 不再出现在任何随机掉落 / 商店 / 盲盒里；唯一获取途径是【黑市赌博机】（见 SHOPS.gamble.weights）。 */
-  { id:"primordial",  name:"特供", color:"#c7e1f4", weight:0,      mult:7.60, affixes:[8,8],   minLv:28, price:1150,named:true, power:true },
-  { id:"celestial",   name:"珍藏", color:"#f8e289", weight:0,      mult:9.50, affixes:[9,9],   minLv:34, price:2300,named:true, power:true },
-  { id:"singularity", name:"孤品", color:"#fce0ee", weight:0,      mult:12.0, affixes:[10,10], minLv:40, price:4200,named:true, power:true },
+  { id:"primordial",  name:"定制", color:"#6ff65a", weight:0,      mult:7.60, affixes:[8,8],   minLv:28, price:1150,named:true, power:true },
+  { id:"celestial",   name:"珍藏", color:"#f9cffc", weight:0,      mult:9.50, affixes:[9,9],   minLv:34, price:2300,named:true, power:true },
+  { id:"singularity", name:"孤品", color:"#f6ec5a", weight:0,      mult:12.0, affixes:[10,10], minLv:40, price:4200,named:true, power:true },
 ];
 const RARITY_BY_ID = {};
 for(const r of RARITIES) RARITY_BY_ID[r.id]=r;
@@ -478,10 +478,10 @@ const SHOPS = {
     ilvlBonus:11,
   },
   gamble: {
-    id:"gamble", name:"黑市赌博机", icon:"✦", tag:"盲盒 · 仅此处出特供/珍藏/孤品",
-    desc:"黑市地下的封存赌博机：投入金币开箱，只有这里能开出【特供 / 珍藏 / 孤品】三档神兵——其余所有掉落与商店都不再出产。",
+    id:"gamble", name:"黑市赌博机", icon:"✦", tag:"盲盒 · 仅此处出定制/珍藏/孤品",
+    desc:"黑市地下的封存赌博机：投入金币开箱，只有这里能开出【定制 / 珍藏 / 孤品】三档神兵——其余所有掉落与商店都不再出产。",
     basePrice:4, lvPrice:2,
-    // v0.21.8：最高三档（特供/珍藏/孤品）的唯一产出表；其余渠道权重已归零
+    // v0.21.8：最高三档（定制/珍藏/孤品）的唯一产出表；其余渠道权重已归零
     weights:{ white:6, green:7, blue:5, purple:2.0, orange:0.6, pearl:0.35, ancient:0.16, rainbow:0.05, mythic:0.03, primordial:0.012, celestial:0.005, singularity:0.0018 },
   },
 };

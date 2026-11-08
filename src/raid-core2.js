@@ -167,7 +167,9 @@ Object.assign(Raid, {
    *
    * RNG 隔离：工厂内部大量调用全局 RNG。这里临时换成本地种子跑一遍，
    * 结束后恢复原 RNG 函数与状态 —— 否则抽奖会推进联机共用的随机流，导致两端分叉。 */
-  _gachaRoll(){
+  /* v0.35.1（用户反馈 #8）：premium=true 才允许抽到 T10~T12（定制/珍藏/孤品）。
+     只有黑市（GP 币）那台抽奖机传 true；枪械 / 材料 / 回收（卢布）三台封顶 T9（定型）。 */
+  _gachaRoll(premium){
     const prevRng = RNG.rng;
     const snap = (typeof RNG.snapshot==="function") ? RNG.snapshot() : null;
     RNG.setSeed((Date.now() ^ ((Math.random()*0x7fffffff)|0))>>>0);
@@ -185,7 +187,7 @@ Object.assign(Raid, {
          T10~T12 的护甲/头盔/护盾底材已加进 RAID_ARMORS / RAID_HELMETS / SHIELD_BASES，
          但商店与普通掉落仍封顶 T9（raidRollArmorTier 只返 1..9），所以这里必须用
          固定区间 gear(10,12) 直接取，不能走任何随机档位函数。 */
-      if(r < 0.0004){
+      if(premium && r < 0.0004){
         const k=Math.random();
         if(k<0.45) return gear(10,12);
         if(k<0.72){
@@ -201,7 +203,7 @@ Object.assign(Raid, {
       }
       if(r < 0.0024){                                  // 极品 ≈0.2%
         const k=Math.random();
-        if(k<0.55) return gear(8,9);
+        if(k<0.55) return gear(8, premium?9:8);
         if(k<0.78) return { item: raidRollUnique(0.95),       bucket:"weapons" };
         return { item: raidRollShieldUnique(0.95), bucket:"shields" };
       }

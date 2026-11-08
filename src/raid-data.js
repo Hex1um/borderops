@@ -11,7 +11,7 @@
  *     PMC 与 Scav 同场（本页用 1 名玩家 + 43 名 AI 模拟满员服务器：30 名普通 AI + 3 名 Boss + 10 名 POI 精英）；河流可涉水缓行，桥面免减速
  *   · 开局可携带仓库里的装备，也可真空手进场（只带 1 卷绷带，进图翻箱捡枪）
  *   · 中弹会流血，需要绷带止血（桌面 H 键 / 移动端医疗键）
- *   · 撤离点条件化：铁路隧道每局随机开放、旧卡车常驻、雇车撤离费按带入装备估值浮动
+ *   · 撤离点条件化：铁路隧道每局随机开放、旧卡车常驻、雇车撤离费按携带装备估值浮动
  *   · 上锁保险箱分 I~V 级，须用同级钥匙开启（钥匙有使用次数，可买 / 可掉落 / 工坊 16 份材料合成）
  *   · 可在配装时为携带装备购买保险，阵亡后有几率被退回仓库
  *   · 只有撤离成功，身上的装备与战利品才写回仓库；阵亡或超时未撤离，全部丢失
@@ -206,31 +206,31 @@ const RAID_BIOMES = {
 };
 
 // 撤离点规则（塔科夫式：条件撤离 / 付费撤离）
-// 付费撤离不再固定 4000~6000 的高价，改为「基础价 + 带入装备估值 × 费率」，
+// 付费撤离不再固定 4000~6000 的高价，改为「基础价 + 携带装备估值 × 费率」，
 //          轻装跑刀几乎白坐，重装才多付一点（见 raidExtractFee）。
 const RAID_EXTRACT_RULES = {
   extA: { need:7, cost:0,    openChance:0.5,  note:"每局随机开放" },
   extB: { need:7, cost:0,    openChance:1.0,  note:"常驻开放" },
-  extC: { need:4, cost:1600, feeRate:0.020, openChance:1.0, note:"V-EX 雇车，按带入装备估价" },
+  extC: { need:4, cost:1600, feeRate:0.020, openChance:1.0, note:"V-EX 雇车，按携带装备估价" },
   extD: { need:9, cost:0,    openChance:0.65, note:"每局随机开放" },
   extE: { need:8, cost:0,    openChance:0.55, note:"每局随机开放" },
   extF: { need:7, cost:0,    openChance:0.6,  note:"每局随机开放" },
   extG: { need:10,cost:0,    openChance:0.5,  note:"每局随机开放" },
-  extH: { need:4, cost:1400, feeRate:0.016, openChance:1.0, note:"北关雇车，按带入装备估价" },
+  extH: { need:4, cost:1400, feeRate:0.016, openChance:1.0, note:"北关雇车，按携带装备估价" },
   extI: { need:9, cost:0,    openChance:0.55, note:"东岭索道，每局随机开放" },
-  extJ: { need:8, cost:2000, feeRate:0.024, openChance:1.0, note:"南港货轮，按带入装备估价" },
+  extJ: { need:8, cost:2000, feeRate:0.024, openChance:1.0, note:"南港货轮，按携带装备估价" },
   extK: { need:6, cost:0,    openChance:0.6,  note:"医院天台，每局随机开放" },
   extL: { need:8, cost:0,    openChance:0.55, note:"林间空投，每局随机开放" },
   extM: { need:9, cost:0,    openChance:0.6,  note:"山顶缆车，每局随机开放" },
   extN: { need:7, cost:0,    openChance:1.0,  note:"河港渡轮，常驻开放" },
   extO: { need:9, cost:0,    openChance:0.6,  note:"火车站台，每局随机开放" },
-  extP: { need:4, cost:1200, feeRate:0.014, openChance:1.0, note:"北桥栈道，按带入装备估价" },
+  extP: { need:4, cost:1200, feeRate:0.014, openChance:1.0, note:"北桥栈道，按携带装备估价" },
   extQ: { need:8, cost:0,    openChance:0.6,  note:"货运专线，每局随机开放" },
   extR: { need:9, cost:0,    openChance:0.55, note:"南岭索道，每局随机开放" },
   extS: { need:8, cost:0,    openChance:0.75, note:"大坝坝顶，每局随机开放" },
 };
 
-/* 撤离费 = (基础价×0.28 + 带入装备估值×费率) × 轻装折扣
+/* 撤离费 = (基础价×0.28 + 携带装备估值×费率) × 轻装折扣
  *   轻装折扣 mult = 0.2 + 0.8 × v/(v+90000)
  *     · 裸装跑刀 v=0      → 0.20 倍，约 70~110 卢布（基本等于白坐）
  *     · 带 ₽30,000        → 0.40 倍
@@ -251,6 +251,8 @@ function raidExtractFee(zone, carryVal){
   const base = zone.cost*0.28 + v*(zone.feeRate||0.018);
   return Math.round(M.clamp(base*raidExtractFeeMult(v), 60, zone.cost*1.4)/10)*10;
 }
+/* 注：raidCarriedGearValue（撤离费按携带装备估值，#7）定义在 raid-core3.js 顶部
+   —— 那里有富余行数，避免 raid-data.js 越过 2000 行分片上限。 */
 
 // PMC / Scav巡逻点（开阔处）
 const RAID_PATROL = [
@@ -425,9 +427,9 @@ const RAID_TIERS = [
   { id:"rainbow", name:"定型", color:"#76ebd7", dr:0.225, arm:2.90, val:11.0, regen:0, affix:8 },
   /* v0.32.0：T10~T12 —— 只从抽奖机的「超极品」档产出，商店与普通掉落仍封顶在定型。
      名字沿用品质阶梯的语义，颜色按 sRGB 亮度继续递增。 */
-  { id:"bespoke", name:"定制", color:"#ffd23f", dr:0.265, arm:3.70, val:15.0, regen:0, affix:9 },
-  { id:"relic",   name:"珍藏", color:"#ff9f43", dr:0.300, arm:4.60, val:21.0, regen:0, affix:10 },
-  { id:"singular",name:"孤品", color:"#ff5c8a", dr:0.340, arm:5.60, val:29.0, regen:0, affix:11 },
+  { id:"bespoke", name:"定制", color:"#6ff65a", dr:0.265, arm:3.70, val:15.0, regen:0, affix:9 },
+  { id:"relic",   name:"珍藏", color:"#f9cffc", dr:0.300, arm:4.60, val:21.0, regen:0, affix:10 },
+  { id:"singular",name:"孤品", color:"#f6ec5a", dr:0.340, arm:5.60, val:29.0, regen:0, affix:11 },
 ];
 // 护甲稀有度数组（与 RAID_TIERS 一一对应，保留旧字段名以兼容 UI）
 const RAID_RARITY_NAME  = RAID_TIERS.map(t=>t.name);
@@ -439,7 +441,7 @@ const RAID_RARITY_VAL   = RAID_TIERS.map(t=>t.val);
 // 9 阶品质图例（配装大厅 / 商店展示用）
 function raidTierLegend(){
   if(weaponQualityHidden()) return `<b style="color:#cfcabb">精简显示（品质 / 前后缀 / 厂商已隐藏，设置里切换到「完整」即可查看）</b>`;
-  return RAID_TIERS.map(t=>`<b style="color:${t.color}">${t.name}</b>`).join(" / ");
+  return RAID_TIERS.slice(0,9).map(t=>`<b style="color:${t.color}">${t.name}</b>`).join(" / ");
 }
 
 // 枪械生成：把塔科夫品质档位映射到全局 RARITIES 的 id（仅取数值/词缀，显示色由 qColor 覆盖）
@@ -1107,8 +1109,11 @@ function raidSalvageMat(family, wantTier){
 /* 配件 → [{id,n}]（纯数据，不改动任何状态） */
 function raidSalvageYield(pt){
   if(!pt || pt.core) return null;                 // 改装模块不可拆（它是模块不是配件）
-  const rar = Math.max(0, RARITIES.findIndex(r=>r.id===pt.rarity));
-  const tier = M.clamp(Math.round((pt.ilvl||10)/8) + (rar>=5?1:0), 0, 6);
+  /* v0.35.1（用户反馈 #10）：材料档位跟**配件自身品阶**走，不再按 round(ilvl/8) 估算并封顶 6。
+     旧算法会让「高品阶、低 ilvl」的配件拆出低档料（T8 件拆出 T2 料，与直觉不符）。
+     现在直接用配件 rarity 在 RARITIES 里的档位（0~11 对齐材料 0~8），
+     材料侧再由 raidSalvageMat 按各族自身上限兜底（如 电子/化工最高 5、织物 4）。 */
+  const tier = M.clamp(Math.max(0, RARITIES.findIndex(r=>r.id===pt.rarity)), 0, 8);
   const fams = SALVAGE_BY_SLOT[pt.slot] || ["metal","metal"];
   const out = [];
   const push=(fam,n)=>{

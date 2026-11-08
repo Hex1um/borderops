@@ -760,7 +760,8 @@ const RenderRaid = {
       ctx.fillStyle=blockedNow?"#ff8a80":(paid?"#e8d48a":"#8fe0a8"); ctx.font="bold 20px system-ui,sans-serif"; ctx.textAlign="center";
       ctx.fillText((blockedNow?"⛔ ":"▲ ")+e.name, e.x+e.w/2, e.y+e.h/2-6);
       ctx.font="12px system-ui,sans-serif"; ctx.fillStyle=`rgba(${col},0.8)`;
-      ctx.fillText(blockedNow?"被封锁，清除封锁者":(paid?`雇车费 ${raidExtractFee(e, R.carryVal||0)} 卢布（按带入装备）· 坚守 ${e.need} 秒`:`坚守 ${e.need} 秒`), e.x+e.w/2, e.y+e.h/2+18);
+      const feeVal=(typeof raidCarriedGearValue==="function")?raidCarriedGearValue(R):(R.carryVal||0);
+      ctx.fillText(blockedNow?"被封锁，清除封锁者":(paid?`雇车费 ${raidExtractFee(e, feeVal)} 卢布（按携带装备）· 坚守 ${e.need} 秒`:`坚守 ${e.need} 秒`), e.x+e.w/2, e.y+e.h/2+18);
     }
 
     // 局内商店摊位（枪店 / 材料店 / 回收超市 / 黑市）
