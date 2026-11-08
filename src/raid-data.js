@@ -1321,7 +1321,7 @@ const RAID_MEDS = [
   { id:"bandage", name:"绷带",   tier:0, value:180,  heal:0,   bleed:true,  cast:2.2, desc:"止血，移动会打断" },
   { id:"hemo",    name:"止血针", tier:1, value:680,  heal:15,  bleed:true,  cast:1.2, desc:"瞬间止血 + 少量回血" },
   { id:"medkit",  name:"急救包", tier:2, value:1900, heal:65,  bleed:false, cast:3.0, desc:"回复 65 生命" },
-  { id:"stim",    name:"强心针", tier:3, value:4300, heal:35,  bleed:false, cast:1.0, boost:true, desc:"回血 35，8 秒加速" },
+  { id:"stim",    name:"强心针", tier:3, value:4300, heal:35,  bleed:false, cast:1.0, boost:true, desc:"回血 35 · 8 秒加速" },
   { id:"surgery", name:"手术包", tier:4, value:9500, heal:100, bleed:true,  cast:4.0, desc:"回满血并止血（耗时最长）" },
 ];
 const RAID_MED_BY_ID={}; for(const m of RAID_MEDS) RAID_MED_BY_ID[m.id]=m;
@@ -1543,7 +1543,7 @@ const RAID_RECV_SLOTS = { rifle:16, sniper:20, smg:6, shotgun:12, pistol:2, laun
 for(const r of RAID_RECEIVERS){
   const slots = RAID_RECV_SLOTS[r.type] || 3;
   RAID_RECIPES.push({ id:"r_"+r.id, name:r.name, kind:"receiver", tag:"底材", slots:slots,
-    desc:`组装枪的底材，${WEAPON_TYPES[r.type]?WEAPON_TYPES[r.type].name:r.type}，需 ${slots} 份材料，等级由材料决定`,
+    desc:`组装枪的底材 · ${WEAPON_TYPES[r.type]?WEAPON_TYPES[r.type].name:r.type} · 需 ${slots} 份材料 · 等级由材料决定`,
     make:(mats,q)=>raidMakeReceiver(r, M.clamp(q,0,8)) });
 }
 
@@ -1555,7 +1555,7 @@ for(const cal of AMMO_CAL_LIST){
   const slots = AMMO_CRAFT_SLOTS[cal] || 3;
   RAID_RECIPES.push({
     id:"r_ammo_"+cal, name:AMMO_CALS[cal].name+"（30 发）", kind:"ammo", tag:"弹药", slots:slots,
-    desc:`产出 ${AMMO_CALS[cal].spec}，适用 ${AMMO_CALS[cal].types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")}，每次 ${slots} 份材料 → ${RAID_AMMO_STACK} 发，级别由材料品质决定`,
+    desc:`产出 ${AMMO_CALS[cal].spec} · 适用 ${AMMO_CALS[cal].types.map(t=>WEAPON_TYPES[t]?WEAPON_TYPES[t].name:t).join(" / ")} · 每次 ${slots} 份材料 → ${RAID_AMMO_STACK} 发 · 级别由材料品质决定`,
     make:(mats,q)=>({ kind:"ammo", id:ammoItemId(cal, M.clamp(1+Math.floor(q*0.62),1,5)), n:RAID_AMMO_STACK }),
   });
 }

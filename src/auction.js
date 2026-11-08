@@ -88,7 +88,7 @@ function auctionItemInfo(kind, it){
       let meta, stats;
       if(it.core==="chaos"){ meta=`改装模块，改装，[${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，决定改装等级（1.12^m 指数放大）"; }
       else if(it.core==="elem"){ const E=ELEMENTS[it.elem]||ELEMENTS.fire; meta=`弹种适配组件，${E.name} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，更换适配弹药并提升弹药效能"; }
-      else { const d=BOOST_CORE_TYPES[it.boost]; meta=`改装模块，强化，${d?d.name:"强化"} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，提供属性增益"; }
+      else { const d=BOOST_CORE_TYPES[it.boost]; meta=`改装模块 · 强化 · ${d?d.name:"强化"} [${RAID_ROMAN[it.lv]||it.lv}]`; stats="装入枪械改装槽，提供属性增益"; }
       return { name:cname, color:it.color||"#8fd0ff", value:it.value||0, meta, stats };
     }
     /* v0.21.7：配件与枪械同一套显示分层 —— 精简只留槽位名，完整才给词缀名 / 品质 / iLv */
