@@ -19,6 +19,10 @@
 const RAID_COMPOUND_KINDS = {
   barrier: "triple",   sandbag: "triple",   shelf: "triple",
   pipe: "triple",      archway: "arch",
+  /* v0.32.0（用户反馈）：rock 的**画面是六边形**，碰撞却走 AABB + 椭圆光线，
+     走位与光斑都对不上边。改成三条横带近似六边形：navCell（移动 / 子弹）、
+     losCell（AI 视线）、_rayLight（手电）都会按这三条带子判定。 */
+  rock: "hex",
 };
 
 /* 返回 3 个绝对坐标矩形；shape=arch 是「两柱 + 顶梁」的门廊（中间真空洞），
@@ -39,6 +43,18 @@ function raidCompoundBoxes(p){
       {x:x,       y:y,       w:w,        h:bh},
       {x:x,       y:y+h-pw,  w:w,        h:pw},
       {x:x,       y:y+bh,    w:Math.max(12,w*0.26), h:h-bh-pw},
+    ];
+  }
+  if(shape==="hex"){
+    /* v0.32.0：六边形用三条横带近似 —— 上窄、中全宽、下略窄，
+       顶点大致对齐 raid-render 里 rock 的六边形绘制（0.24/0.62 顶边、0.94/0.84 底边）。
+       玩家绕石头、子弹打石头、手电被石头挡住，都按这三条带子算。 */
+    const t=Math.max(6, h*0.24);
+    const midH=Math.max(2, h-2*t*0.88);
+    return [
+      { x:x+w*0.22, y:y,        w:w*0.66, h:t },
+      { x:x,        y:y+t*0.88, w:w,      h:midH },
+      { x:x+w*0.10, y:y+h-t,    w:w*0.80, h:t },
     ];
   }
   /* triple：缝宽取长轴的 18%（上限 56px），够 30px 的角色侧身穿过 */

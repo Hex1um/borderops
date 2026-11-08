@@ -117,7 +117,10 @@ Object.assign(Raid, {
     } else if(kind==="black"){
       /* v0.26.0：黑市只卖等级高于 4 的装备，即 5~8 四档；
          枪 / 护盾 / 护甲 / 头盔是同一批档位，全部 GP 币结算。 */
-      const tokenPrice={ 5:18, 6:26, 7:48, 8:86 };
+      /* v0.32.0（用户要求「大幅增大黑市高品质装备售价」）：从 18/26/48/86
+         提到 45/85/160/300，约 2.5~3.5 倍。GP 币一局最多结算 5 枚，
+         现在买一把 T8 黑市枪要攒十几局 —— 高风险高回报的定位更明确。 */
+      const tokenPrice={ 5:45, 6:85, 7:160, 8:300 };
       const TIERS=[5,6,7,8];
       for(const t of TIERS){
         const g=this._shopGun(t, undefined, true);
@@ -178,7 +181,25 @@ Object.assign(Raid, {
         if(k<0.90) return { item: raidMakeShield(t,t), bucket:"shields" };
         return { item: this._shopGun(t), bucket:"weapons" };
       };
-      if(r < 0.002){                                   // 极品 ≈0.2%
+      /* v0.32.0：超极品 ≈0.04% —— 唯一能出 T10~T12 的途径。
+         T10~T12 的护甲/头盔/护盾底材已加进 RAID_ARMORS / RAID_HELMETS / SHIELD_BASES，
+         但商店与普通掉落仍封顶 T9（raidRollArmorTier 只返 1..9），所以这里必须用
+         固定区间 gear(10,12) 直接取，不能走任何随机档位函数。 */
+      if(r < 0.0004){
+        const k=Math.random();
+        if(k<0.45) return gear(10,12);
+        if(k<0.72){
+          const qt=9+pick(0,2);
+          const g=this._shopGun(qt, undefined, true);
+          return { item: g, bucket:"weapons" };
+        }
+        const qt=9+pick(0,2);
+        const slot=RNG.pick(GUN_SLOTS).id;
+        const pt=rollPart(slot, 24, RAID_TIER_TO_RARITY[qt]);
+        pt.qTier=qt; pt.qName=RAID_TIERS[qt].name; pt.qColor=RAID_TIERS[qt].color;
+        return { item: pt, bucket:"parts" };
+      }
+      if(r < 0.0024){                                  // 极品 ≈0.2%
         const k=Math.random();
         if(k<0.55) return gear(8,9);
         if(k<0.78) return { item: raidRollUnique(0.95),       bucket:"weapons" };
@@ -1064,7 +1085,8 @@ Object.assign(Raid, {
       this.carried.shield=s;
     }
     p.shieldGear=s;
-    p.maxShield=s.capacity||0;
+    /* v0.32.0：护盾容量同样按耐久折算 */
+    p.maxShield=(s.capacity||0)*((typeof raidDurOf==="function")?raidDurOf(s):1);
     p.shield=p.maxShield;
     p.shieldRate=s.rate||0;
     p.shieldDelay=s.delay||0;

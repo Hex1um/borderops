@@ -34,6 +34,10 @@ const SHIELD_BASES = {
   7:{ name:"T7 双层防护阵列",   cap:385, rate:36, delay:2.7, invuln:0.82, value:360000 },
   8:{ name:"T8 高功率拦截系统", cap:500, rate:43, delay:2.4, invuln:0.92, value:880000 },
   9:{ name:"T9 全向防护阵列",   cap:640, rate:52, delay:2.1, invuln:1.05, value:2100000},
+  /* v0.32.0：T10~T12 只从抽奖机的超极品档产出（0.04%），商店与普通掉落仍封顶 T9 */
+  10:{ name:"T10 定制协同护盾", cap:800, rate:60, delay:1.9, invuln:1.15, value:4200000},
+  11:{ name:"T11 珍藏相位护盾", cap:980, rate:68, delay:1.7, invuln:1.25, value:7600000},
+  12:{ name:"T12 孤品全域护盾", cap:1200,rate:78, delay:1.5, invuln:1.40, value:14000000},
 };
 const SHIELD_TIERS = [1,2,3,4,5,6,7,8,9];
 
@@ -222,7 +226,7 @@ function shieldName(baseName, affixes, q){
 
 /* ----------------------------- 生成一件护盾 ----------------------------- */
 function raidMakeShield(tier, rarity){
-  const t=M.clamp(Math.round(tier||1),1,9);
+  const t=M.clamp(Math.round(tier||1),1,12);   // v0.32.0：抽奖机可出 T10~T12
   const q=rarity===undefined
     ? M.clamp(Math.round((typeof raidBudgetTier==="function"?raidBudgetTier(0):0)),0,8)
     : M.clamp(Math.round(rarity),0,8);
@@ -241,7 +245,7 @@ function raidMakeShield(tier, rarity){
   const g=shieldGrade(q);
   return Object.assign({
     uid:"sh"+Math.floor(Math.random()*1e9).toString(36), kind:"shield",
-    tier:t, rarity:q, ilvl, qTier:q, qName:g.name, qColor:g.color,
+    tier:t, rarity:q, ilvl, qTier:q, qName:g.name, qColor:g.color, dur:1,
     baseName:SHIELD_BASES[t].name,
     name:shieldName(SHIELD_BASES[t].name,affixes,q),
     parts, affixes, perks,

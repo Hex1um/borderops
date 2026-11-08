@@ -334,7 +334,8 @@ check('raid 相机同步给 game.camera', /game\.camera\.x=this\.camera\.x/.test
 console.log('\n=== 13. 护盾装备：配件组成 / 三数值 / 前后缀 / 具名 ===');
 const SG = G('SHIELD_GRADE'), SB = G('SHIELD_BASES'), SS = G('SHIELD_SLOTS');
 check('4 个配件槽', SS.length, 4, 0.001);
-check('9 阶底材', Object.keys(SB).length, 9, 0.001);
+/* v0.32.0：护盾底材扩到 T12（T10~T12 仅抽奖机可出），前 9 阶不变 */
+check('护盾底材 ≥9 阶（现 12 阶）', Object.keys(SB).length, 12, 0.001);
 check('9 阶品相刻度', SG.length, 9, 0.001);
 let genErr = 0, genNoParts = 0, genNoAffix = 0, genNoPerk = 0, genBadStat = 0;
 const sample = [];
@@ -952,7 +953,8 @@ check('未选的口径一发不带', carryDefault.some.light, 200, 0.001);
 check('仓库按携带量扣减', carryDefault.some.stash, 240, 0.001);
 check('钥匙默认一把不带', /if\(!Array\.isArray\(UI\._raidKeys\)\) UI\._raidKeys=\[\];/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('开始突袭不再兜底全带钥匙', /UI\._raidKeys\.slice\(\):\[\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('大厅弹药默认 0 发', /: 0;\s*\n\s*UI\._raidAmmo\[cal\]=/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* v0.32.0：默认改成带 3 条（90 发），原「默认 0 发」的契约作废 */
+check('大厅弹药默认带 3 条（90 发）', /RAID_AMMO_STACK\*3/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* v0.21.1：显示密度「精简 / 完整」—— 折中方案，显示层决定，不改写存档名 */
 const dispTest = JSON.parse(G(`JSON.stringify((()=>{
@@ -1408,7 +1410,8 @@ console.log('  最小相邻色差 ΔE='+minDE.toFixed(1));
 let multOk = true;
 for(let i=1;i<tiers.length;i++) if(tiers[i].mult < tiers[i-1].mult) multOk=false;
 check('品质倍率不随档位回退', multOk ? 1 : 0, 1, 0.001);
-const tierNames9 = JSON.parse(G(`JSON.stringify(RAID_TIERS.map(t=>[t.name,t.color]))`));
+/* v0.32.0：RAID_TIERS 扩到 12 阶（定制/珍藏/孤品），护甲只用到前 9 阶 */
+const tierNames9 = JSON.parse(G(`JSON.stringify(RAID_TIERS.slice(0,9).map(t=>[t.name,t.color]))`));
 check('护甲 9 阶与武器前 9 阶同名同色', tierNames9.every((v,i)=>v[0]===tiers[i].name && v[1]===tiers[i].color) ? 1 : 0, 1, 0.001);
 const legend = JSON.parse(G(`JSON.stringify((()=>{
   const prev=CFG.display; CFG.display="full";
@@ -2410,8 +2413,9 @@ check('融合失败不退化为降级（产物至少等于最高投料品质）'
   /Math\.min\(RARITIES\.length-1, maxRar\+boost\)/.test(raidSrc) && /boost=raidFuseRollUp\(n\)\+raidFuseRollSecond\(n\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* --- ⑩ 钥匙掉率调低 + 高等级箱子变好 --- */
-check('AI 身上钥匙掉率 20% → 10% / 7% → 3.5%',
-  /bot\.smart\?0\.10:0\.035/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* v0.32.0（用户要求「大幅降低」）：精锐 10%→3%、普通 3.5%→1% */
+check('AI 身上钥匙掉率 10% → 3% / 3.5% → 1%',
+  /bot\.smart\?0\.030:0\.010/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('上锁箱内钥匙 34% → 18%', /if\(RNG\.chance\(0\.18\)\) this\._collect\(raidRollBoxKey\(lv\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('普通木箱钥匙 2.5% → 1.2%', /RNG\.chance\(0\.012\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('保险箱品质保底抬档 [0,0,1,2,4,6]',
@@ -3433,6 +3437,90 @@ check('server.js 压缩缓存超上限用 LRU 淘汰而非整表 clear',
   /while\(COMPRESS_CACHE\.size>120\)/.test(__s55) && /COMPRESS_CACHE\.keys\(\)\.next\(\)/.test(__s55)
    && /COMPRESS_CACHE\.delete\(key\); COMPRESS_CACHE\.set\(key, body\)/.test(__s55)
    && !/COMPRESS_CACHE\.clear\(\)/.test(__s55) ? 1 : 0, 1, 0.001);
+
+/* ==========================================================================
+ * 50. 存档码压缩 / 弹药流转 / 黑市提价 / T10-12 / 耐久 / 连败补偿（v0.32.0）
+ * ========================================================================== */
+console.log('\n=== 50. 存档码 / 弹药 / 黑市 / T10-12 / 耐久 / 连败补偿（v0.32.0）===');
+const saveSrc = fs.readFileSync(path.join(SRC,'save.js'),'utf8');
+
+/* ① 存档码：BOPS1 同步、BOPS2 压缩、带说明文字可提取 */
+check('导出支持压缩前缀 BOPS2', /BOPS2/.test(saveSrc) && /CompressionStream/.test(saveSrc) ? 1 : 0, 1, 0.001);
+check('无 CompressionStream 时回退同步 BOPS1',
+  /typeof CompressionStream==="undefined"/.test(saveSrc) ? 1 : 0, 1, 0.001);
+check('导入先剥空白再提取（容忍换行）',
+  /replace\(\/\\s\+\/g,""\)[\s\S]{0,80}match\(\/\(BOPS\[12\]/.test(saveSrc) ? 1 : 0, 1, 0.001);
+check('截断报错会带收到的字符数',
+  /收到 "\+s\.length\+" 字符/.test(saveSrc) ? 1 : 0, 1, 0.001);
+check('提供存档文件文本导出', /exportFileText/.test(saveSrc) ? 1 : 0, 1, 0.001);
+
+/* ② 弹药双向 */
+check('撤离把局内弹药并回仓库', /this\.stash\.ammo\[aid\]=\(this\.stash\.ammo\[aid\]\|\|0\)\+n/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('配装默认带 3 条（90 发）', /RAID_AMMO_STACK\*3/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ③ 黑市提价 */
+check('黑市 5~8 档 GP 价 45/85/160/300',
+  /tokenPrice=\{\s*5:45,\s*6:85,\s*7:160,\s*8:300\s*\}/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ④ T10~T12：只从抽奖机产出 */
+check('品质表扩到 12 阶', G('RAID_TIERS.length'), 12, 0.001);
+check('T10/T11/T12 名为定制/珍藏/孤品',
+  G('RAID_TIERS[9].name')==='定制' && G('RAID_TIERS[10].name')==='珍藏' && G('RAID_TIERS[11].name')==='孤品' ? 1 : 0, 1, 0.001);
+check('护甲 / 头盔 / 护盾底材都有 T12',
+  G('!!RAID_ARMORS[12]') && G('!!RAID_HELMETS[12]') && G('!!SHIELD_BASES[12]') ? 1 : 0, 1, 0.001);
+check('商店与普通掉落仍封顶 T9',
+  G('raidRollArmorTier(1.6)<=9') ? 1 : 0, 1, 0.001);
+check('抽奖机超极品档 0.04% 直取 T10-12',
+  /if\(r < 0\.0004\)/.test(raidSrc) && /gear\(10,12\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('抽奖机文案改为「T10~T12 的枪械、装备和配件」',
+  /T10~T12 的枪械、装备和配件/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑤ 大厅按钮上移 */
+/* 位置比较比正则可靠：shop 按钮必须出现在「进入海关流域」之前 */
+check('五个入口按钮在页面顶部（早于开始按钮）',
+  raidSrc.indexOf('id="btn-raid-shop"')>=0 &&
+  raidSrc.indexOf('id="btn-raid-shop"') < raidSrc.indexOf('id="btn-raid-start"') ? 1 : 0, 1, 0.001);
+check('底部不再重复渲染这五个按钮',
+  (raidSrc.match(/id="btn-raid-shop"/g)||[]).length===1 ? 1 : 0, 1, 0.001);
+
+/* ⑥ 钥匙掉率 */
+check('钥匙掉率 3% / 1%', /bot\.smart\?0\.030:0\.010/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑦ rock 六边形碰撞 */
+check('rock 走 hex 复合箱', G('RAID_COMPOUND_KINDS.rock')==='hex' ? 1 : 0, 1, 0.001);
+const __hex = JSON.parse(G(`JSON.stringify((()=>{
+  const p={x:0,y:0,w:100,h:100,kind:"rock"};
+  const b=raidCompoundBoxes(p);
+  return { n:b.length, top:b[0].w, mid:b[1].w, bot:b[2].w };
+})())`));
+check('hex 用三条横带：中间全宽、上下更窄',
+  __hex.n===3 && __hex.mid===100 && __hex.top<100 && __hex.bot<100 ? 1 : 0, 1, 0.001);
+
+/* ⑧ 装备耐久 */
+const __dur = JSON.parse(G(`JSON.stringify((()=>{
+  const a=raidMakeArmor(5,0);
+  const before=a.dur;
+  a.dur=0.5;
+  const cost=raidRepairCost(a);
+  const dim=raidDurTint("#ef93d6",0.5), full=raidDurTint("#ef93d6",1);
+  return { before, cost, dim, full, sameHue: dim.length===7 && dim!==full };
+})())`));
+check('新装备 dur=1', __dur.before, 1, 0.001);
+check('修理费随缺口增长且为正', __dur.cost>0 ? 1 : 0, 1, 0.001);
+check('耐久降低只压亮度、色相不变', __dur.sameHue && __dur.dim!==__dur.full ? 1 : 0, 1, 0.001);
+check('受击磨损装备本体',
+  /gear\.dur=Math\.max\(0, base - abs\/\(gear\.maxArmor\*RAID_ARMOR_WEAR_K\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('有效护甲值 = 基础值 × 耐久', /\(it\.maxArmor\|\|0\)\*dur/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('仓库提供修理按钮', /data-repair=/.test(raidSrc) && /raidRepairCost/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑨ 连败补偿 */
+check('失败累计 lossStreak、成功清零',
+  /lossStreak=\(this\.stash\.lossStreak\|\|0\)\+1|lossStreak=Math\.min\(20,/.test(raidSrc) &&
+  /this\.stash\.lossStreak=0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('连败 3 把起给 pity（封顶 6 层）',
+  /this\.pity = M\.clamp\(\(\(this\.stash\.lossStreak\|0\)\|\|0\) - 2, 0, 6\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('pity 同时作用于箱子运气与敌人血量',
+  /\(this\.pity\|\|0\)\*0\.08/.test(raidSrc) && /this\.pity\*0\.035/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

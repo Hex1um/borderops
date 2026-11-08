@@ -210,6 +210,9 @@ const Raid = {
     // 带装备即脱离裸装档：即便只带一把破手枪，AI 也按「常规配装」起步
     if(carriedAny) gs = Math.max(gs, RAID_GEAR_BASE);
     this.gearStrength = M.clamp(gs, 0, 1.6);
+    /* v0.32.0（用户要求）：连续三把撤离失败开始补偿 —— 连败 3 把给 1 层，
+       之后每多败一把 +1，封顶 6 层。箱子运气 +，敌人血量略降。 */
+    this.pity = M.clamp(((this.stash.lossStreak|0)||0) - 2, 0, 6);
 
     // 出生点不再固定卡车停车场 —— 全图 3×3 分区抽取，避免每局都从左上角开跑
     const spawnRoom=this._pickSpawnRoom();
@@ -430,6 +433,11 @@ const Raid = {
         });
         /* v0.27.0：驻守队员带小队标记与归属 POI；游荡者 entry.sid 为空，行为不变。 */
         if(entry.sid){ op.squadId=entry.sid; op.isLeader=!!entry.leader; op.homePoi=entry.poi; }
+        /* v0.32.0：连败补偿 —— 敌人血量最多降 21%（6 层 ×3.5%），不削伤害 */
+        if(this.pity){
+          op.hp=Math.max(1, Math.round(op.hp*(1-this.pity*0.035)));
+          op.maxHP=op.hp;
+        }
         this.ops.push(op);
       }
 

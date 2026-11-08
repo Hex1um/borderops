@@ -383,6 +383,26 @@ Object.assign(Raid, {
       target.helmetArmor-=helmAbs;
     }
     d-=armorAbs+helmAbs;
+    /* v0.32.0：装备耐久磨损 —— 吸收了多少伤害就按比例磨损装备本体。
+       只对玩家生效（AI 的装备是一次性生成的，磨损没有出口）。 */
+    if(target.isPlayer){
+      const wear=(gear,abs)=>{
+        if(!gear || abs<=0 || !(gear.maxArmor>0)) return;
+        const base=gear.dur===undefined?1:gear.dur;
+        gear.dur=Math.max(0, base - abs/(gear.maxArmor*RAID_ARMOR_WEAR_K));
+      };
+      wear(target.armorGear, armorAbs);
+      wear(target.helmetGear, helmAbs);
+      if(target.shieldGear && target.maxShield>0){
+        const sg=target.shieldGear;
+        const base=sg.dur===undefined?1:sg.dur;
+        const cap0=sg.capacity||0;
+        if(cap0>0){
+          const abs=Math.max(0, Math.min(cap0, cap0-target.shield));
+          sg.dur=Math.max(0, base - abs/(cap0*RAID_ARMOR_WEAR_K));
+        }
+      }
+    }
     /* v0.27.0：穿甲要可感知 —— 高穿弹把护甲减伤削弱到 75% 以下时给「穿甲」浮字 + 火花，
        0.45s 节流防连发刷屏。以前护甲耐久只会默默掉，玩家看不出「这发打穿了」。 */
     if(armorAbs>0 && penMul<=0.75 && (target._penFxT||0)<=M.now()){
@@ -614,7 +634,9 @@ Object.assign(Raid, {
     /* v0.25.0：钥匙掉率调低（需求「钥匙掉落概率调低」）—— 精锐 20% → 10%，普通 7% → 3.5%。
        一局要打的 AI 有三十多个，原来光靠翻尸就能攒出一串钥匙，把「钥匙稀缺」
        这条设计意图彻底抵消掉了。 */
-    if(RNG.chance(bot.smart?0.10:0.035)){
+    /* v0.32.0（用户要求「钥匙掉落概率大幅降低」）：精锐 10%→3%、普通 3.5%→1%。
+       钥匙直接决定能开什么箱子，掉得太勤会把「稀缺」这条设计彻底抵消。 */
+    if(RNG.chance(bot.smart?0.030:0.010)){
       const KLV=[{weight:52,lv:1},{weight:26,lv:2},{weight:14,lv:3},{weight:6,lv:4},{weight:2,lv:5}];
       drops.push(raidMakeKey(KLV[RNG.weighted(KLV)].lv));
     }
@@ -641,7 +663,8 @@ Object.assign(Raid, {
     if(this.search.t>=need){
       /* v0.22.2：箱子按所在行政区的静态危险度加权掉落。
          raidLuckAt 只读坐标（纯函数，不碰 RNG / AI / 计时），联机两端 seed 重放结果一致。 */
-      const luck=raidLuckAt(this, c.x, c.y);
+      /* v0.32.0：连败补偿也体现在箱子上（每层 +8% 运气，仍受 1.6 封顶） */
+      const luck=Math.min(1.6, raidLuckAt(this, c.x, c.y) + (this.pity||0)*0.08);
       /* 地面物品堆 —— 逐件尝试装包；装不下的留在原地，这里绝不新生成堆（否则会无限增殖） */
       if(c.ground){
         const rest=[];
@@ -858,12 +881,17 @@ Object.assign(Raid, {
       else this._dropGround(old, p.x, p.y, "spill");
     }
     this.carried[kind]=it;
-    const cap=it.maxArmor||0;
+    /* v0.32.0：护甲值按**耐久系数**折算（磨掉多少就只能用多少），
+       同时把装备本体挂到玩家身上，_damage 才能按受击量磨损它。 */
+    const dur=(typeof raidDurOf==="function") ? raidDurOf(it) : 1;
+    const cap=(it.maxArmor||0)*dur;
     if(kind==="armor"){
+      p.armorGear=it;
       p.armorTier=it.tier||0; p.dr=it.dr||0;
       p.maxArmor=cap; p.armor=cap; p.armorRegen=it.armorRegen||0;
       p.armorBroken=cap<=0;
     } else {
+      p.helmetGear=it;
       p.helmetTier=it.tier||0; p.helmetDr=it.dr||0;
       p.maxHelmetArmor=cap; p.helmetArmor=cap;
     }
@@ -934,10 +962,10 @@ Object.assign(Raid, {
       p.shieldAbsorbMul=1; p.shieldTier=0;
       p.shieldInvulnMax=0; p.shieldInvulnLeft=0;
     } else if(which==="helmet"){
-      carried.helmet=null;
+      carried.helmet=null; p.helmetGear=null;
       p.helmetTier=0; p.helmetDr=0; p.maxHelmetArmor=0; p.helmetArmor=0;
     } else {
-      carried.armor=null;
+      carried.armor=null; p.armorGear=null;
       p.armorTier=0; p.dr=0; p.maxArmor=0; p.armor=0;
       p.armorRegen=0; p.armorBroken=false;
     }
@@ -1153,6 +1181,14 @@ Object.assign(Raid, {
     /* v0.19.0：局内捡到的医疗品也要随撤离入库，否则「捡到即消失」 */
     for(const m of (this.inv.meds||[])) this.stash.meds[m.id]=(this.stash.meds[m.id]||0)+(m.n||0);
     this.stash.bandages=this.bandages;
+    /* v0.32.0（用户反馈「局内弹药撤离带不回仓库」）：把剩余子弹并回仓库。
+       之前这里写回了武器 / 护甲 / 头盔 / 护盾 / 配件 / 材料 / 钥匙 / 遗物 / 医疗 / 绷带
+       十类，唯独漏了 inv.ammo —— 带进去的子弹打剩多少都凭空蒸发。 */
+    this.stash.ammo=this.stash.ammo||{};
+    for(const aid of Object.keys(this.inv.ammo||{})){
+      const n=this.inv.ammo[aid]|0;
+      if(n>0) this.stash.ammo[aid]=(this.stash.ammo[aid]||0)+n;
+    }
     // 撤离不再保底发 GP 币 —— 只按带出价值与击杀数结算
     // （本局首杀的那 1 枚已由 _onBotDeath 当场发放，没打到人、也没翻到货就是 0 枚）
     let lootVal=0;
@@ -1166,6 +1202,8 @@ Object.assign(Raid, {
     const tokenGain=M.clamp(Math.floor(lootVal/60000)+Math.floor((this.player.kills||0)/3), 0, 5);
     const tokenTotal=(this.tokens||0)+tokenGain;
     this.stash.tokens=(this.stash.tokens||0)+tokenTotal;
+    /* v0.32.0：撤离成功即清零连败 —— 补偿只给「真的连续失败」的玩家 */
+    this.stash.lossStreak=0;
     if(!RaidStash.save(this.stash) && this.game && this.game.toast)
       this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
     this.game.state="raidover";
@@ -1210,6 +1248,8 @@ Object.assign(Raid, {
         recovered.push(it);
       }
     }
+    /* v0.32.0：阵亡 / 超时都算一次失败，累计连败用于下一局的补偿 */
+    this.stash.lossStreak=Math.min(20,(this.stash.lossStreak||0)+1);
     if(!RaidStash.save(this.stash) && this.game && this.game.toast)
       this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
     this.game.state="raidover";

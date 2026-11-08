@@ -346,6 +346,10 @@ const RAID_ARMORS = {
   7: { name:"T7 全防护突击甲", dr:0.71, maxArmor:500,  value:48000   },
   8: { name:"T8 多层复合装甲", dr:0.80, maxArmor:720,  value:128000  },
   9: { name:"T9 VI 级重型防弹衣",dr:0.86,maxArmor:960, value:340000  },
+  /* v0.32.0：T10~T12 只从抽奖机的超极品档产出（0.04%），商店与普通掉落仍封顶 T9 */
+  10:{ name:"T10 定制承力防弹甲",dr:0.885,maxArmor:1150,value:620000 },
+  11:{ name:"T11 珍藏陶瓷复合甲",dr:0.905,maxArmor:1350,value:1100000},
+  12:{ name:"T12 孤品全封式战甲",dr:0.920,maxArmor:1600,value:1950000},
 };
 // 1~9 级头盔：减爆头伤害，独立耐久池
 const RAID_HELMETS = {
@@ -358,8 +362,34 @@ const RAID_HELMETS = {
   7: { name:"T7 高切防弹头盔", dr:0.65, maxArmor:220, value:33000 },
   8: { name:"T8 全罩式头盔",   dr:0.74, maxArmor:320, value:88000 },
   9: { name:"T9 面罩一体头盔", dr:0.81, maxArmor:430, value:240000 },
+  10:{ name:"T10 定制一体头盔", dr:0.845,maxArmor:560, value:420000 },
+  11:{ name:"T11 珍藏全罩头盔", dr:0.870,maxArmor:700, value:760000 },
+  12:{ name:"T12 孤品密封头盔", dr:0.890,maxArmor:880, value:1300000},
 };
 const RAID_ARMOR_TIERS = [1,2,3,4,5,6,7,8,9];
+/* ===== v0.32.0：装备耐久（用户方案） =====
+ * 每件护甲 / 头盔 / 护盾带 dur ∈ [0,1]（默认 1）。受击吸收伤害时按比例磨损：
+ *   dur -= 吸收量 / (基础护甲值 × RAID_ARMOR_WEAR_K)
+ * 1.5 表示「彻底打穿一管半护甲值就报废」。有效护甲值 = 基础值 × dur。
+ * 显示上**只降亮度、不动色相**：工坊修回满耐久后颜色与数值一起复原。 */
+const RAID_ARMOR_WEAR_K = 1.5;
+const RAID_REPAIR_RATE = 0.55;      // 修理费 = 缺口 × 估值 × 该系数
+function raidDurOf(it){ return (it && it.dur!==undefined) ? M.clamp(it.dur,0,1) : 1; }
+/* 修理费 = 耐久缺口 × 装备估值 × RAID_REPAIR_RATE（最低 ₽80，避免小额白修） */
+function raidRepairCost(it){
+  const gap=1-raidDurOf(it);
+  if(gap<=0.001) return 0;
+  return Math.max(80, Math.round((it.value||1000)*gap*RAID_REPAIR_RATE));
+}
+function raidDurTint(hex, dur){
+  const f=0.55+0.45*raidDurOf({dur:dur===undefined?1:dur});
+  const h=String(hex||"#9aa4b2").replace("#","");
+  const full=h.length===3 ? h.split("").map(c=>c+c).join("") : h;
+  const n=parseInt(full,16);
+  if(isNaN(n)) return hex;
+  const r=Math.round(((n>>16)&255)*f), g=Math.round(((n>>8)&255)*f), b=Math.round((n&255)*f);
+  return "#"+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+}
 // 局内物品栏容量上限（超出则无法继续拾取，提示「物品栏已满」）
 const RAID_INV_CAP = { weapons:6, armors:4, helmets:4, shields:3, parts:16, materials:24, meds:6, receivers:4, keys:8 };
 
@@ -393,6 +423,11 @@ const RAID_TIERS = [
   { id:"ancient", name:"试验", color:"#f2bd54", dr:0.155, arm:1.60, val:5.20, regen:0, affix:6 },
   { id:"myth",    name:"原型", color:"#b6de19", dr:0.190, arm:2.20, val:7.60, regen:0, affix:7 },
   { id:"rainbow", name:"定型", color:"#76ebd7", dr:0.225, arm:2.90, val:11.0, regen:0, affix:8 },
+  /* v0.32.0：T10~T12 —— 只从抽奖机的「超极品」档产出，商店与普通掉落仍封顶在定型。
+     名字沿用品质阶梯的语义，颜色按 sRGB 亮度继续递增。 */
+  { id:"bespoke", name:"定制", color:"#ffd23f", dr:0.265, arm:3.70, val:15.0, regen:0, affix:9 },
+  { id:"relic",   name:"珍藏", color:"#ff9f43", dr:0.300, arm:4.60, val:21.0, regen:0, affix:10 },
+  { id:"singular",name:"孤品", color:"#ff5c8a", dr:0.340, arm:5.60, val:29.0, regen:0, affix:11 },
 ];
 // 护甲稀有度数组（与 RAID_TIERS 一一对应，保留旧字段名以兼容 UI）
 const RAID_RARITY_NAME  = RAID_TIERS.map(t=>t.name);
@@ -408,7 +443,9 @@ function raidTierLegend(){
 }
 
 // 枪械生成：把塔科夫品质档位映射到全局 RARITIES 的 id（仅取数值/词缀，显示色由 qColor 覆盖）
-const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","ancient","mythic","rainbow"];
+/* 索引 9~11（定制/珍藏/孤品）在旧 rarity 体系里没有对应项，统一回落到 rainbow ——
+   真正区分它们的是 qTier 与 RAID_TIERS 的名字/颜色，旧 rarity 只决定生成器的数值档。 */
+const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","ancient","mythic","rainbow","rainbow","rainbow","rainbow"];
 
 /* ----------------------------- 具名装备 -----------------------------
  * 高档位除了随机改装枪甲之外，还会掉落现实型号 + 出厂改装方案的「具名装备」：
@@ -1639,21 +1676,21 @@ function raidArmorName(baseName, affixes, rar){
 
 // 生成一件指定等级的护甲 / 头盔（rarity 省略时按等级掷稀有度）
 function raidMakeArmor(tier, rarity){
-  const t = M.clamp(Math.round(tier||1), 1, 9);
+  const t = M.clamp(Math.round(tier||1), 1, 12);   // v0.32.0：抽奖机可出 T10~T12
   const r = rarity===undefined ? raidRollArmorRarity(t) : M.clamp(Math.round(rarity),0,8);
   const af = raidRollArmorAffixes(r);
   return Object.assign({
-    uid:"ar"+Math.floor(Math.random()*1e9).toString(36), kind:"armor", tier:t,
+    uid:"ar"+Math.floor(Math.random()*1e9).toString(36), kind:"armor", tier:t, dur:1,
     baseName:RAID_ARMORS[t].name,
     name: raidArmorName(RAID_ARMORS[t].name, af, r),
   }, raidArmorStats(RAID_ARMORS[t], r, af));
 }
 function raidMakeHelmet(tier, rarity){
-  const t = M.clamp(Math.round(tier||1), 1, 9);
+  const t = M.clamp(Math.round(tier||1), 1, 12);   // v0.32.0：抽奖机可出 T10~T12
   const r = rarity===undefined ? raidRollArmorRarity(t) : M.clamp(Math.round(rarity),0,8);
   const af = raidRollArmorAffixes(r);
   return Object.assign({
-    uid:"hm"+Math.floor(Math.random()*1e9).toString(36), kind:"helmet", tier:t,
+    uid:"hm"+Math.floor(Math.random()*1e9).toString(36), kind:"helmet", tier:t, dur:1,
     baseName:RAID_HELMETS[t].name,
     name: raidArmorName(RAID_HELMETS[t].name, af, r),
   }, raidArmorStats(RAID_HELMETS[t], r, af));

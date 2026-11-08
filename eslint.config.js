@@ -32,6 +32,7 @@ for (const g of [
   "Uint8Array", "Float32Array", "ArrayBuffer", "DataView", "Function",
   "structuredClone", "queueMicrotask", "AbortController", "ResizeObserver",
   "URLSearchParams", "MutationObserver", "IntersectionObserver", "matchMedia",
+  "FileReader", "FormData", "Blob", "URL", "CompressionStream", "DecompressionStream", "Response", "Request", "Headers",
   "module", "require", "exports", "process", "Buffer", "__dirname",
 ]) globals[g] = "readonly";
 

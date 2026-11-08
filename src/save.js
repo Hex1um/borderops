@@ -42,6 +42,60 @@ function _b64dec(s){
   return decodeURIComponent(escape(bin));
 }
 
+/* ===== v0.32.0：存档码压缩 =====
+ * 旧版把 JSON 明文直接 base64 —— 实测一个正常存档就有 48,826 字符，
+ * 过一次聊天工具必然被截断，而校验和「差一个字符就判不完整」，
+ * 于是玩家看到的就是「校验失败：存档码已不完整或损坏」。
+ * 现在用浏览器原生 CompressionStream('deflate') 先压一遍再 base64，
+ * 前缀从 BOPS1 升到 BOPS2；**BOPS1 旧码仍能导入**（向后兼容）。
+ * 不支持 CompressionStream 的浏览器自动回退成 BOPS1 明文码。 */
+function _bytesB64(bytes){
+  let out="";
+  for(let i=0;i<bytes.length;i+=3){
+    const a=bytes[i], b=i+1<bytes.length?bytes[i+1]:0, c=i+2<bytes.length?bytes[i+2]:0;
+    const n=(a<<16)|(b<<8)|c;
+    out+=_B64C[(n>>18)&63]+_B64C[(n>>12)&63]
+       +(i+1<bytes.length?_B64C[(n>>6)&63]:"=")+(i+2<bytes.length?_B64C[n&63]:"=");
+  }
+  return out.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function _b64ToBytes(s){
+  s=String(s).replace(/-/g,"+").replace(/_/g,"/");
+  while(s.length%4) s+="=";
+  const out=[];
+  for(let i=0;i<s.length;i+=4){
+    const c0=_B64C.indexOf(s[i]), c1=_B64C.indexOf(s[i+1]), c2=_B64C.indexOf(s[i+2]), c3=_B64C.indexOf(s[i+3]);
+    const n=((c0<0?0:c0)<<18)|((c1<0?0:c1)<<12)|((c2<0?0:c2)<<6)|(c3<0?0:c3);
+    out.push((n>>16)&255);
+    if(s[i+2]!=="=") out.push((n>>8)&255);
+    if(s[i+3]!=="=") out.push(n&255);
+  }
+  return new Uint8Array(out);
+}
+async function _packBody(json){
+  if(typeof CompressionStream==="undefined" || typeof Response==="undefined")
+    return { prefix:"BOPS1", body:_b64enc(json) };
+  try{
+    const cs=new CompressionStream("deflate");
+    const w=cs.writable.getWriter();
+    w.write(new TextEncoder().encode(json)); w.close();
+    const buf=await new Response(cs.readable).arrayBuffer();
+    return { prefix:"BOPS2", body:_bytesB64(new Uint8Array(buf)) };
+  }catch(e){
+    return { prefix:"BOPS1", body:_b64enc(json) };
+  }
+}
+async function _unpackBody(prefix, body){
+  if(prefix==="BOPS1") return _b64dec(body);
+  if(typeof DecompressionStream==="undefined")
+    throw new Error("此浏览器不支持解压存档码，请换用新版浏览器或导入存档文件");
+  const ds=new DecompressionStream("deflate");
+  const w=ds.writable.getWriter();
+  w.write(_b64ToBytes(body)); w.close();
+  const buf=await new Response(ds.readable).arrayBuffer();
+  return new TextDecoder().decode(new Uint8Array(buf));
+}
+
 const Save = {
   KEY:"borderlands_web_save_v1",
 
@@ -187,8 +241,11 @@ const Save = {
     return keys;
   },
 
-  /* 存档码：BOPS1-<8 位 FNV-1a 校验和>-<base64url(UTF-8 JSON)>
+  /* 存档码：BOPS2-<8 位 FNV-1a 校验和>-<base64url(deflate(JSON))>
+   * v0.32.0 起压缩；BOPS1（明文）旧码仍可导入。
    * data 里直接存各 key 的原始字符串，不做二次解析，旧档 / 未来字段都能原样带走。 */
+  /* 返回值可能是字符串（BOPS1 同步）或 Promise<string>（BOPS2 压缩）。
+     调用方统一 `await` 即可 —— await 一个非 Promise 值是无害的。 */
   exportCode(){
     try{
       const bag={ app:"borderops", v:2, ver:CFG.version, at:Date.now(), data:{} };
@@ -198,33 +255,66 @@ const Save = {
       }
       // 全新存档无任何数据时不生成空码（否则复制到新浏览器会被「无可导入数据」拒绝）
       if(!Object.keys(bag.data).length) return null;
-      const body=_b64enc(JSON.stringify(bag));
-      return "BOPS1-"+_b64hash(body)+"-"+body;
+      const json=JSON.stringify(bag);
+      if(typeof CompressionStream==="undefined" || typeof Response==="undefined"){
+        const body=_b64enc(json);
+        return "BOPS1-"+_b64hash(body)+"-"+body;
+      }
+      return _packBody(json).then(p=>p.prefix+"-"+_b64hash(p.body)+"-"+p.body);
     }catch(e){ return null; }
   },
+  /* 导出成可直接存盘的文本（与存档码同构，方便「下载文件」入口） */
+  async exportFileText(){
+    const code=await this.exportCode();
+    if(!code) return null;
+    return "BORDER OPS 存档备份\n"+
+      "版本 "+CFG.version+" · 导出时间 "+new Date().toISOString()+"\n"+
+      "导入方法：大厅 →「导入存档码」→ 把下面整段粘贴进去，或直接用「导入存档文件」。\n\n"+
+      code+"\n";
+  },
+  /* 落盘（BOPS1 / BOPS2 共用）。抽出来是为了让「同步旧码」与「异步新码」两条路
+     走同一套白名单 + 净化逻辑，不会有一边漏掉 v0.31.1 的 XSS 防线。 */
+  _applyBag(bag){
+    if(!bag || bag.app!=="borderops" || !bag.data || typeof bag.data!=="object")
+      return { ok:false, msg:"不是有效的边境行动存档码" };
+    const keys=this.exportKeys(); let n=0;
+    for(const k of Object.keys(bag.data)){
+      if(keys.indexOf(k)<0) continue;                 // 只写白名单 key，拒绝注入任意 localStorage 键
+      /* v0.31.1：校验和只说明「没损坏」，不说明「没恶意」。三个白名单 key
+       * （战役存档 / 塔科夫仓库 / 拍卖行）的 JSON 里所有字符串先剥危险字符，
+       * 再落盘 —— 顺带挡住「导入后绕过 getJSON 直接 Store.get」的未来代码。 */
+      let raw;
+      try{ raw=JSON.stringify(cleanSaveStrings(JSON.parse(String(bag.data[k])))); }
+      catch(e){ continue; }   // 合法存档必然是 Store.setJSON 写出的 JSON
+      if(raw===undefined) continue;
+      Store.set(k, raw); n++;
+    }
+    return n ? { ok:true, msg:"已导入 "+n+" 项存档", count:n }
+             : { ok:false, msg:"存档码里没有可导入的数据" };
+  },
+  /* 同样双形态：BOPS1（明文）同步返回结果对象，BOPS2（压缩）返回 Promise。
+     调用方统一 await 即可。 */
   importCode(code){
+    let m, s;
     try{
-      const s=String(code||"").trim().replace(/\s+/g,"");
-      const m=s.match(/^BOPS1-([0-9a-f]{8})-([A-Za-z0-9_-]+)$/i);
-      if(!m) return { ok:false, msg:"格式不对：应以 BOPS1- 开头" };
-      if(_b64hash(m[2])!==m[1].toLowerCase()) return { ok:false, msg:"校验失败：存档码不完整或已损坏" };
-      const bag=JSON.parse(_b64dec(m[2]));
-      if(!bag || bag.app!=="borderops" || !bag.data || typeof bag.data!=="object")
-        return { ok:false, msg:"不是有效的边境行动存档码" };
-      const keys=this.exportKeys(); let n=0;
-      for(const k of Object.keys(bag.data)){
-        if(keys.indexOf(k)<0) continue;                 // 只写白名单 key，拒绝注入任意 localStorage 键
-        /* v0.31.1：校验和只说明「没损坏」，不说明「没恶意」。三个白名单 key
-         * （战役存档 / 塔科夫仓库 / 拍卖行）的 JSON 里所有字符串先剥危险字符，
-         * 再落盘 —— 顺带挡住「导入后绕过 getJSON 直接 Store.get」的未来代码。 */
-        let raw;
-        try{ raw=JSON.stringify(cleanSaveStrings(JSON.parse(String(bag.data[k])))); }
-        catch(e){ continue; }   // 合法存档必然是 Store.setJSON 写出的 JSON
-        if(raw===undefined) continue;
-        Store.set(k, raw); n++;
-      }
-      return n ? { ok:true, msg:"已导入 "+n+" 项存档", count:n }
-               : { ok:false, msg:"存档码里没有可导入的数据" };
-    }catch(e){ return { ok:false, msg:"解析失败："+(e&&e.message||e) }; }
+      /* v0.32.0：允许整段粘贴 —— 存档文件里带说明文字，从文本中抽出码即可。 */
+      /* 先剥掉所有空白再提取 —— 否则换行会把码切断，正则只匹配到半截。 */
+      const clean=String(code||"").replace(/\s+/g,"");
+      const hit=clean.match(/(BOPS[12]-[0-9a-f]{8}-[A-Za-z0-9_-]+)/i);
+      s=hit ? hit[1] : "";
+      m=s.match(/^(BOPS[12])-([0-9a-f]{8})-([A-Za-z0-9_-]+)$/i);
+    }catch(e){ m=null; }
+    if(!m) return { ok:false, msg:"格式不对：没找到 BOPS1- / BOPS2- 开头的存档码" };
+    if(_b64hash(m[3])!==m[2].toLowerCase())
+      return { ok:false, msg:"校验失败：存档码不完整或已损坏（收到 "+s.length+" 字符，可能是复制时被截断了；"
+        +"建议改用「下载存档文件」备份，或确认完整复制到最后一个字符）" };
+    const prefix=m[1].toUpperCase();
+    if(prefix==="BOPS1"){
+      try{ return this._applyBag(JSON.parse(_b64dec(m[3]))); }
+      catch(e){ return { ok:false, msg:"解析失败："+(e&&e.message||e) }; }
+    }
+    return _unpackBody(prefix, m[3])
+      .then(json=>this._applyBag(JSON.parse(json)))
+      .catch(e=>({ ok:false, msg:"解析失败："+(e&&e.message||e) }));
   },
 };

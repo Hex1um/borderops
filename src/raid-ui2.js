@@ -231,7 +231,7 @@ UI.raidFieldShop=function(key){
         <div>
           <div style="font-weight:800;font-size:15px;color:${sh.color};">抽奖机 · LUCKY DRAW</div>
           <div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5;">
-            极低概率出 <b style="color:#ffd23f">T7~T9 防护装备 / 高阶枪械 / 具名品</b>，七成是普通原材料。每抽 <b>${gacha.costTxt}</b>（${gacha.label}），理性消费。
+            <b style="color:#ff5c8a">极小概率</b>抽得 <b style="color:#ffd23f">T10~T12 的枪械、装备和配件</b>；通常出 T5~T9 防护装备与高阶枪械，七成是普通原材料。每抽 <b>${gacha.costTxt}</b>（${gacha.label}），理性消费。
           </div>
         </div>
         <button class="btn" data-gacha="1" ${gachaCan?"":"disabled"}>投入 ${gacha.costTxt} 抽一次</button>
@@ -827,25 +827,32 @@ UI.raidStash=function(opts){
   const wCards = stash.weapons.length ? byValue(stash.weapons).map(w=>raidWeaponCard(w,{sell:true})).join('') : `<div class="empty-hint">仓库暂无枪械</div>`;
 
   const aCards = stash.armors.length ? byValue(stash.armors).map(a=>{
-    const rar=a.rarity|0, col=RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[a.tier];
+    const rar=a.rarity|0;
+    const dPct=Math.round(raidDurOf(a)*100), rc=raidRepairCost(a);
+    /* v0.32.0：耐久越低颜色越暗（色相不变），修满即复原 */
+    const col=raidDurTint(RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[a.tier], a.dur);
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${a.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
-      <div class="si-meta">T${a.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 躯干${a.armorRegen?(' · 待维修 '+a.armorRegen+'/s'):''}${a.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}</div>
+      <div class="si-meta">T${a.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 耐久 <b style="color:${dPct<60?'#ff8a5a':'#8fe07a'}">${dPct}%</b>${a.armorRegen?(' · 待维修 '+a.armorRegen+'/s'):''}${a.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}</div>
       ${a.uniqPerk?`<div class="uniq-perk">✦ ${a.uniqPerk}</div>`:''}
-      <div class="si-stats">减伤 ${Math.round((a.dr||0)*100)}% · 护甲值 ${a.maxArmor} · 估值 ₽${priceTextShort(a.value)}</div>
+      <div class="si-stats">减伤 ${Math.round((a.dr||0)*100)}% · 护甲值 ${Math.round((a.maxArmor||0)*raidDurOf(a))}/${a.maxArmor} · 估值 ₽${priceTextShort(a.value)}</div>
       <div class="si-buy"><span class="si-price">₽ ${priceTextShort((a.value||0)*RAID_VENDOR_RATE)}</span>
+        ${dPct<100?`<button class="btn ghost" data-repair="a:${a.uid}">修理 ₽${priceTextShort(rc)}</button>`:""}
         <button class="btn ghost" data-sell="a:${a.uid}">售卖</button></div>
     </div>`;
   }).join('') : `<div class="empty-hint">仓库暂无护甲</div>`;
 
   const hCards = stash.helmets.length ? byValue(stash.helmets).map(h=>{
-    const rar=h.rarity|0, col=RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[h.tier];
+    const rar=h.rarity|0;
+    const dPct=Math.round(raidDurOf(h)*100), rc=raidRepairCost(h);
+    const col=raidDurTint(RAID_RARITY_COLOR[rar]||ARMOR_TIER_COLOR[h.tier], h.dur);
     return `<div class="shop-item" style="border-left-color:${col}">
       <div class="si-name" style="color:${col}">${h.name}<span style="font-size:11px;opacity:.9"> · ${RAID_RARITY_NAME[rar]}</span></div>
-      <div class="si-meta">T${h.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 头部${h.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}</div>
+      <div class="si-meta">T${h.tier||"?"} · ${RAID_RARITY_NAME[rar]} · 耐久 <b style="color:${dPct<60?'#ff8a5a':'#8fe07a'}">${dPct}%</b>${h.uniqPerk?' · <b style="color:#ffd23f">具名装备</b>':''}</div>
       ${h.uniqPerk?`<div class="uniq-perk">✦ ${h.uniqPerk}</div>`:''}
-      <div class="si-stats">爆头减伤 ${Math.round((h.dr||0)*100)}% · 耐久 ${h.maxArmor} · 估值 ₽${priceTextShort(h.value)}</div>
+      <div class="si-stats">爆头减伤 ${Math.round((h.dr||0)*100)}% · 耐久 ${Math.round((h.maxArmor||0)*raidDurOf(h))}/${h.maxArmor} · 估值 ₽${priceTextShort(h.value)}</div>
       <div class="si-buy"><span class="si-price">₽ ${priceTextShort((h.value||0)*RAID_VENDOR_RATE)}</span>
+        ${dPct<100?`<button class="btn ghost" data-repair="h:${h.uid}">修理 ₽${priceTextShort(rc)}</button>`:""}
         <button class="btn ghost" data-sell="h:${h.uid}">售卖</button></div>
     </div>`;
   }).join('') : `<div class="empty-hint">仓库暂无头盔</div>`;
@@ -947,6 +954,21 @@ UI.raidStash=function(opts){
       RaidStash.save(st); SFX.pickup();
       UI.toast && UI.toast(`已拆解 ${partNameOf(pt)} · 获得 ${names.join(" + ")}`);
       UI.raidStash(opts);
+    };
+  });
+  /* v0.32.0：装备修理 —— 花卢布把 dur 修回 1，颜色与护甲值一起复原 */
+  UI.overlay.querySelectorAll('[data-repair]').forEach(el=>{
+    el.onclick=()=>{
+      const [kind,key]=el.dataset.repair.split(':');
+      const list = kind==='a'?stash.armors : kind==='h'?stash.helmets : (stash.shields||[]);
+      const it=(list||[]).find(x=>x.uid===key); if(!it) return;
+      const cost=raidRepairCost(it);
+      if(cost<=0) return;
+      if((stash.creds||0)<cost){ SFX.ui(); if(UI.game) UI.game.toast("卢布不足：修理需要 ₽"+priceText(cost)); return; }
+      stash.creds-=cost; it.dur=1;
+      RaidStash.save(stash); SFX.ui();
+      if(UI.game) UI.game.toast("已修理 · "+it.name);
+      UI.raidStash({from:opts.from});
     };
   });
   UI.overlay.querySelectorAll('[data-sell]').forEach(el=>{

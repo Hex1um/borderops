@@ -138,6 +138,7 @@ const UI = {
           <textarea id="export-code" readonly rows="4" spellcheck="false">${this._exportCode}</textarea>
           <div class="row">
             <button class="btn small" id="btn-export-copy">复制</button>
+            <button class="btn small ghost" id="btn-export-file">下载存档文件</button>
             <button class="btn small ghost" id="btn-export-close">关闭</button>
           </div>
         </div>`:''}
@@ -147,6 +148,9 @@ const UI = {
           ${this._importMsg?`<div style="margin-top:6px;color:var(--accent);">${String(this._importMsg).replace(/[&<>"']/g,'')}</div>`:''}
           <div class="row">
             <button class="btn small danger" id="btn-import-go">确认导入</button>
+            <label class="btn small ghost" style="cursor:pointer;display:inline-flex;align-items:center;">导入存档文件
+              <input type="file" id="import-file" accept=".txt,.bops,text/plain" style="display:none;">
+            </label>
             <button class="btn small ghost" id="btn-import-cancel">取消</button>
           </div>
         </div>`:''}
@@ -238,9 +242,9 @@ const UI = {
 
     // v0.22.0：存档码导出 / 导入（解绑域名，换浏览器 / 清缓存可自保）
     const exBtn=document.getElementById('btn-export');
-    if(exBtn) exBtn.onclick=()=>{
+    if(exBtn) exBtn.onclick=async()=>{
       SFX.ui();
-      const code=Save.exportCode();
+      const code=await Save.exportCode();
       if(!code){ this.game.toast("暂无存档可导出（先进入一次游戏）"); return; }
       this._exportCode=code; this._importArm=false; this._importMsg=""; this.title();
       const t=document.getElementById('export-code');
@@ -278,10 +282,10 @@ const UI = {
     const imCancel=document.getElementById('btn-import-cancel');
     if(imCancel) imCancel.onclick=()=>{ SFX.ui(); this._importArm=false; this._importMsg=""; this.title(); };
     const imGo=document.getElementById('btn-import-go');
-    if(imGo) imGo.onclick=()=>{
+    if(imGo) imGo.onclick=async()=>{
       SFX.ui();
       const t=document.getElementById('import-code');
-      const r=Save.importCode(t?t.value:"");
+      const r=await Save.importCode(t?t.value:"");
       if(r.ok){
         this._importArm=false; this._importMsg="";
         this.title();
@@ -289,6 +293,33 @@ const UI = {
       } else {
         this._importMsg=r.msg; this.title();
       }
+    };
+    /* v0.32.0：存档文件下载 / 从文件导入 —— 彻底绕开「长码在聊天工具里被截断」 */
+    const exFile=document.getElementById('btn-export-file');
+    if(exFile) exFile.onclick=async()=>{
+      SFX.ui();
+      const txt=await Save.exportFileText();
+      if(!txt){ this.game.toast("暂无存档可导出（先进入一次游戏）"); return; }
+      try{
+        const blob=new Blob([txt],{type:"text/plain;charset=utf-8"});
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        a.download="borderops-save-"+new Date().toISOString().slice(0,10)+".txt";
+        document.body.appendChild(a); a.click();
+        setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(_e){ /* 回收失败不影响已下载的文件 */ } a.remove(); },1000);
+        this.game.toast("存档文件已下载");
+      }catch(e){ this.game.toast("下载失败："+(e&&e.message||e)); }
+    };
+    const imFile=document.getElementById('import-file');
+    if(imFile) imFile.onchange=()=>{
+      const f=imFile.files&&imFile.files[0]; if(!f) return;
+      const rd=new FileReader();
+      rd.onload=async()=>{
+        const r=await Save.importCode(String(rd.result||""));
+        if(r.ok){ this._importArm=false; this._importMsg=""; this.title(); this.game.toast(r.msg); }
+        else { this._importMsg=r.msg; this.title(); }
+      };
+      rd.readAsText(f,"utf-8");
     };
   },
 

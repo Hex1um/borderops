@@ -114,9 +114,12 @@ UI.raidSetup=function(){
       </div>` };
     }
     const cap=Math.min(cur.n, RAID_AMMO_CAP);
-    /* v0.20.1：默认一发都不带（进图枪是空的，子弹要自己带或自己找）。
-     * 只有玩家点过数量按钮，才按他选的带。 */
-    const n=(sel && sel.id===cur.id) ? Math.max(0, Math.min(sel.n|0, cap)) : 0;
+    /* v0.32.0（用户反馈「仓库弹药带不进去」）：默认改成**带 3 条（90 发）**。
+       v0.20.1 原本默认 0 发，理由是「弹药要自己负责」，但结果是玩家拖都没拖就空枪进图、
+       以为功能坏了。现在默认够打一两轮遭遇战，不够打完一局 —— 仍然要自己负责搜刮。
+       玩家拖过滑动条后以他选的数量为准（sel 存在就不覆盖）。 */
+    const n=(sel && sel.id===cur.id) ? Math.max(0, Math.min(sel.n|0, cap))
+                                    : Math.min(cap, RAID_AMMO_STACK*3);
     UI._raidAmmo[cal]={ id:cur.id, n, cap };
     /* v0.21.3：携带数量改成滑动条（和带入现金一致）—— 0 ~ 该口径库存，步长 30 发。
      * 购买入口全部撤掉，买子弹去军火超市的「子弹」页 / 工坊合成。 */
@@ -200,6 +203,15 @@ UI.raidSetup=function(){
           <b style="color:#8fe07a">带入现金</b>：配装大厅可以把仓库里的<b>卢布 / ◈ GP 币</b>按 25% / 50% / 全部带进图，局内商店与黑市直接花；<b style="color:#ff8a5a">阵亡即丢</b>，撤离成功则连本局所得一起回仓。撤离费先扣局内现金，<b style="color:#ffd36a">不够再从仓库补扣</b>（只在真正撤离成功时扣）。</div>
       </details>
       <div class="raid-balance">仓库卢布：<b>₽ ${stash.creds}</b> · GP 币 <b style="color:#ffd23f">◈ ${stash.tokens||0}</b> · 枪械 ${stash.weapons.length} · 护甲 ${stash.armors.length} · 头盔 ${(stash.helmets||[]).length} · 护盾 ${stash.shields.length} · 配件 ${(stash.parts||[]).length} · 改装模块 ${(stash.parts||[]).filter(p=>p.core).length} · 原材料 ${(stash.materials||[]).length} · 底材 ${(stash.receivers||[]).length} · 钥匙 <b style="color:#ffd23f">${(stash.keys||[]).length}</b></div>
+
+      <!-- v0.32.0（用户要求）：五个入口按钮从页面底部移到上方，随时可点 -->
+      <div class="row" style="justify-content:flex-end;gap:8px;margin:10px 0 2px;">
+        <button class="btn ghost" id="btn-raid-shop">军火超市</button>
+        <button class="btn ghost" id="btn-raid-forge">枪匠台</button>
+        <button class="btn ghost" id="btn-raid-stash">仓库</button>
+        <button class="btn ghost" id="btn-raid-auction">拍卖行${auc.mine?` · 挂单 ${auc.mine}`:""}</button>
+        <button class="btn ghost" id="btn-raid-back">返回</button>
+      </div>
 
       <div class="raid-launch">
         <div class="rl-text">
@@ -294,13 +306,6 @@ UI.raidSetup=function(){
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:10px;">
         ${ammoCarried===0?`<div class="raid-tip" style="color:#ff9a8a;width:100%;">未携带弹药：进图后枪是空的，要先搜到 / 买到子弹才能开火（钥匙同样默认不带）</div>`:''}
         <div class="raid-tip">${sel.w.length===0&&!sel.a&&!sel.h&&!sel.s&&cashVal===0?'裸装进场：空手、无甲、无盔、无盾，只带 1 卷绷带 —— 进图翻箱捡枪，捡到即自动上手':`已选 ${sel.w.length} 把枪${sel.a?' + 护甲':''}${sel.h?' + 头盔':''}${sel.s?' + 护盾':''} · 装备 ₽${priceText(gearVal)}${cashVal>0?` + 现金 ₽${priceText(cashVal)}`:''} · 总价值 <b style="color:#ffd36a">₽${priceText(carryVal)}</b> · 局内 Q 循环换枪 / 1~4 直选，多出的枪放背包`}</div>
-        <div class="row" style="justify-content:flex-end;">
-          <button class="btn ghost" id="btn-raid-shop">军火超市</button>
-          <button class="btn ghost" id="btn-raid-forge">枪匠台</button>
-          <button class="btn ghost" id="btn-raid-stash">仓库</button>
-          <button class="btn ghost" id="btn-raid-auction">拍卖行${auc.mine?` · 挂单 ${auc.mine}`:""}</button>
-          <button class="btn ghost" id="btn-raid-back">返回</button>
-        </div>
       </div>
     </div>`);
 
