@@ -600,43 +600,43 @@ Object.assign(Raid, {
     // v1.0：AI 身上带的是它自己搜刮来的东西——枪 / 甲 / 头盔 / 背包里的备用枪与配件
     const drops=[];
     const mkUid=p=>p+Math.floor(Math.random()*1e9).toString(36);
-    /* v0.36.0（用户要求）：敌人死亡**不一定**掉手上的装备。
-     *   · 装备品阶越高，掉率越低（民用几乎必掉，孤品只有一成多）；
-     *   · 高 tier 护甲 / 头盔同理，T9 以上基本只能靠箱子或黑市；
-     *   · 补偿：改掉「配件 + 材料」，品质随敌人档次上台阶，
-     *     但越往上越稀（每档 ×0.72），所以「一具尸体爆一身红」不会成为常态。 */
+    /* v0.36.1（用户定档）：装备掉率统一走 raidGearDropChance —— T5 = 10%，每高一档 ×0.5
+     * （T6 5% / T7 2.5% / T8 1.25% / T9 0.63%），低档反推翻倍。
+     * 补偿规则也换了一条：**枪没掉出来时给 2~3 个「同等级」配件**（等级 = 那把枪的品阶），
+     * 让「肥枪不掉」变成「拿到半成品，得自己去枪匠台拼」；护盾掉率单独再压一档。 */
     const rarIdx=(o)=>{
       const i=RARITIES.findIndex(r=>r.id===(o&&o.rarity));
       return i<0?0:i;
     };
-    const gearKeep=(idx, soft)=>{
-      const base = idx!==undefined ? (0.95 - idx*0.072) : (0.95 - (soft||0)*0.79);
-      return M.clamp(base, 0.12, 0.95);
-    };
-    let missed=0;   // 因为品阶太高而没掉出来的装备件数 —— 补偿掉落的数量按它来
+    const pOfTier=t=>raidGearDropChance(t);
+    let missedGear=0;      // 甲 / 盔没掉出来（走材料补偿）
+    const lostGuns=[];     // 枪没掉出来（走「同等级配件 ×2~3」补偿）
     if(bot.gun){
-      if(RNG.chance(gearKeep(rarIdx(bot.gun)))){
+      const gt=rarIdx(bot.gun)+1;                       // 品质档 → tier
+      if(RNG.chance(pOfTier(gt))){
         const g=Object.assign({}, bot.gun);
         g.kind="weapon"; g.uid=mkUid("bg");
         drops.push(g);
-      } else missed++;
+      } else lostGuns.push({ tier:gt, ilvl:bot.gun.ilvl||8 });
     }
     if(bot.armorTier){
-      if(RNG.chance(gearKeep(undefined, M.clamp((bot.armorTier-1)/8,0,1)))) drops.push(raidMakeArmor(bot.armorTier, 0));
-      else missed++;
+      if(RNG.chance(pOfTier(bot.armorTier))) drops.push(raidMakeArmor(bot.armorTier, 0));
+      else missedGear++;
     }
     if(bot.helmetTier){
-      if(RNG.chance(gearKeep(undefined, M.clamp((bot.helmetTier-1)/8,0,1)))) drops.push(raidMakeHelmet(bot.helmetTier, 0));
-      else missed++;
+      if(RNG.chance(pOfTier(bot.helmetTier))) drops.push(raidMakeHelmet(bot.helmetTier, 0));
+      else missedGear++;
     }
-    if(bot.maxShield>0 && RNG.chance(bot.smart?0.34:0.12))
+    /* 护盾：比同档装备再低一档（精锐也没多少） */
+    if(bot.maxShield>0 && RNG.chance((bot.smart?0.10:0.03)))
       drops.push(raidMakeShield(M.clamp(bot.armorTier||1,1,9), M.clamp((bot.armorTier||1)-1,0,8)));
-    /* 背包里的备用枪 / 护甲：同样按品阶衰减 */
+    /* 背包里的备用枪 / 护甲：同样按品阶表，且再折一半（它本来就是没换上手的那把） */
     for(const w of (bot.inv.weapons||[]).slice(0,1)){
-      if(!RNG.chance(gearKeep(rarIdx(w))*0.7)) continue;
+      const wt=rarIdx(w)+1;
+      if(!RNG.chance(pOfTier(wt)*0.5)) { lostGuns.push({ tier:wt, ilvl:w.ilvl||8 }); continue; }
       const g=Object.assign({},w); g.kind="weapon"; g.uid=mkUid("bw"); drops.push(g);
     }
-    for(const a of (bot.inv.armors||[]).slice(0,1)){ if(RNG.chance(0.55)) drops.push(a); }
+    for(const a of (bot.inv.armors||[]).slice(0,1)){ if(RNG.chance(0.35)) drops.push(a); }
     /* 它自己搜到的配件 / 改装模块 / 原材料（AI 独立物品栏要能被玩家翻出来） */
     for(const q of (bot.inv.parts||[]).slice(0,3)){
       if(q && RNG.chance(q.core?0.5:0.7)) drops.push(q);
@@ -644,17 +644,26 @@ Object.assign(Raid, {
     for(const m of (bot.inv.materials||[]).slice(0,3)){
       if(m && RNG.chance(0.8)) drops.push(m);
     }
-    /* ---------------- 补偿掉落：配件 → 材料，品质逐级抬、概率逐级降 ----------------
-     * 件数 = 1 + 没掉出来的装备数（Boss 再 +1）—— 「装备越难掉，补偿给得越多」，
-     * 否则高 tier 敌人反而变成空尸体，翻尸体验比旧版还差。 */
+    /* ---------------- 补偿 ①：枪没掉 → 2~3 个同等级配件 ---------------- */
+    for(const lg of lostGuns){
+      const n=RNG.ri(2,3);
+      for(let i=0;i<n;i++){
+        const pt=(typeof this._rollPartAtTier==="function")
+          ? this._rollPartAtTier(lg.tier-1, lg.ilvl)
+          : this._rollPartGear(bot.cls==="scav"?"scav":"pmc", 0, lg.tier-1);
+        if(pt) drops.push(pt);
+      }
+    }
+    /* ---------------- 补偿 ②：甲 / 盔没掉 → 材料（品质随敌人档次上台阶、概率递减） ----------------
+     * 件数 = 1 + 没掉出来的件数（Boss 再 +1）；品质越高越稀，避免「一具尸体爆一身红」。 */
     const botTier = M.clamp(
       Math.round(2 + (bot.armorTier||1)*0.55 + (bot.smart?2:0) + (bot.bounty?3:0)), 1, 11);
-    const compN = 1 + missed + (bot.bounty?1:0);
+    const compN = 1 + missedGear + (bot.bounty?1:0);
     for(let i=0;i<compN;i++){
       const tier = M.clamp(botTier + RNG.ri(-1,1) - i, 1, 11);
       const p = M.clamp(0.72 * Math.pow(0.85, tier-1), 0.02, 0.72);   // T1≈72% → T7≈27% → T11≈12%
       if(!RNG.chance(p)) continue;
-      if(RNG.chance(0.55) && typeof this._rollPartGear==="function"){
+      if(RNG.chance(0.45) && typeof this._rollPartGear==="function"){
         const pt=this._rollPartGear(bot.cls==="scav"?"scav":"pmc", bot.smart?0.4:0.15, tier-1);
         if(pt) drops.push(pt);
       } else {

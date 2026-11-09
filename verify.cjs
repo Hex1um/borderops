@@ -3713,18 +3713,33 @@ check('新厂商特色真的落到数值：斯泰尔射速最高、莱茵金属�
    __man.IWI.move>1.15 &&
    G("MANUFACTURERS.Norinco.recoilMul")<0.8 && G("MANUFACTURERS.Steyr.recoilMul")>1)?1:0,1,0.001);
 
-/* ③ 敌人掉落阶梯：高品阶装备不再必掉，补偿配件/材料 */
+/* ③ 敌人掉落阶梯（v0.36.1 用户定档）：T5 = 10%，每高一档 ×0.5 */
 const __drop = JSON.parse(G(`JSON.stringify((()=>{
-  const keep=[];
-  for(const idx of [0,3,6,9,11]) keep.push(+(0.95-idx*0.072).toFixed(3));
-  return { keep, p1:+(0.72*Math.pow(0.85,0)).toFixed(3), p11:+(0.72*Math.pow(0.85,10)).toFixed(3) };
+  const tbl={};
+  for(let t=1;t<=9;t++) tbl[t]=+(raidGearDropChance(t)*100).toFixed(2);
+  return { tbl, p1:+(0.72*Math.pow(0.85,0)).toFixed(3), p11:+(0.72*Math.pow(0.85,10)).toFixed(3) };
 })())`));
-check('掉落概率随品阶单调下降（民用 0.95 → 孤品 ≈0.16）',
-  __drop.keep.every((v,i)=>i===0||v<__drop.keep[i-1]) && __drop.keep[4]<0.20 ?1:0,1,0.001);
-check('补偿掉落概率随品质递减（T1≈72% → T11≈14%）',
+check('T5 装备掉率 ≈10%，其后每档 ×0.5（T6 5% / T7 2.5% / T9 0.63%）',
+  Math.abs(__drop.tbl[5]-10)<0.6 && Math.abs(__drop.tbl[6]-5)<0.4 &&
+  Math.abs(__drop.tbl[7]-2.5)<0.3 && __drop.tbl[9]<1 ?1:0,1,0.001);
+check('低档反推翻倍并封顶 100%（T4 20% / T3 40% / T1 100%）',
+  Math.abs(__drop.tbl[4]-20)<0.6 && Math.abs(__drop.tbl[3]-40)<0.8 && __drop.tbl[1]<=100 && __drop.tbl[1]>=99 ?1:0,1,0.001);
+check('材料补偿概率随品质递减（T1≈72% → T11≈14%）',
   __drop.p1>0.6 && __drop.p11>0.08 && __drop.p11<0.25 ?1:0,1,0.001);
-check('_dropFromBot 走 gearKeep + 配件/材料补偿',
-  /gearKeep\(rarIdx\(bot\.gun\)\)/.test(raidSrc) && /compN/.test(raidSrc) && /raidMakeMaterial/.test(raidSrc)?1:0,1,0.001);
+check('枪没掉 → 2~3 个同等级配件（_rollPartAtTier 钉死档位）',
+  /lostGuns\.push\(\{ tier:gt/.test(raidSrc) && /const n=RNG\.ri\(2,3\)/.test(raidSrc) &&
+  /_rollPartAtTier\(lg\.tier-1, lg\.ilvl\)/.test(raidSrc) &&
+  /raidGearDropChance\(rarityIdx\)|RARITIES\[idx\]\.id/.test(fs.readFileSync(path.join(SRC,'raid-core2.js'),'utf8')) ?1:0,1,0.001);
+const __tierPart = JSON.parse(G(`JSON.stringify((()=>{
+  const R=Object.create(Raid);
+  const out=[];
+  for(const idx of [4,6,8]){ const p=R._rollPartAtTier(idx, 24); out.push([idx, p.rarity]); }
+  return out;
+})())`));
+check('同等级配件确实落在该档（T5/T7/T9 各抽一件核对）',
+  __tierPart.every(([idx,rid])=>G('RARITIES['+idx+'].id')===rid) ?1:0,1,0.001);
+check('护盾掉率进一步下调（精锐 ≤10%、普通 ≤3%）',
+  /bot\.smart\?0\.10:0\.03/.test(raidSrc)?1:0,1,0.001);
 
 /* ④ AI 独立物品栏 + 会换枪 */
 check('AI 对地面/尸体物品做取舍（_botWants）',

@@ -388,6 +388,17 @@ Object.assign(Raid, {
   },
 
   // 散装配件：品质随运气浮动（越高档词缀越好）；floorTier 为品质保底（V 级军火箱用）
+  /* v0.36.1：按**指定品质档**产出配件（补偿「枪没掉」时用）。
+     与 _rollPartGear 的区别：这里不做品质抽取，档位由调用方钉死，
+     所以「T6 的枪没掉 → 掉 2~3 个 T6 配件」是确定的，不会被掷成低档。 */
+  _rollPartAtTier(rarityIdx, ilvl){
+    const idx=M.clamp(Math.round(rarityIdx||0), 0, RARITIES.length-1);
+    const slot=RNG.pick(GUN_SLOTS).id;
+    const pt=rollPart(slot, Math.max(1, ilvl||8), RARITIES[idx].id);
+    pt.kind="part";
+    return pt;
+  },
+
   _rollPartGear(cls, luck, floorTier){
     const slot=RNG.pick(GUN_SLOTS).id;
     /* v0.30.0：配件品质改走独立的几何权重（后一档 = 前一档 ×1/4），

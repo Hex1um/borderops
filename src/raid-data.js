@@ -254,6 +254,18 @@ function raidExtractFeeMult(carryVal){
  * 结果：裸装仍是 ₽90 量级，带 3 万装备 ≈₽1,040（原 ₽420），带 9 万 ≈₽3,760（原 ₽1,350）。 */
 const RAID_FEE_GEAR_K = 2.6;     // 装备估值计价放大系数
 const RAID_FEE_CAP_K  = 2.6;     // 车费天花板倍数
+/* v0.36.1（用户定档）：敌人身上的装备掉落概率按品阶（tier 1~12）取。
+ *   T5 = 10%，之后**每高一档 ×0.5**；往前反推同样 ×2（T4 20%、T3 40%、T2 80%、T1 封顶 100%）。
+ *   这样「T5 装备」成为分水岭：低档尸体照旧能翻到东西，高档只留极小概率，
+ *   主要靠箱子 / 黑市 / 部件补偿。枪按品质档（1~12）、护甲 / 头盔按 tier 共用这一张表。
+ *   纯函数、不碰 RNG —— 联机两端与 verify 复算结果一致。 */
+const RAID_GEAR_DROP_ANCHOR = 5;     // 锚点档位
+const RAID_GEAR_DROP_P      = 0.10;  // 锚点档掉率
+function raidGearDropChance(tier){
+  const t=M.clamp(Math.round(Number(tier)||1), 1, 12);
+  return M.clamp(RAID_GEAR_DROP_P * Math.pow(2, RAID_GEAR_DROP_ANCHOR - t), 0.004, 1);
+}
+
 function raidExtractFee(zone, carryVal){
   if(!zone || !zone.cost) return 0;
   const v=Math.max(0, carryVal||0);
