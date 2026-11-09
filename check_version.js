@@ -118,6 +118,8 @@ else ok("LICENSE 存在");
   const RUNTIME_ONLY = ["testshots/", "dist/", "node_modules/", "shots/"];
   const paths = [...table.matchAll(/`([^`\n]+)`/g)].map(x => x[1].trim())
     .filter(p => /^[\w./-]+$/.test(p) && !p.includes("*"))
+    /* 以 / 开头的是 URL 路径（如 `/api/ping`），不是仓库内文件，跳过 */
+    .filter(p => !p.startsWith("/") && !p.includes("://"))
     .filter(p => p.includes("/") || /\.(js|json|html|css|svg|md|yml|py|cjs)$/.test(p))
     .filter(p => !RUNTIME_ONLY.some(r => p.startsWith(r)));
   const missing = paths.filter(p => !fs.existsSync(path.join(ROOT, p)));

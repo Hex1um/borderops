@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.36.4 — 2026-11-09
+
+**三件事：存档键去商标化（带迁移）、浏览器冒烟一条命令跑、e2e 具备进 CI 的能力（workflow 待你落地）。**
+
+| # | 改动 | 说明 |
+|---|---|---|
+| 1 | **存档键 `borderlands_web_save_v1` → `borderops_save_v2`** | 旧键名里是 2K 的商标，仓库不该出现。迁移策略是「只前进不破坏」：读档时先读新键，没有则读旧键并**当场上迁**（旧键原样保留当备份）；写档只写新键；存档码白名单同时认新旧键，导入时把旧键**重映射**到新键 —— 老玩家手里的 BOPS 码照样能用 |
+| 2 | **`npm run test:e2e`** | 新增 `tools/e2e.cjs`：随机空闲端口起 `server.js` → 轮询 `/api/ping` 等就绪（20s 超时直接失败，不装死）→ 跑 `playwright_smoke.py` → 收尸。产物统一落 `dist/e2e/`（报告 + 截图） |
+| 3 | **冒烟脚本可进 CI** | `playwright_smoke.py` 原先硬编码 Windows Edge 路径，Linux runner 必挂。现在按 `BO_EDGE` → 本机 Edge/Chromium → **Playwright 自带 chromium** 三级回退；`BO_REPORT` / `BO_SHOTS` 可改写产物路径；报告里记录实际用的是哪个浏览器 |
+| 4 | README / AGENTS 同步 | 运行说明、目录表、门禁说明一并更新；`1184` 条断言口径校准 |
+
+**实测（不是纸面结论）**：`BO_EDGE=bundled npm run test:e2e` 在本机跑通 —— **42 passed / 0 failed**，
+`console_errors: 0`、`page_errors: 0`、报告里 `browser: playwright-chromium`
+（即 CI 上会走的那条路径），产物 7 张截图 + `test-report.json`。
+
+### 仍然卡住的一件事：workflow 推不上去
+
+本机 git 凭据缺 `workflow` scope，GitHub 直接拒绝 `.github/workflows/*` 的任何变更，
+所以下面三项**已经写好但没进仓库**，放在 `dist/pending-workflows/`：
+
+| 文件 | 内容 | 启用方式 |
+|---|---|---|
+| `ci.yml`（完整替换） | gate 增加**经济体检 + artifact**；新增 **lint job**；新增 **e2e job**（装 playwright + 自带 chromium，跑 `npm run test:e2e`，上传报告与截图） | 网页端整文件替换 |
+| `deploy.yml`（新建） | 门禁通过后才 `deploy-pages`，堵住「verify 挂了页面照样发出去」 | 新建后再去 Settings → Pages 把 Source 切成 **GitHub Actions**，并把文件里 `push:` 解注释 |
+
+门禁：`check` 14 项全通过、`verify` **1184 passed / 0 failed**（新增 3 条存档键迁移断言）、`eslint` 0 error。
+
+
 ## v0.36.3 — 2026-11-09
 
 **工程化收口（外部评审建议清单的取舍落地）：升版命令化 / CI 补 lint 与经济体检 / 门禁后才部署 / 文档漂移自动校验 / 信任模型写清楚。**

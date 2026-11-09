@@ -1514,34 +1514,34 @@ const LSET = (k, v) => G('localStorage.setItem(' + JSON.stringify(k) + ',' + JSO
 const LGET = k => G('localStorage.getItem(' + JSON.stringify(k) + ')');
 __store.clear();
 check('空存档不生成空码', G('Save.exportCode()')===null?1:0, 1, 0.001);
-LSET('borderlands_web_save_v1', JSON.stringify({ name:'老兵·贺一杰', gold:12345, weapons:[] }));
+LSET(G('Save.LEGACY_KEY'), JSON.stringify({ name:'老兵·贺一杰', gold:12345, weapons:[] }));
 LSET('raid_stash_v2', JSON.stringify({ gold:999, guns:[] }));
-const __before = LGET('borderlands_web_save_v1');
+const __before = LGET(G('Save.LEGACY_KEY'));
 const __code = G('Save.exportCode()');
 check('存档码格式 BOPS1-<hash>-<b64url>', /^BOPS1-[0-9a-f]{8}-[A-Za-z0-9_-]+$/.test(__code)?1:0, 1, 0.001);
 check('存档码只含 URL 安全字符', !/[^A-Za-z0-9_-]/.test(__code)?1:0, 1, 0.001);
 __store.clear();
 const __imp = G('Save.importCode(' + JSON.stringify(__code) + ')');
 check('存档码导入成功（2 项）', (__imp && __imp.ok && __imp.count===2)?1:0, 1, 0.001);
-check('存档码往返字节一致', LGET('borderlands_web_save_v1')===__before?1:0, 1, 0.001);
-check('存档码中文无损', String(LGET('borderlands_web_save_v1')).indexOf('老兵')>=0?1:0, 1, 0.001);
+check('存档码往返字节一致（旧码导入后落在新键）', LGET(G('Save.KEY'))===__before?1:0, 1, 0.001);
+check('存档码中文无损', String(LGET(G('Save.KEY'))).indexOf('老兵')>=0?1:0, 1, 0.001);
 check('存档码带入塔科夫仓库', String(LGET('raid_stash_v2')).indexOf('999')>=0?1:0, 1, 0.001);
 check('损坏存档码被拒（校验和）', G('Save.importCode(' + JSON.stringify(__code.slice(0,-8)) + ').ok')===false?1:0, 1, 0.001);
 check('非法前缀被拒', G('Save.importCode("hello").ok')===false?1:0, 1, 0.001);
 const __wsCode = __code.slice(0, 20) + '\n ' + __code.slice(20);
 check('存档码容忍粘贴换行/空格', G('Save.importCode(' + JSON.stringify(__wsCode) + ').ok')===true?1:0, 1, 0.001);
-const __evil = G('(function(){ var b=_b64enc(JSON.stringify({app:"borderops",data:{__evil__:"x","borderlands_web_save_v1":"{}"}})); return "BOPS1-"+_b64hash(b)+"-"+b; })()');
+const __evil = G('(function(){ var b=_b64enc(JSON.stringify({app:"borderops",data:{__evil__:"x","__evil_key__":"{}"}})); return "BOPS1-"+_b64hash(b)+"-"+b; })()');
 __store.clear();
 G('Save.importCode(' + JSON.stringify(__evil) + ')');
 check('存档码拒绝写白名单外 key', !__store.has('__evil__')?1:0, 1, 0.001);
-check('存档码仍写入合法 key', __store.has('borderlands_web_save_v1')?1:0, 1, 0.001);
+check('白名单外的码一项都不写', __store.size===0?1:0, 1, 0.001);
 
 let __migBad = 0;
 for (const s of Legacy.samples) {
   __store.clear();
   const raw = JSON.stringify(s.data);
   LSET(s.key, raw);
-  if (s.key === 'borderlands_web_save_v1') {
+  if (s.key === G('Save.KEY') || s.key === G('Save.LEGACY_KEY')) {
     let okLoad = false;
     try { okLoad = G('(function(){try{var d=Save.load(); return !!d && typeof d==="object";}catch(e){return false;}})()'); } catch (e) {}
     if (!okLoad) __migBad++;
@@ -1555,10 +1555,37 @@ for (const s of Legacy.samples) {
   const c2 = G('Save.exportCode()');
   __store.clear();
   const r2 = G('Save.importCode(' + JSON.stringify(c2) + ')');
-  if (!(r2 && r2.ok && LGET(s.key) === raw)) __migBad++;
+  /* v0.36.3：旧存档键在导入时被重映射到新键，所以比较的是「落盘目标键」 */
+  const __tgt = (s.key === G('Save.LEGACY_KEY')) ? G('Save.KEY') : s.key;
+  if (!(r2 && r2.ok && LGET(__tgt) === raw)) __migBad++;
 }
 check('旧存档样本数量 >= 4', Legacy.samples.length>=4?1:0, 1, 0.001);
 check('旧存档样本迁移/往返全通过', __migBad===0?1:0, 1, 0.001);
+
+/* v0.36.3：存档键去商标化 —— 旧键读到即上迁，写只写新键 */
+const __keyMig = JSON.parse(G(`JSON.stringify((()=>{
+  const keep={set:Store.set, get:Store.get};
+  const mem={};
+  Store.get = k => mem[k];
+  Store.set = (k,v)=>{ mem[k]=v; return true; };
+  mem[Save.LEGACY_KEY] = JSON.stringify({name:"老档", gold:777, weapons:[]});
+  const d = Save.load();
+  const out = { loaded:!!d && d.gold===777,
+    newKey: mem[Save.KEY]!==undefined,
+    legacyKept: mem[Save.LEGACY_KEY]!==undefined };
+  out.migratedContent = mem[Save.KEY].indexOf("老档")>=0;
+  out.legacyIntact = mem[Save.LEGACY_KEY] === JSON.stringify({name:"老档", gold:777, weapons:[]});
+  /* 写档路径只能碰新键：save / saveMeta 里出现的必须是 this.KEY */
+  const wsrc = String(Save.save) + String(Save.saveMeta);
+  out.writeUsesNewKey = wsrc.indexOf("Store.setJSON(this.KEY")>=0 && wsrc.indexOf("LEGACY_KEY")<0;
+  Store.set=keep.set; Store.get=keep.get;
+  return out;
+})())`));
+check('旧存档键读到即迁移到新键（旧键保留备份）',
+  (__keyMig.loaded && __keyMig.newKey && __keyMig.legacyKept)?1:0,1,0.001);
+check('迁移写入新键的内容正确、旧键原样保留', (__keyMig.migratedContent && __keyMig.legacyIntact)?1:0,1,0.001);
+check('写档路径只碰新键（save / saveMeta 不含 LEGACY_KEY）', __keyMig.writeUsesNewKey?1:0,1,0.001);
+check('存档键不含商标字样', /^[a-z0-9_]+$/.test(G('Save.KEY')) && G('Save.KEY').indexOf('borderlands')<0 ?1:0,1,0.001);
 
 /* ==================== v0.22.0 组 33：赌博机 EV / 经济护栏（评价 6） ==================== */
 console.log('');
@@ -3372,7 +3399,7 @@ const __t55 = JSON.parse(G(`JSON.stringify((()=>{
 
     /* 存档码：三个白名单 key + 一个伪造 key + 一段非 JSON */
     const bag={ app:"borderops", v:2, ver:CFG.version, data:{
-      "borderlands_web_save_v1": JSON.stringify({name:EV, weapons:[{name:EV}]}),
+      "borderops_save_v2": JSON.stringify({name:EV, weapons:[{name:EV}]}),
       "raid_stash_v2": JSON.stringify({weapons:[{name:EV}], gunVer:3}),
       "raid_auction_v1": JSON.stringify({listings:[{name:EV}]}),
       "evil_key": JSON.stringify({x:EV})
@@ -3384,11 +3411,11 @@ const __t55 = JSON.parse(G(`JSON.stringify((()=>{
     const imp=Save.importCode(code);
     const cap2={};
     Store.set=function(k,v){ cap2[k]=v; return true; };
-    const bag2={ app:"borderops", data:{ "borderlands_web_save_v1":"not-json" } };
+    const bag2={ app:"borderops", data:{ "borderops_save_v2":"not-json" } };
     const b2=_b64enc(JSON.stringify(bag2));
     const imp2=Save.importCode("BOPS1-"+_b64hash(b2)+"-"+b2);
     Store.set=oldSet;
-    const keys=["borderlands_web_save_v1","raid_stash_v2","raid_auction_v1"];
+    const keys=["borderops_save_v2","raid_stash_v2","raid_auction_v1"];
 
     return {
       escaped:es, plain,

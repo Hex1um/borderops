@@ -97,7 +97,14 @@ async function _unpackBody(prefix, body){
 }
 
 const Save = {
-  KEY:"borderlands_web_save_v1",
+  /* v0.36.3：存档键去掉 "borderlands"（那是 2K 的商标，仓库不该出现）。
+   * 迁移策略是**只前进不破坏**：
+   *   · 读：先读新键；没有则退回旧键，读到就当场上迁（写进新键），旧键保留不动；
+   *   · 写：一律只写新键（旧键成为一次性备份，玩家想回滚老版本也还有救）；
+   *   · 存档码：白名单同时接受新旧两个键，导入时把旧键**重映射**到新键，
+   *     所以老玩家分享的 BOPS1/BOPS2 码照样能用，也不会把商标键写回去。 */
+  KEY:"borderops_save_v2",
+  LEGACY_KEY:"borderlands_web_save_v1",
 
   /* 数值字段归一表：字段名 → 非法值（null / 字符串乱码 / NaN）时的兜底。
    * 为什么要专门做：NaN 在 JS 里会**传染** —— 经验值成 NaN 之后，等级、
@@ -187,9 +194,18 @@ const Save = {
 
   load(){
     /* 只挡「压根不是对象」的脏档；其余异常都交给 _repair 逐字段救。
-       解析失败 / 形状非法时 Store 会把原始串隔离到 borderlands_web_save_v1.__bad。 */
-    const d = Store.getJSON(this.KEY, null,
-      v => v && typeof v === "object" && !Array.isArray(v));
+       解析失败 / 形状非法时 Store 会把原始串隔离到 <KEY>.__bad。 */
+    const shapeOK = v => v && typeof v === "object" && !Array.isArray(v);
+    let d = Store.getJSON(this.KEY, null, shapeOK);
+    if(!d && this.LEGACY_KEY){
+      /* v0.36.3：旧键（含商标字样）里还有档的老玩家，读到即迁移到新键。 */
+      const old = Store.getJSON(this.LEGACY_KEY, null, shapeOK);
+      if(old){
+        d = old;
+        try{ Store.setJSON(this.KEY, old); }catch(e){ warnOnce("save:migrate", e); }
+        console.info("[Save] 已把旧存档键迁移到 " + this.KEY + "（旧键保留为备份）");
+      }
+    }
     if(!d) return null;
     return this._repair(d);
   },
@@ -233,9 +249,12 @@ const Save = {
     return true;
   },
 
-  /* 导出 / 导入 / 清档共用同一份键白名单，避免三处漂移 */
+  /* 导出 / 导入 / 清档共用同一份键白名单，避免三处漂移。
+     v0.36.3：旧存档键也留在白名单里 —— 老玩家手里的 BOPS 码里装的是旧键，
+     不认它就把「带档换设备」这条路断了。写入时会被重映射到新键（见 _applyBag）。 */
   exportKeys(){
     const keys=[this.KEY, "raid_stash_v2", "raid_auction_v1"];
+    if(this.LEGACY_KEY && keys.indexOf(this.LEGACY_KEY)<0) keys.push(this.LEGACY_KEY);
     if(typeof RaidStash!=="undefined" && RaidStash.KEY && keys.indexOf(RaidStash.KEY)<0) keys.push(RaidStash.KEY);
     if(typeof AUCTION_KEY!=="undefined" && keys.indexOf(AUCTION_KEY)<0) keys.push(AUCTION_KEY);
     return keys;
@@ -280,14 +299,16 @@ const Save = {
     const keys=this.exportKeys(); let n=0;
     for(const k of Object.keys(bag.data)){
       if(keys.indexOf(k)<0) continue;                 // 只写白名单 key，拒绝注入任意 localStorage 键
-      /* v0.31.1：校验和只说明「没损坏」，不说明「没恶意」。三个白名单 key
-       * （战役存档 / 塔科夫仓库 / 拍卖行）的 JSON 里所有字符串先剥危险字符，
+      /* v0.36.3：旧键重映射到新键 —— 老码能导入，但不会把商标键写回浏览器 */
+      const target = (k===this.LEGACY_KEY) ? this.KEY : k;
+      /* v0.31.1：校验和只说明「没损坏」，不说明「没恶意」。白名单 key
+       * （战役存档 / 突袭仓库 / 拍卖行）的 JSON 里所有字符串先剥危险字符，
        * 再落盘 —— 顺带挡住「导入后绕过 getJSON 直接 Store.get」的未来代码。 */
       let raw;
       try{ raw=JSON.stringify(cleanSaveStrings(JSON.parse(String(bag.data[k])))); }
       catch(e){ continue; }   // 合法存档必然是 Store.setJSON 写出的 JSON
       if(raw===undefined) continue;
-      Store.set(k, raw); n++;
+      Store.set(target, raw); n++;
     }
     return n ? { ok:true, msg:"已导入 "+n+" 项存档", count:n }
              : { ok:false, msg:"存档码里没有可导入的数据" };

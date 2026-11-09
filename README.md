@@ -72,13 +72,13 @@ git checkout main
 
 ```sh
 npm start          # 等价于 node server.js，默认 3000 端口
-npm run verify     # 无浏览器逻辑回归（53 组 / 1180 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏 / POI 主题装饰）
+npm run verify     # 无浏览器逻辑回归（54 组 / 1184 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏 / POI 主题装饰）
 npm run bump -- 0.36.4  # 一条命令升版（package.json / CFG.version / index.html ?v= / WIKI），
                    # 改完自动跑 check 自证；不用再手工同步三处
 npm run check      # 校验版本号三处同步 + 脚本缓存串 + README 目录表（无需安装依赖）
 # 真实浏览器冒烟（需系统 Edge + Python playwright，先起服务）：
 PORT=3211 node server.js
-python playwright_smoke.py      # 断言 + testshots/*.png + test-report.json
+npm run test:e2e                # 断言 + dist/e2e/shots/*.png + test-report.json
                                # BO_SEED=20261107 固定整局生成（默认已固定），保证 42 项可重播
 python probe_mechanics.py      # 只读机制体检 → mechanics-probe.json
 node tools/econ_probe.cjs      # 零依赖经济体检：套利 / 撤离费 / 稀有度预算 / 单趟净利
@@ -111,7 +111,7 @@ Toy 是纯静态托管，不需要 `server.js`；联机会自动退到 WebRTC P2
 3. **版本三处同步**：`package.json` 的 `version`、`src/config.js` 的 `CFG.version`、`index.html` 全部 `?v=` 缓存串。改代码后必须升版并同步，用 `npm run check` 校验。
 4. **兼容旧存档**：v0.15.0 保留了全部内部键名（`element` / `mayhem` / `elemPct` / `core` 等）与 localStorage 存档结构，仅改变语义与显示；`ELEMENTS` 是 `AMMO_TYPES` 的兼容别名。新代码请优先使用 `AMMO_TYPES`。
 5. 改动沿用现有风格：紧凑单行、中文注释带 `vX.Y.Z` 前缀。
-6. **门禁与工具**：`npm run check`（代码三处版本 + 文档版本引用 + 脚本缓存串 + 懒加载清单）、`npm run lint`（ESLint 静态检查，可选本地工具）、`npm run verify`（无浏览器逻辑回归，含旧档迁移 / 净化 / EV / 文案护栏）、`npm run bench:fps`（可选，需本机 Chrome，输出 `fps-baseline.json`）。`.github/workflows/ci.yml` 自 v0.23.2 起已在 GitHub 网页创建并启用，每次 push 自动跑 check / verify / 全量语法检查。`npm run lint` 目前是**本地工具**（0 error）：本机 OAuth 凭据缺 `workflow` scope，无法推送 workflow 文件，CI 的独立 lint job 需合作者在 GitHub 网页端补入（配置见 CHANGELOG v0.26.1 ④）。
+6. **门禁与工具**：`npm run check`（代码三处版本 + 文档版本引用 + 脚本缓存串 + 懒加载清单）、`npm run lint`（ESLint 静态检查，可选本地工具）、`npm run verify`（无浏览器逻辑回归，含旧档迁移 / 净化 / EV / 文案护栏）、`npm run bench:fps`（可选，需本机 Chrome，输出 `fps-baseline.json`）。`.github/workflows/ci.yml` 自 v0.23.2 起已在 GitHub 网页创建并启用，每次 push 自动跑 check / verify / 全量语法检查。`npm run lint` 与 `npm run test:e2e` 的 CI job 已写好但**没能推送**：本机 OAuth 凭据缺 `workflow` scope，GitHub 拒绝 `.github/workflows/*` 变更；文件在 `dist/pending-workflows/`，重新授权或网页端粘贴即可启用（见 CHANGELOG v0.36.4）。
 7. **测试的两类断言**：`verify.cjs` 里既有在 vm 中真实调用结算 / 生成逻辑的**行为断言**，也有检查实现或文案是否仍在的**源码护栏断言**（对重命名、重构脆弱）。运行结束时 `npm run verify` 会打印两类占比，别把总条数当成等价的行为覆盖率。
 
 ## 目录结构
@@ -136,8 +136,9 @@ Toy 是纯静态托管，不需要 `server.js`；联机会自动退到 WebRTC P2
 | `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，1180 项断言） |
+| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，1184 项断言） |
 | `tools/bump_version.cjs` | 一条命令升版并把四处版本号同步（`npm run bump -- x.y.z`） |
+| `tools/e2e.cjs` | 浏览器冒烟运行器：随机端口起 server.js、等 `/api/ping`、跑完收尸（`npm run test:e2e`，找不到 Edge 时用自带 chromium） |
 | `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（42 项断言）与只读机制体检 |
 | `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告（本地产物；`testshots/` 已 gitignore，不入库） |
 | `LICENSE` | 项目 MIT 许可（含第三方 PeerJS 声明） |

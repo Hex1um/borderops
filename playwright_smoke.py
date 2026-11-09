@@ -1,9 +1,19 @@
-"""borderops 真实浏览器冒烟测试（系统 Edge，无需下载浏览器）。
+"""borderops 真实浏览器冒烟测试。
 
-用法：先 `PORT=3211 node server.js`，再 `python playwright_smoke.py`。
+用法（两种都行）：
+  · 一条命令：`npm run test:e2e`   —— 自动起静态服务、跑完自动关（tools/e2e.cjs）
+  · 手工：`node server.js`（或任意静态服务器）后
+          `BO_BASE=http://127.0.0.1:3211/ python playwright_smoke.py`
+
+v0.36.3 起可进 CI：
+  · 浏览器选择：BO_EDGE 显式指定 → 用它；否则本机有 Edge / Chromium 就用它；
+    **都没有则回退到 Playwright 自带的 chromium**（python -m playwright install chromium），
+    这样 ubuntu-latest 上不装 Edge 也能跑。
+  · 产物路径：BO_REPORT / BO_SHOTS 可改写，CI 里直接指向 artifact 目录。
+
 覆盖：标题页 -> 配装大厅 -> 进图 -> 真实鼠标开火/键盘移动 -> 七种弹种终点效应 ->
 插板击穿回退 -> 护盾装备三数值/破盾无敌/回充 -> 控制台异常。
-产物：testshots/*.png 截图 + test-report.json 结构化报告。
+产物：testshots/*.png 截图 + test-report.json 结构化报告（失败退出码 1）。
 """
 import json
 import os
@@ -13,16 +23,33 @@ import sys
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("BO_BASE", "http://127.0.0.1:3211/")
-EDGE = os.environ.get("BO_EDGE", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+
+
+def _pick_browser_path():
+    """BO_EDGE 优先；其次本机 Edge / Chromium；都没有返回 None（用自带 chromium）。"""
+    env = os.environ.get("BO_EDGE")
+    if env == "bundled":
+        return None          # 强制走 Playwright 自带 chromium（CI 走的就是这条）
+    if env:
+        return env
+    for p in ("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+              "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+              "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+EDGE = _pick_browser_path()
 # raid 地图 / AI 生成默认用 Date.now() 与 Math.random() 现算种子。冒烟脚本里
 # 「护盾型单位存在」「T4+ 装甲型单位存在」都靠随机编成，会出现约 3% 的假失败。
 # 这里把整局种子固定成常量，让 44 个 AI 的编成可重播；换种子用 BO_SEED 环境变量。
 SEED = int(os.environ.get("BO_SEED", "20261107"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
-SHOTS = os.path.join(ROOT, "testshots")
+SHOTS = os.environ.get("BO_SHOTS") or os.path.join(ROOT, "testshots")
 os.makedirs(SHOTS, exist_ok=True)
 
-report = {"base": BASE, "checks": [], "console_errors": [], "page_errors": [], "snapshots": {}, "notes": []}
+report = {"base": BASE, "browser": EDGE or "playwright-chromium", "checks": [], "console_errors": [], "page_errors": [], "snapshots": {}, "notes": []}
 
 
 def check(name, cond, detail=""):
@@ -44,9 +71,12 @@ def shot(page, name):
 
 with sync_playwright() as pw:
     # 本机环境带全局 HTTP_PROXY，直连 127.0.0.1 必须绕开代理，否则 net::ERR_CONNECTION_REFUSED
-    browser = pw.chromium.launch(executable_path=EDGE, headless=True,
-                                 args=["--no-sandbox", "--disable-dev-shm-usage",
-                                       "--no-proxy-server", "--proxy-bypass-list=<-loopback>"])
+    launch_kwargs = {"headless": True,
+                     "args": ["--no-sandbox", "--disable-dev-shm-usage",
+                              "--no-proxy-server", "--proxy-bypass-list=<-loopback>"]}
+    if EDGE:
+        launch_kwargs["executable_path"] = EDGE
+    browser = pw.chromium.launch(**launch_kwargs)
     ctx = browser.new_context(viewport={"width": 1360, "height": 820}, device_scale_factor=1)
     page = ctx.new_page()
     page.on("console", lambda m: report["console_errors"].append(m.text) if m.type == "error" else None)
@@ -421,7 +451,11 @@ with sync_playwright() as pw:
 passed = sum(1 for c in report["checks"] if c["ok"])
 failed = len(report["checks"]) - passed
 report["summary"] = {"passed": passed, "failed": failed}
-with open(os.path.join(ROOT, "test-report.json"), "w", encoding="utf-8") as f:
+REPORT_PATH = os.environ.get("BO_REPORT") or os.path.join(ROOT, "test-report.json")
+_rp_dir = os.path.dirname(REPORT_PATH)
+if _rp_dir:
+    os.makedirs(_rp_dir, exist_ok=True)
+with open(REPORT_PATH, "w", encoding="utf-8") as f:
     json.dump(report, f, ensure_ascii=False, indent=2)
 print("\n=== RESULT: %d passed, %d failed ===" % (passed, failed), flush=True)
 print("截图目录: " + SHOTS, flush=True)
