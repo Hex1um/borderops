@@ -1224,7 +1224,10 @@ Object.assign(Raid, {
       }
       if(o.gun.ammoRes<=0){ this._noAmmoWarn(o.gun); return; }
     } else if(o.gun.ammoRes<=0) return;
-    o.reloadT = Math.max(0.9, 2.4 - o.gun.mag*0.02);
+    /* v0.36.0：换弹时间改用枪械自身的 reload（已含换弹词条与「扩容供弹组件」
+       的 reloadPct、莫洛特工厂 / 以色列武器工业的短换弹），旧版一律
+       2.4 - 弹匣×0.02，模块的换弹加成完全没有出口。 */
+    o.reloadT = M.clamp((o.gun.reload!==undefined ? o.gun.reload : (2.4 - o.gun.mag*0.02)), 0.55, 4.2);
     SFX.reload();
   },
 
@@ -1751,8 +1754,21 @@ Object.assign(Raid, {
     b.lootT += dt*(b.smart?1.2:0.6);
     const need = c.locked?2.2:1.25;
     if(b.lootT>=need){
-      c.searched=true;
-      this._botLoot(b, c, b.smart?0.35:0.10);   // AI 按自身水平掷品质，Raider 搜到更好的货
+      /* v0.36.0：尸体 / 地面堆按「它自己看得上哪件」逐件拿走，拿不走的留在原地；
+         只有整堆被拿空才标记 searched —— 否则玩家会看到一具永远翻不开的尸体。 */
+      if(c.body || c.ground){
+        const left=[];
+        let took=0;
+        for(const d of (c.drops||[])){
+          if(took<2 && d && this._botWants(b, d)){ this._botTakeItem(b, d); took++; }
+          else left.push(d);
+        }
+        c.drops=left;
+        if(!left.length) c.searched=true;
+      } else {
+        c.searched=true;
+        this._botLoot(b, c, b.smart?0.35:0.10);   // AI 按自身水平掷品质，Raider 搜到更好的货
+      }
       b.lootTarget=null; b.lootT=0; b.lootCount++;
     }
     return true;
@@ -1761,7 +1777,15 @@ Object.assign(Raid, {
   _nearestLootContainer(b, needGun){
     const rawCap = needGun ? 2600 : (b.smart?820:470);
     const usable=(c)=>{
-      if(c.searched || c.body || c.ground || c===b._badC) return false;
+      /* v0.36.0：AI 也会翻**尸体 / 地面物品堆** —— 这就是「AI 发现地上的枪更好
+         就换掉手里的」真正落地的入口（以前只认箱子，掉在地上的枪 AI 视而不见）。 */
+      const loose = !!(c.body || c.ground);
+      if(loose){
+        if(!c.drops || !c.drops.length) return false;
+        // 只对「有装备 / 有配件材料」的尸体感兴趣，纯现金堆留给玩家
+        if(!c.drops.some(d=>d && (d.kind==="weapon"||d.kind==="armor"||d.kind==="helmet"||d.kind==="shield"||d.kind==="part"))) return false;
+      } else if(c.searched) return false;
+      if(c===b._badC) return false;
       if(this.search && this.search.c===c) return false;
       // AI 没有高级钥匙，只能撬 I~II 级保险箱，把高阶金库留给玩家
       if(c.locked && M.clamp(c.lockLv||1,1,5)>2) return false;
@@ -1770,11 +1794,13 @@ Object.assign(Raid, {
     };
     const score=(c)=>{
       let eff=M.dist2(b.x,b.y,c.x,c.y);
+      if(c.body || c.ground) eff*=1.35;          // 尸体 / 地面堆优先级略低于正经箱子
       if(needGun){
         // 找枪优先级：武器箱 ≫ 上锁军用箱 > 护甲箱 > 其他
         if(c.kind==="weapon") eff*=0.10;
         else if(c.locked) eff*=0.42;
         else if(c.kind==="armor") eff*=0.55;
+        else if(c.drops && c.drops.some(d=>d && d.kind==="weapon")) eff*=0.20;
       } else if(b.smart && (c.kind==="weapon"||c.kind==="armor")) eff*=0.55;
       return eff;
     };
@@ -1825,5 +1851,93 @@ Object.assign(Raid, {
     if(got) this._botTakeItem(b, got);
     // 搜到钱
     if(!got && RNG.chance(0.35)) b.creds+=RNG.ri(8,30);
+  },
+
+  /* =========================================================================
+   * v0.36.0：AI 搜刮的落点（从 raid-core3 迁入）
+   * -------------------------------------------------------------------------
+   * 用户要求两条：
+   *   ① 「ai 在发现地上的枪更好的时候会替换自己物品栏的枪」；
+   *   ② 「ai 搜物资也要有自己独立的物品栏」。
+   * _botWants 只做判断（不改状态），_botTakeItem 才改。整套逻辑与
+   * _nearestLootContainer / _botLoot 挨在一起，方便一起读。
+   * ========================================================================= */
+  _botWants(b, it){
+    if(!b || !it || !it.kind) return false;
+    const scav=(b.cls==="scav");
+    const val=Number(it.value)||0;
+    if(it.kind==="weapon"){
+      if(scav){
+        const ri=RARITIES.findIndex(r=>r.id===it.rarity);
+        if(!SCAV_GUN_TYPES.includes(it.type) || (it.ilvl||0)>SCAV_GUN_ILVL_MAX || ri>2) return false;
+      }
+      if(!b.gun) return true;
+      // 更值钱、或者伤害明显更高 → 换掉手里的
+      if(val > (b.gun.value||0)*1.02) return true;
+      if((it.dmg||0) > (b.gun.dmg||0)*1.15) return true;
+      return (b.inv.weapons||[]).length<2 && val>(b.gun.value||0)*0.5;
+    }
+    if(it.kind==="armor"){
+      if(scav && (it.tier||0)>SCAV_ARMOR_TIER_MAX) return false;
+      return !b.armorTier || (it.dr||0) > (b.dr||0)+0.02;
+    }
+    if(it.kind==="helmet"){
+      if(scav && (it.tier||0)>SCAV_HELMET_TIER_MAX) return false;
+      return !b.helmetTier || (it.dr||0) > (b.helmetDr||0)+0.02;
+    }
+    if(it.kind==="shield") return !scav && (b.maxShield||0)<=0;
+    if(it.kind==="part")   return (b.inv.parts||[]).length<4;
+    if(it.kind==="med")    return true;
+    return false;
+  },
+
+  _botTakeItem(b, it){
+    if(!it) return;
+    // Scav 的装备上限：即使翻到高阶箱，也不会换掉手里的低阶枪 / 甲。
+    if(b.cls==="scav"){
+      if(it.kind==="weapon"){
+        const ri=RARITIES.findIndex(r=>r.id===it.rarity);
+        if(!SCAV_GUN_TYPES.includes(it.type) || (it.ilvl||0)>SCAV_GUN_ILVL_MAX || ri>2) return;
+      }
+      if(it.kind==="armor" && (it.tier||0)>SCAV_ARMOR_TIER_MAX) return;
+      if(it.kind==="helmet" && (it.tier||0)>SCAV_HELMET_TIER_MAX) return;
+      if(it.kind==="shield") return;
+    }
+    if(it.kind==="weapon"){
+      if(!b.gun){
+        b.gun=Object.assign({}, it); b.gun.ammoMag=b.gun.mag; b.gun.ammoRes=b.gun.reserve;
+        return;
+      }
+      if((it.value||0) > (b.gun.value||0)*1.02 || (it.dmg||0) > (b.gun.dmg||0)*1.15){
+        if((b.gun.value||0) > 0 && b.inv.weapons.length<2) b.inv.weapons.push(b.gun);
+        b.gun=Object.assign({}, it); b.gun.ammoMag=b.gun.mag; b.gun.ammoRes=b.gun.reserve;
+      } else if(b.inv.weapons.length<2) b.inv.weapons.push(it);
+      return;
+    }
+    if(it.kind==="armor"){
+      if(!b.armorTier || it.dr>b.dr+0.02){
+        if(b.armorTier && b.inv.armors.length<2)
+          b.inv.armors.push({uid:"aiar"+Math.floor(Math.random()*1e9).toString(36),kind:"armor",tier:b.armorTier,
+            name:RAID_ARMORS[b.armorTier].name,rarity:0,dr:b.dr,maxArmor:b.maxArmor,value:RAID_ARMORS[b.armorTier].value});
+        b.armorTier=it.tier; b.dr=it.dr; b.maxArmor=it.maxArmor; b.armor=it.maxArmor;
+        b.armorBroken=false;   // v0.14.11：换上新甲后重新允许纳米自愈 / 恢复装甲型
+      } else if(b.inv.armors.length<2) b.inv.armors.push(it);
+      return;
+    }
+    if(it.kind==="helmet"){
+      if(!b.helmetTier || it.dr>b.helmetDr+0.02){
+        b.helmetTier=it.tier; b.helmetDr=it.dr; b.maxHelmetArmor=it.maxArmor; b.helmetArmor=it.maxArmor;
+      } else if(b.inv.helmets.length<1) b.inv.helmets.push(it);
+      return;
+    }
+    if(it.kind==="part" && b.inv.parts.length<4){ b.inv.parts.push(it); return; }
+    /* v0.36.0：AI 的独立物品栏也装原材料（以前材料进了 AI 背包就凭空消失） */
+    if(it.kind==="material"){
+      const arr=(b.inv.materials=b.inv.materials||[]);
+      if(arr.length<6) arr.push(it);
+      return;
+    }
+    if(it.kind==="med"){ b.bandages=(b.bandages||0)+1; return; }
   }
 });
+

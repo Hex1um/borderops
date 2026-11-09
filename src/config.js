@@ -7,7 +7,7 @@
  * ========================================================================= */
 
 const CFG = {
-  version: "0.35.1",
+  version: "0.36.0",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
@@ -507,14 +507,25 @@ const DROP = {
  * elemChance 语义改为「特种弹适配率」（对弹种加成的适配倾向），不再产生制式效果。
  */
 const MANUFACTURERS = {
-  Jakobs:  { name:"图拉兵工厂", color:"#8a6a4a", dmg:1.30, fireRate:0.82, accuracy:1.20, mag:0.8,  reload:1.05, crit:1.6, elemChance:0,    style:"高初速 · 栓动 · 精密", throwable:false },
-  Maliwan: { name:"伊热夫斯克", color:"#5d7885", dmg:0.95, fireRate:0.85, accuracy:1.15, mag:0.9,  reload:1.1,  crit:1.0, elemChance:0,    style:"冷锻枪管 · 高精度",   throwable:false },
-  Tediore: { name:"莫洛特工厂", color:"#6b7452", dmg:0.95, fireRate:1.05, accuracy:0.95, mag:1.0,  reload:0.55, crit:1.0, elemChance:0,    style:"快拆弹匣 · 短换弹",   throwable:false },
-  Vladof:  { name:"卡拉什尼科夫", color:"#9a5a3a", dmg:0.95, fireRate:1.35, accuracy:0.9,  mag:1.3,  reload:1.0,  crit:1.0, elemChance:0,    style:"高射速 · 大容量",     throwable:false },
-  Hyperion:{ name:"赫克勒-科赫", color:"#4a5158", dmg:1.0,  fireRate:0.95, accuracy:1.35, mag:0.95, reload:1.05, crit:1.1, elemChance:0,    style:"滚柱闭锁 · 稳定连发", throwable:false },
-  Torgue:  { name:"捷格加廖夫厂", color:"#85704c", dmg:1.1,  fireRate:0.8,  accuracy:0.95, mag:0.7,  reload:1.2,  crit:1.0, elemChance:0,    style:"重弹头 · 大口径",     throwable:false, forceExplosive:false },
-  Dahl:    { name:"FN 赫斯塔尔", color:"#4e6350", dmg:1.0,  fireRate:1.05, accuracy:1.05, mag:1.05, reload:1.0,  crit:1.05,elemChance:0,    style:"导气式 · 均衡",       throwable:false },
-  Atlas:   { name:"西格绍尔",   color:"#455873", dmg:1.02, fireRate:1.0,  accuracy:1.1,  mag:1.0,  reload:1.0,  crit:1.1, elemChance:0,    style:"模块化 · 通用件",     throwable:false, homing:false },
+  Jakobs:  { name:"图拉兵工厂", color:"#8a6a4a", dmg:1.30, fireRate:0.82, accuracy:1.20, mag:0.8,  reload:1.05, crit:1.6, elemChance:0,    style:"高初速 · 栓动 · 精密", throwable:false, perk:"单发伤害 +30%，要害倍率 1.6×" },
+  Maliwan: { name:"伊热夫斯克", color:"#5d7885", dmg:0.95, fireRate:0.85, accuracy:1.15, mag:0.9,  reload:1.1,  crit:1.0, elemChance:0,    style:"冷锻枪管 · 高精度",   throwable:false, perk:"精度 +15%，射程 +12%", rangeMul:1.12 },
+  Tediore: { name:"莫洛特工厂", color:"#6b7452", dmg:0.95, fireRate:1.05, accuracy:0.95, mag:1.0,  reload:0.55, crit:1.0, elemChance:0,    style:"快拆弹匣 · 短换弹",   throwable:false, perk:"换弹时间 −45%" },
+  Vladof:  { name:"卡拉什尼科夫", color:"#9a5a3a", dmg:0.95, fireRate:1.35, accuracy:0.9,  mag:1.3,  reload:1.0,  crit:1.0, elemChance:0,    style:"高射速 · 大容量",     throwable:false, perk:"射速 +35%，弹匣 +30%" },
+  Hyperion:{ name:"赫克勒-科赫", color:"#4a5158", dmg:1.0,  fireRate:0.95, accuracy:1.35, mag:0.95, reload:1.05, crit:1.1, elemChance:0,    style:"滚柱闭锁 · 稳定连发", throwable:false, perk:"精度 +35%，后坐 −20%", recoilMul:0.80 },
+  Torgue:  { name:"捷格加廖夫厂", color:"#85704c", dmg:1.1,  fireRate:0.8,  accuracy:0.95, mag:0.7,  reload:1.2,  crit:1.0, elemChance:0,    style:"重弹头 · 大口径",     throwable:false, forceExplosive:false, perk:"单发伤害 +10%，穿甲 +1", pierce:1 },
+  Dahl:    { name:"FN 赫斯塔尔", color:"#4e6350", dmg:1.0,  fireRate:1.05, accuracy:1.05, mag:1.05, reload:1.0,  crit:1.05,elemChance:0,    style:"导气式 · 均衡",       throwable:false, perk:"全属性小幅加成，没有短板" },
+  Atlas:   { name:"西格绍尔",   color:"#455873", dmg:1.02, fireRate:1.0,  accuracy:1.1,  mag:1.0,  reload:1.0,  crit:1.1, elemChance:0,    style:"模块化 · 通用件",     throwable:false, homing:false, perk:"精度 +10%，要害倍率 1.1×" },
+  /* v0.36.0（用户要求「枪械厂商再增加一些，每个要有自己的特色」）：
+     新增 4 家，全部走「可解释的工艺参数」，并且每一家的长处/短处都能在
+     局内实际读到（精度、后坐、移速、穿甲都已经进入 blGunConvert 的扁平字段）。 */
+  Norinco: { name:"北方工业",   color:"#6f7a54", dmg:0.98, fireRate:1.08, accuracy:1.0,  mag:1.15, reload:0.95, crit:1.0, elemChance:0,
+             style:"廉价耐造 · 大容量", throwable:false, recoilMul:0.72, perk:"后坐 −28%，弹匣 +15%，换弹 −5%" },
+  Steyr:   { name:"斯泰尔",     color:"#57707d", dmg:0.88, fireRate:1.50, accuracy:1.05, mag:1.10, reload:1.0,  crit:1.0, elemChance:0,
+             style:"无托结构 · 极高射速", throwable:false, recoilMul:1.15, perk:"射速 +50%，但单发伤害 −12%、后坐 +15%" },
+  IWI:     { name:"以色列武器工业", color:"#7c6a8a", dmg:0.96, fireRate:1.12, accuracy:1.02, mag:1.0, reload:0.80, crit:1.0, elemChance:0,
+             style:"紧凑枪身 · 高机动", throwable:false, moveMul:1.18, perk:"持枪移速 +18%，换弹 −20%" },
+  Rheinmetall: { name:"莱茵金属", color:"#8a7a55", dmg:1.18, fireRate:0.86, accuracy:1.08, mag:0.92, reload:1.1, crit:1.15, elemChance:0,
+             style:"大口径 · 高穿深", throwable:false, pierce:2, rangeMul:1.10, perk:"穿甲 +2，单发伤害 +18%，射速 −14%" },
 };
 
 /* ----------------------------- 枪型 ----------------------------- */

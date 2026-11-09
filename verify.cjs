@@ -711,7 +711,7 @@ console.log('\n=== 22. 撤离费阶梯 + 撤离点封锁规则（v0.19.2）===')
 const feeTbl = JSON.parse(G(`JSON.stringify((()=>{
   const z=RAID_EXTRACT_RULES.extJ, base0=z.cost*0.28;
   const vs=[0,30000,90000,300000,900000];
-  return { base0, cap:z.cost*1.4,
+  return { base0, cap:z.cost*RAID_FEE_CAP_K,
     rows: vs.map(v=>{ const fee=raidExtractFee(z,v);
       const base=z.cost*0.28+v*(z.feeRate||0.018);
       return { v, fee, mult:+raidExtractFeeMult(v).toFixed(3), ratio:+(fee/base).toFixed(3) }; }) };
@@ -724,7 +724,7 @@ check('带的装备越多折扣越小', feeTbl.rows.every((r,i)=>
 check('折扣永远到不了原价', feeTbl.rows[feeTbl.rows.length-1].mult < 1 ? 1 : 0, 1, 0.001);
 check('绝对费用随装备升值上升', feeTbl.rows.every((r,i)=>
   i === 0 || r.fee >= feeTbl.rows[i-1].fee) ? 1 : 0, 1, 0.001);
-check('撤离费封顶 1.4 倍', feeTbl.rows.every(r => r.fee <= feeTbl.cap + 1) ? 1 : 0, 1, 0.001);
+check('撤离费封顶 2.6 倍（v0.36.0 上调）', feeTbl.rows.every(r => r.fee <= feeTbl.cap + 1) ? 1 : 0, 1, 0.001);
 const noFee = G(`(()=>{ const f=(id,v)=>raidExtractFee(RAID_EXTRACT_RULES[id],v);
   const paid=["extC","extH","extJ","extP"];
   return { all:paid.map(id=>f(id,0)), zero:f("extA",0), zero2:f("extB",300000) }; })()`);
@@ -1622,7 +1622,7 @@ check('撤离费组合扣款（局内+仓库）', (__fee.ok===1 && __fee.purse==
 check('撤离费资金不足不扣款', (__fee.no===0 && __fee.noPurse===10 && __fee.noStash===20)?1:0, 1, 0.001);
 check('命名装权重方向回正', /Math\.pow\(1\.55, 5-u\.tier\)/.test(raidSrc) && !/Math\.pow\(1\.55, u\.tier-5\)/.test(raidSrc) ?1:0, 1, 0.001);
 check('自动穿盾写入 carried.shield', /this\.carried\.shield=s/.test(raidSrc)?1:0, 1, 0.001);
-check('尸体掉落配件去重', /q\.core && q!==firstPart/.test(raidSrc)?1:0, 1, 0.001);
+check('尸体掉落不再重复推同一件配件（v0.36.0 改为逐件概率掉落）', /for\(const q of \(bot\.inv\.parts\|\|\[\]\)\.slice\(0,3\)\)/.test(raidSrc) && !/firstPart/.test(raidSrc)?1:0, 1, 0.001);
 check('撤离成功置 ext 标记', /this\._extractedFlag=true/.test(raidSrc)?1:0, 1, 0.001);
 check('回收超市材料按 id 售卖', /x\.id===row\.id/.test(raidSrc) && /id:item\.id/.test(raidSrc)?1:0, 1, 0.001);
 check('联机入场补 shield/ammo/support', /shield:sel\.s\|\|null/.test(raidSrc) && /ammo:ammoPick, support:supOn/.test(raidSrc)?1:0, 1, 0.001);
@@ -1694,7 +1694,9 @@ check('黑市地图图标统一 ◈', /"♻":"◈"/.test(__uiCopy)?1:0, 1, 0.001
 console.log('');
 console.log('=== 37. 地图分区 / 手电遮挡 / 室内暗化（v0.22.2）===');
 const __fp2 = fs.readFileSync(path.join(SRC,'fpview.js'),'utf8');
-const __rd2 = fs.readFileSync(path.join(SRC,'raid-render.js'),'utf8');
+/* v0.36.0：_groundGunPanel 等 HUD 补丁已迁到 raid-ui2，断言要把两片一起看 */
+const __rd2 = fs.readFileSync(path.join(SRC,'raid-render.js'),'utf8') + '\n' +
+  fs.readFileSync(path.join(SRC,'raid-ui2.js'),'utf8');
 
 /* --- 静态地形：必须是不碰 RNG 的纯函数，联机两端 seed 重放才一致 --- */
 const __bio = G(`(function(){
@@ -2273,8 +2275,8 @@ check('桌面读 E/Space、触摸读 useHeld',
   /Input\.isTouch && Input\.useHeld/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('触摸★改为按住型按钮',
   /_bindHold\('touch-ability'/.test(__inp) && /this\.useHeld=true/.test(__inp) ? 1 : 0, 1, 0.001);
-check('HUD 写出长短按提示',
-  /长按 ★ 替换手上/.test(__rd2) && /按住 E 替换手上/.test(__rd2) ? 1 : 0, 1, 0.001);
+check('HUD 按装备种类写长按提示（换枪/换甲/换盔/换盾）',
+  /长按★/.test(__rd2) && /按住E/.test(__rd2) && /[\"']换甲[\"']/.test(__rd2) ? 1 : 0, 1, 0.001);
 check('_groundEquipItem 顺序与面板一致',
   /for\(const k of \["weapon","shield","armor","helmet"\]\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('_wearGear 支持护甲与头盔',
@@ -3555,8 +3557,8 @@ check('3D 玩家打 AI 用准星判定、2D 仍随机',
 check('暴击判定读 this.aimHead（不是未定义的 R）',
   /this\.aimHead === target/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
-/* ④ 两类装饰的碰撞（v0.33.1，用户反馈）
- *    scrap（废料堆）→ 无碰撞；rock（六边形岩石）→ 三横带六边形碰撞 */
+/* ④ 两类装饰的碰撞（v0.33.1 → v0.36.0）
+ *    scrap（废料堆）→ 无碰撞；rock（六边形岩石）→ **真六边形**多边形碰撞 */
 check('scrap 不进 walls（杂物不挡路）',
   /if\(t\.kind==="scrap"\) return p;/.test(raidSrc) ? 1 : 0, 1, 0.001);
 const __deco = JSON.parse(G(`JSON.stringify((()=>{
@@ -3566,10 +3568,17 @@ const __deco = JSON.parse(G(`JSON.stringify((()=>{
   const scrapWalls=R.walls.length;
   R._pushProp({kind:"rock", w:80, h:80, fill:"#555"}, 100, 0);
   const rockWalls=R.walls.filter(w=>w.kind==="rock").length;
-  return { scrapWalls, rockWalls, scrapProps:R.props.filter(p=>p.kind==="scrap").length };
+  const rockWall=R.walls.find(w=>w.kind==="rock")||{};
+  return { scrapWalls, rockWalls, scrapProps:R.props.filter(p=>p.kind==="scrap").length,
+    hexVerts:(rockWall.hexPoly||[]).length,
+    inside: raidPointInPoly(140,40,rockWall.hexPoly||[]),
+    corner: raidPointInPoly(101,1,rockWall.hexPoly||[]) };
 })())`));
 check('scrap 只留在 props、walls 里没有它', __deco.scrapWalls===0 && __deco.scrapProps===1 ? 1 : 0, 1, 0.001);
-check('rock 登记三条子矩形碰撞', __deco.rockWalls===3 ? 1 : 0, 1, 0.001);
+check('rock 登记 1 个 AABB + 6 顶点六边形（v0.36.0）',
+  __deco.rockWalls===1 && __deco.hexVerts===6 ? 1 : 0, 1, 0.001);
+check('六边形内部挡、左上尖角外不挡',
+  __deco.inside===true && __deco.corner===false ? 1 : 0, 1, 0.001);
 
 /* ⑤ 各 POI 主题装饰（v0.35.0） */
 check('8 个 POI 各有主题装饰清单',
@@ -3648,6 +3657,98 @@ check('高品阶低 ilvl 配件拆出高档料（同 T 级）', svHiTier>=6 ? 1 
 /* ⑨ 枪匠台装备列表按估值降序 */
 check('枪匠台装备列表按估值降序',
   /stash\.weapons\.slice\(\)\.sort\(\(a,b\)=>\(b\.value\|\|0\)-\(a\.value\|\|0\)\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+console.log('');
+console.log('=== 53. v0.36.0（改装模块生效 / 六边形碰撞 / 掉落阶梯 / 新厂商 / 撤离费）===');
+
+/* ① 改装模块必须真的改到局内会读的扁平字段（用户反馈「有的改装模块似乎没有加成」） */
+const __mod = JSON.parse(G(`JSON.stringify((()=>{
+  const mk=()=>blGunConvert(generateWeapon(40,{rarity:"orange",type:"rifle",manufacturer:"Vladof",affixes:[],parts:[]}));
+  const base=mk();
+  const out={};
+  for(const id of BOOST_CORE_IDS){
+    const g=installPartOnGun(mk(), raidMakeBoostCore(id,3));
+    out[id]={ dmg:+(g.dmg-base.dmg).toFixed(2), mag:g.mag-base.mag,
+      reload:+(base.reload-(g.reload||0)).toFixed(2),
+      spread:+(base.spread-(g.spread||0)).toFixed(4),
+      crit:+(g.critChance-base.critChance).toFixed(3),
+      range:g.range-base.range, move:+(g.moveMul-base.moveMul).toFixed(3) };
+  }
+  return out;
+})())`));
+const __modHit=(id,k)=>Math.abs(__mod[id][k])>1e-6;
+check('导气增压：伤害/射速真的涨（dmg 字段变化）', __modHit("berserk","dmg")?1:0,1,0.001);
+check('精磨扳机：暴击率/暴击倍率进入扁平枪械对象',
+  (__mod.lethal.crit>0 && G('raidMakeBoostCore("lethal",3).mods.some(m=>m.stat==="critDmg")')) ?1:0,1,0.001);
+check('扩容供弹：弹匣与换弹时间都生效', (__modHit("barrage","mag") && __modHit("barrage","reload"))?1:0,1,0.001);
+check('比赛级枪管：精度（散布）与射程都生效', (__modHit("precision","spread") && __modHit("precision","range"))?1:0,1,0.001);
+check('枪口制退：后坐字段进入结算（kick 读取 gun.recoil）',
+  /1 - \(sh\.gun\.recoil\|\|0\)\/100/.test(raidSrc) && __modHit("annihil","dmg")?1:0,1,0.001);
+check('人体工学：持枪移速 moveMul 生效', __modHit("vampire","move")?1:0,1,0.001);
+check('综合套件：三项全中', (__modHit("omni","dmg")&&__modHit("omni","spread")&&__modHit("omni","crit"))?1:0,1,0.001);
+check('扁平枪械对象带 accuracy/reload/critChance/critMul/recoil/moveMul/pierce',
+  (()=>{const g=JSON.parse(G('JSON.stringify(blGunConvert(generateWeapon(40,{rarity:"blue",type:"rifle",parts:[],affixes:[]})))'));
+    return ["accuracy","reload","critChance","critMul","recoil","moveMul","pierce"].every(k=>g[k]!==undefined)?1:0;})() ,1,0.001);
+check('换弹走枪械自身 reload（模块 reloadPct 有出口）',
+  /o\.reloadT = M\.clamp\(\(o\.gun\.reload!==undefined/.test(raidSrc)?1:0,1,0.001);
+check('手枪弹匣不再把改装等级从旧枪继承（卸掉膛压组件会降级）',
+  /mayhem: 0, element: gun\.element/.test(fs.readFileSync(path.join(SRC,'weapons.js'),'utf8'))?1:0,1,0.001);
+
+/* ② 兵工厂：12 家，且每家的特色字段真的参与生成 */
+const __man = JSON.parse(G(`JSON.stringify((()=>{
+  const out={};
+  for(const k of Object.keys(MANUFACTURERS)){
+    const g=blGunConvert(generateWeapon(30,{rarity:"blue",type:"rifle",manufacturer:k,affixes:[],parts:[]}));
+    out[k]={ dmg:g.dmg, rpm:g.rpm, reload:g.reload, move:g.moveMul, pierce:g.pierce, range:g.range, recoil:g.recoil };
+  }
+  return out;
+})())`));
+check('兵工厂数量 ≥12 且每家都有 perk 文案',
+  G('Object.keys(MANUFACTURERS).length')>=12 && G('Object.values(MANUFACTURERS).every(m=>typeof m.perk==="string"&&m.perk.length>3)')?1:0,1,0.001);
+check('新厂商特色真的落到数值：斯泰尔射速最高、莱茵金属穿甲最高、以色列移速>1、北方工业后坐更低',
+  (__man.Steyr.rpm>__man.Vladof.rpm &&
+   __man.Rheinmetall.pierce>=2 &&
+   __man.IWI.move>1.15 &&
+   G("MANUFACTURERS.Norinco.recoilMul")<0.8 && G("MANUFACTURERS.Steyr.recoilMul")>1)?1:0,1,0.001);
+
+/* ③ 敌人掉落阶梯：高品阶装备不再必掉，补偿配件/材料 */
+const __drop = JSON.parse(G(`JSON.stringify((()=>{
+  const keep=[];
+  for(const idx of [0,3,6,9,11]) keep.push(+(0.95-idx*0.072).toFixed(3));
+  return { keep, p1:+(0.62*Math.pow(0.72,0)).toFixed(3), p11:+(0.62*Math.pow(0.72,10)).toFixed(3) };
+})())`));
+check('掉落概率随品阶单调下降（民用 0.95 → 孤品 ≈0.16）',
+  __drop.keep.every((v,i)=>i===0||v<__drop.keep[i-1]) && __drop.keep[4]<0.20 ?1:0,1,0.001);
+check('补偿掉落概率随品质递减（T1≈62% → T11≈1.6%）',
+  __drop.p1>0.5 && __drop.p11<0.03 ?1:0,1,0.001);
+check('_dropFromBot 走 gearKeep + 配件/材料补偿',
+  /gearKeep\(rarIdx\(bot\.gun\)\)/.test(raidSrc) && /compN/.test(raidSrc) && /raidMakeMaterial/.test(raidSrc)?1:0,1,0.001);
+
+/* ④ AI 独立物品栏 + 会换枪 */
+check('AI 对地面/尸体物品做取舍（_botWants）',
+  /_botWants\(b, it\)/.test(raidSrc) && /it\.kind==="weapon"\)\{[\s\S]{0,400}val > \(b\.gun\.value\|\|0\)\*1\.02/.test(raidSrc)?1:0,1,0.001);
+check('AI 会翻尸体与地面物品堆',
+  /const loose = !!\(c\.body \|\| c\.ground\);/.test(raidSrc) && /c\.drops\.some\(d=>d && \(d\.kind==="weapon"/.test(raidSrc)?1:0,1,0.001);
+check('AI 背包里的材料也会掉落', /bot\.inv\.materials/.test(raidSrc)?1:0,1,0.001);
+
+/* ⑤ 撤离费对局内装备敏感度大幅提升 */
+const __fee36 = JSON.parse(G(`JSON.stringify((()=>{
+  const z=RAID_EXTRACT_RULES.extC;
+  return { raw0:raidExtractFee(z,0), v30k:raidExtractFee(z,30000), v90k:raidExtractFee(z,90000) };
+})())`));
+check('撤离线：裸装仍 ≤₽120', __fee36.raw0<=120?1:0,1,0.001);
+check('撤离费对装备更敏感：带 3 万 ≥ 旧版 2 倍（≥₽840）', __fee36.v30k>=840?1:0,1,0.001);
+check('撤离费随装备继续上升（9 万 > 3 万）', __fee36.v90k>__fee36.v30k?1:0,1,0.001);
+
+/* ⑥ 音效重做 */
+check('音效分层合成（噪声 + 压缩器 + 波形整形）',
+  /createDynamicsCompressor/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8')) &&
+  /createWaveShaper/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8'))?1:0,1,0.001);
+check('开火音效按枪型分档（6 套参数）',
+  G('Object.keys((()=>{const o={};for(const k of ["pistol","smg","rifle","shotgun","sniper","launcher"])o[k]=1;return o;})()).length')===6 &&
+  /const SHOT = \{/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8'))?1:0,1,0.001);
+check('AI 开火也有声音（1.5km 内）',
+  /SFX\.shoot\(sndKind, \{far:true\}\)/.test(raidSrc)?1:0,1,0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

@@ -909,6 +909,36 @@ UI.toast=function(msg, ms){
  *  ，售卖：按估值 50%（RAID_VENDOR_RATE）换成卢布
  *  ，拆解：枪械拆成配件（配件进配件池，可装到别的枪上 / 在超市卖掉）
  * ========================================================================= */
+/* 共享的武器卡片渲染：物品栏与融合台结果卡用同一套，保证显示完全一致
+ * opts.prefix  前缀文案（如「融合成功 · 」）
+ * opts.sell    是否带售卖/拆解按钮（物品栏 true，融合结果卡 false）
+ * opts.margin  是否带纵向外边距（融合结果卡 true） */
+function raidWeaponCard(w, opts){
+  opts=opts||{};
+  const col=raidGunColor(w);
+  const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:(w.cat||w.type||"枪械");
+  const parts=(w.parts||[]);
+  const sellP=gunSellPrice(w);
+  const head=(opts.prefix||"")+gunNameOf(w);
+  /* v0.36.0（用户要求「枪械改装后在仓库里面要显示改装后的配件」）：
+     旧版只列前 4 件，多出来的配件在仓库里完全看不见，玩家没法确认
+     「我在枪匠台装的那枚模块到底上没上」。现在全部列出，并把改装模块单独计数。 */
+  const coreN=parts.filter(p=>p&&p.core).length;
+  const modTag=(w.mayhem||0)>0?`，<b style="color:#b08a58">改装 ${w.mayhem} 级</b>`:"";
+  return `<div class="shop-item" style="border-left-color:${col}${opts.margin?';margin:12px 0':''}">
+    <div class="si-name" style="color:${col}">${head}</div>
+    <div class="si-meta">${tname}，${parts.length} 个配件${coreN?`（含 ${coreN} 个改装模块）`:""}${modTag}${w.uniqPerk?'，<b style="color:#ffd23f">具名装备</b>':''}${w.pellets>1?`，<b style="color:#ffd54a">${w.pellets} ${w.type==="shotgun"?"弹片":"发/次"}</b>`:''}</div>
+    ${w.uniqPerk?`<div class="uniq-perk">✦ ${w.uniqPerk}</div>`:''}
+    <div class="si-stats">${gunDamageLabel(w)}，弹匣 ${w.mag}，射速 ${w.rpm}，${w.accuracy!==undefined?`精度 ${Math.round(w.accuracy*100)}%，`:""}${w.reload!==undefined?`换弹 ${w.reload}s，`:""}估值 ₽${priceTextShort(w.value)}
+      ${parts.length?`<br><span class="part-row">${parts.map(partChip).join("")}</span>`:''}</div>
+    ${opts.sell?`<div class="si-buy"><span class="si-price">₽ ${priceTextShort(sellP)}</span>
+        <button class="btn ghost" data-sell="w:${w.uid}">售卖</button>
+        <button class="btn ghost" data-salvage="${w.uid}">拆解</button></div>`:''}
+  </div>`;
+}
+
+
+
 UI.raidStash=function(opts){
   opts=opts||{};
   const stash=RaidStash.load();
@@ -1340,3 +1370,84 @@ UI._onlineStartPoll=function(){
   },1400);
 };
 
+
+/* v0.36.0：地面装备对比面板（从 raid-render 迁入，保持分片行数上限）*/
+Object.assign(RenderRaid, {
+  _groundGunPanel(ctx, R, c, v, hintY){
+    const drops=(c && c.drops)||[];
+    const GEAR=["weapon","shield","armor","helmet"];
+    // 武器优先（玩家最常换的就是枪），其次护盾 / 护甲 / 头盔
+    let g=null;
+    for(const k of GEAR){ g=drops.find(d=>d && d.kind===k); if(g) break; }
+    if(!g) return;
+    const kind=g.kind, p=R.player||{}, carried=R.carried||{};
+    /* 当前装备：枪看主手，护盾看身上模块，护甲/头盔看 carried（带入的那件）。
+       裸装进场时 carried 为空但玩家仍可能被 AI 掉落/设施临时上了甲，用 tier 兜底。 */
+    const cur = kind==="weapon" ? (p.gun||null)
+      : kind==="shield" ? (p.shieldGear||null)
+      : kind==="armor"  ? (carried.armor || (p.armorTier?{maxArmor:p.maxArmor,dr:p.dr,tier:p.armorTier,value:0}:null))
+      : (carried.helmet || (p.helmetTier?{maxArmor:p.maxHelmetArmor,dr:p.helmetDr,tier:p.helmetTier,value:0}:null));
+    /* 数值格式化：估值动辄七位数，直接拼数字既撑破面板也没法一眼比大小 */
+    const fmt=(n,big)=>{
+      n=Math.round(n||0);
+      if(!big) return String(n);
+      if(n>=1000000) return "₽"+(n/1000000).toFixed(2)+"M";
+      if(n>=10000) return "₽"+(n/1000).toFixed(1)+"k";
+      return "₽"+n;
+    };
+    const rows = kind==="weapon" ? [
+      { k:"伤害", a:Math.round(g.dmg||0), b:cur?Math.round(cur.dmg||0):0 },
+      { k:"弹匣", a:Math.round(g.mag||0), b:cur?Math.round(cur.mag||0):0 },
+      { k:"射速", a:Math.round(g.rpm||0), b:cur?Math.round(cur.rpm||0):0 },
+      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
+    ] : kind==="shield" ? [
+      { k:"容量", a:Math.round(g.capacity||0), b:cur?Math.round(cur.capacity||0):0 },
+      { k:"充能/s", a:Math.round(g.rate||0), b:cur?Math.round(cur.rate||0):0 },
+      { k:"延迟s", a:Math.round(g.delay||0), b:cur?Math.round(cur.delay||0):0 },
+      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
+    ] : [
+      { k:"耐久", a:Math.round(g.maxArmor||0), b:cur?Math.round(cur.maxArmor||0):0 },
+      { k:"减伤%", a:Math.round((g.dr||0)*100), b:cur?Math.round((cur.dr||0)*100):0 },
+      { k:"品阶", a:Math.round(g.tier||0), b:cur?Math.round(cur.tier||0):0 },
+      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
+    ];
+    const title = kind==="weapon" ? (gunNameOf(g)||"地上枪械")
+      : kind==="shield" ? (g.name||"地上护盾")
+      : kind==="armor" ? (g.name||"地上护甲") : (g.name||"地上头盔");
+    const tint = kind==="weapon" ? raidGunColor(g)
+      : kind==="shield" ? shieldColor(g)
+      : (RAID_RARITY_COLOR[g.rarity|0]||"#dfe7f0");
+    const W=276, H=34+rows.length*20+10;
+    const x=Math.max(8, Math.min(v.w-W-8, v.w/2+28));
+    const y=Math.max(8, Math.min(v.h-H-8, hintY-H-16));
+    ctx.save();
+    ctx.fillStyle="rgba(8,12,16,0.90)"; ctx.fillRect(x,y,W,H);
+    ctx.strokeStyle="rgba(120,150,180,0.45)"; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,W-1,H-1);
+    ctx.textAlign="left";
+    ctx.font="bold 12px system-ui,sans-serif";
+    ctx.fillStyle=tint;
+    ctx.fillText(String(title).slice(0,18), x+10, y+18);
+    /* 溢出标记：让玩家知道「这几件是我背包塞不下才留在这的」 */
+    if(c.spill){
+      ctx.textAlign="right"; ctx.fillStyle="#ff8a5a";
+      ctx.font="10px system-ui,sans-serif"; ctx.fillText("背包溢出", x+W-10, y+18);
+      ctx.textAlign="left";
+    }
+    ctx.font="10px system-ui,sans-serif"; ctx.fillStyle="rgba(180,195,210,0.75)";
+    ctx.fillText(cur
+      ? (kind==="weapon"?"左：地上 / 右：手持":"左：地上 / 右：已穿戴")
+      : (kind==="weapon"?"手持为空，直接拾取":"当前未装备，可直接穿戴"), x+10, y+32);
+    ctx.font="11px system-ui,sans-serif";
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i], ry=y+50+i*20;
+      // 身上没同类装备时不做对比，免得每一行都亮成「提升」
+      const better=!!cur && r.a>r.b, worse=!!cur && r.a<r.b;
+      ctx.fillStyle="rgba(200,212,224,0.85)"; ctx.fillText(r.k, x+10, ry);
+      ctx.fillStyle=better?"#8fe07a":worse?"#ff8a5a":"#dfe7f0";
+      ctx.textAlign="right"; ctx.fillText(fmt(r.a,r.big)+(better?" ▲":worse?" ▼":""), x+168, ry);
+      ctx.fillStyle="rgba(170,185,200,0.70)"; ctx.fillText(cur?fmt(r.b,r.big):"—", x+W-10, ry);
+      ctx.textAlign="left";
+    }
+    ctx.restore();
+  },
+});

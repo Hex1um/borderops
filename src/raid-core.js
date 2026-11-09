@@ -647,6 +647,11 @@ const Raid = {
     const list=this._nearWalls?this._nearWalls(x,y,r):this.walls;
     for(let i=0;i<list.length;i++){
       const w=list[i];
+      /* v0.36.0：六边形岩石按多边形算距离，尖角外不再有「看不见的直边」 */
+      if(w.hexPoly){
+        if(raidPolyDist(x,y,w.hexPoly) < r) return true;
+        continue;
+      }
       const nx=M.clamp(x,w.x,w.x+w.w), ny=M.clamp(y,w.y,w.y+w.h);
       if((x-nx)*(x-nx)+(y-ny)*(y-ny) < r*r) return true;
     }
@@ -1565,6 +1570,17 @@ const Raid = {
        与 losCell（AI 视线）都只认这三个子矩形，缝隙是真正空的。 */
     if(typeof raidCompoundBoxes==="function" && RAID_COMPOUND_KINDS[t.kind]){
       p.compound=RAID_COMPOUND_KINDS[t.kind];
+      /* v0.36.0（用户要求）：rock 的画就是六边形，碰撞也按六边形算。
+         不再登记三条横带，而是登记**一个** AABB（供 navCell / losCell 索引）
+         + 一份绝对坐标多边形；移动、子弹、视线、手电四处都用
+         raidPolyDist / raidPointInPoly / raidRayPoly 做解析判定。 */
+      if(p.compound==="hex"){
+        p.hexPoly = raidHexPolyOf(p);
+        this.walls.push({ x:p.x, y:p.y, w:p.w, h:p.h, kind:t.kind,
+          sight:p.sight, soft:p.soft, round:false, fill:p.fill, edge:p.edge,
+          compoundOf:p, compound:"hex", hexPoly:p.hexPoly });
+        return p;
+      }
       p.boxes=raidCompoundBoxes(p);
       for(const b of p.boxes){
         this.walls.push({ x:b.x, y:b.y, w:b.w, h:b.h, kind:t.kind,

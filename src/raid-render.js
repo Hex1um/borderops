@@ -1291,83 +1291,7 @@ const RenderRaid = {
      都展示对比面板，与当前身上的同类装备逐项比较。函数名沿用历史名（verify 锁着）。
      背包满溢出落地的装备也会进这个面板 —— 之前只认 weapon，掉件头盔等于什么提示都没有。
      画在 HUD 层（世界层之外），2D / 3D 都可见；位置跟随交互提示条，避开准星。 */
-  _groundGunPanel(ctx, R, c, v, hintY){
-    const drops=(c && c.drops)||[];
-    const GEAR=["weapon","shield","armor","helmet"];
-    // 武器优先（玩家最常换的就是枪），其次护盾 / 护甲 / 头盔
-    let g=null;
-    for(const k of GEAR){ g=drops.find(d=>d && d.kind===k); if(g) break; }
-    if(!g) return;
-    const kind=g.kind, p=R.player||{}, carried=R.carried||{};
-    /* 当前装备：枪看主手，护盾看身上模块，护甲/头盔看 carried（带入的那件）。
-       裸装进场时 carried 为空但玩家仍可能被 AI 掉落/设施临时上了甲，用 tier 兜底。 */
-    const cur = kind==="weapon" ? (p.gun||null)
-      : kind==="shield" ? (p.shieldGear||null)
-      : kind==="armor"  ? (carried.armor || (p.armorTier?{maxArmor:p.maxArmor,dr:p.dr,tier:p.armorTier,value:0}:null))
-      : (carried.helmet || (p.helmetTier?{maxArmor:p.maxHelmetArmor,dr:p.helmetDr,tier:p.helmetTier,value:0}:null));
-    /* 数值格式化：估值动辄七位数，直接拼数字既撑破面板也没法一眼比大小 */
-    const fmt=(n,big)=>{
-      n=Math.round(n||0);
-      if(!big) return String(n);
-      if(n>=1000000) return "₽"+(n/1000000).toFixed(2)+"M";
-      if(n>=10000) return "₽"+(n/1000).toFixed(1)+"k";
-      return "₽"+n;
-    };
-    const rows = kind==="weapon" ? [
-      { k:"伤害", a:Math.round(g.dmg||0), b:cur?Math.round(cur.dmg||0):0 },
-      { k:"弹匣", a:Math.round(g.mag||0), b:cur?Math.round(cur.mag||0):0 },
-      { k:"射速", a:Math.round(g.rpm||0), b:cur?Math.round(cur.rpm||0):0 },
-      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
-    ] : kind==="shield" ? [
-      { k:"容量", a:Math.round(g.capacity||0), b:cur?Math.round(cur.capacity||0):0 },
-      { k:"充能/s", a:Math.round(g.rate||0), b:cur?Math.round(cur.rate||0):0 },
-      { k:"延迟s", a:Math.round(g.delay||0), b:cur?Math.round(cur.delay||0):0 },
-      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
-    ] : [
-      { k:"耐久", a:Math.round(g.maxArmor||0), b:cur?Math.round(cur.maxArmor||0):0 },
-      { k:"减伤%", a:Math.round((g.dr||0)*100), b:cur?Math.round((cur.dr||0)*100):0 },
-      { k:"品阶", a:Math.round(g.tier||0), b:cur?Math.round(cur.tier||0):0 },
-      { k:"估值", a:Math.round(g.value||0), b:cur?Math.round(cur.value||0):0, big:true },
-    ];
-    const title = kind==="weapon" ? (gunNameOf(g)||"地上枪械")
-      : kind==="shield" ? (g.name||"地上护盾")
-      : kind==="armor" ? (g.name||"地上护甲") : (g.name||"地上头盔");
-    const tint = kind==="weapon" ? raidGunColor(g)
-      : kind==="shield" ? shieldColor(g)
-      : (RAID_RARITY_COLOR[g.rarity|0]||"#dfe7f0");
-    const W=276, H=34+rows.length*20+10;
-    const x=Math.max(8, Math.min(v.w-W-8, v.w/2+28));
-    const y=Math.max(8, Math.min(v.h-H-8, hintY-H-16));
-    ctx.save();
-    ctx.fillStyle="rgba(8,12,16,0.90)"; ctx.fillRect(x,y,W,H);
-    ctx.strokeStyle="rgba(120,150,180,0.45)"; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,W-1,H-1);
-    ctx.textAlign="left";
-    ctx.font="bold 12px system-ui,sans-serif";
-    ctx.fillStyle=tint;
-    ctx.fillText(String(title).slice(0,18), x+10, y+18);
-    /* 溢出标记：让玩家知道「这几件是我背包塞不下才留在这的」 */
-    if(c.spill){
-      ctx.textAlign="right"; ctx.fillStyle="#ff8a5a";
-      ctx.font="10px system-ui,sans-serif"; ctx.fillText("背包溢出", x+W-10, y+18);
-      ctx.textAlign="left";
-    }
-    ctx.font="10px system-ui,sans-serif"; ctx.fillStyle="rgba(180,195,210,0.75)";
-    ctx.fillText(cur
-      ? (kind==="weapon"?"左：地上 / 右：手持":"左：地上 / 右：已穿戴")
-      : (kind==="weapon"?"手持为空，直接拾取":"当前未装备，可直接穿戴"), x+10, y+32);
-    ctx.font="11px system-ui,sans-serif";
-    for(let i=0;i<rows.length;i++){
-      const r=rows[i], ry=y+50+i*20;
-      // 身上没同类装备时不做对比，免得每一行都亮成「提升」
-      const better=!!cur && r.a>r.b, worse=!!cur && r.a<r.b;
-      ctx.fillStyle="rgba(200,212,224,0.85)"; ctx.fillText(r.k, x+10, ry);
-      ctx.fillStyle=better?"#8fe07a":worse?"#ff8a5a":"#dfe7f0";
-      ctx.textAlign="right"; ctx.fillText(fmt(r.a,r.big)+(better?" ▲":worse?" ▼":""), x+168, ry);
-      ctx.fillStyle="rgba(170,185,200,0.70)"; ctx.fillText(cur?fmt(r.b,r.big):"—", x+W-10, ry);
-      ctx.textAlign="left";
-    }
-    ctx.restore();
-  },
+  /* v0.36.0：_groundGunPanel 已迁到 raid-ui2.js（渲染分片 ≤2000 行上限）。 */
 
   /* ----------------------------- HUD ----------------------------- */
   hud(ctx, game, v){
@@ -1601,14 +1525,31 @@ const RenderRaid = {
     } else {
       // 靠近商店优先提示交易，其次才是搜箱
       // 提示文字加暗色底衬，避免与房间名重叠时读不清
+      /* v0.36.0（用户反馈「长按拾取的提示不对，显示很长一段文字」）：
+         旧版把所有操作拼成一句话（"按 E 拾取地面物资 ×3，按住 E 替换手上"），
+         手机上会横穿半个屏幕，而且「替换手上」对护甲 / 头盔 / 护盾是错的。
+         现在：① 只保留必要动作；② 长按按**装备种类**给词；③ 超宽自动截断。 */
+      const holdWord=(it)=>{
+        if(!it) return "";
+        const w = it.kind==="weapon" ? "换枪" : it.kind==="armor" ? "换甲"
+                : it.kind==="helmet" ? "换盔" : it.kind==="shield" ? "换盾" : "换装";
+        return Input.isTouch ? `，长按★${w}` : `，按住E${w}`;
+      };
       const hintAt=(txt, col, size)=>{
-        ctx.font=`bold ${size||13}px system-ui,sans-serif`;
-        const tw=ctx.measureText(txt).width;
+        const fs=size||13;
+        ctx.font=`bold ${fs}px system-ui,sans-serif`;
+        let out=String(txt);
+        const maxW=Math.max(160, v.w-36);
+        if(ctx.measureText(out).width>maxW){
+          while(out.length>6 && ctx.measureText(out+"…").width>maxW) out=out.slice(0,-1);
+          out+="…";
+        }
+        const tw=ctx.measureText(out).width;
         const ty=mob?v.h*0.6:(v.h-150)-18;
         ctx.fillStyle="rgba(6,10,14,0.72)";
         ctx.fillRect(v.w/2-tw/2-10, ty-14, tw+20, 21);
         ctx.textAlign="center"; ctx.fillStyle=col;
-        ctx.fillText(txt, v.w/2, ty);
+        ctx.fillText(out, v.w/2, ty);
       };
       const it=R._interactTarget();
       if(it && it.kind==="shop"){
@@ -1633,20 +1574,16 @@ const RenderRaid = {
         this._groundGunPanel(ctx, R, c, v, mob?v.h*0.6:(v.h-150)-18);
         if(c.ground){
           const n=(c.drops||[]).length;
-          const tail=R._groundEquipItem(c)
-            ? (Input.isTouch?"，长按 ★ 替换手上":"，按住 E 替换手上") : "";
-          hintAt((Input.isTouch?`点「★」拾取地面物资 ×${n}`:`按 E 拾取地面物资 ×${n}`)+tail, "#ffe08a");
+          hintAt((Input.isTouch?`★ 拾取 ×${n}`:`E 拾取 ×${n}`)+holdWord(R._groundEquipItem(c)), "#ffe08a");
         } else if(c.locked && !c.searched){
           const lv=M.clamp(c.lockLv||1,1,5);
           const has=R._hasKeyFor(lv);
           hintAt(has
-            ? `保险箱，${RAID_LOCK_NAME[lv]}，按住 E 开锁（消耗 1 次钥匙）`
-            : `保险箱，${RAID_LOCK_NAME[lv]}，缺「${raidKeyDef(lv).name}」（商店有售 / 箱内掉落）`,
+            ? (Input.isTouch?`保险箱·${RAID_LOCK_NAME[lv]} · 长按★开锁`:`保险箱·${RAID_LOCK_NAME[lv]} · 按住E开锁`)
+            : `保险箱·${RAID_LOCK_NAME[lv]} · 缺钥匙`,
             has?"#8fe07a":"#ff8a5a");
         } else if(!c.searched){
-          const tail=R._groundEquipItem(c)
-            ? (Input.isTouch?"，长按 ★ 替换":"，按住 E 替换") : "";
-          hintAt((Input.isTouch?"点「★」搜索补给，点「+」包扎":"按 E 搜索补给，H 包扎")+tail, "#ffe08a");
+          hintAt((Input.isTouch?"★ 搜索":"E 搜索")+holdWord(R._groundEquipItem(c)), "#ffe08a");
         }
       }
     }

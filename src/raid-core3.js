@@ -20,48 +20,10 @@ function raidCarriedGearValue(R){
 
 Object.assign(Raid, {
 
-  _botTakeItem(b, it){
-    if(!it) return;
-    // Scav 的装备上限：即使翻到高阶箱，也不会换掉手里的低阶枪 / 甲。
-    if(b.cls==="scav"){
-      if(it.kind==="weapon"){
-        const ri=RARITIES.findIndex(r=>r.id===it.rarity);
-        if(!SCAV_GUN_TYPES.includes(it.type) || (it.ilvl||0)>SCAV_GUN_ILVL_MAX || ri>2) return;
-      }
-      if(it.kind==="armor" && (it.tier||0)>SCAV_ARMOR_TIER_MAX) return;
-      if(it.kind==="helmet" && (it.tier||0)>SCAV_HELMET_TIER_MAX) return;
-      if(it.kind==="shield") return;
-    }
-    if(it.kind==="weapon"){
-      if(!b.gun){
-        b.gun=Object.assign({}, it); b.gun.ammoMag=b.gun.mag; b.gun.ammoRes=b.gun.reserve;
-        return;
-      }
-      if((it.value||0) > (b.gun.value||0)*1.02 || (it.dmg||0) > (b.gun.dmg||0)*1.15){
-        if((b.gun.value||0) > 0 && b.inv.weapons.length<2) b.inv.weapons.push(b.gun);
-        b.gun=Object.assign({}, it); b.gun.ammoMag=b.gun.mag; b.gun.ammoRes=b.gun.reserve;
-      } else if(b.inv.weapons.length<2) b.inv.weapons.push(it);
-      return;
-    }
-    if(it.kind==="armor"){
-      if(!b.armorTier || it.dr>b.dr+0.02){
-        if(b.armorTier && b.inv.armors.length<2)
-          b.inv.armors.push({uid:"aiar"+Math.floor(Math.random()*1e9).toString(36),kind:"armor",tier:b.armorTier,
-            name:RAID_ARMORS[b.armorTier].name,rarity:0,dr:b.dr,maxArmor:b.maxArmor,value:RAID_ARMORS[b.armorTier].value});
-        b.armorTier=it.tier; b.dr=it.dr; b.maxArmor=it.maxArmor; b.armor=it.maxArmor;
-        b.armorBroken=false;   // v0.14.11：换上新甲后重新允许纳米自愈 / 恢复装甲型
-      } else if(b.inv.armors.length<2) b.inv.armors.push(it);
-      return;
-    }
-    if(it.kind==="helmet"){
-      if(!b.helmetTier || it.dr>b.helmetDr+0.02){
-        b.helmetTier=it.tier; b.helmetDr=it.dr; b.maxHelmetArmor=it.maxArmor; b.helmetArmor=it.maxArmor;
-      } else if(b.inv.helmets.length<1) b.inv.helmets.push(it);
-      return;
-    }
-    if(it.kind==="part" && b.inv.parts.length<4){ b.inv.parts.push(it); return; }
-    if(it.kind==="med"){ b.bandages=(b.bandages||0)+1; return; }
-  },
+  /* v0.36.0：_botWants / _botTakeItem 已迁到 raid-core2.js
+     —— AI 搜刮链路集中在一处，也顺手给本分片腾出行数余量（≤2000 行的分片上限）。 */
+
+
 
   /* 枪声 / 翻箱声扩散：范围内的 AI 记下声源位置，冲过去查看。
      v0.27.0：返回被惊动的数量，调用方据此给玩家一句可感知的提示。 */
@@ -149,14 +111,22 @@ Object.assign(Raid, {
      *   muzzleT：枪口火光剩余时间（很短，打一枪闪一下）
      *   kick   ：后坐冲量（0→约 2，按 dt*11 衰减），驱动枪身后退 + 上跳 + 抖动 */
     sh.muzzleT = 0.075;
-    sh.kick = Math.min(2.2, (sh.kick||0) + 1);
+    /* v0.36.0：后坐冲量按枪械的 recoil 减免（枪口制退组件 / 赫克勒-科赫 / 北方工业）。
+       以前恒定 +1，装什么模块手感都一样。 */
+    sh.kick = Math.min(2.2, (sh.kick||0) + M.clamp(1 - (sh.gun.recoil||0)/100, 0.35, 1));
     // v0.14.11：电磁干扰期间射速被强制压到最低 SHOCK_FIRE_CD 间隔（电击的持续效果）
     if(sh.shockT>0) sh.fireCd=Math.max(sh.fireCd, SHOCK_FIRE_CD);
     // 枪声传得远：附近待机的 AI 会摸过来（全局节流，避免每发子弹都算一遍）
     this._nzT=(this._nzT||0)+1;
     if(this._nzT%3===0 && !sh.ghost && (sh.isPlayer || !sh.remote))
       this._noise(sh.x, sh.y, sh.isPlayer?1200:820, sh);   // 枪声传得更远，更多 AI 会摸过来
-    if(sh.isPlayer){ this.spawnGrace=0; SFX.shoot(); }   // 先开枪就先暴露
+    /* v0.36.0：开火音效按枪型分层（手枪 / 冲锋枪 / 步枪 / 霰弹 / 狙击 / 榴弹各有音色），
+       并且**敌我都能听到** —— 远处 AI 的枪声是重要情报，以前完全静音。 */
+    const sndKind = sh.gun.cat || sh.gun.type;
+    if(sh.isPlayer){ this.spawnGrace=0; SFX.shoot(sndKind, {far:false}); }
+    else if(!sh.remote && !sh.ghost && this.player){
+      if(M.dist(sh.x,sh.y,this.player.x,this.player.y) < 1500) SFX.shoot(sndKind, {far:true});
+    }
     // 联机：房主把 AI 开火广播给客户端（只画弹道，不重复结算伤害）
     if(this.online && typeof Net!=="undefined" && Net.isHost && !sh.isPlayer && !sh.ghost && !sh.remote)
       Net.maybeSendShot(sh, angle);
@@ -205,7 +175,14 @@ Object.assign(Raid, {
       if(hit){
         hx=hit.x; hy=hit.y;
         const falloff = M.clamp(1 - hitDist/range*0.45, 0.55, 1);
-        const dmg = sh.gun.dmg * falloff * pelletMul;
+        /* v0.36.0：要害命中（暴击）终于由枪械词条决定 —— 「精磨扳机组」这类
+           只加 critChance / critDmg 的模块以前在局内毫无表现。
+           概率封顶 65%，倍率封顶 3×，避免高品模块叠成「枪枪暴击」。 */
+        let dmg = sh.gun.dmg * falloff * pelletMul;
+        const critC = M.clamp(sh.gun.critChance!==undefined?sh.gun.critChance:0.15, 0, 0.65);
+        const isCrit = RNG.chance(critC);
+        if(isCrit) dmg *= M.clamp(sh.gun.critMul||1.5, 1, 3);
+        if(isCrit && sh.isPlayer) this._float(hit.x, hit.y-46, "要害", "#ffd23f");
         if(this.online && hit.ghost && typeof Net!=="undefined" && !Net.isHost){
           // 影子 AI：本地只放命中特效，血量由房主权威结算
           Net.sendHitAI(hit.id, dmg, sh.gun && gunNameOf(sh.gun));
@@ -623,24 +600,58 @@ Object.assign(Raid, {
     // v1.0：AI 身上带的是它自己搜刮来的东西——枪 / 甲 / 头盔 / 背包里的备用枪与配件
     const drops=[];
     const mkUid=p=>p+Math.floor(Math.random()*1e9).toString(36);
-    if(bot.gun){
+    /* v0.36.0（用户要求）：敌人死亡**不一定**掉手上的装备。
+     *   · 装备品阶越高，掉率越低（民用几乎必掉，孤品只有一成多）；
+     *   · 高 tier 护甲 / 头盔同理，T9 以上基本只能靠箱子或黑市；
+     *   · 补偿：改掉「配件 + 材料」，品质随敌人档次上台阶，
+     *     但越往上越稀（每档 ×0.72），所以「一具尸体爆一身红」不会成为常态。 */
+    const rarIdx=(o)=>{
+      const i=RARITIES.findIndex(r=>r.id===(o&&o.rarity));
+      return i<0?0:i;
+    };
+    const gearKeep=(idx, soft)=>{
+      const base = idx!==undefined ? (0.95 - idx*0.072) : (0.95 - (soft||0)*0.79);
+      return M.clamp(base, 0.12, 0.95);
+    };
+    if(bot.gun && RNG.chance(gearKeep(rarIdx(bot.gun)))){
       const g=Object.assign({}, bot.gun);
       g.kind="weapon"; g.uid=mkUid("bg");
       drops.push(g);
     }
-    if(bot.armorTier) drops.push(raidMakeArmor(bot.armorTier, 0));
-    if(bot.helmetTier) drops.push(raidMakeHelmet(bot.helmetTier, 0));
-    if(bot.maxShield>0 && RNG.chance(bot.smart?0.5:0.2))
+    if(bot.armorTier && RNG.chance(gearKeep(undefined, M.clamp((bot.armorTier-1)/8,0,1))))
+      drops.push(raidMakeArmor(bot.armorTier, 0));
+    if(bot.helmetTier && RNG.chance(gearKeep(undefined, M.clamp((bot.helmetTier-1)/8,0,1))))
+      drops.push(raidMakeHelmet(bot.helmetTier, 0));
+    if(bot.maxShield>0 && RNG.chance(bot.smart?0.34:0.12))
       drops.push(raidMakeShield(M.clamp(bot.armorTier||1,1,9), M.clamp((bot.armorTier||1)-1,0,8)));
+    /* 背包里的备用枪 / 护甲：同样按品阶衰减 */
     for(const w of (bot.inv.weapons||[]).slice(0,1)){
+      if(!RNG.chance(gearKeep(rarIdx(w))*0.7)) continue;
       const g=Object.assign({},w); g.kind="weapon"; g.uid=mkUid("bw"); drops.push(g);
     }
-    for(const a of (bot.inv.armors||[]).slice(0,1)) drops.push(a);
-    // v0.21.9：第一件配件与改装模块可能是同一对象（parts[0] 本身带 core），去重避免尸体掉落复制物品
-    const firstPart=(bot.inv.parts||[])[0]||null;
-    if(firstPart) drops.push(firstPart);
-    const corePart=(bot.inv.parts||[]).find(q=>q.core && q!==firstPart);
-    if(corePart) drops.push(corePart);
+    for(const a of (bot.inv.armors||[]).slice(0,1)){ if(RNG.chance(0.55)) drops.push(a); }
+    /* 它自己搜到的配件 / 改装模块 / 原材料（AI 独立物品栏要能被玩家翻出来） */
+    for(const q of (bot.inv.parts||[]).slice(0,3)){
+      if(q && RNG.chance(q.core?0.5:0.7)) drops.push(q);
+    }
+    for(const m of (bot.inv.materials||[]).slice(0,3)){
+      if(m && RNG.chance(0.8)) drops.push(m);
+    }
+    /* ---------------- 补偿掉落：配件 → 材料，品质逐级抬、概率逐级降 ---------------- */
+    const botTier = M.clamp(
+      Math.round(2 + (bot.armorTier||1)*0.55 + (bot.smart?2:0) + (bot.bounty?3:0)), 1, 11);
+    const compN = bot.bounty ? 3 : (bot.smart ? 2 : 1);
+    for(let i=0;i<compN;i++){
+      const tier = M.clamp(botTier + RNG.ri(-1,1) - i, 1, 11);
+      const p = M.clamp(0.62 * Math.pow(0.72, tier-1), 0.015, 0.62);   // T1≈62% → T11≈1.6%
+      if(!RNG.chance(p)) continue;
+      if(RNG.chance(0.55) && typeof this._rollPartGear==="function"){
+        const pt=this._rollPartGear(bot.cls==="scav"?"scav":"pmc", bot.smart?0.4:0.15, tier-1);
+        if(pt) drops.push(pt);
+      } else {
+        drops.push(raidMakeMaterial(M.clamp((tier-1)/8, 0, 1)));
+      }
+    }
     /* 弹药：按它自己那把枪的口径掉一批（级别跟枪的品级走，Scav 只会民用/制式） */
     {
       const gcal=bot.gun?(bot.gun.cal||ammoCalOfType(bot.gun.type)):null;
@@ -1529,6 +1540,7 @@ Object.assign(Raid, {
        与 _rayLight 的 round 分支同源（共用 w.round 标记）；13px 采样结构保留，
        这里只换形状判定，不改算法、不动移动 / 子弹碰撞，联机手感不变。 */
     const hit=(w,px,py)=>{
+      if(w.hexPoly) return raidPointInPoly(px,py,w.hexPoly);   // v0.36.0：六边形岩石
       if(w.round){
         const a=(w.w||0)*0.5, b=(w.h||0)*0.5;
         if(a<1e-6||b<1e-6) return false;
@@ -1596,6 +1608,13 @@ Object.assign(Raid, {
            * t 依然是真实距离，可直接和 best 比较。
            * 取近根；近根 ≤0 说明起点就在椭圆里（玩家站在灌木中），按原矩形
            * 语义不掐光 —— 否则一进灌木手电会整片熄灭。 */
+          /* v0.36.0：六边形岩石 —— 解析求交取首次进入距离，
+             手电光锥的边界因此和画出来的岩石棱边完全重合。 */
+          if(w.hexPoly){
+            const th=raidRayPoly(x1,y1,ux,uy,best,w.hexPoly);
+            if(th>0.5 && th<best) best=th;
+            continue;
+          }
           if(w.round){
             const ax=(w.w||0)*0.5, by=(w.h||0)*0.5;
             if(ax<1e-6 || by<1e-6) continue;

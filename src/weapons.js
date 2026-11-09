@@ -520,8 +520,13 @@ function generateWeapon(level, opts={}){
   // 扩展词缀：后坐力减免 / 移速 / 射程 / 溅射伤害（命中回血与省弹恒为 0）
   const recoil      = (t.recoil||0);
   const moveSpeed   = (t.moveSpeed||0);
-  const rangePct    = (t.range||0);
+  let   rangePct    = (t.range||0);
   const splashDmg   = (t.splashDmg||0);
+  /* v0.36.0：兵工厂特色取向 —— 每家厂商除了 dmg/fireRate/accuracy/mag/reload/crit
+     之外，还可以带「后坐倍率 / 持枪移速 / 固定穿甲 / 射程加成」。
+     这些字段以前根本没有出口，新加的 4 家厂商就会变成「只有名字不同」。 */
+  if(M0.rangeMul) rangePct += (M0.rangeMul-1)*100;
+  pierce += (M0.pierce||0);
 
   // 品质全局倍率（传奇以上是碾压级）
   dmg *= R.mult;
@@ -576,8 +581,8 @@ function generateWeapon(level, opts={}){
       homing: false,                   // 直线弹道
       lifesteal: 0,                   // 无急救效率
       elemChance: 0,                  // 无弹种增益
-      recoil: M.clamp(recoil,0,80),
-      moveMul: 1 + moveSpeed/100,
+      recoil: M.clamp(recoil * (M0.recoilMul!==undefined?M0.recoilMul:1), 0, 80),
+      moveMul: (1 + moveSpeed/100) * (M0.moveMul!==undefined?M0.moveMul:1),
       rangeMul: 1 + rangePct/100,
       splashDmgMul: 1 + splashDmg/100,
       shieldOnHit: 0,                 // 命中不再回复插板耐久
@@ -715,8 +720,19 @@ function gunArmorPen(type, rarityId, ilvl){
 
 function blGunConvert(w){
   const s=w.stats, t=w.type;
+  /* v0.36.0（用户反馈「有的改装模块似乎没有加成」）：
+     塔科夫模式吃的是这里输出的**扁平枪械对象**，而旧版只搬了 dmg/rpm/spread/mag，
+     精度 / 换弹 / 暴击 / 后坐 / 射程倍率 / 持枪移速 全被丢掉 —— 于是
+     「比赛级枪管」「精磨扳机组」「人体工学套件」「扩容供弹组件」这些模块
+     装上后读数一点变化都没有。现在把它们全部折算成局内真正会读的字段：
+       · 精度 → 散布系数（以 0.85 为基准，越高越收束，±40% 带宽封顶）
+       · 射程倍率 → range（不再一律用 MODE_RANGE 固定值）
+       · 换弹 / 暴击 / 后坐 / 移速 / 穿甲 → 各自新增同名扁平字段 */
+  const acc = (s.accuracy!==undefined ? s.accuracy : 0.85);
+  const accSpread = M.clamp(1 + (0.85-acc)*1.9, 0.62, 1.45);
   return {
     name: w.name,
+    model: w.model||"",        // v0.36.0：型号要跟着走，否则改装后枪名会被重掷
     type: t,
     cat: t,
     manufacturer: w.manufacturer,
@@ -732,8 +748,17 @@ function blGunConvert(w){
     mag: s.mag,
     reserve: Math.max(s.mag, Math.round(s.mag*(MODE_RESERVE[t]||3))),
     rpm: Math.max(40, Math.round(s.fireRate*60)),
-    spread: s.spread,
-    range: MODE_RANGE[t]||560,
+    spread: Math.round(s.spread*accSpread*10000)/10000,
+    /* 散布换算后的精度（0~1，仅用于 UI 与 AI 对比，不参与结算） */
+    accuracy: Math.round(M.clamp(acc,0.4,0.999)*100)/100,
+    range: Math.round((MODE_RANGE[t]||560) * (s.rangeMul||1)),
+    rangeMul: Math.round((s.rangeMul||1)*100)/100,
+    reload: Math.round((s.reload!==undefined?s.reload:1.8)*100)/100,
+    critChance: Math.round(M.clamp(s.critChance!==undefined?s.critChance:0.15,0,0.85)*1000)/1000,
+    critMul: Math.round(M.clamp(s.crit||1.5,1,3)*100)/100,
+    recoil: Math.round((s.recoil||0)*10)/10,
+    moveMul: Math.round((s.moveMul||1)*100)/100,
+    pierce: s.pierce||0,
     auto: !!s.auto,
     pellets: s.pellets||1,
     splash: s.splash||0,
@@ -825,8 +850,12 @@ function installPartOnGun(gun, part){
   parts.push(part);
   const out = blGunConvert(generateWeapon(gun.ilvl, {
     rarity: gun.rarity, type: gun.type, manufacturer: gun.manufacturer,
-    ilvl: gun.ilvl, mayhem: gun.mayhem||0, element: gun.element||"none",
+    ilvl: gun.ilvl,
+    /* v0.36.0：改装等级不再从旧枪继承 —— 它必须由「当前装着的最高级膛压组件」决定。
+       旧写法把 gun.mayhem 原样带进来，卸掉膛压组件后改装等级还在，读数降不下来。 */
+    mayhem: 0, element: gun.element||"none",
     affixes: gun.affixes||[], parts,
+    keepModel: gun.model,
   }));
   out.uid = gun.uid; out.kind = gun.kind || "weapon";
   return keepGunLegend(out, gun);
@@ -850,6 +879,7 @@ function projShapeFor(man, elem, type){
   if(type==="launcher" || elem==="explosive") return "bomb";   // 榴弹战斗部
   if(man==="Jakobs" || man==="Torgue") return "slug";         // 重弹头
   if(man==="Vladof" || man==="Hyperion") return "dart";       // 尖头高速弹
+  if(man==="Steyr" || man==="Rheinmetall") return "dart";      // v0.36.0：高初速/高穿深
   if(man==="Tediore")    return "box";                        // 方形弹托
   return "round";                                             // 标准弹头
 }

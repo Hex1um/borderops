@@ -187,29 +187,204 @@ function hexLighten(hex, amt){
   return `rgb(${mix(c.r)},${mix(c.g)},${mix(c.b)})`;
 }
 
-// 简易音效（WebAudio），无外部资源
+/* =========================================================================
+ * v0.36.0：音效系统重做（用户要求「全面优化游戏声音，开火声音可以学习无主之地」）
+ * -------------------------------------------------------------------------
+ * 旧版每个音效就是一个 50ms 的方波 blip：开火像按鼠标、爆炸像点了一下。
+ * 这里改成**分层合成**（零外部资源，仍然是 WebAudio）：
+ *
+ *   1. 瞬态（crack） —— 高通噪声 15~35ms，提供「啪」的锐度；
+ *   2. 枪身（body） —— 正弦/三角从 ~170Hz 扫到 ~45Hz，提供「咚」的胸腔感；
+ *   3. 中频颗粒（grit）—— 带通噪声 + 波形整形器，无主之地那种「厚实沙砾味」；
+ *   4. 尾音（tail） —— 低通噪声 120~380ms，给室内反射感。
+ *
+ * 每种枪型（手枪 / 冲锋枪 / 步枪 / 霰弹 / 狙击 / 榴弹）都有自己的一套参数，
+ * 每发还有 ±6% 的随机音高与音量抖动 —— 连发时不会听成一段机械重复。
+ * 全链路过一个 DynamicsCompressor 收尾，保证叠了很多层也不破音、并且更「顶」。
+ * 所有节点都判空：没有音频设备 / 自动播放被拦时静音运行，不影响玩法。
+ * ========================================================================= */
 const SFX = (function(){
-  let ctx=null;
-  /* 无音频设备 / 浏览器禁止自动播放时会构造失败 → 静音运行，不影响玩法 */
-  function ensure(){ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ ctx=null; } } return ctx; }
-  function blip(freq, dur, type="square", vol=0.08){
-    const c=ensure(); if(!c) return;
+  let ctx=null, master=null, comp=null, noiseBuf=null, voices=0;
+  let vol = 0.85, muted = false, prefsLoaded = false;
+  /* 音量偏好走 Store（项目约定：只有 store.js 直连 localStorage）。
+     util.js 比 store.js 先加载，所以这里**懒读**，第一次发声时再取。 */
+  function prefs(){
+    if(prefsLoaded) return;
+    prefsLoaded = true;
+    if(typeof Store==="undefined" || !Store.get) return;
+    try{
+      const v=Store.get("bops_sfx_vol", null);
+      if(v!==null && v!==undefined){ const n=parseFloat(v); if(isFinite(n)) vol=Math.max(0,Math.min(1,n)); }
+      muted = Store.get("bops_sfx_mute", "0")==="1";
+    }catch(e){ /* 存储不可用就保持默认音量 */ }
+  }
+  function savePref(k, val){
+    if(typeof Store==="undefined" || !Store.set) return;
+    try{ Store.set(k, String(val)); }catch(e){ /* 存储不可用则放弃持久化 */ }
+  }
+
+  function ensure(){
+    if(ctx) return ctx;
+    try{
+      const AC = window.AudioContext||window.webkitAudioContext;
+      if(!AC) return null;
+      ctx=new AC();
+      /* 压缩器：把多层叠加压成「一块」，这是无主之地枪声听起来有分量的关键 */
+      comp=ctx.createDynamicsCompressor();
+      comp.threshold.value=-16; comp.knee.value=12; comp.ratio.value=5.5;
+      comp.attack.value=0.002; comp.release.value=0.14;
+      master=ctx.createGain();
+      master.gain.value=(muted?0:vol);
+      comp.connect(master); master.connect(ctx.destination);
+      // 白噪声 1s，反复复用（不要每发都新建 buffer）
+      const len=Math.floor(ctx.sampleRate*1.0);
+      noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      const d=noiseBuf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+    }catch(e){ ctx=null; }
+    return ctx;
+  }
+  function unlock(){
+    const c=ensure(); if(c && c.state==="suspended"){ try{ c.resume(); }catch(e){ /* 自动播放被拦：静默 */ } }
+  }
+  if(typeof window!=="undefined" && window.addEventListener){
+    ["pointerdown","keydown","touchstart"].forEach(ev=>
+      window.addEventListener(ev, unlock, { passive:true }));
+  }
+  function volNow(){ const c=ensure(); if(c&&master) master.gain.value=(muted?0:vol); return (muted?0:vol); }
+
+  /* 单层噪声：filter 类型 / 频率 / Q / 增益 / 持续时间 / 延迟 / 波形整形量 */
+  function noise(t0, dur, type, freq, q, gain, distortAmt, dest){
+    const c=ctx;
+    const src=c.createBufferSource();
+    src.buffer=noiseBuf;
+    src.loop=true;
+    src.playbackRate.value=0.85+Math.random()*0.3;
+    const f=c.createBiquadFilter();
+    f.type=type; f.frequency.value=freq; f.Q.value=q;
+    const g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002,gain), t0+0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    let node=f;
+    if(distortAmt>0 && c.createWaveShaper){
+      const ws=c.createWaveShaper();
+      const n=1024, curve=new Float32Array(n);
+      for(let i=0;i<n;i++){ const x=i*2/n-1; curve[i]=Math.tanh(x*(1+distortAmt*6)); }
+      ws.curve=curve; ws.oversample="2x";
+      f.connect(ws); node=ws;
+    }
+    src.connect(f); node.connect(g); g.connect(dest||comp);
+    src.start(t0); src.stop(t0+dur+0.02);
+  }
+  /* 单层音调：扫频 + 指数衰减 */
+  function sweep(t0, f0, f1, dur, type, gain){
+    const c=ctx;
     const o=c.createOscillator(), g=c.createGain();
-    o.type=type; o.frequency.value=freq;
-    g.gain.value=vol; o.connect(g); g.connect(c.destination);
-    const t=c.currentTime; o.start(t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
-    o.stop(t+dur);
+    o.type=type||"sine";
+    o.frequency.setValueAtTime(f0,t0);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20,f1), t0+dur*0.9);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002,gain), t0+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    o.connect(g); g.connect(comp);
+    o.start(t0); o.stop(t0+dur+0.02);
+  }
+  function click(t0, freq, gain, dur, type){
+    sweep(t0, freq, freq*0.55, dur||0.035, type||"square", gain||0.03);
+  }
+
+  /* ---- 开火：按枪型分层 ---- */
+  const SHOT = {
+    pistol:  { body:[190,52,0.13], grit:[1500,0.9,0.16], crack:[4200,0.020,0.22], tail:[0.10,0.10], thump:0.55 },
+    smg:     { body:[165,48,0.09], grit:[1900,1.0,0.13], crack:[5200,0.016,0.19], tail:[0.07,0.07], thump:0.45 },
+    rifle:   { body:[150,42,0.15], grit:[1200,0.8,0.20], crack:[3800,0.024,0.26], tail:[0.13,0.12], thump:0.70 },
+    shotgun: { body:[110,34,0.24], grit:[760,0.7,0.30],  crack:[3000,0.030,0.30], tail:[0.22,0.16], thump:0.95 },
+    sniper:  { body:[125,36,0.20], grit:[1050,0.9,0.22], crack:[4600,0.026,0.30], tail:[0.24,0.18], thump:0.85 },
+    launcher:{ body:[85,28,0.28],  grit:[600,0.6,0.26],  crack:[2200,0.034,0.24], tail:[0.20,0.14], thump:1.0  },
+  };
+  function shotOf(kind){
+    const k=String(kind||"").toLowerCase();
+    if(k==="shotgun"||k==="霰弹枪"||k==="霰弹") return SHOT.shotgun;
+    if(k==="sniper"||k==="狙击枪"||k==="狙击") return SHOT.sniper;
+    if(k==="rifle"||k==="步枪"||k==="lmg"||k==="机枪") return SHOT.rifle;
+    if(k==="smg"||k==="冲锋枪") return SHOT.smg;
+    if(k==="launcher"||k==="火箭筒"||k==="榴弹发射器") return SHOT.launcher;
+    return SHOT.pistol;
   }
   return {
-    shoot(){ blip(420+Math.random()*120, 0.05, "square", 0.04); },
-    hit(){ blip(180,0.05,"sawtooth",0.05); },
-    pickup(){ blip(660,0.08,"triangle",0.06); blip(880,0.08,"triangle",0.05); },
-    reload(){ blip(300,0.06,"square",0.05); },
-    hurt(){ blip(140,0.12,"sawtooth",0.07); },
-    boom(){ blip(90,0.25,"sawtooth",0.09); },
-    levelup(){ blip(520,0.1,"triangle",0.07); blip(780,0.12,"triangle",0.06); blip(1040,0.14,"triangle",0.05); },
-    ui(){ blip(520,0.04,"triangle",0.04); },
+    /* 保留旧 API 的默认参数，同时支持 shoot("rifle") / shoot({kind, far}) */
+    shoot(kind, opts){
+      const c=ensure(); if(!c || muted) return;
+      if(voices>28) return;                       // 极端连发时丢弃多余声部，避免卡顿
+      const p=shotOf(typeof kind==="object"&&kind?kind.kind:kind);
+      const far=!!(opts&&opts.far);
+      const t=c.currentTime+0.001;
+      const j=0.94+Math.random()*0.12;            // 每发音高抖动
+      const g=far?0.55:1.0;                        // 远处（AI）听感略轻
+      voices++;
+      const durAll=Math.max(p.tail[0],p.grit[0]?0.2:0.2)+p.body[2];
+      setTimeout(()=>{ voices=Math.max(0,voices-1); }, Math.max(120, durAll*1000));
+      // 1) 瞬态
+      noise(t, p.crack[1], "highpass", p.crack[0]*j, 0.7, p.crack[2]*g, 0, null);
+      // 2) 枪身低频
+      sweep(t, p.body[0]*j, p.body[1], p.body[2], "sine", 0.32*p.thump*g);
+      // 3) 中频颗粒（带轻微削波 → 厚）
+      noise(t+0.002, 0.055+0.02*Math.random(), "bandpass", p.grit[0]*j, p.grit[1], p.grit[2]*g, 0.8, null);
+      // 4) 尾音
+      noise(t+0.008, p.tail[0], "lowpass", 1400*Math.max(0.6,j), 0.5, p.tail[1]*0.55*g, 0, null);
+    },
+    /* 命中：打在护甲上是金属声，打在血肉上是闷响 */
+    hit(metal){
+      const c=ensure(); if(!c || muted) return;
+      const t=c.currentTime+0.001;
+      if(metal){ noise(t,0.055,"bandpass",2600,2.2,0.16,0.5,null); sweep(t,1400,700,0.05,"square",0.045); }
+      else { noise(t,0.075,"lowpass",520,0.8,0.18,0.4,null); sweep(t,150,60,0.09,"sine",0.10); }
+    },
+    pickup(){
+      const c=ensure(); if(!c || muted) return;
+      const t=c.currentTime+0.001;
+      click(t,640,0.05,0.05,"triangle"); click(t+0.06,960,0.045,0.06,"triangle"); click(t+0.12,1280,0.03,0.08,"sine");
+    },
+    reload(){
+      const c=ensure(); if(!c || muted) return;
+      const t=c.currentTime+0.001;
+      noise(t,0.035,"bandpass",1800,3.0,0.10,0.3,null);      // 弹匣脱开
+      click(t+0.10,420,0.04,0.04,"square");
+      noise(t+0.20,0.045,"bandpass",2400,2.4,0.09,0.3,null); // 插入
+    },
+    hurt(){
+      const c=ensure(); if(!c || muted) return;
+      const t=c.currentTime+0.001;
+      sweep(t,190,70,0.16,"sawtooth",0.10); noise(t,0.10,"lowpass",700,0.7,0.10,0.5,null);
+    },
+    boom(){
+      const c=ensure(); if(!c || muted) return;
+      const t=c.currentTime+0.001;
+      sweep(t,110,26,0.42,"sine",0.34);
+      noise(t,0.34,"lowpass",620,0.6,0.30,0.7,null);
+      noise(t+0.01,0.10,"highpass",2400,0.8,0.14,0, null);
+    },
+    levelup(){
+      const c=ensure(); if(!c || muted) return;
+      const t=c.currentTime+0.001;
+      [523,659,784,1046].forEach((f,i)=>click(t+i*0.075,f,0.05,0.14,"triangle"));
+    },
+    ui(){ const c=ensure(); if(!c || muted) return; click(c.currentTime+0.001, 620, 0.035, 0.035,"triangle"); },
+    /* 音量 / 静音（设置面板或调试用；持久化经 Store） */
+    setVolume(v){
+      vol=Math.max(0,Math.min(1,Number(v)||0));
+      savePref("bops_sfx_vol", vol);
+      volNow();
+    },
+    getVolume(){ return vol; },
+    setMuted(m){
+      muted=!!m;
+      savePref("bops_sfx_mute", muted?"1":"0");
+      volNow();
+    },
+    isMuted(){ return muted; },
+    unlock: unlock,
   };
 })();
 

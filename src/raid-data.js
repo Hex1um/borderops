@@ -239,17 +239,26 @@ const RAID_EXTRACT_RULES = {
  *   「带的装备越多，折扣越小」，绝对金额仍随装备升值上升，重装才该多付。
  *   封顶 = 基础价×1.4，避免顶级装备出现天价车费。 */
 const RAID_FEE_LIGHT = 0.20;     // 裸装折扣下限
-const RAID_FEE_SOFT  = 90000;    // 折扣衰减半程的装备估值
+const RAID_FEE_SOFT  = 45000;    // 折扣衰减半程的装备估值（v0.36.0：90000 → 45000，重装更快掉满价）
 /* 折扣系数本体：0.2 → 趋近 1.0 的单调递增曲线（拆出来便于单独校验） */
 function raidExtractFeeMult(carryVal){
   const v=Math.max(0, carryVal||0);
   return RAID_FEE_LIGHT + (1-RAID_FEE_LIGHT)*(v/(v+RAID_FEE_SOFT));
 }
+/* v0.36.0（用户要求「局内装备对撤离费的影响大幅增加」）：
+ * 旧版车费对装备几乎不敏感 —— 带 30 万和带 3 万只差几百卢布，
+ * 「肥装撤离有代价」这条设计形同虚设。现在：
+ *   · 装备计价系数 ×2.6（extC 0.020 → 0.052 等效）；
+ *   · 折扣半程估值 9 万 → 4.5 万，重装更早按原价付；
+ *   · 天花板 基础价×1.4 → ×2.6，避免一进图就被封顶而失去区分度。
+ * 结果：裸装仍是 ₽90 量级，带 3 万装备 ≈₽1,040（原 ₽420），带 9 万 ≈₽3,760（原 ₽1,350）。 */
+const RAID_FEE_GEAR_K = 2.6;     // 装备估值计价放大系数
+const RAID_FEE_CAP_K  = 2.6;     // 车费天花板倍数
 function raidExtractFee(zone, carryVal){
   if(!zone || !zone.cost) return 0;
   const v=Math.max(0, carryVal||0);
-  const base = zone.cost*0.28 + v*(zone.feeRate||0.018);
-  return Math.round(M.clamp(base*raidExtractFeeMult(v), 60, zone.cost*1.4)/10)*10;
+  const base = zone.cost*0.28 + v*(zone.feeRate||0.018)*RAID_FEE_GEAR_K;
+  return Math.round(M.clamp(base*raidExtractFeeMult(v), 60, zone.cost*RAID_FEE_CAP_K)/10)*10;
 }
 /* 注：raidCarriedGearValue（撤离费按携带装备估值，#7）定义在 raid-core3.js 顶部
    —— 那里有富余行数，避免 raid-data.js 越过 2000 行分片上限。 */
@@ -714,7 +723,10 @@ function raidPlayerBeam(R){
 /* 手持武器的移速倍率（目前只有狙击枪有惩罚）。只看主手 —— 副手要紧的是正在用的那把。 */
 function raidGunMoveMul(p){
   const g=p&&p.gun;
-  return (g && (g.type==="sniper"||g.cat==="sniper")) ? RAID_SNIPER_MOVE_MUL : 1;
+  /* v0.36.0：枪械自带的持枪移速（人体工学套件 / 以色列武器工业这类厂商的紧凑枪身）
+     终于进结算 —— 之前 moveMul 只在 Weapon 里算过，扁平枪械对象根本没有这个字段。 */
+  const own = (g && g.moveMul!==undefined) ? M.clamp(g.moveMul, 0.7, 1.35) : 1;
+  return ((g && (g.type==="sniper"||g.cat==="sniper")) ? RAID_SNIPER_MOVE_MUL : 1) * own;
 }
 function raidPlayerLit(R, x, y){
   const p=R&&R.player; if(!p) return false;
@@ -1611,30 +1623,6 @@ function partChip(pt){
   const named=pt.named?' <b style="color:#ffd23f">✦具名</b>':"";
   return `<span class="part-chip" style="border-color:${col};color:${col}${pt.named?';box-shadow:0 0 0 1px #ffd23f inset':''}">${partNameOf(pt)}${named}<em>${partText(pt)}</em></span>`;
 }
-
-/* 共享的武器卡片渲染：物品栏与融合台结果卡用同一套，保证显示完全一致
- * opts.prefix  前缀文案（如「融合成功 · 」）
- * opts.sell    是否带售卖/拆解按钮（物品栏 true，融合结果卡 false）
- * opts.margin  是否带纵向外边距（融合结果卡 true） */
-function raidWeaponCard(w, opts){
-  opts=opts||{};
-  const col=raidGunColor(w);
-  const tname=WEAPON_TYPES[w.type]?WEAPON_TYPES[w.type].name:(w.cat||w.type||"枪械");
-  const parts=(w.parts||[]);
-  const sellP=gunSellPrice(w);
-  const head=(opts.prefix||"")+gunNameOf(w);
-  return `<div class="shop-item" style="border-left-color:${col}${opts.margin?';margin:12px 0':''}">
-    <div class="si-name" style="color:${col}">${head}</div>
-    <div class="si-meta">${tname}，${parts.length} 个配件${w.uniqPerk?'，<b style="color:#ffd23f">具名装备</b>':''}${w.pellets>1?`，<b style="color:#ffd54a">${w.pellets} ${w.type==="shotgun"?"弹片":"发/次"}</b>`:''}</div>
-    ${w.uniqPerk?`<div class="uniq-perk">✦ ${w.uniqPerk}</div>`:''}
-    <div class="si-stats">${gunDamageLabel(w)}，弹匣 ${w.mag}，射速 ${w.rpm}，估值 ₽${priceTextShort(w.value)}
-      ${parts.length?`<br><span class="part-row">${parts.slice(0,4).map(partChip).join("")}</span>`:''}</div>
-    ${opts.sell?`<div class="si-buy"><span class="si-price">₽ ${priceTextShort(sellP)}</span>
-        <button class="btn ghost" data-sell="w:${w.uid}">售卖</button>
-        <button class="btn ghost" data-salvage="${w.uid}">拆解</button></div>`:''}
-  </div>`;
-}
-
 
 /* 护甲 / 头盔词缀：每件都必带 1 前缀 + 1 后缀（强度随品质提升） */
 const RAID_ARMOR_PREFIX = [

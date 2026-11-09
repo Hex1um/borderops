@@ -19,9 +19,11 @@
 const RAID_COMPOUND_KINDS = {
   barrier: "triple",   sandbag: "triple",   shelf: "triple",
   pipe: "triple",      archway: "arch",
-  /* v0.32.0（用户反馈）：rock 的**画面是六边形**，碰撞却走 AABB + 椭圆光线，
-     走位与光斑都对不上边。改成三条横带近似六边形：navCell（移动 / 子弹）、
-     losCell（AI 视线）、_rayLight（手电）都会按这三条带子判定。 */
+  /* v0.36.0（用户要求）：rock 的**画面是六边形**，碰撞也必须是六边形。
+     v0.32 曾用三条横带近似，但顶部带只有 66% 宽 —— 尖角外侧走不进去、
+     棱边中段却能贴脸穿过。现在 hex 不再走 raidCompoundBoxes，
+     而是由 _pushProp 登记 raidHexPolyOf() 的真多边形，见下方「一·B」。
+     这里保留 "hex" 映射只是为了 _pushProp 能认出它是复合形状。 */
   rock: "hex",
 };
 
@@ -64,6 +66,64 @@ function raidCompoundBoxes(p){
   return horiz
     ? [0,1,2].map(i=>({ x:x+i*(seg+gap), y:y, w:seg, h:h }))
     : [0,1,2].map(i=>({ x:x, y:y+i*(seg+gap), w:w, h:seg }));
+}
+
+/* ---------------------------------------------------------------------------
+ * 一·B、真六边形碰撞（v0.36.0，用户要求「rock 装饰本身就是六边形，碰撞箱就按六边形算」）
+ * ---------------------------------------------------------------------------
+ * 之前 rock 用三条横带近似六边形：顶部带只有 66% 宽，玩家绕石头时仍然会
+ * 撞在一条不存在的直边上（石头尖角外反而能走进去）。这里改成**按绘制多边形**
+ * 做解析判定：顶点与 raid-render 里画岩石的 6 个点完全一致，所以
+ *   「看到的边」＝「挡住的边」＝「挡光的边」＝「挡子弹的边」。
+ *
+ * 三个纯函数，供 raid-core._blockedAt / raid-core3._rayWall / _rayLight 共用：
+ *   raidHexPolyOf(p)            相对顶点 → 绝对坐标多边形
+ *   raidPolyDist(x,y,poly)      点到多边形的距离（内部为 0）
+ *   raidRayPoly(x,y,ux,uy,max,poly)  射线首次进入多边形的距离（未命中 -1）
+ */
+const RAID_ROCK_HEX = [
+  [0.06,0.55],[0.24,0.10],[0.62,0.04],[0.94,0.42],[0.84,0.90],[0.36,0.96],
+];
+function raidHexPolyOf(p){
+  const out=[];
+  for(const v of RAID_ROCK_HEX) out.push([p.x+p.w*v[0], p.y+p.h*v[1]]);
+  return out;
+}
+function raidPointInPoly(x,y,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0], yi=poly[i][1], xj=poly[j][0], yj=poly[j][1];
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/((yj-yi)||1e-9)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function raidPolyDist(x,y,poly){
+  if(raidPointInPoly(x,y,poly)) return 0;
+  let best=Infinity;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const ax=poly[j][0], ay=poly[j][1], bx=poly[i][0], by=poly[i][1];
+    const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+    let t=L2>1e-9 ? ((x-ax)*dx+(y-ay)*dy)/L2 : 0;
+    t=t<0?0:(t>1?1:t);
+    const px=ax+dx*t, py=ay+dy*t;
+    const d=Math.hypot(x-px,y-py);
+    if(d<best) best=d;
+  }
+  return best;
+}
+function raidRayPoly(x,y,ux,uy,maxT,poly){
+  let best=-1;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const ax=poly[j][0], ay=poly[j][1], bx=poly[i][0], by=poly[i][1];
+    const ex=bx-ax, ey=by-ay;
+    const den=ux*ey-uy*ex;
+    if(Math.abs(den)<1e-9) continue;
+    const t=((ax-x)*ey-(ay-y)*ex)/den;      // 沿射线距离
+    const u=((ax-x)*uy-(ay-y)*ux)/den;      // 线段参数
+    if(u<0||u>1) continue;
+    if(t>0.01 && t<=maxT && (best<0||t<best)) best=t;
+  }
+  return best;
 }
 
 /* ---------------------------------------------------------------------------

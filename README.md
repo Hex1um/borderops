@@ -45,7 +45,7 @@
 
 ```sh
 npm start          # 等价于 node server.js，默认 3000 端口
-npm run verify     # 无浏览器逻辑回归（52 组 / 1152 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏 / POI 主题装饰）
+npm run verify     # 无浏览器逻辑回归（53 组 / 1177 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏 / POI 主题装饰）
 npm run check      # 校验版本号三处同步 + 脚本缓存串（无需安装依赖）
 # 真实浏览器冒烟（需系统 Edge + Python playwright，先起服务）：
 PORT=3211 node server.js
@@ -79,7 +79,7 @@ python -m http.server 8132
 | `index.html` | 唯一 HTML：画布 + overlay + 局内物品栏层 + 脚本清单 |
 | `styles.css` | 全部样式，含移动端断点 |
 | `src/config.js` | 全局常量、弹种/品质/改装词条/兵工厂/枪型定义 |
-| `src/raid-*.js` | 主战场按自然边界拆成 7 片（合计 ~9.8k 行，单片 ≤1621 行）：`raid-data`（数据表/工具/RaidStash）、`raid-core`/`core2`/`core3`（主控 Raid，`Object.assign` 续接）、`raid-render`（RenderRaid + HUD）、`raid-ui`/`ui2`（UI 补丁） |
+| `src/raid-*.js` | 主战场按自然边界拆成 9 片（合计 ~12.8k 行，单片 ≤2000 行，verify 有护栏）：`raid-data`（数据表/工具/RaidStash）、`raid-core`/`core2`/`core3`（主控 Raid，`Object.assign` 续接）、`raid-render`（RenderRaid + HUD）、`raid-ui`/`ui2`（UI 补丁） |
 | `src/sanitize.js` | 联机数据净化内核（UMD 同构）：HTTP 轮询 / WebRTC P2P / 单测共用一份 corpse schema 与文本净化规则 |
 | `src/lazy-legacy.js` | 旧模式按需加载器：`onlyRaid=true` 时不请求战役/无尽/沙二/大逃杀 4 个脚本 |
 | `src/save.js` | 存档读写 + 存档码导出/导入（`BOPS1-` 前缀，解绑域名） |
@@ -94,7 +94,7 @@ python -m http.server 8132
 | `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，1152 项断言） |
+| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，1177 项断言） |
 | `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（42 项断言）与只读机制体检 |
 | `testshots/` / `test-report.json` / `mechanics-probe.json` | 冒烟截图与结构化测试报告（本地产物；`testshots/` 已 gitignore，不入库） |
 | `LICENSE` | 项目 MIT 许可（含第三方 PeerJS 声明） |
