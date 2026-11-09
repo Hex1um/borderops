@@ -14,6 +14,26 @@
 
 线上地址：`https://hex1um.github.io/borderops/`（GitHub Pages，纯静态托管；联机自动走 WebRTC P2P，无需后端）
 
+## 两个发布线（v0.36.2 起分开）
+
+同一个仓库同时维护两条互不干扰的发布线，**代码内容不同，不要互相 merge**：
+
+| 分支 | 用途 | 当前版本 | 差异 |
+|---|---|---|---|
+| `main` | GitHub Pages 公开版：`https://hex1um.github.io/borderops/` | **0.36.2** | 本分支就是完整原版，含真实兵工厂与枪械型号命名 |
+| `toy` | B 站 Toy 投稿版（合规 + 云存档） | 0.37.0 | 12 家兵工厂 / 84 个枪型号改为原创命名、`塔科夫` 等他人游戏名替换、`src/toy-sdk.js` 接入 B 站云存档与云房间 |
+
+日常改动走 `main`；要出 Toy 包时切到 `toy`：
+
+```sh
+git checkout toy
+node tools/build_toy.cjs        # → dist/borderops-toy-v<版本>.zip
+python tools/make_toy_cover.py  # 封面与图标（需要时）
+git checkout main
+```
+
+`tools/` 与 `dist/` 的处理：脚本两条线共用（与版本无关），`dist/` 已在 `.gitignore` 里不入库。
+
 ## 特性
 
 - **撤离射击循环**：9 阶军规品质战利品 + 12 阶枪械品质、5 级钥匙与上锁箱、9 家随机商店（枪械/材料/回收/黑市）、GP 币经济、装备保险与撤离费
