@@ -1436,8 +1436,10 @@ check('完整模式枪名含前后缀', preOk?1:0, 1, 0.001);
 // 精简模式：隐藏前后缀与品质
 G('CFG.display="compact"');
 check('精简模式 weaponQualityHidden=true', G('weaponQualityHidden()')?1:0, 1, 0.001);
-const preOkC = G('(function(){ const w=generateWeapon(40,{rarity:"primordial"}); const a=w.affixes.find(x=>x.kind==="prefix")||w.affixes[0]; return a? gunNameOf(w).indexOf(a.nm)>=0 : true; })()');
-check('精简模式枪名不含前后缀', preOkC?0:1, 1, 0.001);
+/* v0.36.0：原写法在「这条枪恰好没有词缀」时会随机掉一条断言（判定自身的抖动）。
+   现在把「不含前后缀」直接写成返回值，词缀为空也视为通过。 */
+const preOkC = G('(function(){ const w=generateWeapon(40,{rarity:"primordial"}); const a=w.affixes.find(x=>x.kind==="prefix")||w.affixes[0]; return a? gunNameOf(w).indexOf(a.nm)<0 : true; })()');
+check('精简模式枪名不含前后缀', preOkC?1:0, 1, 0.001);
 G('CFG.display="'+prevD+'"');
 
 // 最高三档（定制/珍藏/孤品）默认权重归零
@@ -3715,12 +3717,12 @@ check('新厂商特色真的落到数值：斯泰尔射速最高、莱茵金属�
 const __drop = JSON.parse(G(`JSON.stringify((()=>{
   const keep=[];
   for(const idx of [0,3,6,9,11]) keep.push(+(0.95-idx*0.072).toFixed(3));
-  return { keep, p1:+(0.62*Math.pow(0.72,0)).toFixed(3), p11:+(0.62*Math.pow(0.72,10)).toFixed(3) };
+  return { keep, p1:+(0.72*Math.pow(0.85,0)).toFixed(3), p11:+(0.72*Math.pow(0.85,10)).toFixed(3) };
 })())`));
 check('掉落概率随品阶单调下降（民用 0.95 → 孤品 ≈0.16）',
   __drop.keep.every((v,i)=>i===0||v<__drop.keep[i-1]) && __drop.keep[4]<0.20 ?1:0,1,0.001);
-check('补偿掉落概率随品质递减（T1≈62% → T11≈1.6%）',
-  __drop.p1>0.5 && __drop.p11<0.03 ?1:0,1,0.001);
+check('补偿掉落概率随品质递减（T1≈72% → T11≈14%）',
+  __drop.p1>0.6 && __drop.p11>0.08 && __drop.p11<0.25 ?1:0,1,0.001);
 check('_dropFromBot 走 gearKeep + 配件/材料补偿',
   /gearKeep\(rarIdx\(bot\.gun\)\)/.test(raidSrc) && /compN/.test(raidSrc) && /raidMakeMaterial/.test(raidSrc)?1:0,1,0.001);
 

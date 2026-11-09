@@ -613,15 +613,22 @@ Object.assign(Raid, {
       const base = idx!==undefined ? (0.95 - idx*0.072) : (0.95 - (soft||0)*0.79);
       return M.clamp(base, 0.12, 0.95);
     };
-    if(bot.gun && RNG.chance(gearKeep(rarIdx(bot.gun)))){
-      const g=Object.assign({}, bot.gun);
-      g.kind="weapon"; g.uid=mkUid("bg");
-      drops.push(g);
+    let missed=0;   // 因为品阶太高而没掉出来的装备件数 —— 补偿掉落的数量按它来
+    if(bot.gun){
+      if(RNG.chance(gearKeep(rarIdx(bot.gun)))){
+        const g=Object.assign({}, bot.gun);
+        g.kind="weapon"; g.uid=mkUid("bg");
+        drops.push(g);
+      } else missed++;
     }
-    if(bot.armorTier && RNG.chance(gearKeep(undefined, M.clamp((bot.armorTier-1)/8,0,1))))
-      drops.push(raidMakeArmor(bot.armorTier, 0));
-    if(bot.helmetTier && RNG.chance(gearKeep(undefined, M.clamp((bot.helmetTier-1)/8,0,1))))
-      drops.push(raidMakeHelmet(bot.helmetTier, 0));
+    if(bot.armorTier){
+      if(RNG.chance(gearKeep(undefined, M.clamp((bot.armorTier-1)/8,0,1)))) drops.push(raidMakeArmor(bot.armorTier, 0));
+      else missed++;
+    }
+    if(bot.helmetTier){
+      if(RNG.chance(gearKeep(undefined, M.clamp((bot.helmetTier-1)/8,0,1)))) drops.push(raidMakeHelmet(bot.helmetTier, 0));
+      else missed++;
+    }
     if(bot.maxShield>0 && RNG.chance(bot.smart?0.34:0.12))
       drops.push(raidMakeShield(M.clamp(bot.armorTier||1,1,9), M.clamp((bot.armorTier||1)-1,0,8)));
     /* 背包里的备用枪 / 护甲：同样按品阶衰减 */
@@ -637,13 +644,15 @@ Object.assign(Raid, {
     for(const m of (bot.inv.materials||[]).slice(0,3)){
       if(m && RNG.chance(0.8)) drops.push(m);
     }
-    /* ---------------- 补偿掉落：配件 → 材料，品质逐级抬、概率逐级降 ---------------- */
+    /* ---------------- 补偿掉落：配件 → 材料，品质逐级抬、概率逐级降 ----------------
+     * 件数 = 1 + 没掉出来的装备数（Boss 再 +1）—— 「装备越难掉，补偿给得越多」，
+     * 否则高 tier 敌人反而变成空尸体，翻尸体验比旧版还差。 */
     const botTier = M.clamp(
       Math.round(2 + (bot.armorTier||1)*0.55 + (bot.smart?2:0) + (bot.bounty?3:0)), 1, 11);
-    const compN = bot.bounty ? 3 : (bot.smart ? 2 : 1);
+    const compN = 1 + missed + (bot.bounty?1:0);
     for(let i=0;i<compN;i++){
       const tier = M.clamp(botTier + RNG.ri(-1,1) - i, 1, 11);
-      const p = M.clamp(0.62 * Math.pow(0.72, tier-1), 0.015, 0.62);   // T1≈62% → T11≈1.6%
+      const p = M.clamp(0.72 * Math.pow(0.85, tier-1), 0.02, 0.72);   // T1≈72% → T7≈27% → T11≈12%
       if(!RNG.chance(p)) continue;
       if(RNG.chance(0.55) && typeof this._rollPartGear==="function"){
         const pt=this._rollPartGear(bot.cls==="scav"?"scav":"pmc", bot.smart?0.4:0.15, tier-1);
