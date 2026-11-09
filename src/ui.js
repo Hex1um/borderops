@@ -6,7 +6,7 @@
 const UI = {
   game:null,
   overlay:null,
-  _mode:"raid",            // 当前选择的模式（主模式为塔科夫）
+  _mode:"raid",            // 当前选择的模式（主模式为撤离区）
   _moreModes:false,        // 标题页「其他模式」折叠面板是否展开
   _buyTimer:null,
 
@@ -95,13 +95,13 @@ const UI = {
         <h1 class="title-big">边境行动</h1>
         <div class="subtitle">BORDER OPS · WEB · v${CFG.version} · 撤离突袭 · 词缀枪械 · 黑市经济</div>
 
-        <div class="mode-hero" data-mode="raid" role="button" tabindex="0" aria-label="进入塔科夫模式">
+        <div class="mode-hero" data-mode="raid" role="button" tabindex="0" aria-label="进入撤离突袭模式">
           <div class="hero-top">
             <span class="hero-kicker"><span class="kick-full">主模式，MAIN MODE</span><span class="kick-short">主模式</span></span>
             <span class="hero-live"><span class="live-full">2~4 人联机</span><span class="live-short">联机</span></span>
           </div>
-          <h2>塔科夫模式</h2>
-          <div class="hero-tag">ESCAPE FROM TARKOV · 硬核撤离射击</div>
+          <h2>撤离突袭模式</h2>
+          <div class="hero-tag">BORDER OPS · 硬核撤离射击</div>
           <p>PMC 与 Scav 同场，流血、包扎、条件撤离点与装备保险——<b>只有活着撤离，装备才会入库</b>。
             配装大厅内含军火超市 / 枪匠台 / 仓库 / 拍卖行，进图后还有枪械店、材料店、回收超市与黑市。</p>
           <div class="hero-chips">
@@ -126,7 +126,7 @@ const UI = {
 
         ${armed?`<div class="wipe-box">
           确认删除本机全部存档？<br>
-          ${onlyRaid?'':'战役进度，'}塔科夫仓库（枪械/护甲/材料/改装模块）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
+          ${onlyRaid?'':'战役进度，'}撤离区仓库（枪械/护甲/材料/改装模块）· 拍卖行挂单与成交记录，全部清空且<b>不可恢复</b>。
           <div class="row">
             <button class="btn small danger" id="btn-wipe-yes">确认删除</button>
             <button class="btn small ghost" id="btn-wipe-no">取消</button>
@@ -134,7 +134,7 @@ const UI = {
         </div>`:''}
 
         ${this._exportCode?`<div class="wipe-box save-box" id="save-export-box">
-          <div style="margin-bottom:6px;">存档码已生成（含战役进度 / 塔科夫仓库 / 拍卖行）。复制后妥善保存，换域名或清缓存后用「导入存档码」恢复：</div>
+          <div style="margin-bottom:6px;">存档码已生成（含战役进度 / 撤离区仓库 / 拍卖行）。复制后妥善保存，换域名或清缓存后用「导入存档码」恢复：</div>
           <textarea id="export-code" readonly rows="4" spellcheck="false">${this._exportCode}</textarea>
           <div class="row">
             <button class="btn small" id="btn-export-copy">复制</button>
@@ -192,7 +192,7 @@ const UI = {
             沙二：<span class="kbd">B</span> 购买，<span class="kbd">E</span> 下包/拆包，<span class="kbd">G</span> 手雷 ·
             大逃杀：<span class="kbd">E</span> 用医疗，活到最后吃鸡<br>
           </span>`}
-          塔科夫模式：<span class="kbd">WASD</span> 移动，<span class="kbd">左键</span> 开火，<span class="kbd">E</span> 搜索 ·
+          撤离突袭模式：<span class="kbd">WASD</span> 移动，<span class="kbd">左键</span> 开火，<span class="kbd">E</span> 搜索 ·
           <span class="kbd">H</span> 绷带止血，<span class="kbd">Q</span> 换枪，<span class="kbd">Tab</span> 物品栏，站上撤离点坚守数秒<br>
           移动端：左半屏拖动，右下扳机开火，<span class="kbd">AUTO</span> 自动开火
         </div>
@@ -324,7 +324,7 @@ const UI = {
   },
 
   pickMode(mode){
-    // 默认只开放塔科夫模式；其他模式代码保留，但入口隐藏且禁止绕过。
+    // 默认只开放撤离突袭模式；其他模式代码保留，但入口隐藏且禁止绕过。
     if(CFG.onlyRaid !== false && mode!=="raid") mode="raid";
     this._mode=mode;
     if(mode==="dust2") this.dustSetup();

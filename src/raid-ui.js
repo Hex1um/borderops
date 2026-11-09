@@ -177,10 +177,10 @@ UI.raidSetup=function(){
 
   UI._set(`
     <div class="panel raid-setup">
-      <h2 class="title-big" style="font-size:34px;">塔科夫模式 · 撤离突袭</h2>
-      <div class="subtitle">ESCAPE FROM TARKOV · 硬核撤离射击 · 地图「海关流域」· 工业区 + 北境密林 + 中央河谷 + 铁路枢纽 + 西南监狱/小镇/大坝，支持 <b style="color:#7ee08a">2~4 人联机</b></div>
+      <h2 class="title-big" style="font-size:34px;">撤离突袭模式 · 撤离突袭</h2>
+      <div class="subtitle">BORDER OPS · 硬核撤离射击 · 地图「海关流域」· 工业区 + 北境密林 + 中央河谷 + 铁路枢纽 + 西南监狱/小镇/大坝，支持 <b style="color:#7ee08a">2~4 人联机</b></div>
       <details class="tarkov-intro">
-        <summary>塔科夫模式 · 玩法说明（点此展开 / 折叠）</summary>
+        <summary>撤离突袭模式 · 玩法说明（点此展开 / 折叠）</summary>
         <div class="tarkov-intro-body" style="color:var(--muted);max-width:680px;">
           开局与 <b style="color:#e0b84a">30 名 PMC / Scav</b>、<b style="color:#ffd23f">3 名 Boss</b>，以及 8 个核心地点的 <b style="color:#8fe07a">10 名精英</b>同场（共 43 名）。他们和你一样从零起步：各自有<b style="color:#8fe07a">独立背包与卢布</b>，会搜箱、换更好的枪甲；名字带 <b style="color:#ffd23f">★</b> 的 Raider 会优先抢武器箱、残血自行包扎。中弹会<b style="color:#ff8a5a">流血</b>（随身绷带/搜刮补给可止血）。<br>
           ${weaponQualityHidden()
@@ -539,7 +539,7 @@ UI.raidPause=function(confirmQuit){
   UI._set(`
     <div class="panel" style="text-align:center;max-width:460px;">
       <h2 class="title-big" style="font-size:32px;">已暂停</h2>
-      <div class="subtitle">塔科夫模式 · 地图「海关流域」（工业区 / 密林 / 河谷 / 铁路 / 监狱 / 小镇 / 大坝）</div>
+      <div class="subtitle">撤离突袭模式 · 地图「海关流域」（工业区 / 密林 / 河谷 / 铁路 / 监狱 / 小镇 / 大坝）</div>
       <p style="color:var(--muted);">撤离倒计时已停止。继续行动，或放弃突袭返回大厅。</p>
       <div class="row" style="justify-content:center;margin-top:16px;">
         <button class="btn ghost" id="btn-raid-quit">放弃突袭（装备丢失）</button>
@@ -556,7 +556,7 @@ UI.raidPause=function(confirmQuit){
 
 /* =========================================================================
  * 军火超市（Arms Supermarket）
- *   用塔科夫仓库的卢布采购枪械 / 护甲 / 绷带，直接入库到 RaidStash，
+ *   用撤离区仓库的卢布采购枪械 / 护甲 / 绷带，直接入库到 RaidStash，
  *   可在配装大厅携带下场或投保。撤离成功才会真正带走；阵亡或超时全部丢失。
  * ========================================================================= */
 /* ==================== v0.28.0：军火超市每日特价 ====================
@@ -942,7 +942,7 @@ UI.raidShop=function(opts){
 
 /* =========================================================================
  * 枪匠台，精密改装（Rakanishu 赫拉迪克方块式改造）
- *   对塔科夫仓库里的旧刷宝体系枪械做「重铸词缀 / 更换弹种 / 升阶改装」，
+ *   对撤离区仓库里的旧刷宝体系枪械做「重铸词缀 / 更换弹种 / 升阶改装」，
  *   用仓库卢布支付；改造后数值由生成管线重算，直接覆盖仓库中的那把枪。
  * ========================================================================= */
 const FORGE_RARITY_MULT = { white:1, green:1.4, blue:2, purple:3.2, orange:5, pearl:7,

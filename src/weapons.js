@@ -596,7 +596,7 @@ function generateWeapon(level, opts={}){
 // 厂商显示中文兵工厂名，具名档用真实枪械型号，不再拼接奇幻词与弹种标签
 function weaponName(man, base, R, element, affixes, model){
   const M0 = MANUFACTURERS[man] || MANUFACTURERS.Jakobs;
-  /* v0.21.6：枪名一律以「型号」为主体（AKM / MP5 / M4A1 …），不再所有枪都叫「步枪」。
+  /* v0.21.6：枪名一律以「型号」为主体（R-47 / S-5 / R-41 …），不再所有枪都叫「步枪」。
    * 具名档仍从 named 池里取标志性型号；其余用型号池。 */
   const mdl = model || gunModelFor(base, man, 0, R.id);
   /* v0.21.6：**存档名一律写全**（厂商 + 型号 + 前后缀 + 弹种），
@@ -701,7 +701,7 @@ function affixText(m){
 
 /* ----------------------------- 战术模式转换器 ----------------------------- */
 /*
- * 把「旧刷宝体系」程序化武器（Weapon 实例）转成 塔科夫 / 吃鸡 模式所用的
+ * 把「旧刷宝体系」程序化武器（Weapon 实例）转成 撤离区 / 吃鸡 模式所用的
  * 轻量枪械对象 {name,cat,dmg,mag,reserve,rpm,spread,range,auto,pellets,...}。
  * 两模式都用自家的射线命中（hit-scan），所以只取数值，不依赖 Weapon.fire。
  * cat 直接沿用 BL 的 type（pistol/smg/...），moveSpread 系统能识别。
@@ -711,7 +711,7 @@ const MODE_RESERVE  = { pistol:4,   smg:3,   shotgun:5,   rifle:3,   sniper:4,  
 
 /* 护甲穿透：越高越能无视高级护甲的减伤。
  * 由枪型 + 稀有度决定——狙击/步枪天然穿甲强，白板手枪打 T8 基本挠痒。
- * 只影响塔科夫 / 吃鸡的护甲结算，不改战役伤害。 */
+ * 只影响撤离区 / 吃鸡的护甲结算，不改战役伤害。 */
 const AP_BY_TYPE = { pistol:0.05, smg:0.09, shotgun:0.03, rifle:0.16, sniper:0.26, launcher:0.30 };
 function gunArmorPen(type, rarityId, ilvl){
   const R = RARITY_BY_ID[rarityId] || RARITIES[0];
@@ -724,7 +724,7 @@ function gunArmorPen(type, rarityId, ilvl){
 function blGunConvert(w){
   const s=w.stats, t=w.type;
   /* v0.36.0（用户反馈「有的改装模块似乎没有加成」）：
-     塔科夫模式吃的是这里输出的**扁平枪械对象**，而旧版只搬了 dmg/rpm/spread/mag，
+     撤离突袭模式吃的是这里输出的**扁平枪械对象**，而旧版只搬了 dmg/rpm/spread/mag，
      精度 / 换弹 / 暴击 / 后坐 / 射程倍率 / 持枪移速 全被丢掉 —— 于是
      「比赛级枪管」「精磨扳机组」「人体工学套件」「扩容供弹组件」这些模块
      装上后读数一点变化都没有。现在把它们全部折算成局内真正会读的字段：
@@ -791,7 +791,7 @@ function blGunGen(ilvl, opts){
   const w=blGunConvert(generateWeapon(ilvl, opts));
   // 精简名缓存（只用于显示，name 保持完整，切回完整模式即可恢复）
   if(typeof CFG!=="undefined" && CFG.display!=="full") w.short=compactGunName(w.name, w);
-  // Scav 等低阶配装可强制指定塔科夫实装型号，避免生成「兵工厂+枪型+词缀」的泛称。
+  // Scav 等低阶配装可强制指定本作实装型号，避免生成「兵工厂+枪型+词缀」的泛称。
   if(opts && opts.model){
     const ammo=(w.element && w.element!=="none" && AMMO_TYPES[w.element]) ? "，"+AMMO_TYPES[w.element].short : "";
     w.name=String(opts.model)+ammo;

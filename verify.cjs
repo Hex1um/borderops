@@ -528,14 +528,15 @@ for (let i = 0; i < 200; i++) {
   if ((g.ilvl || 0) > SCAV_MAX) badIlvl++;
   const ri = RAR.findIndex(r => r.id === g.rarity);
   if (ri > 2) badRarity++;
-  if (!/^(PM|PB|MP-443 Grach|GSh-18|TT|MP-133|TOZ-106|M870|MP-153|KS-23M|PP-91 Kedr|PP-9 Klin|PP-19-01 Vityaz|MP5)(，(PS|T|RIP))?$/.test(g.name)) badName++;
+  const scavNames = Object.values(G('SCAV_GUN_MODELS')).flat();
+  if (!scavNames.some(n => String(g.name||'').indexOf(n) === 0)) badName++;
   const sh = g.element === 'none' ? 'PS' : (ELEMENTS[g.element] || {}).short;
   if (!/^(PS|T|RIP)$/.test(sh)) badAmmo++;
 }
 check('Scav 枪型只在手枪/霰弹/冲锋枪池', badType, 0, 0.001);
 check('Scav 枪械等级封顶 8', badIlvl, 0, 0.001);
 check('Scav 品质封顶蓝品', badRarity, 0, 0.001);
-check('Scav 型号全部为塔科夫低阶实装名', badName, 0, 0.001);
+check('Scav 型号全部来自原创低阶型号池', badName, 0, 0.001);
 check('Scav 弹药只出 PS/T/RIP', badAmmo, 0, 0.001);
 let lootBad = 0;
 for (let i = 0; i < 80; i++) {
@@ -3250,7 +3251,7 @@ const __rr  = fs.readFileSync(path.join(SRC,'raid-render.js'),'utf8');
 const __t54 = JSON.parse(G(`JSON.stringify((()=>{
   try{
     /* 弹片按型号 */
-    const models=["TOZ-106","KS-23M","M870","Saiga-12","MP-133"];
+    const models=["G-106","G-23","G-870","G-12","G-133"];
     const bases=models.map(m=>shotgunModelSpec(m).pellets);
     const label=gunDamageLabel({dmg:7,pellets:8});
     /* 三矩形：三块 + 缝隙透光 */
@@ -3766,6 +3767,66 @@ check('开火音效按枪型分档（6 套物理参数）',
   /const GUNSHOT = \{/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8'))?1:0,1,0.001);
 check('AI 开火也有声音（1.5km 内）',
   /SFX\.shoot\(sndKind, \{far:true\}\)/.test(raidSrc)?1:0,1,0.001);
+
+console.log('');
+console.log('=== 54. v0.37.0（合规改名 / B 站云存档 / 云房间）===');
+
+/* ① 商标合规：不得残留现实厂商商标、他人游戏名、现实装备代号 */
+const __allSrc = fs.readdirSync(SRC).filter(f=>f.endsWith('.js'))
+  .map(f=>fs.readFileSync(path.join(SRC,f),'utf8')).join('\n') + fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+const BANNED = ['塔科夫','TARKOV','Tarkov','卡拉什尼科夫','赫克勒-科赫','FN 赫斯塔尔',
+  '莱茵金属','西格绍尔','北方工业','斯泰尔','以色列武器工业','图拉兵工厂','伊热夫斯克',
+  '莫洛特工厂','捷格加廖夫厂','Altyn','Vulkan','Fort Redut','AK-74','M4A1','HK 416','TOZ-106','Saiga-12'];
+const hitBanned = BANNED.filter(w=>__allSrc.indexOf(w)>=0);
+check('无现实厂商/游戏名残留（'+(hitBanned.join('、')||'全部已原创化')+'）', hitBanned.length, 0, 0.001);
+
+/* ② 枪型号全部是原创编号：P/S/G/R/D/L + 数字或短字母 */
+const __models = JSON.parse(G(`JSON.stringify((()=>{
+  const all=[]; for(const k of Object.keys(WEAPON_TYPES)) all.push(...WEAPON_TYPES[k].models, ...WEAPON_TYPES[k].named);
+  return all;
+})())`));
+const badModel = __models.filter(m=>!/^[PSGRDL]-[A-Z0-9]{1,4}$/.test(m));
+check('全部枪型号符合原创编号规则（P/S/G/R/D/L-####）', badModel.length, 0, 0.001);
+
+/* ③ 霰弹型号必须都在 SHOTGUN_MODELS 里（改名最容易漏这张表 → 弹片数会静默退回默认值） */
+const __sgMiss = JSON.parse(G(`JSON.stringify(
+  WEAPON_TYPES.shotgun.models.filter(m=>!SHOTGUN_MODELS[m])
+)`));
+check('霰弹型号与 SHOTGUN_MODELS 一一对应', __sgMiss.length, 0, 0.001);
+
+/* ④ Scav 池也必须是原创型号 */
+const __scavMiss = JSON.parse(G(`JSON.stringify(
+  Object.values(SCAV_GUN_MODELS).flat().filter(m=>!WEAPON_TYPES[Object.keys(SCAV_GUN_MODELS).find(k=>SCAV_GUN_MODELS[k].includes(m))].models.includes(m))
+)`));
+check('Scav 型号都在对应枪型的型号池内', __scavMiss.length, 0, 0.001);
+
+/* ⑤ Toy SDK：环境识别 + 预览页只读 + 全链路降级 */
+const __toy = fs.readFileSync(path.join(SRC,'toy-sdk.js'),'utf8');
+check('ToySdk 用 __TOY_META__.toy_id 判定环境', /__TOY_META__/.test(__toy) && /toy_id/.test(__toy) ?1:0,1,0.001);
+check('预览页只读（IS_PREVIEW 时不写云存档）',
+  /IS_PREVIEW/.test(__toy) && /state\.write\s*=\s*!IS_PREVIEW/.test(__toy) ?1:0,1,0.001);
+check('云存档写失败只降级不抛错',
+  /catch\(e\)\{[^}]*cloudFail\+\+/.test(__toy) && /debounceSave|setTimeout\(/.test(__toy) ?1:0,1,0.001);
+check('云 KV 只做大厅登记，不承担逐帧同步',
+  /sharedStorage/.test(__toy) && !/setInterval/.test(__toy) ?1:0,1,0.001);
+
+/* ⑥ 存档层：本地优先 + 云镜像 + 按 _ts 采纳 */
+check('RaidStash.save 先写本地再镜像云存档',
+  /const ok=Store\.setJSON\(this\.KEY, d\);[\s\S]{0,220}ToySdk\.save/.test(raidSrc) ?1:0,1,0.001);
+const __adopt = JSON.parse(G(`JSON.stringify((()=>{
+  const keepGet=Store.getJSON, keepSet=Store.setJSON;
+  Store.getJSON=()=>({weapons:[],_ts:100});
+  Store.setJSON=()=>true;
+  const fresh=RaidStash.adoptCloud(JSON.stringify({weapons:[],_ts:200}));
+  const stale=RaidStash.adoptCloud(JSON.stringify({weapons:[],_ts:50}));
+  const junk=RaidStash.adoptCloud('{"nope":1}');
+  Store.getJSON=keepGet; Store.setJSON=keepSet;
+  return { fresh, stale, junk };
+})())`));
+check('云端更新才覆盖本地（新→采纳 / 旧→忽略 / 坏档→拒绝）',
+  (__adopt.fresh===true && __adopt.stale===false && __adopt.junk===false)?1:0,1,0.001);
+check('index.html 在 store.js 之后加载 toy-sdk.js',
+  /store\.js[^\n]*\n[^\n]*toy-sdk\.js/.test(fs.readFileSync(path.join(ROOT,'index.html'),'utf8')) ?1:0,1,0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

@@ -530,13 +530,51 @@ const _httpStart = Net.startRoom.bind(Net);
 const _httpLeave = Net.leave.bind(Net);
 const _httpPoll = Net.pollRoom.bind(Net);
 
+/* =========================================================================
+ * v0.37.0：Toy 云房间（大厅登记，不做逐帧同步）
+ * -------------------------------------------------------------------------
+ * 用户要求「尝试调用 B 站服务器」。可行的部分与不可行的部分要分开说：
+ *   可行：云 KV（sharedStorage）写一条房间记录 —— 房间码、房主/客户端、
+ *         开始信号、版本号。让「有谁在开房」这种大厅级信息不依赖 P2P 信令。
+ *   不可行：把 4 人 × 15Hz 的快照与事件回执塞进云 KV。平台对单个 Toy 限流
+ *         约 50 QPS 且是全站共用，60+ QPS 必然被限，表现为大面积丢帧。
+ *         所以真正的游戏状态同步仍然走 P2P；云 KV 只解决「找房/登记」。
+ * 全部 best-effort：写失败、被限流、预览页只读都只是没有大厅信息，不影响联机。
+ * ========================================================================= */
+const ToyRelay = {
+  lastCode:null,
+  announce(res, role){
+    try{
+      if(!res || !res.ok || !res.code) return;
+      if(typeof ToySdk==="undefined" || !ToySdk.inToy) return;
+      if(!ToySdk.room.available()) return;
+      this.lastCode=res.code;
+      const payload={ role:role, host:role==="host", peers:1, started:false,
+        ver:(typeof CFG!=="undefined"&&CFG.version)||"" };
+      if(role==="host" && typeof res.seed==="number") payload.seed=res.seed;
+      ToySdk.room.put(res.code, payload);
+      if(typeof Net!=="undefined" && Net._toast) Net._toast("已登记到 B 站云房间："+res.code);
+    }catch(e){ /* 云房间是附加信息，失败不阻断联机 */ }
+  },
+  async lookup(code){
+    try{
+      if(typeof ToySdk==="undefined" || !ToySdk.room.available()) return null;
+      return await ToySdk.room.get(code);
+    }catch(e){ return null; }
+  },
+};
+
 Net.create = async function(name){
-  if(await NetP2P.serverAvailable()) return _httpCreate(name);
-  return NetP2P.create(name);
+  const server = await NetP2P.serverAvailable();
+  const r = server ? await _httpCreate(name) : await NetP2P.create(name);
+  ToyRelay.announce(r, "host");
+  return r;
 };
 Net.join = async function(code,name){
-  if(await NetP2P.serverAvailable()) return _httpJoin(code,name);
-  return NetP2P.join(code,name);
+  const server = await NetP2P.serverAvailable();
+  const r = server ? await _httpJoin(code,name) : await NetP2P.join(code,name);
+  ToyRelay.announce(r, "client");
+  return r;
 };
 Net.startRoom = async function(){
   if(Net.transport==="p2p") return NetP2P.startRoom();

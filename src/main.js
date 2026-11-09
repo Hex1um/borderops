@@ -52,7 +52,7 @@ class Game {
     const diag=Math.hypot(w,h);
     this.zoom=M.clamp(diag/920, 1.0, 1.4);
     if(this.mode==="dust2") this.zoom=0.8;   // 沙二固定拉远镜头
-    if(this.mode==="raid") this.zoom=0.92;   // 塔科夫模式略拉远，便于观察
+    if(this.mode==="raid") this.zoom=0.92;   // 撤离突袭模式略拉远，便于观察
     if(this.mode==="br")   this.zoom=0.82;   // 大逃杀略拉远，便于观察缩圈
   }
 
@@ -172,7 +172,7 @@ class Game {
     this._showDustHUD();
   }
 
-  /* ----------------------------- 塔科夫模式（撤离突袭） ----------------------------- */
+  /* ----------------------------- 撤离突袭模式（撤离突袭） ----------------------------- */
   startRaid(opts){
     RNG.setSeed((Date.now()^(Math.random()*1e9))>>>0);
     this.enemies=[]; this.projectiles=[]; this.allies=[]; this.loot=[]; this.particles=[]; this.floats=[];
@@ -312,7 +312,7 @@ class Game {
   pause(){
     if(this.state==="playing"){
       this.state="paused"; Input.resetStick();
-      // 塔科夫商店/物品栏是自绘 DOM 弹层；暂停面板会替换它们，必须同步清掉逻辑状态，
+      // 撤离区商店/物品栏是自绘 DOM 弹层；暂停面板会替换它们，必须同步清掉逻辑状态，
       // 否则 shopOpen 残留会让 E 键永久失效。
       if(this.mode==="raid" && typeof Raid!=="undefined" && Raid.resetUiState) Raid.resetUiState();
       this.hud.classList.add("hidden");
@@ -578,7 +578,7 @@ class Game {
 
   /* ----------------------------- HUD ----------------------------- */
   updateHUD(){
-    if(this.mode==="dust2"||this.mode==="raid"||this.mode==="br") return;      // 沙二/塔科夫/大逃杀自带 canvas HUD
+    if(this.mode==="dust2"||this.mode==="raid"||this.mode==="br") return;      // 沙二/撤离区/大逃杀自带 canvas HUD
     if(this.state==="title"||!this.player) return;
     const p=this.player, w=p.activeWeapon;
     const hpF=document.getElementById('hp-fill'), hpT=document.getElementById('hp-text');
@@ -611,3 +611,14 @@ class Game {
 // 启动
 const game = new Game();
 window.game = game;
+
+/* v0.37.0：B 站 Toy 环境下拉一次云存档（不阻塞启动，失败静默）。
+   采纳成功且当前停在标题/配装页时重渲染一次，玩家能直接看到云端进度。 */
+try{
+  if(typeof ToySdk!=="undefined" && ToySdk.inToy && ToySdk.probe().read){
+    ToySdk.loadCloud().then(raw=>{
+      if(!raw) return;
+      if(RaidStash.adoptCloud(raw) && typeof UI!=="undefined" && UI.title) UI.title();
+    }).catch(()=>{});
+  }
+}catch(e){ /* 云存档不可用时按本地存档继续 */ }

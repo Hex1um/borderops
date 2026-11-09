@@ -625,7 +625,7 @@ UI.raidForge=function(opts){
       <div class="subtitle">GUNSMITH · 用卢布重调改装词条，模块（弹种 / 膛压 / 工艺）装进改装槽即可换弹 / 提等级 / 加参数（部件只能实物换装）</div>
       ${forgeTabsHTML()}
       <div class="shop-bar">
-        <div class="shop-desc">改造对象是塔科夫仓库中的枪械；改造后伤害、射速、弹匣、估值全部重算。改造不可撤销，谨慎升阶。<b style="color:#ff9a3a">配件槽位不支持重铸</b>——好配件只能从箱子里搜，或自己投料合成。</div>
+        <div class="shop-desc">改造对象是撤离区仓库中的枪械；改造后伤害、射速、弹匣、估值全部重算。改造不可撤销，谨慎升阶。<b style="color:#ff9a3a">配件槽位不支持重铸</b>——好配件只能从箱子里搜，或自己投料合成。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-forge-back">${backLabel}</button>
       </div>

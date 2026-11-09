@@ -154,7 +154,7 @@ const Raid = {
     } else {
       this.inv.keys=this.stash.keys.splice(0, RAID_INV_CAP.keys);
     }
-    // 塔科夫式保险：为携带装备投保，阵亡后有几率退回
+    // 撤离区式保险：为携带装备投保，阵亡后有几率退回
     const baseVal=this.carried.weapons.reduce((s,w)=>s+(w.value||0),0)
       +(this.carried.armor?(this.carried.armor.value||0):0)
       +(this.carried.helmet?(this.carried.helmet.value||0):0)
@@ -379,7 +379,7 @@ const Raid = {
           helmetArmor=helmetTier?RAID_HELMETS[helmetTier].maxArmor:0;
           helmetDr=helmetTier?RAID_HELMETS[helmetTier].dr:0;
         } else {
-          // Scav：塔科夫拾荒者只拿低阶武器。玩家携带再强也不会抬高他们的枪械等级，
+          // Scav：撤离区拾荒者只拿低阶武器。玩家携带再强也不会抬高他们的枪械等级，
           // 只会让他们更常带枪（0.72 → 0.90），不会变成高穿深 PMC。
           const gid=RNG.pick(["pistol","shotgun","smg","pistol"]);
           gun=RNG.chance(0.72+Math.min(0.18,gs*0.10)) ? raidScavGun(RNG.ri(2,7),{type:gid}) : null;
