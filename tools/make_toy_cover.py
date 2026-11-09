@@ -15,7 +15,9 @@ make_toy_cover.py — 生成 B 站 Toy 的封面（16:9）与作品图标（1:1�
 import math, random, sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-W, H = 1920, 1080
+W = int(__import__('os').environ.get('COVER_W', 1920))
+H = int(__import__('os').environ.get('COVER_H', 1080))
+RATIO43 = abs(W/H - 4/3) < 0.02
 random.seed(20261109)
 
 TIERS = ["#867b61", "#4c9d2e", "#559edf", "#bc94e9", "#ef93d6",
@@ -268,8 +270,9 @@ draw.text((80, H - 66), "borderops  ·  webaudio  ·  zero build",
           font=font(F_MONO, 22), fill=(96, 114, 130))
 
 cover = base.convert("RGB")
-cover.save("dist/borderops-cover-1920x1080.png", quality=95)
-print("cover 1920x1080 ok", round(len(open("dist/borderops-cover-1920x1080.png", "rb").read()) / 1024, 1), "KB")
+COVER_OUT = "dist/borderops-cover-%dx%d.png" % (W, H)
+cover.save(COVER_OUT, quality=95)
+print(COVER_OUT, "ok", round(len(open(COVER_OUT, "rb").read()) / 1024, 1), "KB")
 
 # ---------------------------------------------------------------- 图标 1:1
 # 图标在列表里只有 64~96px，文字必然糊 —— 只留图形：六边形掩体 + 准星。
