@@ -294,45 +294,123 @@ const SFX = (function(){
     sweep(t0, freq, freq*0.55, dur||0.035, type||"square", gain||0.03);
   }
 
-  /* ---- 开火：按枪型分层 ---- */
-  const SHOT = {
-    pistol:  { body:[190,52,0.13], grit:[1500,0.9,0.16], crack:[4200,0.020,0.22], tail:[0.10,0.10], thump:0.55 },
-    smg:     { body:[165,48,0.09], grit:[1900,1.0,0.13], crack:[5200,0.016,0.19], tail:[0.07,0.07], thump:0.45 },
-    rifle:   { body:[150,42,0.15], grit:[1200,0.8,0.20], crack:[3800,0.024,0.26], tail:[0.13,0.12], thump:0.70 },
-    shotgun: { body:[110,34,0.24], grit:[760,0.7,0.30],  crack:[3000,0.030,0.30], tail:[0.22,0.16], thump:0.95 },
-    sniper:  { body:[125,36,0.20], grit:[1050,0.9,0.22], crack:[4600,0.026,0.30], tail:[0.24,0.18], thump:0.85 },
-    launcher:{ body:[85,28,0.28],  grit:[600,0.6,0.26],  crack:[2200,0.034,0.24], tail:[0.20,0.14], thump:1.0  },
+  /* =========================================================================
+   * v0.36.2：枪声重做 —— 目标是「像真枪」，不是「像合成器」
+   * -------------------------------------------------------------------------
+   * 上一版错在拿**正弦扫频**当枪身：真实枪声里几乎没有纯音成分，那是
+   * 爆轰在管内的宽带噪声 + 出口的冲击波。听感上就变成「电子枪/激光」。
+   *
+   * 真实枪声可以拆成四段（顺序即时间顺序）：
+   *   ① 冲击波（crack）   1~3ms 起音、6~20ms 衰减，3~6kHz 高通 —— 耳朵先听到的「啪」
+   *   ② 炮口爆音（blast） 30~90ms，700~1500Hz 带通 + 轻微削波 —— 枪声的「实体感」
+   *   ③ 低频推力（body）  60~160ms，低通扫频 200→60Hz 的**噪声**（不是正弦）—— 胸腔的「咚」
+   *   ④ 尾音（tail）      100~350ms，房间/地形反射，低通噪声随距离变长变闷
+   * 另加：自动武器在 +40ms 处的机件「咔嗒」、每发 ±6% 抖动、全链路过压缩器。
+   * 远处（AI 开火）走单独的低通 + 更长的尾音 —— 距离感主要来自高频衰减，不是音量。
+   * ========================================================================= */
+
+  /* 单层噪声，带「快起音 + 两段衰减」包络与可选扫频。
+   * opts: { attack, mid, midGain, freqEnd, sat, bus } —— 全部可选。 */
+  function burst(t0, dur, type, freq, q, gain, opts){
+    const c=ctx; if(!c) return;
+    opts=opts||{};
+    const src=c.createBufferSource();
+    src.buffer=noiseBuf; src.loop=true;
+    src.playbackRate.value=0.8+Math.random()*0.4;      // 每发纹理不同，连发不「机关枪复读」
+    const f=c.createBiquadFilter();
+    f.type=type;
+    f.frequency.setValueAtTime(Math.max(40,freq), t0);
+    if(opts.freqEnd && opts.freqEnd>0)
+      f.frequency.exponentialRampToValueAtTime(Math.max(30,opts.freqEnd), t0+dur*0.85);
+    f.Q.value=q;
+    const g=c.createGain();
+    const atk=opts.attack||0.0018;                     // 真实起音 1~3ms，慢一点就成了「吹气」
+    const peak=Math.max(0.0003,gain);
+    g.gain.setValueAtTime(0.00001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0+atk);
+    const mid=opts.mid||0.30;
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0004, peak*(opts.midGain||0.22)), t0+dur*mid);
+    g.gain.exponentialRampToValueAtTime(0.00001, t0+dur);
+    let node=f;
+    if(opts.sat && c.createWaveShaper){
+      const ws=c.createWaveShaper();
+      const n=1024, curve=new Float32Array(n), k=1+opts.sat*5;
+      for(let i=0;i<n;i++){ const x=i*2/n-1; curve[i]=Math.tanh(x*k)/Math.tanh(k); }
+      ws.curve=curve; ws.oversample="2x";
+      f.connect(ws); node=ws;
+    }
+    src.connect(f); node.connect(g); g.connect(opts.bus||comp);
+    src.start(t0); src.stop(t0+dur+0.02);
+  }
+
+  /* 每次开火一条临时总线：远处直接挂低通（高频先衰减），近处原样直连。 */
+  function shotBus(far){
+    const c=ctx;
+    if(!far) return comp;
+    const g=c.createGain(); g.gain.value=1;
+    const lp=c.createBiquadFilter();
+    lp.type="lowpass"; lp.frequency.value=1500; lp.Q.value=0.6;
+    g.connect(lp); lp.connect(comp);
+    return g;
+  }
+
+  /* ---- 开火：六种枪型各自的「物理参数」，全部由口径/装药量推出来 ---- */
+  const GUNSHOT = {
+    /*                 crack(Hz,秒,增益)     blast(Hz,Q,秒,增益)    body(起,止,秒,增益)   tail(秒,增益)  sub */
+    pistol:  { crack:[4600,0.016,0.30], blast:[1250,1.0,0.040,0.20], body:[210,80,0.075,0.55], tail:[0.11,0.09], sub:0.20 },
+    smg:     { crack:[5200,0.013,0.26], blast:[1600,1.0,0.032,0.17], body:[230,90,0.060,0.42], tail:[0.08,0.07], sub:0.15 },
+    rifle:   { crack:[3800,0.020,0.36], blast:[1000,0.9,0.048,0.26], body:[190,72,0.100,0.70], tail:[0.17,0.13], sub:0.28 },
+    shotgun: { crack:[2600,0.024,0.32], blast:[720,0.8,0.075,0.33], body:[150,55,0.145,0.90], tail:[0.26,0.18], sub:0.40 },
+    sniper:  { crack:[5400,0.022,0.40], blast:[1450,1.1,0.042,0.24], body:[175,62,0.120,0.78], tail:[0.30,0.19], sub:0.32 },
+    launcher:{ crack:[2000,0.030,0.26], blast:[560,0.7,0.100,0.32], body:[120,46,0.190,0.95], tail:[0.32,0.20], sub:0.46 },
   };
   function shotOf(kind){
     const k=String(kind||"").toLowerCase();
-    if(k==="shotgun"||k==="霰弹枪"||k==="霰弹") return SHOT.shotgun;
-    if(k==="sniper"||k==="狙击枪"||k==="狙击") return SHOT.sniper;
-    if(k==="rifle"||k==="步枪"||k==="lmg"||k==="机枪") return SHOT.rifle;
-    if(k==="smg"||k==="冲锋枪") return SHOT.smg;
-    if(k==="launcher"||k==="火箭筒"||k==="榴弹发射器") return SHOT.launcher;
-    return SHOT.pistol;
+    if(k==="shotgun"||k==="霰弹枪"||k==="霰弹") return GUNSHOT.shotgun;
+    if(k==="sniper"||k==="狙击枪"||k==="狙击") return GUNSHOT.sniper;
+    if(k==="rifle"||k==="步枪"||k==="lmg"||k==="机枪") return GUNSHOT.rifle;
+    if(k==="smg"||k==="冲锋枪") return GUNSHOT.smg;
+    if(k==="launcher"||k==="火箭筒"||k==="榴弹发射器") return GUNSHOT.launcher;
+    return GUNSHOT.pistol;
   }
   return {
     /* 保留旧 API 的默认参数，同时支持 shoot("rifle") / shoot({kind, far}) */
     shoot(kind, opts){
       const c=ensure(); if(!c || muted) return;
-      if(voices>28) return;                       // 极端连发时丢弃多余声部，避免卡顿
+      if(voices>26) return;                       // 极端连发时丢弃多余声部，避免卡顿
       const p=shotOf(typeof kind==="object"&&kind?kind.kind:kind);
       const far=!!(opts&&opts.far);
       const t=c.currentTime+0.001;
-      const j=0.94+Math.random()*0.12;            // 每发音高抖动
-      const g=far?0.55:1.0;                        // 远处（AI）听感略轻
+      const j=0.94+Math.random()*0.12;            // 每发音高/频谱抖动
+      const bus=shotBus(far);
       voices++;
-      const durAll=Math.max(p.tail[0],p.grit[0]?0.2:0.2)+p.body[2];
-      setTimeout(()=>{ voices=Math.max(0,voices-1); }, Math.max(120, durAll*1000));
-      // 1) 瞬态
-      noise(t, p.crack[1], "highpass", p.crack[0]*j, 0.7, p.crack[2]*g, 0, null);
-      // 2) 枪身低频
-      sweep(t, p.body[0]*j, p.body[1], p.body[2], "sine", 0.32*p.thump*g);
-      // 3) 中频颗粒（带轻微削波 → 厚）
-      noise(t+0.002, 0.055+0.02*Math.random(), "bandpass", p.grit[0]*j, p.grit[1], p.grit[2]*g, 0.8, null);
-      // 4) 尾音
-      noise(t+0.008, p.tail[0], "lowpass", 1400*Math.max(0.6,j), 0.5, p.tail[1]*0.55*g, 0, null);
+      const durAll=Math.max(p.tail[0], p.body[2], p.blast[2])*1000;
+      setTimeout(()=>{ voices=Math.max(0,voices-1); }, Math.max(160, durAll));
+      /* 远处：冲击波与爆音都被空气吃掉大半，只剩低频与长尾 —— 这是「距离感」的来源 */
+      const airK = far ? 0.45 : 1.0;
+      const tailK = far ? 1.5 : 1.0;
+      // ① 冲击波：高通噪声，极短
+      burst(t, p.crack[1], "highpass", p.crack[0]*j, 0.7, p.crack[2]*airK,
+        { attack:0.0012, mid:0.25, midGain:0.12, bus });
+      // ② 炮口爆音：带通 + 轻微削波，枪声的「实体」
+      burst(t+0.001, p.blast[2], "bandpass", p.blast[0]*j, p.blast[1], p.blast[3]*airK,
+        { attack:0.0016, mid:0.35, midGain:0.20, sat:0.7, bus });
+      // ③ 低频推力：低通**噪声**扫频（不是正弦），胸腔那一下
+      burst(t+0.002, p.body[2], "lowpass", p.body[0]*j, 0.9, p.body[3],
+        { attack:0.0022, mid:0.45, midGain:0.30, freqEnd:p.body[1], sat:0.35, bus });
+      // ③b 一点点次低频正弦（60~100Hz），只补「推力」不构成音高
+      sweep(t+0.001, p.body[0]*0.45, p.body[1]*0.5, p.body[2]*0.55, "sine", p.sub*(far?0.55:0.9));
+      // ④ 尾音：房间 / 地形反射
+      burst(t+0.010, p.tail[0]*tailK, "lowpass", (far?700:1300)*j, 0.5, p.tail[1]*(far?1.15:1),
+        { attack:0.012, mid:0.4, midGain:0.45, bus });
+      /* ⑤ 机件声：自动武器在 +38~52ms 有一个很轻的「咔嗒」，
+            单发武器没有 —— 这一层是「真枪」与「合成枪」最容易分辨的细节。 */
+      const auto = (p===GUNSHOT.smg || p===GUNSHOT.rifle);
+      if(auto && !far){
+        const dt=0.038+Math.random()*0.014;
+        burst(t+dt, 0.014, "bandpass", 2600+Math.random()*600, 2.2, 0.035,
+          { attack:0.0012, mid:0.3, midGain:0.15, bus });
+      }
     },
     /* 命中：打在护甲上是金属声，打在血肉上是闷响 */
     hit(metal){
@@ -361,9 +439,11 @@ const SFX = (function(){
     boom(){
       const c=ensure(); if(!c || muted) return;
       const t=c.currentTime+0.001;
-      sweep(t,110,26,0.42,"sine",0.34);
-      noise(t,0.34,"lowpass",620,0.6,0.30,0.7,null);
-      noise(t+0.01,0.10,"highpass",2400,0.8,0.14,0, null);
+      /* v0.36.2：爆炸也按「冲击 → 低频 → 碎片/回响」三段做，比单根正弦扫频真实得多 */
+      burst(t, 0.55, "lowpass", 340, 0.9, 0.34, { attack:0.006, mid:0.42, midGain:0.34, freqEnd:90, sat:0.9 });
+      burst(t+0.006, 0.22, "bandpass", 950, 0.8, 0.15, { attack:0.004, mid:0.3, midGain:0.2, sat:0.6 });
+      sweep(t, 92, 26, 0.42, "sine", 0.22);
+      burst(t+0.05, 0.55, "lowpass", 760, 0.4, 0.10, { attack:0.02, mid:0.5, midGain:0.4 });
     },
     levelup(){
       const c=ensure(); if(!c || muted) return;

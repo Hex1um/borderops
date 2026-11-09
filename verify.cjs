@@ -3761,9 +3761,9 @@ check('撤离费随装备继续上升（9 万 > 3 万）', __fee36.v90k>__fee36.
 check('音效分层合成（噪声 + 压缩器 + 波形整形）',
   /createDynamicsCompressor/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8')) &&
   /createWaveShaper/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8'))?1:0,1,0.001);
-check('开火音效按枪型分档（6 套参数）',
+check('开火音效按枪型分档（6 套物理参数）',
   G('Object.keys((()=>{const o={};for(const k of ["pistol","smg","rifle","shotgun","sniper","launcher"])o[k]=1;return o;})()).length')===6 &&
-  /const SHOT = \{/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8'))?1:0,1,0.001);
+  /const GUNSHOT = \{/.test(fs.readFileSync(path.join(SRC,'util.js'),'utf8'))?1:0,1,0.001);
 check('AI 开火也有声音（1.5km 内）',
   /SFX\.shoot\(sndKind, \{far:true\}\)/.test(raidSrc)?1:0,1,0.001);
 
