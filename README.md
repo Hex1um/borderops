@@ -63,14 +63,15 @@ python -m http.server 8132
 ### 发布到 B 站 Toy
 
 ```sh
-node tools/build_toy.cjs        # 生成 dist/toy/（纯静态运行时 41 个文件 / 约 1.6MB）
+node tools/build_toy.cjs        # 生成 dist/toy/ + dist/borderops-toy-v<版本>.zip
 python tools/make_toy_cover.py  # 生成封面 1920×1080 + 图标 512×512
 ```
 
-包成 zip 时注意两条平台硬规则：**压缩包根目录必须是 index.html**（不是外层文件夹），
-**入口 index.html ≤1MB、整包 ≤50MB**。Toy 是纯静态托管，不需要 `server.js`；
-联机会自动退到 WebRTC P2P（依赖 PeerJS 公共信令，连接失败不影响单机）。
-打包脚本会自动做「入口引用的脚本是否都在包里」的自检，避免上传后白屏。
+`build_toy.cjs` **自己写 zip**（Node 原生 zlib，零依赖），并且打包后立刻解析产物自检：
+**根目录必须有 index.html**（不能多套一层文件夹，这是「上传后打不开」的头号原因）、
+入口 ≤1MB、入口引用的每个脚本都在包里。平台整包上限 50MB（本包约 550KB）。
+Toy 是纯静态托管，不需要 `server.js`；联机会自动退到 WebRTC P2P
+（依赖 PeerJS 公共信令，连接失败不影响单机）。
 
 ## 技术约束（给后续维护者）
 
