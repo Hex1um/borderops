@@ -104,5 +104,31 @@ else ok("README.md 无过时 CI 说明");
 if (!fs.existsSync(path.join(ROOT, "LICENSE"))) fail("缺少 LICENSE 文件");
 else ok("LICENSE 存在");
 
+/* 12) README 的「目录结构」表不能指向不存在的文件（v0.36.3）
+ * 之前 README 写「raid 拆成 7 片 / 单片 ≤1621 行」，实际早就是 9 片 1999 行 —— 文档漂移没人发现。
+ * 这里做**存在性**校验（不判行数，行数由 verify 的护栏管）：
+ * 表格里每一个 `反引号路径`，只要看起来像路径（含 / 或以常见扩展名结尾）就必须真的存在；
+ * 带通配符 / 形如 `src/raid-*.js` 「一片指代多文件」的写法自动跳过。
+ * 另外给一条软校验：README 里声明的 raid 分片数量必须与实际文件数一致。 */
+{
+  const sec = readme.split("## 目录结构")[1] || "";
+  const table = sec.split(/\n##\s/)[0];
+  /* 运行期产物目录是 gitignore 的（testshots/ 截图、dist/ 打包），
+     文档里提它们是合理的，所以放行这几个前缀。 */
+  const RUNTIME_ONLY = ["testshots/", "dist/", "node_modules/", "shots/"];
+  const paths = [...table.matchAll(/`([^`\n]+)`/g)].map(x => x[1].trim())
+    .filter(p => /^[\w./-]+$/.test(p) && !p.includes("*"))
+    .filter(p => p.includes("/") || /\.(js|json|html|css|svg|md|yml|py|cjs)$/.test(p))
+    .filter(p => !RUNTIME_ONLY.some(r => p.startsWith(r)));
+  const missing = paths.filter(p => !fs.existsSync(path.join(ROOT, p)));
+  if (missing.length) fail(`README 目录结构表指向不存在的路径：${missing.join("、")}`);
+  else ok(`README 目录结构表 ${paths.length} 条路径均存在`);
+
+  const claim = readme.match(/拆成\s*(\d+)\s*片/);
+  const real = fs.readdirSync(path.join(ROOT, "src")).filter(f => /^raid-.*\.js$/.test(f)).length;
+  if (claim && +claim[1] !== real) fail(`README 写「拆成 ${claim[1]} 片」，实际 src 下有 ${real} 个 raid-*.js`);
+  else if (claim) ok(`README 分片数与实际一致（${real} 片）`);
+}
+
 if (failed) { console.error("\n检查未通过。请同步 package.json / CFG.version / index.html 的 ?v= 与文档版本引用。"); process.exit(1); }
 console.log("\n全部通过。");

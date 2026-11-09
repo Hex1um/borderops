@@ -41,10 +41,20 @@
 # 1. 先同步远端（用户要求：每次对话开头检查是否有新提交）
 git pull --ff-only
 
-# 2. 改动只在 main 上做，改完即发布（用户长期授权）
-node check_version.js && node verify.cjs && npx eslint src/
+# 2. 改动只在 main 上做
+#    升版用一条命令，别手工同步四处（会漏）
+npm run bump -- 0.36.4        # package.json / CFG.version / index.html ?v= / WIKI，自动跑 check 自证
+
+# 3. 三连门禁 —— 三项都必须过，缺一不算完成
+npm run check                 # 版本一致性 + 脚本清单 + README 目录表
+npm run verify                # 1100+ 条逻辑回归
+npm run lint                  # ESLint，0 error 才算过
+
+# 4. 改完即发布（用户长期授权，不必再问）
 git add -A && git commit -m "..." && git push origin main
 ```
+
+**硬约定**：任何一次「改代码」结束时，`check` / `verify` / `lint` 必须三项全绿；只跑其中一项就汇报「完成」视为未完成。
 
 `main` 推上去后 GitHub Pages 会自动构建，**不需要**任何额外发布动作。
 
@@ -57,6 +67,7 @@ git add -A && git commit -m "..." && git push origin main
 | `npm run lint` | ESLint | 每次改完必跑（0 error 才算过） |
 | `tools/build_toy.cjs` | 打包 B 站 Toy zip | **仅在明确要更新 B 站版时** |
 | `tools/make_toy_cover.py` | 生成 Toy 封面/图标 | 同上 |
+| `npm run bump -- x.y.z` | 一条命令升版，自动同步四处版本号并自证 | 每次升版 |
 
 ## 硬性工程约束（改了会直接挂 CI）
 
