@@ -245,7 +245,7 @@ canvas#game.locked{cursor:none;}
  * 新增：模式选择 / 装备库分区 / 沙二购买菜单
  * ========================================================================= */
 /* =========================================================================
- * 标题页：撤离突袭主模式 Hero + 其他模式折叠
+ * 标题页：塔科夫主模式 Hero + 其他模式折叠
  * ========================================================================= */
 .mode-hero{position:relative;margin:2px 0 14px;padding:20px 22px 20px;text-align:left;cursor:pointer;
   border:3px solid var(--ink);border-radius:12px;overflow:hidden;
@@ -493,7 +493,7 @@ body.mode-br .touch-btn.ability{display:none !important;}
  *   解决竖屏上按钮互相压叠、并压住 canvas HUD 的问题：
  *   右列 fire / 医疗 / AUTO 纵向排列，中列 reload / switch，左上角新增物品栏
  * ========================================================================= */
-/* 撤离突袭：星键（搜索/交互）与加号键（医疗包扎）彻底分开，各占一格 */
+/* 塔科夫：星键（搜索/交互）与加号键（医疗包扎）彻底分开，各占一格 */
 body.mode-raid .touch-btn.ability{
   background:linear-gradient(#b9cede,#7b9ab5);color:#1a2730;
   box-shadow:0 6px 18px #7b9ab577,0 4px 10px #000a,inset 0 2px 0 #fff8;}
@@ -546,7 +546,7 @@ body.mode-br   .touch-btn.use{display:none !important;}
 body.inv-open .touch-btn:not(.inv){display:none !important;}
 body.inv-open .touch-btn.inv{right:70px;top:calc(env(safe-area-inset-top,0px) + 11px);}
 
-/* 撤离突袭星键：恢复显示（兼作搜索/交互），放中列上方，避开右列医疗键 */
+/* 塔科夫星键：恢复显示（兼作搜索/交互），放中列上方，避开右列医疗键 */
 @media (pointer: coarse){
   body.mode-raid .touch-btn.ability{right:110px;bottom:calc(env(safe-area-inset-bottom,0px) + 158px);}
 }
@@ -688,7 +688,7 @@ button:disabled:hover{filter:grayscale(.35);}
   color:#0b0f14;background:#7fd0ff;vertical-align:middle;}
 .auc-val .stk{background:#22303a;color:#9fe3ff;}
 
-/* ---- 撤离突袭模式介绍折叠 ---- */
+/* ---- 塔科夫模式介绍折叠 ---- */
 .tarkov-intro{margin:0 0 14px;border:1px solid #1d2a33;border-radius:10px;background:#0d141a;overflow:hidden;}
 .tarkov-intro>summary{cursor:pointer;list-style:none;padding:10px 14px;font-weight:700;color:#cdd7e2;
   background:linear-gradient(90deg,#16222c,#0f181f);user-select:none;display:flex;align-items:center;gap:8px;}

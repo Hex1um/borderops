@@ -4,9 +4,9 @@
  * 共享同一全局词法作用域。verify 的 raidSrc 会聚合全部 raid-*.js 做源码断言。
  * ========================================================================= */
 /* =========================================================================
- * raid.js — 撤离突袭模式（Escape from  风格离线突袭）
+ * raid.js — 塔科夫模式（Escape from Tarkov 风格离线突袭）
  *
- * 参考《逃离撤离区》玩法：
+ * 参考《逃离塔科夫》玩法：
  *   · 硬核撤离射击：地图「海关流域」（工业区 + 北境密林 + 中央河谷 + 铁路枢纽），
  *     PMC 与 Scav 同场（本页用 1 名玩家 + 43 名 AI 模拟满员服务器：30 名普通 AI + 3 名 Boss + 10 名 POI 精英）；河流可涉水缓行，桥面免减速
  *   · 开局可携带仓库里的装备，也可真空手进场（只带 1 卷绷带，进图翻箱捡枪）
@@ -51,7 +51,7 @@ function raidArmorType(o){
   return "flesh";
 }
 
-// 房间沿用撤离区「海关」地图风格的命名与相对位置
+// 房间沿用塔科夫「海关」地图风格的命名与相对位置
 const RAID_ROOMS = [
   { id:"dorm",   name:"宿舍楼",       x:140,  y:170,  w:340, h:250, tint:"#3a3550" },
   { id:"west",   name:"西侧检查站",   x:140,  y:660,  w:300, h:260, tint:"#3a3030" },
@@ -205,7 +205,7 @@ const RAID_BIOMES = {
   ],
 };
 
-// 撤离点规则（撤离区式：条件撤离 / 付费撤离）
+// 撤离点规则（塔科夫式：条件撤离 / 付费撤离）
 // 付费撤离不再固定 4000~6000 的高价，改为「基础价 + 携带装备估值 × 费率」，
 //          轻装跑刀几乎白坐，重装才多付一点（见 raidExtractFee）。
 const RAID_EXTRACT_RULES = {
@@ -254,6 +254,24 @@ function raidExtractFeeMult(carryVal){
  * 结果：裸装仍是 ₽90 量级，带 3 万装备 ≈₽1,040（原 ₽420），带 9 万 ≈₽3,760（原 ₽1,350）。 */
 const RAID_FEE_GEAR_K = 2.6;     // 装备估值计价放大系数
 const RAID_FEE_CAP_K  = 2.6;     // 车费天花板倍数
+/* v0.36.1（用户定档）：敌人身上的装备掉落概率按品阶（tier 1~12）取。
+ *   T5 = 10%，之后**每高一档 ×0.5**；往前反推同样 ×2（T4 20%、T3 40%、T2 80%、T1 封顶 100%）。
+ *   这样「T5 装备」成为分水岭：低档尸体照旧能翻到东西，高档只留极小概率，
+ *   主要靠箱子 / 黑市 / 部件补偿。枪按品质档（1~12）、护甲 / 头盔按 tier 共用这一张表。
+ *   纯函数、不碰 RNG —— 联机两端与 verify 复算结果一致。 */
+const RAID_GEAR_DROP_ANCHOR = 5;     // 锚点档位
+const RAID_GEAR_DROP_P      = 0.10;  // 锚点档掉率
+function raidGearDropChance(tier){
+  const t=M.clamp(Math.round(Number(tier)||1), 1, 12);
+  return M.clamp(RAID_GEAR_DROP_P * Math.pow(2, RAID_GEAR_DROP_ANCHOR - t), 0.004, 1);
+}
+
+function raidExtractFee(zone, carryVal){
+  if(!zone || !zone.cost) return 0;
+  const v=Math.max(0, carryVal||0);
+  const base = zone.cost*0.28 + v*(zone.feeRate||0.018)*RAID_FEE_GEAR_K;
+  return Math.round(M.clamp(base*raidExtractFeeMult(v), 60, zone.cost*RAID_FEE_CAP_K)/10)*10;
+}
 /* 注：raidCarriedGearValue（撤离费按携带装备估值，#7）定义在 raid-core3.js 顶部
    —— 那里有富余行数，避免 raid-data.js 越过 2000 行分片上限。 */
 
@@ -335,7 +353,7 @@ const RAID_INDOOR = [
 const RAID_ROUND_KINDS = { bush:1, rock:1, tree:1, scrap:1 };
 
 /* ----------------------------- 枪械 / 护甲 ----------------------------- */
-// 撤离突袭模式已全面改用「旧刷宝体系」程序化枪械（blGunGen / blGunConvert），
+// 塔科夫模式已全面改用「旧刷宝体系」程序化枪械（blGunGen / blGunConvert），
 // 此处只保留 AI / 掉落 / 超市铺货所用的枪型池
 const RAID_GUN_TYPES = ["pistol","smg","shotgun","rifle","sniper"];
 
@@ -409,7 +427,7 @@ const RAID_AMMO_STARTER = {     // 新档 / 旧档迁移时发的起步弹药（
 };
 
 /* ----------------------------- 9 阶统一品级 -----------------------------
- * 全场战利品共用同一套品级刻度（共 9 阶，严格由低到高）：
+ * 塔科夫全战利品共用同一套品级刻度（共 9 阶，严格由低到高）：
  *   民用 · 翻新 · 制式 · 军规 · 精工 · 特种 · 试验 · 原型 · 竞赛
  * 改为军工品质刻度和低饱和军规配色；
  *   regen（护甲自动回复）全部归零 —— 现实护甲耐久只能维修，不会待维修。
@@ -447,14 +465,14 @@ function raidTierLegend(){
   return RAID_TIERS.slice(0,9).map(t=>`<b style="color:${t.color}">${t.name}</b>`).join(" / ");
 }
 
-// 枪械生成：把撤离区品质档位映射到全局 RARITIES 的 id（仅取数值/词缀，显示色由 qColor 覆盖）
+// 枪械生成：把塔科夫品质档位映射到全局 RARITIES 的 id（仅取数值/词缀，显示色由 qColor 覆盖）
 /* 索引 9~11（定制/珍藏/孤品）在旧 rarity 体系里没有对应项，统一回落到 rainbow ——
    真正区分它们的是 qTier 与 RAID_TIERS 的名字/颜色，旧 rarity 只决定生成器的数值档。 */
 const RAID_TIER_TO_RARITY = ["white","green","blue","purple","orange","pearl","ancient","mythic","rainbow","rainbow","rainbow","rainbow"];
 
 /* ----------------------------- 具名装备 -----------------------------
  * 高档位除了随机改装枪甲之外，还会掉落现实型号 + 出厂改装方案的「具名装备」：
- * 词条全部手工配置，同档数值远高于随机生成，名字固定（如「R-74N 5.45×39 战术型」）。
+ * 词条全部手工配置，同档数值远高于随机生成，名字固定（如「AK-74N 5.45×39 战术型」）。
  * 移除制式/定制命名与急救效率、额外弹丸、特殊弹触发、溅射等超现实词条。 */
 /* AI 索敌感知分级：Scav 迟钝、PMC 警觉、Boss 提前锁定。
  * 只影响「发现目标」这一段；射击精度 / 走位 / 包扎仍按 smart 与 cls 原逻辑结算。
@@ -717,7 +735,7 @@ function raidPlayerBeam(R){
 /* 手持武器的移速倍率（目前只有狙击枪有惩罚）。只看主手 —— 副手要紧的是正在用的那把。 */
 function raidGunMoveMul(p){
   const g=p&&p.gun;
-  /* v0.36.0：枪械自带的持枪移速（人体工学套件 / 短刃工业这类厂商的紧凑枪身）
+  /* v0.36.0：枪械自带的持枪移速（人体工学套件 / 以色列武器工业这类厂商的紧凑枪身）
      终于进结算 —— 之前 moveMul 只在 Weapon 里算过，扁平枪械对象根本没有这个字段。 */
   const own = (g && g.moveMul!==undefined) ? M.clamp(g.moveMul, 0.7, 1.35) : 1;
   return ((g && (g.type==="sniper"||g.cat==="sniper")) ? RAID_SNIPER_MOVE_MUL : 1) * own;
@@ -893,7 +911,7 @@ function raidAISense(b){
            hunt:base.hunt, hear:base.hear*hMul };
 }
 
-/* Scav 制式武器：撤离区拾荒者只会拿低阶手枪 / 霰弹枪 / 冲锋枪。
+/* Scav 制式武器：塔科夫拾荒者只会拿低阶手枪 / 霰弹枪 / 冲锋枪。
  * 硬封顶等级与品质，并强制低穿深弹种，避免高装备玩家把全场 Scav 一起养肥。 */
 function raidScavGun(level, opts){
   opts=opts||{};
@@ -1599,7 +1617,7 @@ function ensureGunAffixes(w){
   return w;
 }
 
-// 撤离区枪械显示：优先使用本次掉落的 qTier/qName/qColor（与 9 阶品质刻度一致）
+// 塔科夫枪械显示：优先使用本次掉落的 qTier/qName/qColor（与 9 阶品质刻度一致）
 function raidGunColor(g){
   if(weaponQualityHidden()) return "#cfcabb";
   return (g && g.qColor) ? g.qColor : gunRarColor(g && g.rarity);
@@ -1894,26 +1912,7 @@ const RaidStash = {
   },
   /* 写失败（配额满 / 隐私模式）时不再静默：Store 会限流告警并降级到内存，
      本局仍可正常游玩，只是刷新后会回到上一次成功落盘的进度。 */
-  /* v0.37.0：写盘后镜像云存档（去抖 2.2s；云 KV 约 50 QPS 且全站共用）。失败只降级。 */
-  save(d){
-    try{ if(d && typeof d==="object") d._ts=Date.now(); }catch(e){ /* 冻结对象就跳过时间戳 */ }
-    const ok=Store.setJSON(this.KEY, d);
-    try{
-      if(typeof ToySdk!=="undefined" && ToySdk.inToy) ToySdk.save(JSON.stringify(d));
-    }catch(e){ /* 云存档是增强项，失败只降级不报错 */ }
-    return ok;
-  },
-  adoptCloud(raw){   /* v0.37.0：冷启动采纳云端存档，只有云端 _ts 更新时才覆盖本地 */
-    try{
-      const d = typeof raw==="string" ? JSON.parse(raw) : raw;
-      if(!d || typeof d!=="object" || !Array.isArray(d.weapons)) return false;
-      const local=Store.getJSON(this.KEY, null,
-        v=>v && typeof v==="object" && !Array.isArray(v) && Array.isArray(v.weapons)) || {};
-      if((d._ts||0) <= (local._ts||0)) return false;
-      Store.setJSON(this.KEY, d);
-      return true;
-    }catch(e){ return false; }
-  },
+  save(d){ return Store.setJSON(this.KEY, d); },
 };
 
 /* ----------------------------- PMC / Scav ----------------------------- */
@@ -1934,7 +1933,7 @@ class RaidOperator {
     // 打穿即报废：纳米自愈不能把已归零的护甲救回来（否则「回归血肉」会每帧反复横跳）
     this.armorBroken=this.maxArmor>0 && this.armor<=0;
     // v0.14.11：能量护盾层（精锐 / Boss）——优先级高于护甲，破盾后才轮到护甲，
-    // 让「护盾型蓝血条 / 电击 ×2.00」在撤离突袭模式里真的有目标。
+    // 让「护盾型蓝血条 / 电击 ×2.00」在塔科夫模式里真的有目标。
     this.shieldGear=o.shieldGear||null;
     this.shieldPerks=(o.shieldPerks||[]).slice();
     const _sp=new Set(this.shieldPerks);
@@ -1983,7 +1982,7 @@ class RaidOperator {
     this.moveX=0; this.moveY=0; this.vx=0; this.vy=0;
     this.roamT=0; this.roamPt=null; this.state="roam"; this._stuck=0;
     this.kills=0;
-    // 撤离区式流血状态（玩家用）
+    // 塔科夫式流血状态（玩家用）
     this.bleed=0;
     // v0.14.10：冰冻剩余时间（秒）；元素克制提示节流
     this.freezeT=0;

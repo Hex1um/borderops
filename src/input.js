@@ -126,14 +126,14 @@ const Input = {
     document.addEventListener('gesturestart',(e)=>e.preventDefault());
     document.addEventListener('contextmenu',(e)=>e.preventDefault());
 
-    // 星键：战役=职业技能；撤离区=搜索/交互（与医疗键完全分开）
+    // 星键：战役=职业技能；塔科夫=搜索/交互（与医疗键完全分开）
     /* v0.24.0：改成按住型 —— 短按仍是一次性 act.ability，长按由 useHeld 告诉 Raid。
        useHeld 原本只给沙二下包用，两种模式不会同时运行，复用不冲突。 */
     this._bindHold('touch-ability',
       ()=>{ this.act.ability=true; this.useHeld=true; },
       ()=>{ this.useHeld=false; });
     this._bindBtn('touch-switch',  ()=>{ this.act.switch=true; });
-    // 加号键：只负责医疗（撤离区=绷带/药品，大逃杀=医疗）
+    // 加号键：只负责医疗（塔科夫=绷带/药品，大逃杀=医疗）
     this._bindBtn('touch-med',     ()=>{ this.act.med=true; });
     this._bindBtn('touch-inv',     ()=>{ this.act.inv=true; });
     this._bindBtn('touch-reload',  ()=>{ this.act.reload=true; });

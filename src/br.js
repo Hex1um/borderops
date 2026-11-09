@@ -552,7 +552,7 @@ const BR = {
       return;
     }
     const pellets=sh.gun.pellets||1;
-    // 与撤离突袭模式一致：非霰弹枪的多发是稀有词条，总伤害只 +30%
+    // 与塔科夫模式一致：非霰弹枪的多发是稀有词条，总伤害只 +30%
     const pelletMul = pellets<=1 ? 1
       : ((sh.gun.type==="shotgun"||sh.gun.cat==="shotgun") ? 0.9 : (1.30/pellets));
     const mv=sh._mv||0;

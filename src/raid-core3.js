@@ -111,7 +111,7 @@ Object.assign(Raid, {
      *   muzzleT：枪口火光剩余时间（很短，打一枪闪一下）
      *   kick   ：后坐冲量（0→约 2，按 dt*11 衰减），驱动枪身后退 + 上跳 + 抖动 */
     sh.muzzleT = 0.075;
-    /* v0.36.0：后坐冲量按枪械的 recoil 减免（枪口制退组件 / 黑鸦精密 / 长城联合）。
+    /* v0.36.0：后坐冲量按枪械的 recoil 减免（枪口制退组件 / 赫克勒-科赫 / 北方工业）。
        以前恒定 +1，装什么模块手感都一样。 */
     sh.kick = Math.min(2.2, (sh.kick||0) + M.clamp(1 - (sh.gun.recoil||0)/100, 0.35, 1));
     // v0.14.11：电磁干扰期间射速被强制压到最低 SHOCK_FIRE_CD 间隔（电击的持续效果）
@@ -452,7 +452,7 @@ Object.assign(Raid, {
       this.hitFlash=Math.min(0.35, this.hitFlash+0.18);
       SFX.hurt();
       this._float(target.x, target.y-24, "-"+Math.round(d), "#ff6a6a");
-      // 撤离区式流血：被击中有几率开始流血（最多叠 3 层）
+      // 塔科夫式流血：被击中有几率开始流血（最多叠 3 层）
       if(dmg>0 && RNG.chance(0.30) && target.bleed<3){
         target.bleed++;
         this._float(target.x, target.y-40, "⚠ 流血 x"+target.bleed+"（H/医疗键 包扎）", "#ff8a5a");
@@ -1304,7 +1304,7 @@ Object.assign(Raid, {
     this._hideTouchLayer();
     if(killer && killer.name) this._feed(killer.name, "你", gun?gunNameOf(gun):"交火", false, "kill");
     // 阵亡：携带装备与战利品全部丢失（仓库在开局已扣除）
-    // 撤离区式保险：投保的装备有 65% 概率"无人捡走"被退回
+    // 塔科夫式保险：投保的装备有 65% 概率"无人捡走"被退回
     let recovered=[];
     if(this.insured){
       const retBack=[];
@@ -1545,7 +1545,7 @@ Object.assign(Raid, {
     ty = RAID_MAP_H<=vh ? (RAID_MAP_H-vh)/2 : M.clamp(ty,0,RAID_MAP_H-vh);
     this.camera.x=M.lerp(this.camera.x,tx,0.2);
     this.camera.y=M.lerp(this.camera.y,ty,0.2);
-    // v0.14.11：撤离突袭模式原本只维护 Raid.camera，game.camera 一直停在 (0,0)，
+    // v0.14.11：塔科夫模式原本只维护 Raid.camera，game.camera 一直停在 (0,0)，
     // 导致 game.worldToScreen() / 任何按屏幕坐标定位的 UI 在 raid 模式下全部算错。
     game.camera.x=this.camera.x; game.camera.y=this.camera.y;
   },

@@ -736,7 +736,7 @@ const RenderRaid = {
       }
     }
 
-    // 撤离点（撤离区式：关闭=灰、付费=金、开放=绿）
+    // 撤离点（塔科夫式：关闭=灰、付费=金、开放=绿）
     for(const e of R.extracts){
       const pulse=0.5+0.5*Math.sin(M.now()*3);
       if(e.closed){
@@ -1432,7 +1432,7 @@ const RenderRaid = {
       ctx.fillText(Input.isTouch?"靠近补给箱点「★」搜索，受伤点「+」包扎":"翻箱搜刮捡枪，捡到即自动上手", bx, by+74);
     }
 
-    // 流血 / 绷带状态（撤离区式医疗）
+    // 流血 / 绷带状态（塔科夫式医疗）
     if(p.bleed>0){
       ctx.font=mob?"bold 12px system-ui,sans-serif":"bold 13px system-ui,sans-serif";
       ctx.fillStyle=Math.sin(M.now()*8)>0?"#ff5a4a":"#ff8a5a";
@@ -1932,5 +1932,5 @@ Raid.nearestContainerVisible = function(){
 };
 
 /* =========================================================================
- * UI — 撤离突袭模式：仓库/配装、结算
+ * UI — 塔科夫模式：仓库/配装、结算
  * ========================================================================= */

@@ -1,18 +1,18 @@
 /* =========================================================================
  * config.js — 全局常量与平衡数值
  * 边境行动：弹药 / 枪械成色 / 配件词缀 / 枪型 / PMC 定义
- * 移除全部超现实与制式词条，改为拟真军械体系；v0.16.1 起弹药按撤离区口径 + 弹种代号命名。
+ * 移除全部超现实与制式词条，改为拟真军械体系；v0.16.1 起弹药按塔科夫口径 + 弹种代号命名。
  *   内部键名（element / mayhem / elemPct 等）一律保留，仅语义与显示改名，
  *   保证旧 localStorage 存档、联机快照与拍卖行数据可直接读取。
  * ========================================================================= */
 
 const CFG = {
-  version: "0.37.0",
+  version: "0.36.2",
   name: "边境行动",
   en: "BORDER OPS",
   // 界面开关（其他模式代码仍保留，只是不显示入口）
-  onlyRaid: true,        // 只显示撤离突袭模式
-  raidMinimap: false,    // 撤离区 HUD 小地图
+  onlyRaid: true,        // 只显示塔科夫模式
+  raidMinimap: false,    // 塔科夫 HUD 小地图
   /* v0.21.1：显示密度（设置里可切）
    *   "compact" 精简 —— 枪名只留型号 / 枪型，不显示厂商、前后缀词、弹种尾巴
    *   "full"    完整 —— 厂商 + 型号 + 前后缀 + 弹种，卡片里也展开完整词缀
@@ -52,9 +52,9 @@ const CFG = {
  * status 状态在 HUD 与头顶标签上的名称（拟真化后的元素状态名）
  */
 const AMMO_TYPES = {
-  none:      { id:"none",      name:"5.45×39mm PS gs",  short:"PS",   color:"#cfcabb", pen:12, dot:0, strong:null,     status:"",         mult:{flesh:1.00,shield:0.95,armor:0.80}, desc:"SP-1 钢芯全被甲弹，R-74 系列制式弹，穿深低、对软目标停止作用一般" },
-  fire:      { id:"fire",      name:"5.45×39mm T gs",   short:"T",    color:"#d97a3c", pen:14, dot:6, strong:"flesh",  status:"引燃",     mult:{flesh:1.20,shield:0.90,armor:0.80}, desc:"T-1 曳光弹，弹尾曳光剂便于修正弹道，命中可引燃；对护盾与插板乏力" },
-  shock:     { id:"shock",     name:"7.62×39mm BP gzh", short:"BP",   color:"#9fb0bd", pen:36, dot:0, strong:"armor",  status:"钝击失能", mult:{flesh:0.90,shield:1.30,armor:1.45}, desc:"SP-2 淬火钢芯穿甲弹，对硬质插板穿深高；冲击造成短暂失能并额外削护盾" },
+  none:      { id:"none",      name:"5.45×39mm PS gs",  short:"PS",   color:"#cfcabb", pen:12, dot:0, strong:null,     status:"",         mult:{flesh:1.00,shield:0.95,armor:0.80}, desc:"7N6 钢芯全被甲弹，AK-74 系列制式弹，穿深低、对软目标停止作用一般" },
+  fire:      { id:"fire",      name:"5.45×39mm T gs",   short:"T",    color:"#d97a3c", pen:14, dot:6, strong:"flesh",  status:"引燃",     mult:{flesh:1.20,shield:0.90,armor:0.80}, desc:"T-45 曳光弹，弹尾曳光剂便于修正弹道，命中可引燃；对护盾与插板乏力" },
+  shock:     { id:"shock",     name:"7.62×39mm BP gzh", short:"BP",   color:"#9fb0bd", pen:36, dot:0, strong:"armor",  status:"钝击失能", mult:{flesh:0.90,shield:1.30,armor:1.45}, desc:"7N23 淬火钢芯穿甲弹，对硬质插板穿深高；冲击造成短暂失能并额外削护盾" },
   corrosive: { id:"corrosive", name:"9×19mm RIP",       short:"RIP",  color:"#8fae72", pen:5,  dot:6, strong:"flesh",  status:"撕裂",     mult:{flesh:1.55,shield:1.10,armor:0.42}, desc:"RIP 扩张弹头撕裂创口、啃噬软质防护，几乎打不穿硬质插板" },
   cryo:      { id:"cryo",      name:"9×39mm SP-6 gs",   short:"SP-6", color:"#7fa2b8", pen:11, dot:0, strong:"flesh",  status:"迟滞",     mult:{flesh:1.15,shield:0.95,armor:0.78}, desc:"SP-6 亚音速穿甲弹，配消音器枪声传播距离短；命中失衡造成短暂迟滞" },
   explosive: { id:"explosive", name:"40mm VOG-25",      short:"VOG",  color:"#c2a05a", pen:6,  dot:0, strong:null,     status:"",         mult:{flesh:1.30,shield:1.15,armor:0.95}, desc:"GP-25 系列用破片榴弹战斗部，溅射半径有限" },
@@ -507,24 +507,24 @@ const DROP = {
  * elemChance 语义改为「特种弹适配率」（对弹种加成的适配倾向），不再产生制式效果。
  */
 const MANUFACTURERS = {
-  Jakobs:  { name:"铁砧兵工厂", color:"#8a6a4a", dmg:1.30, fireRate:0.82, accuracy:1.20, mag:0.8,  reload:1.05, crit:1.6, elemChance:0,    style:"高初速 · 栓动 · 精密", throwable:false, perk:"单发伤害 +30%，要害倍率 1.6×" },
-  Maliwan: { name:"北岭机械", color:"#5d7885", dmg:0.95, fireRate:0.85, accuracy:1.15, mag:0.9,  reload:1.1,  crit:1.0, elemChance:0,    style:"冷锻枪管 · 高精度",   throwable:false, perk:"精度 +15%，射程 +12%", rangeMul:1.12 },
-  Tediore: { name:"快拆工坊", color:"#6b7452", dmg:0.95, fireRate:1.05, accuracy:0.95, mag:1.0,  reload:0.55, crit:1.0, elemChance:0,    style:"快拆弹匣 · 短换弹",   throwable:false, perk:"换弹时间 −45%" },
-  Vladof:  { name:"河谷机械", color:"#9a5a3a", dmg:0.95, fireRate:1.35, accuracy:0.9,  mag:1.3,  reload:1.0,  crit:1.0, elemChance:0,    style:"高射速 · 大容量",     throwable:false, perk:"射速 +35%，弹匣 +30%" },
-  Hyperion:{ name:"黑鸦精密", color:"#4a5158", dmg:1.0,  fireRate:0.95, accuracy:1.35, mag:0.95, reload:1.05, crit:1.1, elemChance:0,    style:"滚柱闭锁 · 稳定连发", throwable:false, perk:"精度 +35%，后坐 −20%", recoilMul:0.80 },
-  Torgue:  { name:"重锤重工", color:"#85704c", dmg:1.1,  fireRate:0.8,  accuracy:0.95, mag:0.7,  reload:1.2,  crit:1.0, elemChance:0,    style:"重弹头 · 大口径",     throwable:false, forceExplosive:false, perk:"单发伤害 +10%，穿甲 +1", pierce:1 },
-  Dahl:    { name:"边境界兵工", color:"#4e6350", dmg:1.0,  fireRate:1.05, accuracy:1.05, mag:1.05, reload:1.0,  crit:1.05,elemChance:0,    style:"导气式 · 均衡",       throwable:false, perk:"全属性小幅加成，没有短板" },
-  Atlas:   { name:"模块工业",   color:"#455873", dmg:1.02, fireRate:1.0,  accuracy:1.1,  mag:1.0,  reload:1.0,  crit:1.1, elemChance:0,    style:"模块化 · 通用件",     throwable:false, homing:false, perk:"精度 +10%，要害倍率 1.1×" },
+  Jakobs:  { name:"图拉兵工厂", color:"#8a6a4a", dmg:1.30, fireRate:0.82, accuracy:1.20, mag:0.8,  reload:1.05, crit:1.6, elemChance:0,    style:"高初速 · 栓动 · 精密", throwable:false, perk:"单发伤害 +30%，要害倍率 1.6×" },
+  Maliwan: { name:"伊热夫斯克", color:"#5d7885", dmg:0.95, fireRate:0.85, accuracy:1.15, mag:0.9,  reload:1.1,  crit:1.0, elemChance:0,    style:"冷锻枪管 · 高精度",   throwable:false, perk:"精度 +15%，射程 +12%", rangeMul:1.12 },
+  Tediore: { name:"莫洛特工厂", color:"#6b7452", dmg:0.95, fireRate:1.05, accuracy:0.95, mag:1.0,  reload:0.55, crit:1.0, elemChance:0,    style:"快拆弹匣 · 短换弹",   throwable:false, perk:"换弹时间 −45%" },
+  Vladof:  { name:"卡拉什尼科夫", color:"#9a5a3a", dmg:0.95, fireRate:1.35, accuracy:0.9,  mag:1.3,  reload:1.0,  crit:1.0, elemChance:0,    style:"高射速 · 大容量",     throwable:false, perk:"射速 +35%，弹匣 +30%" },
+  Hyperion:{ name:"赫克勒-科赫", color:"#4a5158", dmg:1.0,  fireRate:0.95, accuracy:1.35, mag:0.95, reload:1.05, crit:1.1, elemChance:0,    style:"滚柱闭锁 · 稳定连发", throwable:false, perk:"精度 +35%，后坐 −20%", recoilMul:0.80 },
+  Torgue:  { name:"捷格加廖夫厂", color:"#85704c", dmg:1.1,  fireRate:0.8,  accuracy:0.95, mag:0.7,  reload:1.2,  crit:1.0, elemChance:0,    style:"重弹头 · 大口径",     throwable:false, forceExplosive:false, perk:"单发伤害 +10%，穿甲 +1", pierce:1 },
+  Dahl:    { name:"FN 赫斯塔尔", color:"#4e6350", dmg:1.0,  fireRate:1.05, accuracy:1.05, mag:1.05, reload:1.0,  crit:1.05,elemChance:0,    style:"导气式 · 均衡",       throwable:false, perk:"全属性小幅加成，没有短板" },
+  Atlas:   { name:"西格绍尔",   color:"#455873", dmg:1.02, fireRate:1.0,  accuracy:1.1,  mag:1.0,  reload:1.0,  crit:1.1, elemChance:0,    style:"模块化 · 通用件",     throwable:false, homing:false, perk:"精度 +10%，要害倍率 1.1×" },
   /* v0.36.0（用户要求「枪械厂商再增加一些，每个要有自己的特色」）：
      新增 4 家，全部走「可解释的工艺参数」，并且每一家的长处/短处都能在
      局内实际读到（精度、后坐、移速、穿甲都已经进入 blGunConvert 的扁平字段）。 */
-  Norinco: { name:"长城联合",   color:"#6f7a54", dmg:0.98, fireRate:1.08, accuracy:1.0,  mag:1.15, reload:0.95, crit:1.0, elemChance:0,
+  Norinco: { name:"北方工业",   color:"#6f7a54", dmg:0.98, fireRate:1.08, accuracy:1.0,  mag:1.15, reload:0.95, crit:1.0, elemChance:0,
              style:"廉价耐造 · 大容量", throwable:false, recoilMul:0.72, perk:"后坐 −28%，弹匣 +15%，换弹 −5%" },
-  Steyr:   { name:"疾风制造",     color:"#57707d", dmg:0.88, fireRate:1.50, accuracy:1.05, mag:1.10, reload:1.0,  crit:1.0, elemChance:0,
+  Steyr:   { name:"斯泰尔",     color:"#57707d", dmg:0.88, fireRate:1.50, accuracy:1.05, mag:1.10, reload:1.0,  crit:1.0, elemChance:0,
              style:"无托结构 · 极高射速", throwable:false, recoilMul:1.15, perk:"射速 +50%，但单发伤害 −12%、后坐 +15%" },
-  IWI:     { name:"短刃工业", color:"#7c6a8a", dmg:0.96, fireRate:1.12, accuracy:1.02, mag:1.0, reload:0.80, crit:1.0, elemChance:0,
+  IWI:     { name:"以色列武器工业", color:"#7c6a8a", dmg:0.96, fireRate:1.12, accuracy:1.02, mag:1.0, reload:0.80, crit:1.0, elemChance:0,
              style:"紧凑枪身 · 高机动", throwable:false, moveMul:1.18, perk:"持枪移速 +18%，换弹 −20%" },
-  Rheinmetall: { name:"铁流重工", color:"#8a7a55", dmg:1.18, fireRate:0.86, accuracy:1.08, mag:0.92, reload:1.1, crit:1.15, elemChance:0,
+  Rheinmetall: { name:"莱茵金属", color:"#8a7a55", dmg:1.18, fireRate:0.86, accuracy:1.08, mag:0.92, reload:1.1, crit:1.15, elemChance:0,
              style:"大口径 · 高穿深", throwable:false, pierce:2, rangeMul:1.10, perk:"穿甲 +2，单发伤害 +18%，射速 −14%" },
 };
 
@@ -532,38 +532,37 @@ const MANUFACTURERS = {
 // 具名池全部改为现实枪械型号
 const WEAPON_TYPES = {
   pistol:  { name:"手枪",   baseDmg:11, fireRate:3.2, accuracy:0.92, mag:12, reload:1.1, speed:760, pellets:1, ammoType:"pistol",  spread:0.05, auto:false,
-             named:["P-11","P-18","P-43","P-6","P-15","P-17"],
-             /* v0.37.0：型号池全部改为**原创编号**（合规：不使用现实厂商商标与型号），
-              * 规则：P 手枪 / S 冲锋枪 / G 霰弹枪 / R 步枪 / D 狙击枪 / L 榴弹发射器。
-              * 精简模式只显示型号，完整模式再叠厂商 / 前后缀 / 品质。 */
-             models:["P-11","P-6","P-33","P-43","P-18","P-15","P-26","P-45","P-17","P-19",
-                     "P-4S","P-57","P-45U","P-AP","P-12","P-DE"] },
+             named:["PM","GSh-18","MP-443 Grach","PB","PL-15","Glock 17"],
+             /* v0.21.6：型号池 —— 「完整显示」下每条枪都有自己的真实型号，
+              * 不再所有手枪都叫「手枪」。精简模式只显示型号，完整模式再叠厂商 / 前后缀 / 品质。 */
+             models:["PM","PB","TT","MP-443 Grach","GSh-18","PL-15","P226R","M1911A1","Glock 17","Glock 19",
+                     "PX4 Storm","Five-seveN","USP .45","APS Stechkin","RSh-12","Desert Eagle"] },
   smg:     { name:"冲锋枪", baseDmg:6,  fireRate:11,  accuracy:0.82, mag:30, reload:1.5, speed:720, pellets:1, ammoType:"smg",     spread:0.10, auto:true,
-             named:["S-91","S-9","S-19","S-5","S-41","S-90"],
-             models:["S-91","S-9","S-19","S-19B","S-41","S-5","S-5D","S-7",
-                     "S-45","S-90","S-MX","S-V45","S-UZ","S-10","S-E3","S-90M"] },
+             named:["PP-19-01 Vityaz","MP5","MP7A1","PP-9 Klin","PPSh-41","FN P90"],
+             models:["PP-91 Kedr","PP-9 Klin","PP-19-01 Vityaz","PP-19 Bizon","PPSh-41","MP5","MP5SD","MP7A1",
+                     "UMP .45","FN P90","SIG MPX","Vector .45","UZI","MAC-10","Scorpion EVO 3","PP-90M1"] },
   shotgun: { name:"霰弹枪", baseDmg:7,  fireRate:1.8, accuracy:0.65, mag:6,  reload:2.2, speed:680, pellets:8, ammoType:"shotgun", spread:0.22, auto:false,
-             named:["G-12","G-106","G-153","G-155","G-870","G-23"],
-             models:["G-133","G-153","G-155","G-106","G-34","G-23","G-870","G-590","G-12",
-                     "G-12V","G-12K","G-4","G-12S","G-117"] },
+             named:["Saiga-12","TOZ-106","MP-153","MP-155","M870","KS-23M"],
+             models:["MP-133","MP-153","MP-155","TOZ-106","TOZ-34","KS-23M","M870","M590A1","Saiga-12",
+                     "Vepr-12","S12K","Benelli M4","SPAS-12","Remington 11-87"] },
   rifle:   { name:"步枪", baseDmg:16, fireRate:6.0, accuracy:0.9,  mag:24, reload:1.8, speed:820, pellets:1, ammoType:"rifle",   spread:0.06, auto:true,
-             named:["R-74N","R-103","R-47","R-41","R-416","R-215"],
-             models:["R-74N","R-74M","R-47","R-103","R-105","R-12","R-15","R-41","R-16","R-416",
-                     "R-36","R-SCL","R-SCH","R-550","R-FAL","R-215","R-SKS","R-136","R-VAL","R-3M"] },
+             named:["AK-74N","AK-103","AKM","M4A1","HK 416A5","ADAR 2-15"],
+             models:["AK-74N","AK-74M","AKM","AK-103","AK-105","AK-12","AK-15","M4A1","M16A4","HK 416A5",
+                     "HK G36","SCAR-L","SCAR-H","SIG SG550","FN FAL","ADAR 2-15","SKS","VPO-136","AS VAL","SR-3M"] },
   sniper:  { name:"狙击枪", baseDmg:55, fireRate:1.1, accuracy:0.99, mag:5,  reload:2.0, speed:1100,pellets:1, ammoType:"sniper",  spread:0.01, auto:false, charge:true,
-             named:["D-94","D-98","D-VSS","D-700","D-10","D-5000"],
-             models:["D-94","D-94S","D-98","D-VSS","D-700","D-24","D-10","D-5000","D-42",
-                     "D-WM","D-82","D-RS","D-14","D-TRG","D-SV4"] },
+             named:["SVD-S","SV-98","VSS Vintorez","M700","DVL-10","ORSIS T-5000"],
+             models:["SVD-S","SVDS","SV-98","VSS Vintorez","M700","M24","DVL-10","ORSIS T-5000","TRG-42",
+                     "AWM","M82A1","RSASS","M1A","Sako TRG","SVCh"] },
   launcher:{ name:"榴弹发射器", baseDmg:70, fireRate:0.9, accuracy:0.88, mag:4,  reload:2.6, speed:300, pellets:1, ammoType:"launcher",spread:0.04, auto:false, splash:120,
-             named:["L-25","L-34","L-94","L-40","L-203","L-25K"],
-             models:["L-25","L-34","L-94","L-40","L-203","L-320","L-MGL","L-6","L-H1"] },
+             named:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","GP-25"],
+             models:["GP-25 Kostyor","GP-34","GM-94","RGM-40 Kastet","M203","M320 GLM","Milkor MGL","RG-6","Hawk MM-1"] },
 };
 
 /* ---------------------------------------------------------------------------
  * v0.31.0 —— 霰弹枪弹片数按型号区分
  * ---------------------------------------------------------------------------
- * 旧版所有霰弹枪共用 WEAPON_TYPES.shotgun.pellets = 8：双管 G-106 和
- * 弹鼓 G-12 打出来是同一团弹丸，「型号」只剩一个名字。
+ * 旧版所有霰弹枪共用 WEAPON_TYPES.shotgun.pellets = 8：双管 TOZ-106 和
+ * 弹鼓 Saiga-12 打出来是同一团弹丸，「型号」只剩一个名字。
  * 这里按型号给出「每发弹片数 / 单弹片伤害系数 / 散布」三元组；生成管线在
  * model 确定之后再套用（不能提前：gunModelFor 会消耗 RNG，前移会打乱词条与
  * 配件的随机序列，联机同种子就生成不出同一把枪）。
@@ -571,20 +570,21 @@ const WEAPON_TYPES = {
  * 10 片枪直接碾压 4 片枪；差异体现在散布、射速与破甲手感上。
  */
 const SHOTGUN_MODELS = {
-  "G-133":             { pellets:6,  dmg:1.14, spread:0.20 },
-  "G-153":             { pellets:7,  dmg:1.07, spread:0.20 },
-  "G-155":             { pellets:8,  dmg:1.00, spread:0.21 },
-  "G-106":             { pellets:4,  dmg:1.42, spread:0.26 },
-  "G-34":              { pellets:2,  dmg:1.85, spread:0.17 },
-  "G-23":              { pellets:3,  dmg:1.68, spread:0.24 },
-  "G-870":             { pellets:8,  dmg:1.00, spread:0.22 },
-  "G-590":             { pellets:8,  dmg:1.00, spread:0.22 },
-  "G-12":              { pellets:10, dmg:0.88, spread:0.24 },
-  "G-12K":             { pellets:9,  dmg:0.93, spread:0.25 },
-  "G-12V":             { pellets:10, dmg:0.88, spread:0.23 },
-  "G-12S":             { pellets:9,  dmg:0.93, spread:0.24 },
-  "G-4":               { pellets:9,  dmg:0.94, spread:0.21 },
-  "G-117":             { pellets:7,  dmg:1.07, spread:0.20 },
+  "MP-133":            { pellets:6,  dmg:1.14, spread:0.20 },
+  "MP-153":            { pellets:7,  dmg:1.07, spread:0.20 },
+  "MP-155":            { pellets:8,  dmg:1.00, spread:0.21 },
+  "TOZ-106":           { pellets:4,  dmg:1.42, spread:0.26 },
+  "TOZ-34":            { pellets:2,  dmg:1.85, spread:0.17 },
+  "KS-23M":            { pellets:3,  dmg:1.68, spread:0.24 },
+  "M870":              { pellets:8,  dmg:1.00, spread:0.22 },
+  "M590A1":            { pellets:8,  dmg:1.00, spread:0.22 },
+  "Saiga-12":          { pellets:10, dmg:0.88, spread:0.24 },
+  "Saiga-12K":         { pellets:9,  dmg:0.93, spread:0.25 },
+  "Vepr-12":           { pellets:10, dmg:0.88, spread:0.23 },
+  "S12K":              { pellets:9,  dmg:0.93, spread:0.24 },
+  "Benelli M4":        { pellets:9,  dmg:0.94, spread:0.21 },
+  "SPAS-12":           { pellets:8,  dmg:1.00, spread:0.22 },
+  "Remington 11-87":   { pellets:7,  dmg:1.07, spread:0.20 },
   _default:            { pellets:8,  dmg:1.00, spread:0.22 },
 };
 function shotgunModelSpec(model){
@@ -604,20 +604,20 @@ function gunDamageLabel(g){
 }
 
 /* ----------------------------- Scav 低阶武器池 -----------------------------
- * 拾荒者 Scav 是拾荒者，不是 PMC：只配发廉价、老旧、短射程的枪械。
+ * 塔科夫 Scav 是拾荒者，不是 PMC：只配发廉价、老旧、短射程的枪械。
  * 这里单独建池，避免他们从战利品 / 玩家装备强度里拿到高穿透弹和高阶枪。
- * 全部型号均为本作实装名称；Scav 不会使用步枪 / 狙击枪 / 榴弹发射器。
+ * 全部型号均为塔科夫实装名称；Scav 不会使用步枪 / 狙击枪 / 榴弹发射器。
  */
 const SCAV_GUN_TYPES = ["pistol","shotgun","smg"];
 const SCAV_GUN_MODELS = {
-  pistol:  ["P-11","P-6","P-43","P-18","P-33"],
-  shotgun: ["G-133","G-106","G-870","G-153","G-23"],
-  smg:     ["S-91","S-9","S-19","S-5"],
+  pistol:  ["PM","PB","MP-443 Grach","GSh-18","TT"],
+  shotgun: ["MP-133","TOZ-106","M870","MP-153","KS-23M"],
+  smg:     ["PP-91 Kedr","PP-9 Klin","PP-19-01 Vityaz","MP5"],
 };
 // Scav 弹药：PS / T / RIP 一类低穿深弹，绝不出现 BP / BT / SP-6。
 const SCAV_AMMO = ["none","none","none","fire","corrosive"];
 const SCAV_GUN_ILVL_MAX = 8;   // 枪械等级硬上限：再肥的 Scav 也只能拿低阶枪
-const SCAV_ARMOR_TIER_MAX = 3; // 护甲等级上限（拾荒者 Scav 极少出 4 级甲）
+const SCAV_ARMOR_TIER_MAX = 3; // 护甲等级上限（塔科夫 Scav 极少出 4 级甲）
 const SCAV_HELMET_TIER_MAX = 2;
 
 /* ----------------------------- PMC ----------------------------- */
@@ -648,7 +648,7 @@ const CLASSES = {
 /* =========================================================================
  * 防弹插板 / 随身装备
  * 「护甲」在显示层一律称为防弹插板／护甲，不再描述为能量立场；
- * 自动整备机制属隐藏的旧模式，撤离突袭模式使用 raid.js 的护甲耐久系统。
+ * 自动整备机制属隐藏的旧模式，塔科夫模式使用 raid.js 的护甲耐久系统。
  * effect 概率全部置 0 —— 不再产生冲击波 / 荆棘反伤 / 虹吸等超现实特效。
  * ========================================================================= */
 const SHIELD_RARITY = {
@@ -767,31 +767,31 @@ const CS2 = {
     usp:       { id:"usp",       name:"USP-S",     cat:"pistol", price:200,  dmg:35, ap:0.505,rpm:352, spread:0.075, mag:12, reload:2.2, kill:300, auto:false, side:"ct" },
     p250:      { id:"p250",      name:"P250",      cat:"pistol", price:300,  dmg:38, ap:0.605,rpm:400, spread:0.085, mag:13, reload:2.2, kill:300, auto:false },
     tec9:      { id:"tec9",      name:"Tec-9",     cat:"pistol", price:500,  dmg:33, ap:0.90, rpm:500, spread:0.10,  mag:18, reload:2.2, kill:300, auto:false, side:"t" },
-    fiveseven: { id:"fiveseven", name:"P-57",cat:"pistol", price:500,  dmg:32, ap:0.912,rpm:400, spread:0.085, mag:20, reload:2.2, kill:300, auto:false, side:"ct" },
-    deagle:    { id:"deagle",    name:"P-DE",   cat:"pistol", price:700,  dmg:63, ap:0.93, rpm:267, spread:0.065, mag:7,  reload:2.2, kill:300, auto:false },
+    fiveseven: { id:"fiveseven", name:"Five-SeveN",cat:"pistol", price:500,  dmg:32, ap:0.912,rpm:400, spread:0.085, mag:20, reload:2.2, kill:300, auto:false, side:"ct" },
+    deagle:    { id:"deagle",    name:"沙漠之鹰",   cat:"pistol", price:700,  dmg:63, ap:0.93, rpm:267, spread:0.065, mag:7,  reload:2.2, kill:300, auto:false },
     // ---- 微冲 ---- （散布大幅上调 ×2.2～2.4，冲锋枪最飘）
-    mac10:     { id:"mac10",     name:"S-10",    cat:"smg",    price:1050, dmg:29, ap:0.675,rpm:800, spread:0.20,  mag:30, reload:2.6, kill:600, auto:true, side:"t" },
-    mp9:       { id:"mp9",       name:"S-9",       cat:"smg",    price:1250, dmg:26, ap:0.69, rpm:857, spread:0.18,  mag:30, reload:2.1, kill:600, auto:true, side:"ct" },
-    mp7:       { id:"mp7",       name:"S-7",       cat:"smg",    price:1500, dmg:25, ap:0.66, rpm:750, spread:0.18,  mag:30, reload:3.1, kill:600, auto:true },
-    mp5sd:     { id:"mp5sd",     name:"S-5D",    cat:"smg",    price:1500, dmg:27, ap:0.675,rpm:750, spread:0.17,  mag:30, reload:2.7, kill:600, auto:true },
-    ump45:     { id:"ump45",     name:"S-45",    cat:"smg",    price:1200, dmg:35, ap:0.65, rpm:666, spread:0.22,  mag:25, reload:3.5, kill:600, auto:true },
-    p90:       { id:"p90",       name:"S-90",       cat:"smg",    price:2350, dmg:26, ap:0.69, rpm:857, spread:0.19,  mag:50, reload:3.4, kill:300, auto:true },
+    mac10:     { id:"mac10",     name:"MAC-10",    cat:"smg",    price:1050, dmg:29, ap:0.675,rpm:800, spread:0.20,  mag:30, reload:2.6, kill:600, auto:true, side:"t" },
+    mp9:       { id:"mp9",       name:"MP9",       cat:"smg",    price:1250, dmg:26, ap:0.69, rpm:857, spread:0.18,  mag:30, reload:2.1, kill:600, auto:true, side:"ct" },
+    mp7:       { id:"mp7",       name:"MP7",       cat:"smg",    price:1500, dmg:25, ap:0.66, rpm:750, spread:0.18,  mag:30, reload:3.1, kill:600, auto:true },
+    mp5sd:     { id:"mp5sd",     name:"MP5-SD",    cat:"smg",    price:1500, dmg:27, ap:0.675,rpm:750, spread:0.17,  mag:30, reload:2.7, kill:600, auto:true },
+    ump45:     { id:"ump45",     name:"UMP-45",    cat:"smg",    price:1200, dmg:35, ap:0.65, rpm:666, spread:0.22,  mag:25, reload:3.5, kill:600, auto:true },
+    p90:       { id:"p90",       name:"P90",       cat:"smg",    price:2350, dmg:26, ap:0.69, rpm:857, spread:0.19,  mag:50, reload:3.4, kill:300, auto:true },
     // ---- 霰弹 ---- （散布 ×1.3）
-    nova:      { id:"nova",      name:"G-8",      cat:"shotgun",price:1050, dmg:24, ap:0.50, rpm:68,  spread:0.21,  mag:8,  reload:3.3, kill:900, auto:false, pellets:9 },
-    xm1014:    { id:"xm1014",    name:"G-4",    cat:"shotgun",price:2000, dmg:22, ap:0.50, rpm:171, spread:0.20,  mag:7,  reload:3.6, kill:900, auto:true,  pellets:6 },
-    mag7:      { id:"mag7",      name:"G-7",     cat:"shotgun",price:1300, dmg:32, ap:0.50, rpm:85,  spread:0.18,  mag:5,  reload:2.7, kill:900, auto:false, pellets:8, side:"ct" },
-    sawedoff:  { id:"sawedoff",  name:"G-2", cat:"shotgun",price:1100, dmg:30, ap:0.50, rpm:85,  spread:0.22,  mag:7,  reload:2.6, kill:900, auto:false, pellets:9, side:"t" },
+    nova:      { id:"nova",      name:"Nova",      cat:"shotgun",price:1050, dmg:24, ap:0.50, rpm:68,  spread:0.21,  mag:8,  reload:3.3, kill:900, auto:false, pellets:9 },
+    xm1014:    { id:"xm1014",    name:"XM1014",    cat:"shotgun",price:2000, dmg:22, ap:0.50, rpm:171, spread:0.20,  mag:7,  reload:3.6, kill:900, auto:true,  pellets:6 },
+    mag7:      { id:"mag7",      name:"MAG-7",     cat:"shotgun",price:1300, dmg:32, ap:0.50, rpm:85,  spread:0.18,  mag:5,  reload:2.7, kill:900, auto:false, pellets:8, side:"ct" },
+    sawedoff:  { id:"sawedoff",  name:"Sawed-Off", cat:"shotgun",price:1100, dmg:30, ap:0.50, rpm:85,  spread:0.22,  mag:7,  reload:2.6, kill:900, auto:false, pellets:9, side:"t" },
     // ---- 步枪 ---- （散布 ×1.5）
-    galil:     { id:"galil",     name:"R-GL",  cat:"rifle",  price:1800, dmg:30, ap:0.775,rpm:666, spread:0.085, mag:35, reload:3.0, kill:300, auto:true, side:"t" },
-    famas:     { id:"famas",     name:"R-FS",     cat:"rifle",  price:2050, dmg:30, ap:0.70, rpm:666, spread:0.085, mag:25, reload:3.3, kill:300, auto:true, side:"ct" },
-    ak:        { id:"ak",        name:"R-47",     cat:"rifle",  price:2700, dmg:36, ap:0.775,rpm:600, spread:0.08,  mag:30, reload:2.5, kill:300, auto:true, side:"t" },
-    m4a4:      { id:"m4a4",      name:"R-4",      cat:"rifle",  price:3000, dmg:33, ap:0.70, rpm:666, spread:0.075, mag:30, reload:3.1, kill:300, auto:true, side:"ct" },
-    m4a1s:     { id:"m4a1s",     name:"R-41S",    cat:"rifle",  price:2900, dmg:38, ap:0.705,rpm:600, spread:0.065, mag:20, reload:3.1, kill:300, auto:true, side:"ct" },
-    sg553:     { id:"sg553",     name:"R-553",    cat:"rifle",  price:3000, dmg:30, ap:1.00, rpm:545, spread:0.08,  mag:30, reload:2.8, kill:300, auto:true, side:"t" },
-    aug:       { id:"aug",       name:"R-AU",       cat:"rifle",  price:3300, dmg:28, ap:0.90, rpm:666, spread:0.07,  mag:30, reload:3.8, kill:300, auto:true, side:"ct" },
+    galil:     { id:"galil",     name:"Galil AR",  cat:"rifle",  price:1800, dmg:30, ap:0.775,rpm:666, spread:0.085, mag:35, reload:3.0, kill:300, auto:true, side:"t" },
+    famas:     { id:"famas",     name:"FAMAS",     cat:"rifle",  price:2050, dmg:30, ap:0.70, rpm:666, spread:0.085, mag:25, reload:3.3, kill:300, auto:true, side:"ct" },
+    ak:        { id:"ak",        name:"AK-47",     cat:"rifle",  price:2700, dmg:36, ap:0.775,rpm:600, spread:0.08,  mag:30, reload:2.5, kill:300, auto:true, side:"t" },
+    m4a4:      { id:"m4a4",      name:"M4A4",      cat:"rifle",  price:3000, dmg:33, ap:0.70, rpm:666, spread:0.075, mag:30, reload:3.1, kill:300, auto:true, side:"ct" },
+    m4a1s:     { id:"m4a1s",     name:"M4A1-S",    cat:"rifle",  price:2900, dmg:38, ap:0.705,rpm:600, spread:0.065, mag:20, reload:3.1, kill:300, auto:true, side:"ct" },
+    sg553:     { id:"sg553",     name:"SG 553",    cat:"rifle",  price:3000, dmg:30, ap:1.00, rpm:545, spread:0.08,  mag:30, reload:2.8, kill:300, auto:true, side:"t" },
+    aug:       { id:"aug",       name:"AUG",       cat:"rifle",  price:3300, dmg:28, ap:0.90, rpm:666, spread:0.07,  mag:30, reload:3.8, kill:300, auto:true, side:"ct" },
     // ---- 狙击 ---- （精密武器，散布轻微上调）
-    scout:     { id:"scout",     name:"D-08",    cat:"sniper", price:1700, dmg:88, ap:0.90, rpm:48,  spread:0.016, mag:10, reload:3.7, kill:300, auto:false },
-    awp:       { id:"awp",       name:"D-WM",       cat:"sniper", price:4750, dmg:115,ap:0.975,rpm:41,  spread:0.011, mag:10, reload:3.7, kill:100, auto:false },
+    scout:     { id:"scout",     name:"SSG 08",    cat:"sniper", price:1700, dmg:88, ap:0.90, rpm:48,  spread:0.016, mag:10, reload:3.7, kill:300, auto:false },
+    awp:       { id:"awp",       name:"AWP",       cat:"sniper", price:4750, dmg:115,ap:0.975,rpm:41,  spread:0.011, mag:10, reload:3.7, kill:100, auto:false },
   },
   gear: {
     kevlar:    { id:"kevlar",   name:"防弹衣",        cat:"gear", price:650,  armor:100, helmet:false },

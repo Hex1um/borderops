@@ -410,7 +410,7 @@ Object.assign(Raid, {
     return pt;
   },
 
-  // 枪械战利品：按撤离区品质档位生成，高品阶枪更强，并打上 qTier/qName/qColor 供显示
+  // 枪械战利品：按塔科夫品质档位生成，高品阶枪更强，并打上 qTier/qName/qColor 供显示
   // floorTier：品质保底（上锁保险箱按 lockLv 抬高下限，等级越高必出越好的枪）
   _rollGunLoot(cls, luck, floorTier){
     luck=luck||0;
@@ -549,7 +549,7 @@ Object.assign(Raid, {
       }
     }
 
-    // 绷带使用（撤离区式：边走边撕会被打断）
+    // 绷带使用（塔科夫式：边走边撕会被打断）
     const p0=this.player;
     if(this.medT>0){
       if(Math.hypot(p0.moveX,p0.moveY)>0.2){
@@ -777,7 +777,7 @@ Object.assign(Raid, {
     UI.hide();
     // UI.show() 会藏起 HUD / 触屏按钮，关商店后必须还回来，
     // 否则「退出商店所有按钮都消失」（手机上摇杆与★/+ 键全没了）。
-    // 注意撤离区/沙二/大逃杀用的是 _showDustHUD（DOM 血条隐藏、只留触屏层），
+    // 注意塔科夫/沙二/大逃杀用的是 _showDustHUD（DOM 血条隐藏、只留触屏层），
     // 不能一律调 _showHUD，否则会多出一套战役 HUD。
     if(typeof game!=="undefined" && game){
       const fn=(game.mode==="raid"||game.mode==="dust2"||game.mode==="br") ? game._showDustHUD : game._showHUD;
@@ -1236,7 +1236,7 @@ Object.assign(Raid, {
       if(o.gun.ammoRes<=0){ this._noAmmoWarn(o.gun); return; }
     } else if(o.gun.ammoRes<=0) return;
     /* v0.36.0：换弹时间改用枪械自身的 reload（已含换弹词条与「扩容供弹组件」
-       的 reloadPct、快拆工坊 / 短刃工业的短换弹），旧版一律
+       的 reloadPct、莫洛特工厂 / 以色列武器工业的短换弹），旧版一律
        2.4 - 弹匣×0.02，模块的换弹加成完全没有出口。 */
     o.reloadT = M.clamp((o.gun.reload!==undefined ? o.gun.reload : (2.4 - o.gun.mag*0.02)), 0.55, 4.2);
     SFX.reload();
@@ -1951,25 +1951,4 @@ Object.assign(Raid, {
     if(it.kind==="med"){ b.bandages=(b.bandages||0)+1; return; }
   }
 });
-
-/* 以下三个函数 v0.37.0 从 raid-data.js 迁入（数据分片已到 2000 行上限）：
-   掉率定档表 + 撤离费曲线，纯函数、不碰 RNG。 */
-/* v0.36.1（用户定档）：敌人身上的装备掉落概率按品阶（tier 1~12）取。
- *   T5 = 10%，之后**每高一档 ×0.5**；往前反推同样 ×2（T4 20%、T3 40%、T2 80%、T1 封顶 100%）。
- *   这样「T5 装备」成为分水岭：低档尸体照旧能翻到东西，高档只留极小概率，
- *   主要靠箱子 / 黑市 / 部件补偿。枪按品质档（1~12）、护甲 / 头盔按 tier 共用这一张表。
- *   纯函数、不碰 RNG —— 联机两端与 verify 复算结果一致。 */
-const RAID_GEAR_DROP_ANCHOR = 5;     // 锚点档位
-const RAID_GEAR_DROP_P      = 0.10;  // 锚点档掉率
-function raidGearDropChance(tier){
-  const t=M.clamp(Math.round(Number(tier)||1), 1, 12);
-  return M.clamp(RAID_GEAR_DROP_P * Math.pow(2, RAID_GEAR_DROP_ANCHOR - t), 0.004, 1);
-}
-
-function raidExtractFee(zone, carryVal){
-  if(!zone || !zone.cost) return 0;
-  const v=Math.max(0, carryVal||0);
-  const base = zone.cost*0.28 + v*(zone.feeRate||0.018)*RAID_FEE_GEAR_K;
-  return Math.round(M.clamp(base*raidExtractFeeMult(v), 60, zone.cost*RAID_FEE_CAP_K)/10)*10;
-}
 
