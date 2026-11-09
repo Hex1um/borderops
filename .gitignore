@@ -9,3 +9,5 @@ __pycache__/
 .git/
 # FPS 基准运行产物（含本机 Chrome 绝对路径，实测值记在 CHANGELOG / WIKI）
 fps-baseline.json
+# B 站 Toy 打包产物（tools/build_toy.cjs 生成，不入库）
+dist/

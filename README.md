@@ -60,6 +60,18 @@ python -m http.server 8132
 
 访问 `http://127.0.0.1:3000/`。
 
+### 发布到 B 站 Toy
+
+```sh
+node tools/build_toy.cjs        # 生成 dist/toy/（纯静态运行时 41 个文件 / 约 1.6MB）
+python tools/make_toy_cover.py  # 生成封面 1920×1080 + 图标 512×512
+```
+
+包成 zip 时注意两条平台硬规则：**压缩包根目录必须是 index.html**（不是外层文件夹），
+**入口 index.html ≤1MB、整包 ≤50MB**。Toy 是纯静态托管，不需要 `server.js`；
+联机会自动退到 WebRTC P2P（依赖 PeerJS 公共信令，连接失败不影响单机）。
+打包脚本会自动做「入口引用的脚本是否都在包里」的自检，避免上传后白屏。
+
 ## 技术约束（给后续维护者）
 
 1. **零构建**：原生 HTML/CSS/JS，不用 ES modules，不用打包器 / 框架；`server.js` 与 `check_version.js` 仅用 Node 原生模块。唯一第三方浏览器库是 `vendor/peerjs.min.js`（MIT，仅 P2P 联机时按需加载，许可原文见 `vendor/peerjs.LICENSE`）；项目自身许可见 `LICENSE`（MIT，版权归属待与合作者确认）。
