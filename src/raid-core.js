@@ -1683,6 +1683,8 @@ const Raid = {
       const s=Object.assign({}, d, { x:pt.x, y:pt.y, r:66 });
       delete s.anchors; delete s.spawnNear;
       s.stock=this._shopStock(s.kind);
+      /* v0.40.0：回收超市的「收购单」挂在摊位本身上（要随交易递减），不能只留在 stock 里 */
+      s.wants=s.stock.wants||null;
       this.shops.push(s);
     }
   },
@@ -1885,6 +1887,17 @@ const Raid = {
   },
 
   /* ---- v0.39.0：契约进度 / 阵亡装备赎回（引擎侧两个 hook 的实现） ---- */
+
+  /* 撤离成功那一次，把所有「本局结算类」契约一起推进：件数 / 现金 / 存活时长。
+   * 合并成一个方法是为了不再往 raid-core3 里加行（那边只剩 1 行余量）。 */
+  _extractContractTicks(){
+    const n=this.inv.weapons.length+this.inv.armors.length+this.inv.helmets.length
+      +(this.inv.shields||[]).length+this.inv.parts.length+this.inv.materials.length
+      +(this.inv.keys||[]).length;
+    this._contractTick("extract", n);
+    this._contractTick("money", Math.round(this.creds||0));
+    this._contractTick("time", Math.round((this.raidDuration||0)-(this.timer||0)));
+  },
 
   /* 契约进度。raid-core3 只负责在正确的时机调一行，判定与发奖都在这里 + raid-legends。 */
   _contractTick(kind, n){

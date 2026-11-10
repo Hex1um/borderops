@@ -565,7 +565,7 @@ Object.assign(Raid, {
   },
 
   _onBotDeath(victim, killer){
-    this._contractTick(victim.bounty?"boss":(victim.smart?"elite":null), 1);   // v0.39.0：契约进度（Boss / 精锐）
+    this._contractTick(victim.bounty?"boss":(victim.smart?"elite":(victim.cls==="scav"?"scav":null)), 1);   // v0.39.0/0.40.0：契约进度（Boss / 精锐 / Scav）
     if(killer && killer.isPlayer){
       killer.kills++;
       if((killer.shieldPerks||[]).includes("siphon") && killer.maxShield>0){
@@ -1279,7 +1279,7 @@ Object.assign(Raid, {
     this.stash.tokens=(this.stash.tokens||0)+tokenTotal;
     /* v0.32.0：撤离成功即清零连败 —— 补偿只给「真的连续失败」的玩家 */
     this.stash.lossStreak=0;
-    this._contractTick("extract", this.inv.weapons.length+this.inv.armors.length+this.inv.helmets.length+(this.inv.shields||[]).length+this.inv.parts.length+this.inv.materials.length+(this.inv.keys||[]).length);   // v0.39.0：搜刮契约
+    this._extractContractTicks();   // v0.39.0/0.40.0：搜刮 / 运货 / 死守三种契约一起结算
     if(!RaidStash.save(this.stash) && this.game && this.game.toast)
       this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
     this.game.state="raidover";

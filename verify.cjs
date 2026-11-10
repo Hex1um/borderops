@@ -3930,8 +3930,13 @@ check('精英词条至少改写了一项属性（不是空标记）',
 check('精英名字带词条标签（玩家看得见）', /\[/.test(__affixed.name)?1:0, 1, 0.001);
 
 /* ③ 契约：三种完成条件都必须有引擎侧 hook，且发奖会真的落进仓库 */
-check('契约三种条件都有 hook（boss / elite / extract）',
-  /_contractTick\(victim\.bounty\?"boss"/.test(__c3) && /_contractTick\("extract"/.test(__c3)?1:0, 1, 0.001);
+/* v0.40.0：契约扩到 6 种 —— 击杀类走 _onBotDeath，结算类走 _extractContractTicks */
+check('契约 6 种条件都有 hook（boss / elite / scav / extract / money / time）',
+  /_contractTick\(victim\.bounty\?"boss":\(victim\.smart\?"elite":\(victim\.cls==="scav"\?"scav":null\)\)/.test(__c3)
+  && /this\._extractContractTicks\(\)/.test(__c3)
+  && /this\._contractTick\("extract", n\)/.test(__coreSrc)
+  && /this\._contractTick\("money"/.test(__coreSrc)
+  && /this\._contractTick\("time"/.test(__coreSrc)?1:0, 1, 0.001);
 const __contract = JSON.parse(G(`JSON.stringify((()=>{
   const now=Date.now();
   const stash={ creds:0, tokens:0, weapons:[], parts:[], armors:[], helmets:[], shields:[], materials:[], keys:[] };
@@ -3987,6 +3992,95 @@ const __recap = JSON.parse(G(`JSON.stringify(Raid._deathRecap(
   { name:"AK-74N" }))`));
 check('死亡回放字段完整（'+__recap.dist+'m / '+__recap.hits+' 次 / -'+__recap.dmg+'）',
   (__recap.name==="Slick" && __recap.dist===42 && __recap.hits===3 && __recap.dmg===137)?1:0, 1, 0.001);
+
+/* ---------------- 59. v0.40.0：冲锋枪手感 / 回收收购单 / 契约扩展 ---------------- */
+console.log('\n=== 59. v0.40.0（冲锋枪手感 / 回收收购单 / 契约扩展）===');
+
+/* ① 冲锋枪：移动散布惩罚下降、持枪移速上升，且负机动性词条不再把它拖成最慢的枪 */
+const __smg = JSON.parse(G(`JSON.stringify((()=>{
+  const still={ smg:moveSpreadMul("smg",0), rifle:moveSpreadMul("rifle",0) };
+  const runSmg=moveSpreadMul("smg",1), runRifle=moveSpreadMul("rifle",1);
+  const mv=(g)=>raidGunMoveMul({ gun:g });
+  return {
+    stillSmg:still.smg, runSmg, runRifle,
+    smgPlain:mv({ type:"smg" }),
+    smgBadRoll:mv({ type:"smg", moveMul:0.72 }),
+    riflePlain:mv({ type:"rifle" }),
+    sniper:mv({ type:"sniper" }),
+    smgCap:moveSpreadCap("smg"),
+  };
+})())`));
+check('冲锋枪跑动散布明显低于步枪（'+__smg.runSmg.toFixed(1)+' vs '+__smg.runRifle.toFixed(1)+' 倍）',
+  __smg.runSmg < __smg.runRifle*0.18 && __smg.runSmg > 1 ? 1 : 0, 1, 0.001);
+check('冲锋枪静止散布仍为 1（没被顺手改坏）', __smg.stillSmg===1?1:0, 1, 0.001);
+check('手持冲锋枪移速 ×1.10', Math.abs(__smg.smgPlain-1.10)<0.001, __smg.smgPlain.toFixed(2));
+check('负机动性词条不再让冲锋枪比步枪更慢（'+__smg.smgBadRoll.toFixed(2)+' vs '+__smg.riflePlain.toFixed(2)+'）',
+  __smg.smgBadRoll > __smg.riflePlain?1:0, 1, 0.001);
+check('狙击手移速惩罚保持不变（0.62，别误伤）', Math.abs(__smg.sniper-0.62)<0.001, __smg.sniper.toFixed(2));
+
+/* ② 回收超市：收购单 2~3 类、倍率 2~3、每类限量；不再是自由收购 */
+const __rec = JSON.parse(G(`JSON.stringify((()=>{
+  let bad=[], nMin=9, nMax=0, mulLo=9, mulHi=0, leftMax=0, cats={};
+  for(let i=0;i<300;i++){
+    const sh={ wants:undefined };
+    const st=Raid._shopStock("rec");
+    sh.wants=st.wants||[];
+    if(!sh.wants.length){ bad.push("empty"); continue; }
+    nMin=Math.min(nMin, sh.wants.length); nMax=Math.max(nMax, sh.wants.length);
+    const seen=new Set();
+    for(const w of sh.wants){
+      if(seen.has(w.cat)) bad.push("dup:"+w.cat);
+      seen.add(w.cat); cats[w.cat]=(cats[w.cat]||0)+1;
+      mulLo=Math.min(mulLo,w.mul); mulHi=Math.max(mulHi,w.mul);
+      leftMax=Math.max(leftMax,w.left);
+      if(w.left<=0 || w.left>w.total) bad.push("left:"+w.cat);
+      /* 收购单消失后 raidRecWant 必须返回 null（UI 靠它决定「收不收」） */
+      if(raidRecWant(sh, w.cat)!==w) bad.push("want:"+w.cat);
+    }
+    if(raidRecWant(sh,"_nope")) bad.push("ghost");
+  }
+  return { nMin, nMax, mulLo, mulHi, leftMax, badN:bad.length, bad:bad.slice(0,4), cats:Object.keys(cats) };
+})())`));
+check('回收收购单每局 2~3 类（实测 '+__rec.nMin+'~'+__rec.nMax+'，异常 '+__rec.badN+'）',
+  (__rec.nMin>=2 && __rec.nMax<=3 && __rec.badN===0)?1:0, 1, 0.001);
+check('收购倍率落在 2.0~3.0（实测 '+__rec.mulLo.toFixed(1)+'~'+__rec.mulHi.toFixed(1)+'）',
+  __rec.mulLo>=2.0 && __rec.mulHi<=3.0?1:0, 1, 0.001);
+check('每类都有件数上限（最大 '+__rec.leftMax+' 件）', __rec.leftMax>=1 && __rec.leftMax<=6?1:0, 1, 0.001);
+check('收购单覆盖多个品类（'+__rec.cats.join("/")+'）', __rec.cats.length>=4?1:0, 1, 0.001);
+const __rui2 = fs.readFileSync(path.join(SRC,'raid-ui2.js'),'utf8');
+check('回收面板不再走旧的 1.2× 自由收购价',
+  /raidFieldSellPrice\(/.test(__rui2)?0:1, 1, 0.001);
+check('回收超市不挂每日特价', /if\(kind!=="rec"\)\{[\s\S]{0,80}_fieldDailyDeal/.test(__rui2)?1:0, 1, 0.001);
+
+/* ③ 契约：6 种类型、显式奖励、完成即刷新、越做越难 */
+const __cx = JSON.parse(G(`JSON.stringify((()=>{
+  const kinds=Object.keys(RAID_CONTRACT_KINDS);
+  const o0=raidContractOffers(Date.now(), 0);
+  const o6=raidContractOffers(Date.now(), 6);
+  const ids0=o0.map(o=>o.id), ids6=o6.map(o=>o.id);
+  const sameSet = ids0.length===ids6.length && ids0.every(x=>ids6.indexOf(x)>=0);
+  const needUp = o0.map((o,i)=>o6[i].need>o.need);
+  const labels = o0.map(o=>o.reward && o.reward.label || "");
+  const noCashOut = labels.every(l=>l.indexOf("折")<0);
+  /* 完成一单：发奖 + contractDone+1 + 契约清空（下一次进大厅即是新的 3 条） */
+  const stash={ creds:0, tokens:0, weapons:[], parts:[], materials:[], keys:[], ammo:{},
+                armors:[], helmets:[], shields:[] };
+  raidContractAccept(stash, o0[0], Date.now());
+  const fin=raidContractProgress(stash, o0[0].kind, o0[0].need);
+  const after=raidContractOffers(Date.now(), stash.contractDone);
+  return { kinds, n0:o0.length, distinct:new Set(o0.map(o=>o.kind)).size,
+           refresh:!sameSet, needUpAll:needUp.every(Boolean), labels, noCashOut,
+           done:fin.done, doneCount:stash.contractDone, cleared:!stash.contract,
+           grantKind:fin.grant?fin.grant.kind:"", grantName:fin.grant?fin.grant.name:"",
+           afterIds:after.map(o=>o.id), beforeIds:ids0 };
+})())`));
+check('契约任务类型扩到 6 种（'+__cx.kinds.join('/')+'）', __cx.kinds.length>=6?1:0, 1, 0.001);
+check('每次报价 3 条且类型不重复（'+__cx.labels.join(' | ')+'）', (__cx.n0===3 && __cx.distinct===3)?1:0, 1, 0.001);
+check('奖励是写明的东西（无「集齐折现」）', (__cx.noCashOut && __cx.labels.every(l=>l.length>2))?1:0, 1, 0.001);
+check('完成一单后立刻换一批（做完即刷新）', __cx.refresh?1:0, 1, 0.001);
+check('越做越难：完成 6 单后需求全部上升', __cx.needUpAll?1:0, 1, 0.001);
+check('完成后发奖 + 完成数 +1 + 契约清空（'+__cx.grantKind+'：'+__cx.grantName+'）',
+  (__cx.done && __cx.doneCount===1 && __cx.cleared && __cx.grantName.length>0)?1:0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

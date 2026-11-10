@@ -176,21 +176,27 @@ UI.raidSetup=function(){
   const feeMin=feeOf("extP"), feeMax=feeOf("extJ");
 
   /* v0.39.0（用户选定）：战地契约 + 阵亡装备限时赎回。
+   * v0.40.0：契约奖励改成写明白的具体物品、完成即刷新、越做越难。
    * 两者都只读 stash 上的可选字段，旧档没有就是「没有契约 / 没有待赎回」。 */
   const _now=Date.now();
+  const cDone=(stash.contractDone|0)||0;
   const cActive=(typeof raidContractActive==="function")?raidContractActive(stash, _now):null;
-  const cOffers=(!cActive && typeof raidContractOffers==="function")?raidContractOffers(_now):[];
+  const cOffers=(!cActive && typeof raidContractOffers==="function")?raidContractOffers(_now, cDone):[];
+  const cTier=(typeof raidContractTier==="function")?raidContractTier(cDone):1;
+  const rewardLine=(r)=>r&&r.label?`<b style="color:#ffd23f">${r.label}</b>`:"—";
   const contractHtml = cActive
     ? `<div class="raid-item sel" style="cursor:default;">
          <div class="ri-name" style="color:#8fd0ff">${cActive.name}：${cActive.title}</div>
          <div class="ri-meta">${cActive.desc}</div>
-         <div class="ri-val" style="color:#8fe07a">进度 ${cActive.progress||0} / ${cActive.need}
+         <div class="ri-meta">奖励：${rewardLine(cActive.reward)}</div>
+         <div class="ri-val" style="color:#8fe07a">进度 ${cActive.progress||0} / ${cActive.need}（第 ${cActive.tier||1} 档）
            <button class="btn ghost small" data-cx="1" style="margin-left:8px;">放弃</button></div>
        </div>`
     : (cOffers.length ? cOffers.map(o=>`<div class="raid-item" style="cursor:default;">
          <div class="ri-name" style="color:#ffd23f">${o.name}：${o.title}</div>
-         <div class="ri-meta">${o.desc}，奖励：具名装备（集齐后折 ₽120,000）</div>
-         <div class="ri-val"><button class="btn ghost small" data-cc="${o.id}">接取</button></div>
+         <div class="ri-meta">${o.desc}</div>
+         <div class="ri-meta">奖励：${rewardLine(o.reward)}</div>
+         <div class="ri-val"><button class="btn ghost small" data-cc="${o.id}">接取（第 ${o.tier} 档）</button></div>
        </div>`).join('') : `<div class="empty-hint">今天没有可接的契约</div>`);
 
   const bbList=(typeof raidBuybackList==="function")?raidBuybackList(stash, _now):[];
@@ -225,7 +231,7 @@ UI.raidSetup=function(){
           <b>充能延迟</b>= 不受伤害多少秒后开始回盾，<b>充能速度</b>= 每秒回多少；<b>破盾瞬间有一小段无敌</b>，
           之后按延迟重新起盾。护盾由电池组 / 充能模块 / 延时继电器 / 承载框架 4 个配件组成，
           带前后缀与独特加成，可工坊合成、融合升阶、箱子和 Raider 掉落、军火超市购买。<br>
-          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与 GP 币都不互通，同名分店也是自己的库存。回收超市按估值 <b style="color:#62c8ff">120%（±40%）</b> 收你的货，远高于背包直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#ffd23f">◈ GP 币</b>，出售高品阶成品枪与高级改装模块。<br>
+          <b style="color:#ffb44a">局内商店</b>：全图 <b>9 个摊位</b>（枪械 ×2 / 材料 ×3 / 回收 ×2 / 黑市 ×2），<b style="color:#ffd23f">每局随机刷新位置</b>，散在工业区、北境、河谷、东部铁路与西南监狱/小镇之间，走近按 <b>E</b> 交易（游戏不暂停）。<b>每个摊位各自独立</b>：货架、收购与 GP 币都不互通，同名分店也是自己的库存。回收超市<b style="color:#62c8ff">只按今日收购单收货</b>（2~3 类，估价 <b style="color:#62c8ff">2~3 倍</b>，每类限量收满即停），远高于背包直售的 <b style="color:#ff8a5a">${Math.round(RAID_VENDOR_RATE*100)}%</b>；黑市只收 <b style="color:#ffd23f">◈ GP 币</b>，出售高品阶成品枪与高级改装模块。<br>
           <b style="color:#ffd23f">保险箱与钥匙</b>：地图里散布着 <b>I~V 级上锁保险箱</b>（箱体带等级锁扣），等级越高里面的枪械 / 护甲 / 改装模块越好。低阶箱遍地都是，<b style="color:#ff8a5a">IV 级每局通常只有一口</b>（最大房间的军械库），<b style="color:#ff6a5a">V 级军火箱全图随机、约五局一遇</b>，箱内保底 <b>T5 特种装</b>、一次出 4 件。开箱要消耗一次对应等级的<b>钥匙</b>（钥匙能开同级及更低的箱子，有使用次数，用尽报废）。钥匙还能在<b style="color:#8fd0ff">工坊合成表</b>用 <b style="color:#ffd76a">16 份原材料</b>做一把（投料品质决定 I~V 级，越好的料出越高级的钥匙）；另外两条路是<b>开箱掉落</b>（<b style="color:#ffd76a">i 级箱最多掉 i+1 级钥匙</b>，V 级封顶；普通箱只出 I 级）与<b>商店购买</b>（<b>材料商店</b> I~II 卢布、<b>黑市</b> III~V GP 币；Raider 身上也会揣一把）。钥匙带进图才算数，死了就丢——<b style="color:#ffd23f">入场前在配装大厅的「钥匙串」逐把勾选</b>，不想冒险的钥匙留在仓库，绝对安全。<br>
           <b style="color:#8fb0c8">改装模块不可合成</b>：弹种适配组件 / 膛压组件 / 改装模块既不能用材料造，也不能两两升阶，只能从<b>保险箱与 Raider</b>身上掉落，或在<b>枪械商店（低阶，卢布）</b>与<b>黑市（高阶，GP 币）</b>购买。膛压组件决定<b>改装等级</b>（每级主伤害 <b>×${MAYHEM.corePower}</b>，V 级约 ×1.34），弹种适配组件更换枪械适配弹药。<br>
           <b style="color:#8fe07a">可互动设施</b>：<b>监狱 / 小镇 / 大坝</b>里有医疗站（回 45 血并止血）、弹药柜（补满备弹）、警报器（拉响把 AI 引过去，撤离前调虎离山）与<b style="color:#8fd0ff">泄洪闸</b>——闸门一开，水库放空，水底露出 <b style="color:#ffd23f">IV 级 + III 级保险箱</b>各一口，代价是巨响会招来一票人。<br>
@@ -338,7 +344,7 @@ UI.raidSetup=function(){
       <!-- v0.39.0：战地契约（局外接、局内推进、完成给具名装备）+ 阵亡装备限时赎回 -->
       <div class="row" style="margin-top:12px;gap:14px;align-items:flex-start;flex-wrap:wrap;">
         <div style="flex:1 1 340px;min-width:290px;">
-          <div class="raid-result-label" style="margin:0 0 6px;">战地契约</div>
+          <div class="raid-result-label" style="margin:0 0 6px;">战地契约（第 ${cTier} 档 · 已完成 ${cDone} 单，完成即刷新、越做越难）</div>
           <div class="raid-list">${contractHtml}</div>
         </div>
         <div style="flex:1 1 340px;min-width:290px;">
@@ -426,7 +432,7 @@ UI.raidSetup=function(){
   UI.overlay.querySelectorAll('[data-cc]').forEach(el=>{
     el.onclick=(e)=>{
       e.stopPropagation();
-      const off=raidContractOffers(Date.now()).find(o=>o.id===el.dataset.cc);
+      const off=raidContractOffers(Date.now(), stash.contractDone|0).find(o=>o.id===el.dataset.cc);
       if(off && raidContractAccept(stash, off, Date.now())){ RaidStash.save(stash); SFX.ui(); UI.raidSetup(); }
     };
   });

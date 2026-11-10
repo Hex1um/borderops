@@ -476,7 +476,10 @@ const SFX = (function(){
    站定几乎指哪打哪，一跑起来子弹就散了（狙击尤其明显）。
    ------------------------------------------------------------ */
 const MOVE_SPREAD_K = {
-  smg:4.8,      "冲锋枪":4.8,
+  /* v0.40.0（用户要求「冲锋枪移动散射惩罚减小」）：4.8 → 2.4。
+     SMG 的定位就是「边跑边扫」，旧值满速仍是 5.8 倍散布，跑起来只剩概率命中；
+     现在满速约 3.4 倍，站定差距还在（步枪 25 倍），但腰射不再是摆设。 */
+  smg:2.4,      "冲锋枪":2.4,
   pistol:16.5,  "手枪":16.5,
   shotgun:18.0, "霰弹":18.0, "霰弹枪":18.0,
   rifle:24.0,   "步枪":24.0,
@@ -485,6 +488,11 @@ const MOVE_SPREAD_K = {
   launcher:18.0,"火箭筒":18.0,
 };
 function isSMG(cat){ return cat==="smg" || cat==="冲锋枪"; }
+/* v0.40.0（用户要求「冲锋枪移动速度惩罚减小」）：
+   冲锋枪此前没有任何正向移速加成，只有随机「机动性」词条可能掷出负数把它拖慢。
+   这里给两条：① 手持 SMG 移速 ×1.10；② SMG 的机动性词条负值下限抬高（见 raid-data 的 raidGunMoveMul），
+   保证「拿冲锋枪跑得更快」这条武器定位真的成立。 */
+const SMG_HOLD_MOVE_MUL = 1.10;
 function moveSpreadMul(cat, mv){
   const k = MOVE_SPREAD_K[cat];
   const K = (k===undefined) ? 24.0 : k;      // 未分类按步枪处理
@@ -506,6 +514,22 @@ const MOVE_SPREAD_CAP = {
 function moveSpreadCap(cat){
   const c = MOVE_SPREAD_CAP[cat];
   return (c===undefined) ? 0.98 : c;
+}
+
+/* 手持武器的移速倍率。只看主手 —— 副手要紧的是正在用的那把。
+ * v0.40.0 从 raid-data.js 搬到这里：那边分片已经贴在 2000 行上限上，
+ * 而这里本来就是「移动 / 散布」的数值归属地，语义更对口。
+ * 引用 RAID_SNIPER_MOVE_MUL（raid-data.js）只在运行时发生，加载顺序不影响。 */
+function raidGunMoveMul(p){
+  const g=p&&p.gun;
+  /* v0.36.0：枪械自带的持枪移速（人体工学套件 / 紧凑枪身这类厂商加成）终于进结算 ——
+     之前 moveMul 只在 Weapon 里算过，扁平枪械对象根本没有这个字段。 */
+  const own = (g && g.moveMul!==undefined) ? M.clamp(g.moveMul, 0.7, 1.35) : 1;
+  /* v0.40.0（用户要求「冲锋枪移速惩罚减小」）：SMG 原以为自己「轻」，实际只吃随机机动性词条，
+     掷到负值就比步枪还慢 —— 现在统一 ×1.10，且自身机动性下限抬到 0.92。 */
+  const smg = !!(g && isSMG(g.type||g.cat));
+  const ownS = smg ? Math.max(0.92, own) : own;
+  return ((g && (g.type==="sniper"||g.cat==="sniper")) ? RAID_SNIPER_MOVE_MUL : (smg?SMG_HOLD_MOVE_MUL:1)) * ownS;
 }
 
 /* ---------------- v0.31.1：存档字符串净化 / HTML 出口转义 ----------------

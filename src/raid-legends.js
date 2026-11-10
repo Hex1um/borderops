@@ -150,6 +150,30 @@ function raidNamedPartFor(uniqueId){
 }
 
 /* =========================================================================
+ * v0.40.0 — 回收超市「收购单」品类表
+ *
+ * 用户要求：回收超市只收**指定品类**（不再是自由选择），但收购价给到估价的 2~3 倍。
+ * mul 是倍率区间、left 是该品类本摊位的**收购件数上限** —— 上限是这套设计的关键：
+ * 局内商店 0.8× 买、回收 2~3× 卖，如果无限收就是无限刷钱；限量之后搬砖有天花板。
+ * 表放这个文件是因为 raid-data.js 只剩 9 行、raid-core2 只剩 20 行。
+ * ========================================================================= */
+const RAID_REC_WANTS = [
+  { cat:"weapon",   label:"枪械",           mul:[2.0,2.6], left:[1,1] },
+  { cat:"part",     label:"配件 / 改装模块", mul:[2.2,3.0], left:[2,3] },
+  { cat:"material", label:"原材料",          mul:[2.4,3.0], left:[4,6] },
+  { cat:"med",      label:"医疗品",          mul:[2.6,3.0], left:[3,5] },
+  { cat:"gear",     label:"护甲 / 头盔 / 护盾", mul:[2.0,2.8], left:[1,2] },
+  { cat:"key",      label:"钥匙",            mul:[2.2,2.8], left:[1,2] },
+];
+/* 收购单里某个品类当前还能收几件；没有该品类返回 0 */
+function raidRecWant(sh, cat){
+  const ws=(sh && sh.wants)||[];
+  for(const w of ws){ if(w.cat===cat) return w; }
+  return null;
+}
+
+
+/* =========================================================================
  * v0.39.0 — 局外契约（击杀指标 / 搜刮配额）+ 阵亡装备限时赎回
  *
  * 为什么放这个文件：契约的奖励载体就是上面的 RAID_UNIQUES 具名装备表；
@@ -161,27 +185,104 @@ function raidNamedPartFor(uniqueId){
 const RAID_CONTRACT_HOURS = 24;     // 契约与待赎回装备的有效期
 const RAID_BUYBACK_RATE   = 3.0;    // 赎回价 = 装备估值 ×300%（比重新买一件更贵，但胜在确定）
 
-/* 契约模板：三种都能在引擎里用一行 hook 精确判定的，避免「说好的进度不认」。
- * need 由天数决定，同一天刷新出的契约对所有人都一样（联机两端不会打架）。 */
+/* v0.40.0（用户要求）：契约扩到 6 种任务类型，奖励改成**显式可读的具体物品**，
+ * 完成即刻刷新下一批，且「越做越难」（难度与奖励都随完成数抬）。
+ *
+ * 判定全部落在引擎已有的两个 hook 上（_onBotDeath / 撤离结算），不新增结算分支：
+ *   boss / elite / scav → _onBotDeath 里按 victim 分类
+ *   extract / money / time → 撤离成功那一次按背包件数 / 局内现金 / 存活时长
+ * need 与奖励都由「UTC 天数 + 已完成数」决定，所以同一玩家重开、联机两端都一致。 */
 const RAID_CONTRACT_KINDS = {
-  boss:    { name:"猎杀", need:(d)=>1+(d%2), title:(n)=>"击杀 "+n+" 名封锁区指挥官", desc:"Boss 在地图上以黄色标记显示，3 名同时在场" },
-  elite:   { name:"清剿", need:(d)=>2+(d%3), title:(n)=>"击杀 "+n+" 名精锐（★）",       desc:"POI 精英与名字带 ★ 的 Raider 都算" },
-  extract: { name:"搜刮", need:(d)=>6+(d%5), title:(n)=>"带出 "+n+" 件战利品",           desc:"只统计成功撤离的那一趟，装备/配件/材料/钥匙都算" },
+  boss:    { name:"猎杀", base:1,     step:1,     title:(n)=>"击杀 "+n+" 名封锁区指挥官", desc:"Boss 在地图上以黄色标记显示，3 名同时在场" },
+  elite:   { name:"清剿", base:2,     step:1,     title:(n)=>"击杀 "+n+" 名精锐（★）",       desc:"POI 精英与名字带 ★ 的 Raider 都算" },
+  scav:    { name:"清扫", base:5,     step:2,     title:(n)=>"击杀 "+n+" 名 Scav",           desc:"拾荒者数量最多，多在建筑群外围游荡" },
+  extract: { name:"搜刮", base:5,     step:2,     title:(n)=>"带出 "+n+" 件战利品",           desc:"只统计成功撤离的那一趟，装备/配件/材料/钥匙都算" },
+  money:   { name:"运货", base:20000, step:12000, title:(n)=>"单局带出 ₽"+n+" 现金",          desc:"撤离那一刻手上的局内卢布要够这个数" },
+  time:    { name:"死守", base:240,   step:45,    title:(n)=>"存活 "+Math.floor(n/60)+" 分 "+(n%60)+" 秒后撤离", desc:"在本局撑到这个时间再走" },
 };
-const RAID_CONTRACT_ORDER = ["boss","elite","extract"];
+const RAID_CONTRACT_ORDER = ["boss","elite","scav","extract","money","time"];
 
-/* 当天的契约报价：种子取「UTC 天数」，同一天刷新结果固定 */
-function raidContractOffers(now){
+/* 用固定种子跑一段会用到 RNG 的生成（不污染主随机流 —— 联机两端结算必须一致） */
+function raidSeeded(seed, fn){
+  const prev=RNG.rng;
+  const snap=(typeof RNG.snapshot==="function")?RNG.snapshot():null;
+  RNG.setSeed((seed>>>0)||1);
+  try{ return fn(); }
+  finally{
+    RNG.rng=prev;
+    if(snap!==null && typeof RNG.restoreSnap==="function") RNG.restoreSnap(snap);
+  }
+}
+
+/* 奖励真身：给什么就写着什么，不做「集齐折现」这种模糊承诺。
+ * 每种都返回 { type, label, give(stash) }，label 直接上大厅界面。 */
+function raidContractRewardFor(kind, seed, scale){
+  const s=Math.max(1, scale||1);
+  return raidSeeded(seed, ()=>{
+    /* 加权：具名装备偏少但存在，材料 / 弹药 / 卢布为主，保证「看得见的收益」 */
+    const roll=RNG.f();
+    if(roll<0.22){
+      const pool=RAID_UNIQUES.filter(u=>u.kind==="weapon");
+      const u=pool[RNG.ri(0,pool.length-1)];
+      return { type:"uniqGun", name:u.name, label:"具名枪「"+u.name+"」",
+        give:(st)=>{ const w=raidMakeUnique(u); st.weapons.push(w); return w.name; } };
+    }
+    if(roll<0.40){
+      const pool=RAID_NAMED_PARTS;
+      const d=pool[RNG.ri(0,pool.length-1)];
+      return { type:"uniqPart", name:d.name, label:"具名配件"+d.name,
+        give:(st)=>{ const pt=raidMakeNamedPart(d.id); st.parts=st.parts||[]; st.parts.push(pt); return pt.name; } };
+    }
+    if(roll<0.62){
+      const pool=RAID_MATERIALS.filter(x=>x.tier>=5);
+      const pickPool=pool.length?pool:RAID_MATERIALS;
+      const m=pickPool[RNG.ri(0,pickPool.length-1)];
+      const n=Math.round((4+RNG.ri(0,3))*s);
+      return { type:"material", id:m.id, n, label:"原材料「"+m.name+"」×"+n,
+        give:(st)=>{ st.materials=st.materials||[];
+          for(let i=0;i<n;i++) st.materials.push(Object.assign({},m,{n:1}));
+          return m.name+" ×"+n; } };
+    }
+    if(roll<0.80){
+      const cal=RNG.pick(["light","mid","heavy"]);
+      const lv=3+RNG.ri(1,2);                     // T4 / T5 高级弹
+      const d=ammoDef(cal, lv);
+      const n=Math.round(60*s/10)*10;
+      return { type:"ammo", id:d.id, n, label:"弹药「"+d.name+"」×"+n,
+        give:(st)=>{ st.ammo=st.ammo||{}; st.ammo[d.id]=(st.ammo[d.id]||0)+n; return d.name+" ×"+n; } };
+    }
+    if(roll<0.92){
+      const lv=3+RNG.ri(0,2);
+      return { type:"key", lv, label:"「"+RAID_LOCK_NAME[lv]+"钥匙」×1",
+        give:(st)=>{ st.keys=st.keys||[]; const k=raidMakeKey(lv); st.keys.push(k); return k.name; } };
+    }
+    const amount=Math.round((30000+RNG.ri(0,20000))*s/1000)*1000;
+    return { type:"creds", amount, label:"卢布 ₽"+amount,
+      give:(st)=>{ st.creds=(st.creds||0)+amount; return "₽"+amount; } };
+  });
+}
+
+/* 难度：完成得越多需求越高（每 2 单抬一档），奖励同步放大（每单 +12%，封顶 2.5 倍） */
+function raidContractTier(done){ return 1+Math.floor((done||0)/2); }
+function raidContractRewardScale(done){ return Math.min(2.5, 1+(done||0)*0.12); }
+
+/* 当前可接的报价：3 条不同种类，种子 =「天数 + 已完成数」→ 完成即刻换成新的一批 */
+function raidContractOffers(now, done){
   const t=Number(now)||Date.now();
   const day=Math.floor(t/86400000);
+  const d=done||0;
+  const tier=raidContractTier(d), scale=raidContractRewardScale(d);
   const list=[];
-  for(let i=0;i<RAID_CONTRACT_ORDER.length;i++){
-    const kind=RAID_CONTRACT_ORDER[(day+i)%RAID_CONTRACT_ORDER.length];
-    const need=RAID_CONTRACT_KINDS[kind].need(day+i);
-    list.push({ id:kind+"-"+day, kind, need, progress:0, at:t,
-      title:RAID_CONTRACT_KINDS[kind].title(need),
-      desc:RAID_CONTRACT_KINDS[kind].desc,
-      name:RAID_CONTRACT_KINDS[kind].name });
+  for(let i=0;i<3;i++){
+    /* +d*5：每完成一单整体换组（5 与 6 互质，6 单内轮完整个种类表） */
+    const kind=RAID_CONTRACT_ORDER[(day*3+i+d*5)%RAID_CONTRACT_ORDER.length];
+    const kd=RAID_CONTRACT_KINDS[kind];
+    const need=kd.base + kd.step*(tier-1);
+    const seed=raidDealSeed("contract-"+kind, day+d*97, tier);
+    const reward=raidContractRewardFor(kind, seed, scale);
+    list.push({ id:kind+"-"+day+"-"+d, kind, need, tier, progress:0, at:t,
+      title:kd.title(need), desc:kd.desc, name:kd.name,
+      reward:{ type:reward.type, label:reward.label, seed } });
   }
   return list;
 }
@@ -193,47 +294,36 @@ function raidContractActive(stash, now){
 }
 function raidContractAccept(stash, offer, now){
   if(!stash || !offer) return false;
-  stash.contract={ id:offer.id, kind:offer.kind, need:offer.need, progress:0,
-    at:Number(now)||Date.now(), title:offer.title, desc:offer.desc, name:offer.name };
+  stash.contract={ id:offer.id, kind:offer.kind, need:offer.need, tier:offer.tier||1, progress:0,
+    at:Number(now)||Date.now(), title:offer.title, desc:offer.desc, name:offer.name,
+    reward:offer.reward||null };
   return true;
 }
 function raidContractAbandon(stash){ if(stash) stash.contract=null; }
 
-/* 奖励：一件还没拿到过的具名装备（优先枪，枪都拿过了就给具名配件）。
- * 全部拿完就折成卢布 —— 契约不能变成「完成但没有奖励」。 */
-function raidContractGrant(stash){
+/* 发奖：按契约上**写明的**那份奖励发放（种子可复算 → 接单看到什么就拿到什么）。
+ * 没有任何「集齐后折现」兜底 —— 用户明确要求奖励必须是具体物品。 */
+function raidContractGrant(stash, contract){
   if(!stash) return null;
-  const owned=new Set();
-  for(const w of (stash.weapons||[])) if(w && w.unique) owned.add(w.unique);
-  for(const p of (stash.parts||[])) if(p && p.unique) owned.add(p.unique);
-  const guns=RAID_UNIQUES.filter(u=>u.kind==="weapon" && !owned.has(u.id));
-  if(guns.length){
-    const u=guns[Math.floor(Math.random()*guns.length)];
-    const w=raidMakeUnique(u);
-    stash.weapons.push(w);
-    return { kind:"weapon", name:w.name, perk:u.perk };
-  }
-  const parts=RAID_NAMED_PARTS.filter(p=>!owned.has(p.id));
-  if(parts.length){
-    const pt=raidMakeNamedPart(parts[Math.floor(Math.random()*parts.length)].id);
-    stash.parts=stash.parts||[];
-    stash.parts.push(pt);
-    return { kind:"part", name:pt.name, perk:"具名配件（可直接装枪）" };
-  }
-  const cash=120000;
-  stash.creds=(stash.creds||0)+cash;
-  return { kind:"creds", name:"₽"+cash, perk:"具名装备已集齐，折成卢布" };
+  const c=contract||stash.contract||{};
+  const seed=(c.reward && c.reward.seed) || raidDealSeed("contract-"+(c.kind||"boss"), 0, 1);
+  const got=raidContractRewardFor(c.kind||"boss", seed, raidContractRewardScale(stash.contractDone));
+  const name=got.give(stash);
+  return { kind:got.type, name:name||got.label, label:got.label, perk:"" };
 }
 
-/* 进度推进。返回 { done, grant } —— 只有 done 的那次会发奖。 */
+/* 进度推进。done 的那次会发奖，并让 contractDone +1 → 报价与难度都刷新。 */
 function raidContractProgress(stash, kind, n){
   const c=raidContractActive(stash, Date.now());
   if(!c || c.kind!==kind) return { done:false };
-  c.progress=Math.min(c.need, (c.progress||0)+(n||1));
+  /* money / time 是「单局阈值」型：只认最好的一次，不能跨局累加（否则攒钱也算完成） */
+  if(kind==="money" || kind==="time") c.progress=Math.max(c.progress||0, Math.min(c.need, Math.round(n||0)));
+  else c.progress=Math.min(c.need, (c.progress||0)+(n||1));
   if(c.progress<c.need) return { done:false };
-  const grant=raidContractGrant(stash);
+  const grant=raidContractGrant(stash, c);
+  stash.contractDone=(stash.contractDone||0)+1;
   stash.contract=null;
-  return { done:true, grant };
+  return { done:true, grant, doneCount:stash.contractDone };
 }
 
 /* ---- 阵亡装备限时赎回 ----

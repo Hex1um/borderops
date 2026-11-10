@@ -732,14 +732,6 @@ function raidPlayerBeam(R){
     sniper,
   };
 }
-/* 手持武器的移速倍率（目前只有狙击枪有惩罚）。只看主手 —— 副手要紧的是正在用的那把。 */
-function raidGunMoveMul(p){
-  const g=p&&p.gun;
-  /* v0.36.0：枪械自带的持枪移速（人体工学套件 / 以色列武器工业这类厂商的紧凑枪身）
-     终于进结算 —— 之前 moveMul 只在 Weapon 里算过，扁平枪械对象根本没有这个字段。 */
-  const own = (g && g.moveMul!==undefined) ? M.clamp(g.moveMul, 0.7, 1.35) : 1;
-  return ((g && (g.type==="sniper"||g.cat==="sniper")) ? RAID_SNIPER_MOVE_MUL : 1) * own;
-}
 function raidPlayerLit(R, x, y){
   const p=R&&R.player; if(!p) return false;
   const bm=raidPlayerBeam(R);

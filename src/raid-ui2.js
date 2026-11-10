@@ -232,20 +232,27 @@ UI.raidFieldShop=function(key){
     if(mkeys.length) body += `<div class="hint" style="margin:10px 0 6px;grid-column:1/-1;">▸ 钥匙（开对应等级的上锁保险箱，带进图才会生效）</div>` +
       mkeys.map((k,i)=>keyCard(k,"cash",i)).join("");
   } else if(kind==="rec"){
-    // 回收超市：把背包里的东西折现（v0.19.0：估价 × 1.2 ± 0.4，按件稳定浮动）
+    /* v0.40.0（用户要求）：回收超市改成「收购单」——
+       只收指定品类（2~3 类），价格是估价的 2~3 倍，每类有件数上限；
+       不在收购单上的东西**根本不出现在面板里**（不再是自由选择）。
+       弹药单独走固定的 0.55× 折现（低于买价，构不成套利），不占收购单名额。 */
     const rows=[];
     const equipped=new Set();
     if(R.player.gun) equipped.add(R.player.gun.uid);
     if(R.player.secondary) equipped.add(R.player.secondary.uid);
-    const add=(key, item, name, col, note, base)=>{
-      // v0.21.9：材料没有 uid（undefined===undefined 恒命中第一件），行上补 id 供按 id 匹配
-      rows.push({ key, uid:item.uid, id:item.id, name, col, note, base,
-        val: raidFieldSellPrice(base, item.uid || name) });
+    const wants=sh.wants||[];
+    const wantOf=cat=>raidRecWant(sh, cat);
+    const price=(base, mul)=>Math.max(1, raidEconRound((base||0)*mul));
+    const add=(cat, key, item, name, col, note, base)=>{
+      const w=wantOf(cat);
+      if(!w || w.left<=0) return;                       // 不在收购单 / 已收满 → 不出现
+      rows.push({ cat, key, uid:item.uid, id:item.id, name, col, note, base,
+        mul:w.mul, val:price(base, w.mul) });
     };
     for(const w of (R.inv.weapons||[])){
       const on=equipped.has(w.uid);
-      add("w", w, gunNameOf(w), raidGunColor(w), on?"手持/副手中，需先换下":"枪械", w.value||0);
-      if(on) rows[rows.length-1].on=true;
+      add("weapon", "w", w, gunNameOf(w), raidGunColor(w), on?"手持/副手中，需先换下":"枪械", w.value||0);
+      if(on && rows.length) rows[rows.length-1].on=true;
     }
     /* v0.25.0：局内回收超市的护甲 / 头盔也改用 9 阶品质色（与仓库卡片一致） */
     const armorCol=(it)=>{
@@ -253,33 +260,64 @@ UI.raidFieldShop=function(key){
       return (typeof r==="number" && RAID_RARITY_COLOR[r]) ? RAID_RARITY_COLOR[r]
         : (ARMOR_TIER_COLOR[it.tier]||"#dfe7f0");
     };
-    for(const a of (R.inv.armors||[])) add("a", a, a.name, armorCol(a), "护甲", a.value||0);
-    for(const h of (R.inv.helmets||[])) add("h", h, h.name, armorCol(h), "头盔", h.value||0);
-    for(const s of (R.inv.shields||[])) add("s", s, s.name, shieldColor(s), "护盾", s.value||0);
-    for(const pt of (R.inv.parts||[])) add("p", pt, partNameOf(pt)||(pt.core?"改装模块":pt.slot_name||"配件"),
+    for(const a of (R.inv.armors||[])) add("gear", "a", a, a.name, armorCol(a), "护甲", a.value||0);
+    for(const h of (R.inv.helmets||[])) add("gear", "h", h, h.name, armorCol(h), "头盔", h.value||0);
+    for(const s of (R.inv.shields||[])) add("gear", "s", s, s.name, shieldColor(s), "护盾", s.value||0);
+    for(const pt of (R.inv.parts||[])) add("part", "p", pt, partNameOf(pt)||(pt.core?"改装模块":pt.slot_name||"配件"),
       (RARITY_BY_ID[pt.rarity]||{color:"#cfd8e2"}).color, pt.core?"改装模块":"配件",
       (pt.slot==="core"?pt.value:partValue(pt))||0);
-    for(const m of (R.inv.materials||[])) add("m", m, m.name, m.color||"#dfe7f0", "原材料", m.value||0);
-    /* v0.20.3：多捡的子弹也能在这里变现（按「单发估值 × 数量」走 1.2× 回收价） */
+    for(const m of (R.inv.materials||[])) add("material", "m", m, m.name, m.color||"#dfe7f0", "原材料", m.value||0);
+    for(const md of (R.inv.meds||[])){
+      const def=RAID_MED_BY_ID[md.id]||{};
+      add("med", "md", md, md.name+(md.n>1?" ×"+md.n:""), md.color||"#ff9a9a", def.desc||"医疗品",
+        (def.value||100)*(md.n||1));
+    }
+    for(const k of (R.inv.keys||[])){
+      add("key", "k", k, k.name, k.color||"#ffd23f", "钥匙，剩 "+(k.uses||1)+" 次",
+        (typeof raidKeyValue==="function") ? raidKeyValue(k) : (k.value||0));
+    }
+    /* 弹药：固定 0.55×，不进收购单（买了再卖必亏，所以不需要限量） */
+    const ammoRows=[];
     for(const id of Object.keys(R.inv.ammo||{})){
       const n=R.inv.ammo[id]; if(!(n>0)) continue;
       const d=ammoDefFromId(id); if(!d) continue;
       const base=d.value*n;
-      rows.push({ key:"am", uid:id, name:d.name+" ×"+n, col:d.color,
+      ammoRows.push({ key:"am", uid:id, name:d.name+" ×"+n, col:d.color,
         note:"弹药，"+d.spec, base, val:raidAmmoSellPrice(base), n });
     }
-    body = rows.length ? rows.map((r,i)=>`
+    const wantsHtml = wants.map(w=>{
+      const full=w.left<=0;
+      return `<span class="solo-badge" style="margin-right:8px;border-color:${full?"#5a6472":"#62c8ff"}66;color:${full?"#7a8494":"#62c8ff"}">
+        ${w.label} ×${w.mul.toFixed(1)} · ${full?"已收满":("还剩 "+w.left+" / "+w.total+" 件")}</span>`;
+    }).join("");
+    const sellRow=(r,i)=>`
       <div class="si">
         <div class="si-name" style="color:${r.col}">${r.name}</div>
-        <div class="si-stats">${r.note}，估值 ₽${priceTextShort(r.base)}，回收价 ${(r.val/Math.max(1,r.base)*100).toFixed(0)}%</div>
+        <div class="si-stats">${r.note}，估值 ₽${priceTextShort(r.base)}，本店 ×${r.mul.toFixed(1)} 收购</div>
         <div class="si-buy"><span class="si-price">₽ ${priceTextShort(r.val)}</span>
           <button class="btn ghost" data-fsell="${r.key}:${i}" ${r.on?"disabled":""}>${r.on?"换下后可卖":"回收"}</button></div>
-      </div>`).join("") : `<div class="empty-hint">背包是空的，先下场搜刮再来</div>`;
+      </div>`;
+    body = `<div class="hint" style="grid-column:1/-1;margin:0 0 8px;">▸ 今日收购单（只收以下几类，限量收满即停）</div>
+      <div style="grid-column:1/-1;margin-bottom:10px;">${wantsHtml||`<span style="color:#7a8494">今日没有收购单</span>`}</div>`
+      + (rows.length ? rows.map(sellRow).join("")
+         : `<div class="empty-hint" style="grid-column:1/-1;">背包里没有收购单上的品类。本店只收：${wants.map(w=>w.label).join(" / ")||"（无）"}</div>`)
+      + (ammoRows.length
+         ? `<div class="hint" style="grid-column:1/-1;margin:12px 0 6px;">▸ 弹药回收（固定 ${Math.round(raidAmmoSellPrice(100)/100*100)}%，不占收购单名额）</div>`
+           + ammoRows.map((r,i)=>`
+             <div class="si">
+               <div class="si-name" style="color:${r.col}">${r.name}</div>
+               <div class="si-stats">${r.note}，估值 ₽${priceTextShort(r.base)}</div>
+               <div class="si-buy"><span class="si-price">₽ ${priceTextShort(r.val)}</span>
+                 <button class="btn ghost" data-fsell="am:${i}">回收</button></div>
+             </div>`).join("")
+         : "");
     R._sellRows=rows;
+    R._sellAmmo=ammoRows;
   }
 
-  /* v0.35.1（#9）：每个摊位顶部一张「每日特价」卡（与军火超市同一套确定性逻辑） */
-  {
+  /* v0.35.1（#9）：每个摊位顶部一张「每日特价」卡（与军火超市同一套确定性逻辑）
+   * v0.40.0（用户要求）：回收超市不挂特价商品 —— 它只按收购单收货。 */
+  if(kind!=="rec"){
     const fdeal=UI._fieldDailyDeal(kind);
     if(fdeal){
       const leftMin=Math.max(1, Math.ceil((raidDealBucketEnd(raidDealBucket())-Date.now())/60000));
@@ -328,7 +366,7 @@ UI.raidFieldShop=function(key){
       <div class="subtitle">${tagLine} · 局内交易，撤离成功才会把货带回仓库</div>
       <div class="shop-bar">
         <div class="shop-desc">${kind==="rec"
-          ? `回收超市按装备估值的 <b style="color:#62c8ff">${Math.round(RAID_FIELD_SELL_RATE*100)}%（±${Math.round(RAID_FIELD_SELL_JITTER*100)}%）</b> 收购（背包直售只有 ${Math.round(RAID_VENDOR_RATE*100)}%）。带进图卖能多赚，但要先活着走到这里。`
+          ? `回收超市只收<b style="color:#62c8ff">今日收购单</b>上的品类（2~3 类），价格是估价的 <b style="color:#62c8ff">2~3 倍</b>，每类限量、收满即停；不在单上的东西本店不收。弹药单独按固定 55% 折现。`
           : kind==="black"
             ? `黑市只认 <b style="color:#ffd23f">◈ GP 币</b>：<b>本局首杀必得 1 枚</b>，之后靠上锁箱与 Raider 掉落，撤离时再按带出价值结算。这里出售 <b style="color:#ffd23f">高品阶成品枪</b>、高级改装模块与 <b style="color:#ffd23f">III~V 级保险箱钥匙</b>，卢布买不到。`
             : `用<b style="color:#ffd23f">局内卢布</b>交易 —— 卢布要先在局内搜刮到，撤离后才真正落袋。死了，钱和货一起没。`}</div>
@@ -468,8 +506,9 @@ UI.raidFieldShop=function(key){
 
   UI.overlay.querySelectorAll("[data-fsell]").forEach(el=>el.onclick=()=>{
     const [key, si]=el.dataset.fsell.split(":"); const idx=+si;
-    const rows=R._sellRows||[]; const row=rows[idx]; if(!row) return;
+    /* v0.40.0：弹药走单独的固定折现表（不占收购单名额） */
     if(key==="am"){
+      const row=(R._sellAmmo||[])[idx]; if(!row) return;
       const n=R._ammoTake(row.uid, row.n||0);
       if(n<=0) return;
       const d=ammoDefFromId(row.uid);
@@ -477,6 +516,13 @@ UI.raidFieldShop=function(key){
       R.creds+=g2;
       R._float(R.player.x, R.player.y-40, "卖 "+n+" 发，+₽"+g2, "#8fe07a");
       SFX.ui(); UI.raidFieldShop(sid);
+      return;
+    }
+    const rows=R._sellRows||[]; const row=rows[idx]; if(!row) return;
+    /* 收购单收口：品类必须在单上、且还没收满（界面已挡住，这里再挡一次防联机/连点） */
+    const want=raidRecWant(sh, row.cat);
+    if(!want || want.left<=0){
+      R._float(R.player.x, R.player.y-40, "本店不收这件（或已收满）", "#ff8a5a");
       return;
     }
     const gain=Math.round(row.val/10)*10;
@@ -487,6 +533,15 @@ UI.raidFieldShop=function(key){
     else if(key==="h") it=pull(R.inv.helmets);
     else if(key==="s") it=pull(R.inv.shields||[]);
     else if(key==="p") it=pull(R.inv.parts);
+    else if(key==="k") it=pull(R.inv.keys||[]);
+    else if(key==="md"){
+      const arr=R.inv.meds||[]; const i=arr.findIndex(x=>x.id===row.id);
+      if(i>=0){
+        it=arr[i];
+        if((it.n|0)>1) it.n=(it.n|0)-1; else arr.splice(i,1);
+        it=Object.assign({}, it);                      // 只卖 1 件，不整堆搬走
+      }
+    }
     else if(key==="m"){
       // v0.21.9：材料无 uid，按 id 匹配，否则永远删掉材料栏第一件（卖错货 + 可刷钱）
       const arr=R.inv.materials||[];
@@ -494,6 +549,7 @@ UI.raidFieldShop=function(key){
       if(i>=0) it=arr.splice(i,1)[0];
     }
     if(!it) return;
+    want.left--;                                        // 收满即停
     R.creds+=gain;
     R._float(R.player.x, R.player.y-40, "+₽"+gain, "#8fe07a");
     SFX.ui(); UI.raidFieldShop(sid);
@@ -1044,7 +1100,7 @@ UI.raidStash=function(opts){
       <h2 class="title-big" style="font-size:32px;">仓库</h2>
       <div class="subtitle">STASH · 售卖换卢布 / 拆解换配件</div>
       <div class="shop-bar">
-        <div class="shop-desc">背包直售只按估值 <b style="color:#ff8a5a">50%</b> 回收卢布（<b style="color:#62c8ff">带进图卖给回收超市可得 120%（±40%）</b>）；拆解会把枪上的全部配件拆进配件池（枪本身消失），配件可装到别的枪上或在配件页卖掉。</div>
+        <div class="shop-desc">背包直售只按估值 <b style="color:#ff8a5a">50%</b> 回收卢布（<b style="color:#62c8ff">带进图卖给回收超市，收购单上的品类可得 2~3 倍</b>）；拆解会把枪上的全部配件拆进配件池（枪本身消失），配件可装到别的枪上或在配件页卖掉。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
         <button class="btn ghost" id="btn-stash-back">${backLabel}</button>
       </div>

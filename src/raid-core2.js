@@ -157,6 +157,19 @@ Object.assign(Raid, {
       // 钥匙：黑市卖高阶 III~V，只收 GP 币
       out.keys=[raidMakeKey(3), raidMakeKey(4), raidMakeKey(5)];
       for(const k of out.keys) k.tokenPrice=raidKeyDef(k.lv).token;
+    } else if(kind==="rec"){
+      /* v0.40.0（用户要求）：「回收超市只收指定品类，价格 2~3 倍估价，不再是自由选择」。
+       * 旧版是 1.2× 全品类自由收购 —— 配合局内商店 0.8× 售价，等于一个无上限的搬运循环。
+       * 现在高价只对**收购单上的品类**生效，且每类限量，搬砖因此有上限。 */
+      const pool=RAID_REC_WANTS.slice();
+      const n=2+RNG.ri(0,1);                      // 每局 2~3 个品类
+      out.wants=[];
+      while(out.wants.length<n && pool.length){
+        const w=pool.splice(RNG.ri(0,pool.length-1),1)[0];
+        const mul=Math.round((w.mul[0]+RNG.f()*(w.mul[1]-w.mul[0]))*10)/10;
+        const left=RNG.ri(w.left[0], w.left[1]);
+        out.wants.push({ cat:w.cat, label:w.label, mul, left, total:left });
+      }
     }
     return out;
   },
