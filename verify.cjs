@@ -1887,7 +1887,10 @@ check('涌潮随机源同 seed 同序列（两端一致）',
 check('涌潮随机源不同 seed 不同序列', _sg1[0] !== _sg3[0] ? 1 : 0, 1, 0.001);
 check('涌潮触发在 hostSim 之外（容器表两端同长）',
   /surgeIdx<RAID_SURGE_AT\.length/.test(raidSrc) && !/hostSim\)\{[\s\S]{0,400}_surge\(/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('空投箱按 V 级军火箱出货', /else if\(c\.airdrop\)/.test(raidSrc) && /_rollVaultLoot\(5, c\.x, c\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* v0.40.3（用户要求「空投装备等级不要太高」）：从 V 级军火箱（保底 T7）降到 III 级箱（保底 T2） */
+check('空投箱改按 III 级箱出货（不再是 V 级军火箱）',
+  /else if\(c\.airdrop\)/.test(raidSrc) && /raidAirdropOpen\(this, c\)/.test(raidSrc)
+  && !/_rollVaultLoot\(5, c\.x, c\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('空投搜得比常规箱子久（1.5s）', /c\.airdrop\) \? 1\.5/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('空投有世界信标与小地图标记',
   /R\.airdrops && R\.airdrops\.length/.test(__rd2) && /for\(const a of \(R\.airdrops\|\|\[\]\)\)/.test(__rd2) ? 1 : 0, 1, 0.001);
@@ -4181,6 +4184,96 @@ check('首页有 meta description（作品库列表会直接用它当简介）',
   /<meta name="description" content="[^"]{20,}"/.test(__idx)?1:0, 1, 0.001);
 
 
+
+/* ---------------- 61. v0.40.3：空投降品质 / 守卫小队 / AI 抢空投 ---------------- */
+console.log('\n=== 61. v0.40.3（空投：降品质 / 守卫小队 / AI 争抢）===');
+
+/* ① 品质：III 级箱出货，明显低于原来的 V 级军火箱（T7 保底） */
+const __ad = JSON.parse(G(`JSON.stringify((()=>{
+  const tiers=(lv)=>{
+    const t=[];
+    for(let i=0;i<300;i++){
+      const it=Raid._rollVaultLoot(lv, 6000, 6000);
+      if(!it) continue;
+      const tt = (it.tier!==undefined) ? it.tier : (it.qTier!==undefined ? it.qTier : null);
+      if(tt!==null) t.push(tt);
+    }
+    t.sort((a,b)=>a-b);
+    const hi=t.filter(x=>x>=7).length;
+    return { n:t.length, min:t[0], max:t[t.length-1],
+             hi:Math.round(hi/Math.max(1,t.length)*100),
+             avg:+(t.reduce((a,b)=>a+b,0)/Math.max(1,t.length)).toFixed(2) };
+  };
+  return { lv3:tiers(RAID_AIRDROP_VAULT_LV), lv5:tiers(5), consts:{
+    lv:RAID_AIRDROP_VAULT_LV, items:RAID_AIRDROP_ITEMS, guards:RAID_AIRDROP_GUARDS } };
+})())`));
+check('空投用 III 级箱（RAID_AIRDROP_VAULT_LV='+__ad.consts.lv+'）', __ad.consts.lv===3?1:0, 1, 0.001);
+check('III 级箱平均品质明显低于 V 级军火箱（'+__ad.lv3.avg+' vs '+__ad.lv5.avg+'）',
+  (__ad.lv3.avg < __ad.lv5.avg - 1)?1:0, 1, 0.001);
+check('III 级箱出现 T7+ 的比例 ≤5%（实测 '+__ad.lv3.hi+'%，V 级为 '+__ad.lv5.hi+'%）',
+  (__ad.lv3.hi<=5 && __ad.lv3.hi<=__ad.lv5.hi)?1:0, 1, 0.001);
+check('空投件数仍为 '+__ad.consts.items+' 件（价值靠守卫与争抢体现，不是堆品质）', __ad.consts.items===3?1:0, 1, 0.001);
+
+/* ② 守卫小队：落空投即生成 2~3 名守卫，绕箱站位、同队标记、巡逻锚点为空投 */
+const __guard = JSON.parse(G(`JSON.stringify((()=>{
+  const before = Raid.ops.length;
+  const poi = { id:"probe-poi", drop:[6000,6000], name:"测试空投点" };
+  raidAirdropSpawn(Raid, poi, ()=>0.5);
+  const added = Raid.ops.slice(before);
+  const drop = Raid.airdrops[Raid.airdrops.length-1];
+  const dists = added.map(o=>Math.round(M.dist(o.x,o.y,drop.x,drop.y)));
+  return {
+    n: added.length,
+    guards: added.map(o=>({
+      name:o.name, squad:o.squadId, hasGuard:!!o.guardAt, smart:!!o.smart,
+      gun:!!o.gun, armor:o.armorTier, hp:o.hp, color:o.color,
+      d:Math.round(M.dist(o.x,o.y,drop.x,drop.y)),
+    })),
+    maxD: Math.max(...dists), minD: Math.min(...dists),
+    sameSquad: added.every(o=>o.squadId===added[0].squadId),
+    anchored: added.every(o=>o.guardAt && Math.abs(o.guardAt.x-drop.x)<1 && Math.abs(o.guardAt.y-drop.y)<1),
+    containerAS: Raid.containers.some(c=>c.airdrop && Math.abs(c.x-drop.x)<1 && Math.abs(c.y-drop.y)<1),
+  };
+})())`));
+check('落空投就带出守卫小队（'+__guard.n+' 人，配置 '+__guard.n+'∈[2,3]）',
+  (__guard.n>=2 && __guard.n<=3)?1:0, 1, 0.001);
+check('守卫绕空投落位（'+__guard.minD+'~'+__guard.maxD+'px，都在 200px 内）',
+  (__guard.minD>=40 && __guard.maxD<=200)?1:0, 1, 0.001);
+check('守卫带枪带甲、同队标记、巡逻锚点＝空投点',
+  (__guard.guards.every(g=>g.gun) && __guard.guards.every(g=>g.armor>=2)
+   && __guard.sameSquad && __guard.anchored)?1:0, 1, 0.001);
+check('空投容器与 airdrops 记录同时生成', __guard.containerAS?1:0, 1, 0.001);
+
+/* ③ AI 抢空投：权重 + 产出分支 + 守卫不吃自家那箱 */
+check('AI 搜刮时给空投最高权重（eff×0.30）',
+  /if\(c\.airdrop\) eff = /.test(raidSrc) && /eff\*0\.30/.test(raidSrc)?1:0, 1, 0.001);
+check('守卫不抢自己守的空投（否则玩家到场永远空箱）',
+  /b\.guardAt && M\.dist2\(b\.guardAt\.x,b\.guardAt\.y,c\.x,c\.y\)<400\*400/.test(raidSrc)?1:0, 1, 0.001);
+check('AI 开空投有自己的产出分支（不再当普通武器箱）',
+  /if\(c\.airdrop\)\{[\s\S]{0,200}_rollVaultLoot\(RAID_AIRDROP_VAULT_LV-1\)/.test(raidSrc)?1:0, 1, 0.001);
+check('守卫不会被「战术角色」改造顶掉（狙击手/医疗兵只从普通 PMC 里挑）',
+  /!o\.arch && !o\.guardAt && o\.cls==="pmc"/.test(raidSrc)?1:0, 1, 0.001);
+
+/* ④ 行为：守卫在场时，玩家离箱子越近越容易被拦住（守卫会锁定玩家当目标） */
+const __engage = JSON.parse(G(`JSON.stringify((()=>{
+  const R = Raid;
+  const g = R.ops.find(o=>o.guardAt);
+  if(!g) return { skip:true };
+  // 把玩家摆到守卫正前方 120px，看索敌能否锁定（模拟"走到空投前被拦"）
+  g.angle = Math.atan2(g.guardAt.y-g.y, g.guardAt.x-g.x);   // 守卫面朝空投
+  R.player.x = g.x + Math.cos(g.angle)*Math.min(150, Math.max(60, M.dist(g.x,g.y,g.guardAt.x,g.guardAt.y)+60));
+  R.player.y = g.y + Math.sin(g.angle)*Math.min(150, Math.max(60, M.dist(g.x,g.y,g.guardAt.x,g.guardAt.y)+60));
+  const lit = raidAiLit(R, g, R.player.x, R.player.y);
+  const los = R._los(g.x, g.y, R.player.x, R.player.y);
+  return { skip:false, sight:raidAISense(g).sight, lit, los,
+           d:Math.round(M.dist(g.x,g.y,R.player.x,R.player.y)) };
+})())`));
+if (!__engage.skip) {
+  check('守卫视距足够覆盖空投周边（'+__engage.sight+'px）',
+    __engage.sight >= 400?1:0, 1, 0.001);
+  check('空投前的玩家能被守卫看见（lit='+__engage.lit+'，距离 '+__engage.d+'px）',
+    (__engage.lit===true || __engage.los===true)?1:0, 1, 0.001);
+}
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

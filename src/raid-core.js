@@ -1820,7 +1820,7 @@ const Raid = {
   _ensureTacticalRoles(){
     for(const spec of ["sniper","medic"]){
       if(this.ops.some(o=>o.arch===spec)) continue;
-      const cand=this.ops.filter(o=>!o.isPlayer && !o.remote && !o.arch && o.cls==="pmc" && o.alive);
+      const cand=this.ops.filter(o=>!o.isPlayer && !o.remote && !o.arch && !o.guardAt && o.cls==="pmc" && o.alive);
       const op=cand[0];
       if(!op) continue;
       const sp=RAID_ARCH[spec];

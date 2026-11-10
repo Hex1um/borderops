@@ -760,18 +760,9 @@ Object.assign(Raid, {
         this._collect(c.drop, c.x, c.y);
         if(c.cash){ this.creds+=c.cash; this._float(c.x, c.y-46, "+₽"+c.cash, "#8fe07a"); }
       } else if(c.airdrop){
-        /* v0.23.0：空投箱 —— 按 V 级军火箱品质出 3 件 + 一笔现金。
-           品质仍走 raidLuckAt，所以「末段涌潮的空投」比「中段涌潮的空投」更好，
-           这条曲线和时间品质曲线是同一根，不另设参数。 */
-        for(let i=0;i<3;i++){
-          const vit=this._rollVaultLoot(5, c.x, c.y);
-          this._collect(vit, c.x, c.y);
-          if(vit && vit.kind==="weapon") this._giveGunAmmo(vit, c.x, c.y);
-        }
-        const gain=RNG.ri(120,260);
-        this.creds+=gain;
-        this._float(c.x, c.y-46, "空投 +₽"+gain, "#ffd23f");
-        SFX.pickup();
+        /* v0.40.3：品质从「V 级军火箱（保底 T7）」降到「III 级箱（保底 T2）」，
+           价值改由「守卫小队 + AI 争抢」提供，见 raid-legends 的 raidAirdropOpen。 */
+        raidAirdropOpen(this, c);
       } else if(c.locked){
         // 上锁保险箱：按 lockLv 决定件数与品质（等级越高装备越好），并稳定出卢布
         const lv=M.clamp(c.lockLv||1,1,5);
@@ -1466,14 +1457,8 @@ Object.assign(Raid, {
       const k=Math.floor(rnd()*pool.length)%pool.length;
       picked.push(pool.splice(k,1)[0]);
     }
-    for(const poi of picked){
-      const x=M.clamp(poi.drop[0]+(rnd()-0.5)*120, 80, RAID_MAP_W-80);
-      const y=M.clamp(poi.drop[1]+(rnd()-0.5)*120, 80, RAID_MAP_H-80);
-      this.containers.push({ x, y, tier:2, kind:"weapon", airdrop:true,
-        searched:false, drop:null, poi:poi.id });
-      this.airdrops.push({ x, y, name:poi.name, poi:poi.id, life:150 });
-      this._feed("空投", "补给空投落点，"+poi.name+"（"+Math.round(x)+" / "+Math.round(y)+"）", "", false, "info");
-    }
+    /* v0.40.3：落点 + 箱子 + 广播 + 守卫小队统一走 raid-legends 的 raidAirdropSpawn */
+    for(const poi of picked) raidAirdropSpawn(this, poi, rnd);
     if(picked.length) this._toast("补给空投已落地，小地图可见", "#ffd23f");
   },
 

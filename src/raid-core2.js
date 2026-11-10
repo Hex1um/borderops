@@ -1710,7 +1710,9 @@ Object.assign(Raid, {
         const huntP = sense.hunt;
         const hunts = b.gun && tgt.alive && RNG.chance(huntP);
         /* v0.27.0：驻守队员在本 POI 内换点，游荡者仍走全图巡逻点 */
-        const homePt = b.homePoi ? this._poiPatrolPoint(b.homePoi) : null;
+        /* v0.40.3：空投守卫的巡逻锚点就是空投本身（±80px），不会追着玩家跑出视野 */
+        const homePt = b.guardAt ? [b.guardAt.x+RNG.fr(-80,80), b.guardAt.y+RNG.fr(-80,80)]
+                      : (b.homePoi ? this._poiPatrolPoint(b.homePoi) : null);
         const pt = hunts
           ? [tgt.x+RNG.fr(-560,560), tgt.y+RNG.fr(-560,560)]
           : (homePt || RNG.pick((this.patrolPts&&this.patrolPts.length)?this.patrolPts:RAID_PATROL));
@@ -1834,6 +1836,8 @@ Object.assign(Raid, {
         else if(c.kind==="armor") eff*=0.55;
         else if(c.drops && c.drops.some(d=>d && d.kind==="weapon")) eff*=0.20;
       } else if(b.smart && (c.kind==="weapon"||c.kind==="armor")) eff*=0.55;
+      /* v0.40.3：空投是全场最优搜刮目标 —— 但**守卫不抢自己守的那箱**（否则玩家到场永远是空箱） */
+      if(c.airdrop) eff = (b.guardAt && M.dist2(b.guardAt.x,b.guardAt.y,c.x,c.y)<400*400) ? Infinity : eff*0.30;
       return eff;
     };
     // 三档退让：① 半径内视线可达 ② 半径内任意 ③ 全图任意
@@ -1857,7 +1861,12 @@ Object.assign(Raid, {
   _botLoot(b, c, luck){
     luck=luck||0;
     let got=null;
-    if(c.kind==="weapon"){
+    if(c.airdrop){
+      /* v0.40.3：AI 抢空投要真拿到东西 —— 旧版走普通武器箱分支（25% 出枪），
+         「AI 也会抢空投」等于只是换了个箱子外观。这里按比玩家低一档的箱级产出。 */
+      got=this._rollVaultLoot(RAID_AIRDROP_VAULT_LV-1);
+      b.creds+=RNG.ri(60,120);
+    } else if(c.kind==="weapon"){
       // 空手的 AI 翻武器箱更容易翻到枪（否则永远在找枪的路上）
       const pGun = b.gun ? 0.25 : 0.72;
       // Scav 翻到的仍是低阶枪，不会因为摸到武器箱就掏出高品级步枪。

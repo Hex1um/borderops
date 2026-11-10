@@ -7,6 +7,7 @@
  *   · raidMakeUnique / 箱子掉落只在运行时调用 raidNamedPartFor 等函数，
  *     函数声明全局提升，加载顺序不影响调用。
  *
+ * 另外还承载：局外契约 / 阵亡赎回 / 回收收购单 / 空投（这几个文件都被 2000 行门禁逼过来了）。
  * 设计说明：「无主之地」系列传奇枪只取招牌机制作为灵感，不沿用原作名称、
  * 世界观与商标；全部改成现实军械口径 + 中文制式命名，机制落地为本作已有的
  * pellets / splash / armorPen / rpm / noAmmo，数值压回 T8 带宽。
@@ -147,6 +148,77 @@ function raidMakeNamedPart(id){
 function raidNamedPartFor(uniqueId){
   const d=RAID_NAMED_PARTS.find(p=>p.bindTo===uniqueId);
   return d ? raidMakeNamedPart(d.id) : null;
+}
+
+/* =========================================================================
+ * v0.40.3 — 空投：降品质 + 守卫小队 + AI 也来抢
+ *
+ * 用户要求三条：
+ *   ① 空投里的装备等级不要太高（旧版按「V 级军火箱」出，保底 T7，太离谱）；
+ *   ② 空投旁加一支小队镇守；
+ *   ③ AI 也会抢空投（旧版只把空投当普通武器箱，AI 拿走的是普通武器箱产物）。
+ *
+ * 为什么放这个文件：raid-core / raid-core2 / raid-core3 / raid-data 全部只剩个位数行余量，
+ * 而这里还有 1600 多行。函数是「接收 Raid 实例」的纯函数（加载时 Raid 还不存在），
+ * 所以不写 Object.assign，由 raid-core3 在运行时调。
+ * ========================================================================= */
+const RAID_AIRDROP_VAULT_LV = 3;      // 按 III 级箱出（保底 T2），不再是 V 级的保底 T7
+const RAID_AIRDROP_ITEMS    = 3;      // 件数不变：靠守卫与 AI 抢来体现价值，而不是靠堆品质
+const RAID_AIRDROP_CASH     = [180, 320];
+const RAID_AIRDROP_GUARDS   = [2, 3]; // 每处空投 2~3 名守卫
+
+/* 落一处空投：箱子 + 小地图标记 + 广播 + 守卫小队 */
+function raidAirdropSpawn(R, poi, rnd){
+  const x=M.clamp(poi.drop[0]+(rnd()-0.5)*120, 80, RAID_MAP_W-80);
+  const y=M.clamp(poi.drop[1]+(rnd()-0.5)*120, 80, RAID_MAP_H-80);
+  R.containers.push({ x, y, tier:2, kind:"weapon", airdrop:true,
+    searched:false, drop:null, poi:poi.id });
+  R.airdrops.push({ x, y, name:poi.name, poi:poi.id, life:150 });
+  R._feed("空投", "补给空投落点，"+poi.name+"（"+Math.round(x)+" / "+Math.round(y)+"）", "", false, "info");
+  raidAirdropGuards(R, x, y, poi.id);
+}
+
+/* 空投旁镇守小队：绕箱 90~160px 落位，带枪带甲，靠 guardAt 把巡逻半径锁在空投附近 */
+function raidAirdropGuards(R, x, y, poiId){
+  const n=RNG.ri(RAID_AIRDROP_GUARDS[0], RAID_AIRDROP_GUARDS[1]);
+  const names=["哨兵","看守","压制手","斥候","门卫"];
+  for(let i=0;i<n;i++){
+    const a=(Math.PI*2/n)*i + RNG.fr(-0.35,0.35), rr=RNG.fr(90,160);
+    const px=M.clamp(x+Math.cos(a)*rr, 60, RAID_MAP_W-60);
+    const py=M.clamp(y+Math.sin(a)*rr, 60, RAID_MAP_H-60);
+    const g=blGunGen(RNG.ri(11,15), { type:RNG.pick(["rifle","smg","shotgun"]), rarity:"blue" });
+    g.uid=R._uid(); g.kind="weapon";
+    const at=RNG.ri(2,4), ht=RNG.ri(1,3);
+    const guard=new RaidOperator({
+      id:"airdrop-guard-"+poiId+"-"+i, cls:"pmc",
+      name:"守卫·"+names[(i+RNG.ri(0,4))%names.length],
+      x:px, y:py, angle:M.angle(px,py,x,y), r:14,
+      speed:RNG.fr(130,145), hp:RNG.ri(110,150), color:"#e08a4a",
+      gun:g,
+      armor:RAID_ARMORS[at].maxArmor, dr:RAID_ARMORS[at].dr, armorTier:at,
+      helmetArmor:RAID_HELMETS[ht].maxArmor, helmetDr:RAID_HELMETS[ht].dr, helmetTier:ht,
+      smart:true, creds:RNG.ri(60,140), lootLimit:3,
+    });
+    guard.guardAt={ x, y };                 // raid-core2 的巡逻换点读它，把守卫钉在空投附近
+    guard.squadId="airdrop-"+poiId;          // 同队不互打；打一个会引来同队
+    guard.homePoi=poiId;
+    R.ops.push(guard);
+  }
+  R._feed("空投", "空投旁已有一支 "+n+" 人守卫小队，其他 AI 也在往这边摸", "", false, "warn");
+}
+
+/* 玩家开空投：III 级箱品质 3 件 + 一包弹药 + 一笔现金 */
+function raidAirdropOpen(R, c){
+  for(let i=0;i<RAID_AIRDROP_ITEMS;i++){
+    const vit=R._rollVaultLoot(RAID_AIRDROP_VAULT_LV, c.x, c.y);
+    R._collect(vit, c.x, c.y);
+    if(vit && vit.kind==="weapon") R._giveGunAmmo(vit, c.x, c.y);
+  }
+  if(typeof R._rollAmmo==="function") R._collect(R._rollAmmo(0.5), c.x, c.y);
+  const gain=RNG.ri(RAID_AIRDROP_CASH[0], RAID_AIRDROP_CASH[1]);
+  R.creds+=gain;
+  R._float(c.x, c.y-46, "空投 +₽"+gain, "#ffd23f");
+  if(typeof SFX!=="undefined" && SFX.pickup) SFX.pickup();
 }
 
 /* =========================================================================
