@@ -4,6 +4,10 @@
  * 共享同一全局词法作用域。verify 的 raidSrc 会聚合全部 raid-*.js 做源码断言。
  * ========================================================================= */
 UI.raidSetup=function(){
+  /* v0.40.1（用户反馈「装备似乎无法修复」）：`UI.game` 之前**只有读取、从来没有赋值**，
+     于是仓库里点修理 / 卢布不足这些 `if(UI.game) UI.game.toast(...)` 全部静默 ——
+     点了没反应的根源不是修不了，而是没有任何反馈。这里补上绑定。 */
+  if(typeof game!=="undefined" && game) UI.game=game;
   // 回大厅先结算拍卖行（到期的成交 / 退款 / 流拍退回）
   /* 拍卖结算失败不该挡住进大厅（否则玩家卡在加载页），
      但它涉及钱和物品的退回，必须留痕而不是静默吞掉。 */
@@ -188,14 +192,14 @@ UI.raidSetup=function(){
     ? `<div class="raid-item sel" style="cursor:default;">
          <div class="ri-name" style="color:#8fd0ff">${cActive.name}：${cActive.title}</div>
          <div class="ri-meta">${cActive.desc}</div>
-         <div class="ri-meta">奖励：${rewardLine(cActive.reward)}</div>
+         <div class="ri-meta">奖励（${cActive.rt||1}/6 档）：${rewardLine(cActive.reward)}</div>
          <div class="ri-val" style="color:#8fe07a">进度 ${cActive.progress||0} / ${cActive.need}（第 ${cActive.tier||1} 档）
            <button class="btn ghost small" data-cx="1" style="margin-left:8px;">放弃</button></div>
        </div>`
     : (cOffers.length ? cOffers.map(o=>`<div class="raid-item" style="cursor:default;">
          <div class="ri-name" style="color:#ffd23f">${o.name}：${o.title}</div>
          <div class="ri-meta">${o.desc}</div>
-         <div class="ri-meta">奖励：${rewardLine(o.reward)}</div>
+         <div class="ri-meta">奖励（${o.rt}/6 档${o.rt>=5?"，高级":""}）：${rewardLine(o.reward)}</div>
          <div class="ri-val"><button class="btn ghost small" data-cc="${o.id}">接取（第 ${o.tier} 档）</button></div>
        </div>`).join('') : `<div class="empty-hint">今天没有可接的契约</div>`);
 

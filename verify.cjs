@@ -3950,7 +3950,9 @@ const __contract = JSON.parse(G(`JSON.stringify((()=>{
   const fin=raidContractProgress(stash, c.kind, c.need);      // 收尾
   return { n:offers.length, kinds, active, mid, done:fin.done,
            grant:fin.grant?fin.grant.kind:"", cleared:!stash.contract,
-           got:stash.weapons.length+stash.parts.length+((stash.creds||0)>0?1:0) };
+           got:stash.weapons.length+stash.parts.length+stash.armors.length+stash.helmets.length
+               +stash.materials.length+stash.keys.length+Object.keys(stash.ammo||{}).length
+               +((stash.creds||0)>0?1:0)+((stash.tokens||0)>0?1:0) };
 })())`));
 check('每日契约报价 3 条且类型不重复（'+__contract.kinds.join("/")+'）',
   (__contract.n===3 && new Set(__contract.kinds).size===3)?1:0, 1, 0.001);
@@ -4081,6 +4083,92 @@ check('完成一单后立刻换一批（做完即刷新）', __cx.refresh?1:0, 1
 check('越做越难：完成 6 单后需求全部上升', __cx.needUpAll?1:0, 1, 0.001);
 check('完成后发奖 + 完成数 +1 + 契约清空（'+__cx.grantKind+'：'+__cx.grantName+'）',
   (__cx.done && __cx.doneCount===1 && __cx.cleared && __cx.grantName.length>0)?1:0, 1, 0.001);
+
+/* ④ v0.40.1（用户要求「契约奖励大幅减少，只有很难的契约才给高级货」）：
+ *   奖励按 1~6 档分池，低难度任务被**死死按在低档**（清扫/搜刮最高 3 档），
+ *   具名枪与 GP 币只出现在 6 档，而 6 档只有「猎杀指挥官」能摸到。 */
+const __rw = JSON.parse(G(`JSON.stringify((()=>{
+  const tiers={};
+  for(const k of ["scav","extract","elite","money","time","boss"]){
+    tiers[k]=[0,3,6,9,12,18].map(d=>raidContractRewardTier(k,d));
+  }
+  const sample=(rt,n)=>{
+    const types={}, creds=[], mats=[], tok=[];
+    for(let i=0;i<400;i++){
+      const r=raidContractRewardFor("boss", raidDealSeed("rw", i, rt), rt);
+      types[r.type]=(types[r.type]||0)+1;
+      if(r.type==="creds") creds.push(r.amount);
+      if(r.type==="material") mats.push(r.n);
+      if(r.type==="tokens") tok.push(r.n);
+    }
+    return { types:Object.keys(types), credsMax:creds.length?Math.max(...creds):0,
+             matMax:mats.length?Math.max(...mats):0, tokMax:tok.length?Math.max(...tok):0 };
+  };
+  return { tiers, t1:sample(1), t3:sample(3), t5:sample(5), t6:sample(6) };
+})())`));
+check('低难度任务奖励被封顶（scav '+__rw.tiers.scav.join("→")+'）',
+  (__rw.tiers.scav[5]<=3 && __rw.tiers.extract[5]<=3)?1:0, 1, 0.001);
+check('中难度封顶 5 档、只有指挥官能到 6 档（boss '+__rw.tiers.boss.join("→")+'）',
+  (__rw.tiers.elite[5]===5 && __rw.tiers.boss[5]===6)?1:0, 1, 0.001);
+check('1 档只给低阶材料 / 民用弹 / 少量卢布 / 低阶装备（'+__rw.t1.types.join("/")+'，卢布≤'+__rw.t1.credsMax+'，材料≤'+__rw.t1.matMax+'）',
+  (!__rw.t1.types.includes("uniqGun") && !__rw.t1.types.includes("uniqPart")
+   && !__rw.t1.types.includes("tokens") && !__rw.t1.types.includes("gun")
+   && __rw.t1.credsMax<=5000 && __rw.t1.matMax<=1)?1:0, 1, 0.001);
+check('3 档仍不给高级枪 / 具名 / GP（'+__rw.t3.types.join("/")+'）',
+  (!__rw.t3.types.includes("uniqGun") && !__rw.t3.types.includes("tokens")
+   && !__rw.t3.types.includes("gun") && __rw.t3.credsMax<=15000)?1:0, 1, 0.001);
+check('具名枪与 GP 币只在 6 档出现（5档 '+__rw.t5.types.join("/")+'｜6档 '+__rw.t6.types.join("/")+'）',
+  (!__rw.t5.types.includes("uniqGun") && !__rw.t5.types.includes("tokens")
+   && __rw.t6.types.includes("uniqGun") && __rw.t6.types.includes("tokens"))?1:0, 1, 0.001);
+check('6 档 GP 币数量克制（最多 '+__rw.t6.tokMax+' 枚）', __rw.t6.tokMax<=4?1:0, 1, 0.001);
+check('奖励数量整体收紧（任何档材料 ≤3 件，实测 '+__rw.t6.matMax+'）', __rw.t6.matMax<=3?1:0, 1, 0.001);
+
+/* ---------------- 60. v0.40.1：护甲「穿上又显示在背包」自愈 + 修理反馈 ---------------- */
+console.log('\n=== 60. v0.40.1（穿戴去重 / 修理入口与反馈）===');
+
+/* ① 自愈：已穿戴的防具不允许同时留在背包（同引用 / 同 uid 都算重复） */
+const __heal = JSON.parse(G(`JSON.stringify((()=>{
+  const mk=()=>({ weapons:[], armors:[], helmets:[], shields:[], parts:[], materials:[], keys:[], ammo:{} });
+  const R={ inv:mk(), carried:{ weapons:[], armor:null, helmet:null, shield:null } };
+  const A={ uid:"A1", kind:"armor", name:"甲A", tier:3 }, B={ uid:"B1", kind:"armor", name:"甲B", tier:4 };
+  R.carried.armor=A; R.inv.armors=[A, B];                 // A 既穿着又在背包（同引用）
+  const n1=Raid._invHealDupes.call(R);
+  const afterRef={ n:n1, bag:R.inv.armors.map(x=>x.name) };
+  const A2={ uid:"A1", kind:"armor", name:"甲A副本", tier:3 };
+  R.inv.armors=[A2];                                      // 同 uid 的另一个对象也算重复
+  const n2=Raid._invHealDupes.call(R);
+  const afterUid={ n:n2, bag:R.inv.armors.map(x=>x.name) };
+  const H={ uid:"H1", kind:"helmet", name:"盔" };
+  R.carried.helmet=H; R.inv.helmets=[H];
+  const n3=Raid._invHealDupes.call(R);
+  return { afterRef, afterUid, n3, helmetBag:R.inv.helmets.length };
+})())`));
+check('已穿戴护甲不再同时留在背包（同引用）',
+  (__heal.afterRef.n===1 && __heal.afterRef.bag.join()==="甲B")?1:0, 1, 0.001);
+check('同 uid 的重复件也被清掉（不是只比引用）',
+  (__heal.afterUid.n===1 && __heal.afterUid.bag.length===0)?1:0, 1, 0.001);
+check('头盔同样自愈（背包剩 '+__heal.helmetBag+' 件）', (__heal.n3===1 && __heal.helmetBag===0)?1:0, 1, 0.001);
+check('背包护甲 / 头盔行显示耐久百分比（同款两件可区分）',
+  /耐久 \$\{Math\.round\(raidDurOf\(a\)\*100\)\}%/.test(__c3)
+  && /耐久 \$\{Math\.round\(raidDurOf\(h\)\*100\)\}%/.test(__c3)?1:0, 1, 0.001);
+
+/* ② 修理：入口、反馈、以及 UI.game 这个「从来没被赋值过」的坑 */
+check('进大厅时绑定 UI.game（否则所有 toast 都是静默）',
+  /if\(typeof game!=="undefined" && game\) UI\.game=game;/.test(fs.readFileSync(path.join(SRC,'raid-ui.js'),'utf8'))?1:0, 1, 0.001);
+check('仓库有「全部修理」入口',
+  /id="btn-stash-repair-all"/.test(__rui2) && /repairAllCost/.test(__rui2)?1:0, 1, 0.001);
+check('修理结果在面板内可见（不依赖 game.toast）',
+  /UI\._stashMsg="已修理/.test(__rui2) && /UI\._stashMsg="卢布不足/.test(__rui2)?1:0, 1, 0.001);
+check('满耐久的装备显示「耐久已满」而不是消失',
+  (__rui2.match(/耐久已满/g)||[]).length>=2?1:0, 1, 0.001);
+const __repair = JSON.parse(G(`JSON.stringify((()=>{
+  const low={ kind:"armor", value:10000, dur:0.5 };
+  const full={ kind:"armor", value:10000, dur:1 };
+  return { low:raidRepairCost(low), full:raidRepairCost(full) };
+})())`));
+check('修理费随耐久缺口变化（半损 ₽'+__repair.low+'，满耐久 ₽'+__repair.full+'）',
+  (__repair.low>0 && __repair.full===0)?1:0, 1, 0.001);
+
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

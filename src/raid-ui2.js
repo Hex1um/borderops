@@ -675,6 +675,13 @@ UI.raidForge=function(opts){
   }
 
   const backLabel = opts.from==='title' ? '返回主菜单' : '前往配装大厅';
+  /* v0.40.1：修理入口与反馈。旧版只有护甲 / 头盔 tab 里那张损坏的卡片上才有按钮，
+     满耐久的卡片什么都不显示、钱不够时又完全静默（`UI.game` 从未赋值），
+     玩家看到的就是「装备似乎无法修复」。现在：顶部一键修全部 + 面板内明确提示。 */
+  const repairAllCost = (stash.armors||[]).concat(stash.helmets||[])
+    .reduce((s,it)=>s+(raidRepairCost(it)||0), 0);
+  const stashMsg = UI._stashMsg || "";
+  const stashMsgCol = UI._stashMsgBad ? "#ff8a5a" : "#8fe07a";
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:32px;">枪匠台 · 精密改装</h2>
@@ -1019,7 +1026,8 @@ UI.raidStash=function(opts){
       ${a.uniqPerk?`<div class="uniq-perk">✦ ${a.uniqPerk}</div>`:''}
       <div class="si-stats">减伤 ${Math.round((a.dr||0)*100)}%，护甲值 ${Math.round((a.maxArmor||0)*raidDurOf(a))}/${a.maxArmor}，估值 ₽${priceTextShort(a.value)}</div>
       <div class="si-buy"><span class="si-price">₽ ${priceTextShort((a.value||0)*RAID_VENDOR_RATE)}</span>
-        ${dPct<100?`<button class="btn ghost" data-repair="a:${a.uid}">修理 ₽${priceTextShort(rc)}</button>`:""}
+        ${dPct<100?`<button class="btn ghost" data-repair="a:${a.uid}">修理 ₽${priceTextShort(rc)}</button>`
+                   :`<button class="btn ghost" disabled title="耐久已满">耐久已满</button>`}
         <button class="btn ghost" data-sell="a:${a.uid}">售卖</button></div>
     </div>`;
   }).join('') : `<div class="empty-hint">仓库暂无护甲</div>`;
@@ -1034,7 +1042,8 @@ UI.raidStash=function(opts){
       ${h.uniqPerk?`<div class="uniq-perk">✦ ${h.uniqPerk}</div>`:''}
       <div class="si-stats">爆头减伤 ${Math.round((h.dr||0)*100)}%，耐久 ${Math.round((h.maxArmor||0)*raidDurOf(h))}/${h.maxArmor}，估值 ₽${priceTextShort(h.value)}</div>
       <div class="si-buy"><span class="si-price">₽ ${priceTextShort((h.value||0)*RAID_VENDOR_RATE)}</span>
-        ${dPct<100?`<button class="btn ghost" data-repair="h:${h.uid}">修理 ₽${priceTextShort(rc)}</button>`:""}
+        ${dPct<100?`<button class="btn ghost" data-repair="h:${h.uid}">修理 ₽${priceTextShort(rc)}</button>`
+                   :`<button class="btn ghost" disabled title="耐久已满">耐久已满</button>`}
         <button class="btn ghost" data-sell="h:${h.uid}">售卖</button></div>
     </div>`;
   }).join('') : `<div class="empty-hint">仓库暂无头盔</div>`;
@@ -1094,6 +1103,13 @@ UI.raidStash=function(opts){
     {id:'mat',name:'材料',n:matStacks.reduce((s,x)=>s+x.n,0)}];
   const body = TAB==='weapon'?wCards : TAB==='armor'?aCards : TAB==='helmet'?hCards : TAB==='shield'?sCards : TAB==='mat'?mCards : pCards;
   const backLabel = opts.from==='title' ? '返回主菜单' : '前往配装大厅';
+  /* v0.40.1：修理入口与反馈。旧版只有护甲 / 头盔 tab 里那张损坏的卡片上才有按钮，
+     满耐久的卡片什么都不显示、钱不够时又完全静默（`UI.game` 从未赋值），
+     玩家看到的就是「装备似乎无法修复」。现在：顶部一键修全部 + 面板内明确提示。 */
+  const repairAllCost = (stash.armors||[]).concat(stash.helmets||[])
+    .reduce((s,it)=>s+(raidRepairCost(it)||0), 0);
+  const stashMsg = UI._stashMsg || "";
+  const stashMsgCol = UI._stashMsgBad ? "#ff8a5a" : "#8fe07a";
 
   UI._set(`
     <div class="panel raid-setup">
@@ -1102,8 +1118,12 @@ UI.raidStash=function(opts){
       <div class="shop-bar">
         <div class="shop-desc">背包直售只按估值 <b style="color:#ff8a5a">50%</b> 回收卢布（<b style="color:#62c8ff">带进图卖给回收超市，收购单上的品类可得 2~3 倍</b>）；拆解会把枪上的全部配件拆进配件池（枪本身消失），配件可装到别的枪上或在配件页卖掉。</div>
         <div class="shop-gold">仓库卢布 ₽ ${priceTextShort(stash.creds)}</div>
+        <button class="btn ghost" id="btn-stash-repair-all" ${repairAllCost>0?"":"disabled"}
+          title="${repairAllCost>0?("修理全部护甲 / 头盔，共 ₽"+priceTextShort(repairAllCost)):"所有护甲与头盔耐久都是满的"}">
+          全部修理${repairAllCost>0?` ₽${priceTextShort(repairAllCost)}`:"（无需修理）"}</button>
         <button class="btn ghost" id="btn-stash-back">${backLabel}</button>
       </div>
+      ${stashMsg?`<div class="hint" style="margin:6px 0 0;color:${stashMsgCol}">${stashMsg}</div>`:""}
       <div class="shop-tabs">
         ${tabs.map(t=>`<button class="shop-tab ${TAB===t.id?'on':''}" data-stab="${t.id}"><b>${t.name}</b><span class="tab-tag">${t.n}</span></button>`).join('')}
       </div>
@@ -1112,8 +1132,32 @@ UI.raidStash=function(opts){
     </div>`);
 
   UI.overlay.querySelectorAll('[data-stab]').forEach(el=>{
-    el.onclick=()=>{ UI._stashTab=el.dataset.stab; SFX.ui(); UI.raidStash(opts); };
+    el.onclick=()=>{ UI._stashTab=el.dataset.stab; UI._stashMsg=""; SFX.ui(); UI.raidStash(opts); };
   });
+  const repairAllBtn=document.getElementById('btn-stash-repair-all');
+  if(repairAllBtn && !repairAllBtn.disabled){
+    repairAllBtn.onclick=()=>{
+      const st=RaidStash.load();
+      const list=(st.armors||[]).concat(st.helmets||[]);
+      const total=list.reduce((s,it)=>s+(raidRepairCost(it)||0),0);
+      if(total<=0){ UI._stashMsg="所有护甲与头盔耐久都是满的"; UI._stashMsgBad=true; SFX.ui(); UI.raidStash(opts); return; }
+      if((st.creds||0)<total){
+        SFX.ui();
+        UI._stashMsg="卢布不足：全部修理需要 ₽"+priceText(total)+"，仓库只有 ₽"+priceText(st.creds||0);
+        UI._stashMsgBad=true;
+        UI.raidStash(opts); return;
+      }
+      let n=0;
+      for(const it of list){ if(raidRepairCost(it)>0){ it.dur=1; n++; } }
+      st.creds-=total;
+      RaidStash.save(st);
+      SFX.levelup();
+      UI._stashMsg="已修理 "+n+" 件装备，共花费 ₽"+priceText(total);
+      UI._stashMsgBad=false;
+      if(UI.game && UI.game.toast) UI.game.toast("全部修理完成（"+n+" 件）");
+      UI.raidStash(opts);
+    };
+  }
 
   UI.overlay.querySelectorAll('[data-partsalvage]').forEach(el=>{
     el.onclick=()=>{
@@ -1145,11 +1189,19 @@ UI.raidStash=function(opts){
       const list = kind==='a'?stash.armors : kind==='h'?stash.helmets : (stash.shields||[]);
       const it=(list||[]).find(x=>x.uid===key); if(!it) return;
       const cost=raidRepairCost(it);
-      if(cost<=0) return;
-      if((stash.creds||0)<cost){ SFX.ui(); if(UI.game) UI.game.toast("卢布不足：修理需要 ₽"+priceText(cost)); return; }
+      if(cost<=0){ UI._stashMsg="这件耐久已经满了，不需要修理"; UI._stashMsgBad=true; SFX.ui(); UI.raidStash({from:opts.from}); return; }
+      if((stash.creds||0)<cost){
+        SFX.ui();
+        UI._stashMsg="卢布不足：修理「"+it.name+"」需要 ₽"+priceText(cost)+"，仓库只有 ₽"+priceText(stash.creds||0);
+        UI._stashMsgBad=true;
+        if(UI.game && UI.game.toast) UI.game.toast("卢布不足，无法修理");
+        UI.raidStash({from:opts.from}); return;
+      }
       stash.creds-=cost; it.dur=1;
       RaidStash.save(stash); SFX.ui();
-      if(UI.game) UI.game.toast("已修理，"+it.name);
+      UI._stashMsg="已修理「"+it.name+"」，花费 ₽"+priceText(cost)+"，耐久 100%";
+      UI._stashMsgBad=false;
+      if(UI.game && UI.game.toast) UI.game.toast("已修理，"+it.name);
       UI.raidStash({from:opts.from});
     };
   });

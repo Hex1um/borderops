@@ -1888,8 +1888,39 @@ const Raid = {
 
   /* ---- v0.39.0：契约进度 / 阵亡装备赎回（引擎侧两个 hook 的实现） ---- */
 
-  /* 撤离成功那一次，把所有「本局结算类」契约一起推进：件数 / 现金 / 存活时长。
-   * 合并成一个方法是为了不再往 raid-core3 里加行（那边只剩 1 行余量）。 */
+  /* =========================================================================
+   * v0.40.1（用户反馈）：「护甲实际上已经穿上了，却还显示在背包里、还能点『穿上护甲』，
+   * 而且这个状态下按钮怎么点都没反应」。
+   *
+   * 引擎侧的穿戴链路（换新甲 / 旧甲回包 / 破损按耐久折算）经实测是对的，问题出在
+   * **同一件装备同时挂在 carried 与 inv 两处**时：物品栏会把它渲染两遍，两行同名同款，
+   * 点「穿上护甲」等于把它自己再穿一次（视觉零变化），点「丢弃」又会把身上那件
+   * 从背包里删掉而身上还在 —— 表现就是「按钮全部无效」。
+   *
+   * 这里做两件事：
+   *   ① 渲染前自愈：凡是已经穿戴中的护甲/头盔/护盾，绝不留在背包列表里（同引用或同 uid 都算）；
+   *   ② 背包行补上「耐久 %」，让「同款两件」一眼能区分，不会误以为没换。
+   * 只在护甲/头盔/护盾上生效 —— 枪是设计上就同时存在于 inv（_gunBag 靠 uid 过滤）。 */
+  _invHealDupes(){
+    const inv=this.inv, car=this.carried;
+    if(!inv || !car) return 0;
+    let n=0;
+    const each=[["armors","armor"],["helmets","helmet"],["shields","shield"]];
+    for(const [key,slot] of each){
+      const worn=car[slot];
+      const arr=inv[key];
+      if(!worn || !arr || !arr.length) continue;
+      const keep=arr.filter(it=>{
+        const dup = it===worn || (it && worn && it.uid!==undefined && it.uid===worn.uid);
+        if(dup) n++;
+        return !dup;
+      });
+      if(keep.length!==arr.length) inv[key]=keep;
+    }
+    return n;
+  },
+
+  /* 撤离成功那一次，把所有「本局结算类」契约一起推进：件数 / 现金 / 存活时长。   * 合并成一个方法是为了不再往 raid-core3 里加行（那边只剩 1 行余量）。 */
   _extractContractTicks(){
     const n=this.inv.weapons.length+this.inv.armors.length+this.inv.helmets.length
       +(this.inv.shields||[]).length+this.inv.parts.length+this.inv.materials.length

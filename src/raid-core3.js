@@ -1009,7 +1009,7 @@ Object.assign(Raid, {
     const ok=this._swapEquip(it);
     if(!ok){ arr.splice(idx,0,it); return false; }
     this._invDirty=false;
-    if(this.player) this._pick(this.player.x, this.player.y-34, "已穿戴 "+it.name, "#8fe07a");
+    if(this.player) this._pick(this.player.x, this.player.y-34, "已穿戴 "+it.name+(arr.length&&arr[arr.length-1]&&arr[arr.length-1]!==it?("，换下 "+arr[arr.length-1].name):""), "#8fe07a");
     SFX.ui();
     return true;
   },
@@ -1705,7 +1705,7 @@ Object.assign(Raid, {
     this._invRender();
   },
   _invRender(){
-    const el=document.getElementById('inv-layer');
+    this._invHealDupes(); const el=document.getElementById('inv-layer');   // v0.40.1：已穿戴的防具不允许同时出现在背包里
     if(!el || !this.showInv) return;
     const R=this, p=R.player;
     const bodyOld=el.querySelector('.inv-body');
@@ -1738,7 +1738,7 @@ Object.assign(Raid, {
       null, null, null, "secondary");
     /* v0.26.0：三类防具也能「放回背包」，与枪的 stow 按钮一致；名称前缀明确区分穿戴中。 */
     if(p.armorTier) line("[穿戴中] 护甲，"+RAID_ARMORS[p.armorTier].name, ARMOR_TIER_COLOR[p.armorTier]||"#dfe7f0",
-      `T${p.armorTier}，耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)}，减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?('，硬质插板（HP ×'+elemMult('corrosive','armor').toFixed(2)+'）'):'，已击穿（无防护）'):''}`,
+      `T${p.armorTier}，耐久 ${Math.round(p.armor)}/${Math.round(p.maxArmor)}（${Math.round((p.maxArmor?Math.min(1,p.armor/p.maxArmor):0)*100)}%），减伤 ${Math.round(p.dr*100)}%${p.armorTier>=RAID_ARMOR_TYPE_TIER?(p.armor>0?('，硬质插板（HP ×'+elemMult('corrosive','armor').toFixed(2)+'）'):'，已击穿（无防护）'):''}`,
       null, null, null, "armor");
     if(p.helmetTier) line("[穿戴中] 头盔，"+RAID_HELMETS[p.helmetTier].name, ARMOR_TIER_COLOR[p.helmetTier]||"#dfe7f0",
       `T${p.helmetTier}，耐久 ${Math.round(p.helmetArmor)}/${Math.round(p.maxHelmetArmor)}，躯干减伤 ${Math.round(p.helmetDr*HELMET_BODY_SHARE*100)}% / 爆头 ${Math.round(p.helmetDr*100)}%`,
@@ -1796,12 +1796,12 @@ Object.assign(Raid, {
     for(let i=0;i<R.inv.armors.length;i++){
       const a=R.inv.armors[i]; any=true;
       line("[背包] "+a.name, RAID_RARITY_COLOR[a.rarity|0]||"#dfe7f0",
-        `T${a.tier}，${RAID_RARITY_NAME[a.rarity|0]||""}，耐久 ${a.maxArmor}，${money(a.value)}`, `armors:${i}`, `armors:${i}`);
+        `T${a.tier}，${RAID_RARITY_NAME[a.rarity|0]||""}，耐久 ${Math.round(raidDurOf(a)*100)}%（${a.maxArmor}），${money(a.value)}`, `armors:${i}`, `armors:${i}`);
     }
     for(let i=0;i<R.inv.helmets.length;i++){
       const h=R.inv.helmets[i]; any=true;
       line("[背包] "+h.name, RAID_RARITY_COLOR[h.rarity|0]||"#dfe7f0",
-        `T${h.tier}，${RAID_RARITY_NAME[h.rarity|0]||""}，耐久 ${h.maxArmor}，${money(h.value)}`, `helmets:${i}`, `helmets:${i}`);
+        `T${h.tier}，${RAID_RARITY_NAME[h.rarity|0]||""}，耐久 ${Math.round(raidDurOf(h)*100)}%（${h.maxArmor}），${money(h.value)}`, `helmets:${i}`, `helmets:${i}`);
     }
     for(let i=0;i<(R.inv.shields||[]).length;i++){
       const s=R.inv.shields[i]; any=true;

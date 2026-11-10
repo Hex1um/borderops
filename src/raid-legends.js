@@ -214,75 +214,139 @@ function raidSeeded(seed, fn){
   }
 }
 
+/* ---- v0.40.1：奖励按难度分档，低档只给小东西 ----
+ * 用户反馈「契约奖励太大方」：原来最低一档就可能出具名枪 / T4~T5 弹药 60~90 发 / 4~7 件高阶材料。
+ * 现在奖励分 1~6 档，档位 = 任务难度权重 + 完成数每 3 单 +1：
+ *   具名枪、GP 币 **只在第 6 档**（只有「猎杀指挥官」能到），
+ *   高阶枪 / 具名配件从第 5 档起，「运货 / 死守 / 清剿」顶到第 5 档，
+ *   扫荡与搜刮这类低难度任务基本停在第 1~3 档：低阶材料、少量弹药、小钱、低阶装备或普通配件。 */
+const RAID_CONTRACT_DIFF = { scav:1, extract:1, elite:2, money:2, time:2, boss:3 };
+/* 每个难度权重能摸到的**上限档**：低难度任务再刷也到不了具名枪那一档。
+ *   diff1（清扫 / 搜刮）→ 顶到 3 档：中阶材料 2 件、普通配件、₽8k~14k
+ *   diff2（清剿 / 运货 / 死守）→ 顶到 5 档：高阶枪、具名配件
+ *   diff3（猎杀指挥官）→ 才可能到 6 档：具名枪 / GP 币 */
+const RAID_CONTRACT_RT_CAP = { 1:3, 2:5, 3:6 };
+function raidContractRewardTier(kind, done){
+  const diff=RAID_CONTRACT_DIFF[kind]||1;
+  const cap=RAID_CONTRACT_RT_CAP[diff]||3;
+  return M.clamp(diff + Math.floor((done||0)/3), 1, cap);
+}
+
+/* 档位对应的奖励池（权重）。同一档里也会偏向「看得见但不多」的东西。 */
+function raidContractRewardPool(rt){
+  const pool=[];
+  const add=(kind,w)=>pool.push({ kind, w });
+  add("creds", 30);
+  add("material", rt<=2?32:24);
+  add("ammo", rt<=2?20:14);
+  if(rt<=3) add("gear", 14); else add("part", 16);
+  if(rt>=3) add("part", 16);
+  if(rt>=4) add("gearHi", 10);
+  if(rt>=5){ add("gun", 10); add("namedPart", 6); }
+  if(rt>=6){ add("namedGun", 8); add("tokens", 8); }
+  return pool;
+}
+const RAID_CONTRACT_MAT_TIER = { 1:[0,1], 2:[1,2], 3:[2,3], 4:[3,4], 5:[4,5], 6:[5,7] };
+const RAID_CONTRACT_CREDS    = { 1:[2000,4500], 2:[4000,8000], 3:[8000,14000], 4:[12000,20000], 5:[18000,30000], 6:[26000,42000] };
+
 /* 奖励真身：给什么就写着什么，不做「集齐折现」这种模糊承诺。
- * 每种都返回 { type, label, give(stash) }，label 直接上大厅界面。 */
-function raidContractRewardFor(kind, seed, scale){
-  const s=Math.max(1, scale||1);
+ * 返回 { type, label, give(stash) }，label 直接上大厅界面。 */
+function raidContractRewardFor(kind, seed, rt){
+  rt = M.clamp(Math.round(rt||1), 1, 6);
   return raidSeeded(seed, ()=>{
-    /* 加权：具名装备偏少但存在，材料 / 弹药 / 卢布为主，保证「看得见的收益」 */
-    const roll=RNG.f();
-    if(roll<0.22){
-      const pool=RAID_UNIQUES.filter(u=>u.kind==="weapon");
-      const u=pool[RNG.ri(0,pool.length-1)];
+    const pool=raidContractRewardPool(rt);
+    let total=0; for(const x of pool) total+=x.w;
+    let r=RNG.f()*total, pick=pool[0].kind;
+    for(const x of pool){ r-=x.w; if(r<=0){ pick=x.kind; break; } }
+
+    if(pick==="namedGun"){                       // 第 6 档专属
+      const guns=RAID_UNIQUES.filter(u=>u.kind==="weapon");
+      const u=guns[RNG.ri(0,guns.length-1)];
       return { type:"uniqGun", name:u.name, label:"具名枪「"+u.name+"」",
         give:(st)=>{ const w=raidMakeUnique(u); st.weapons.push(w); return w.name; } };
     }
-    if(roll<0.40){
-      const pool=RAID_NAMED_PARTS;
-      const d=pool[RNG.ri(0,pool.length-1)];
+    if(pick==="tokens"){                          // 第 6 档专属：GP 币 2~4 枚
+      const n=2+RNG.ri(0,2);
+      return { type:"tokens", n, label:"GP 币 ◈"+n,
+        give:(st)=>{ st.tokens=(st.tokens||0)+n; return "◈"+n; } };
+    }
+    if(pick==="gun"){                             // 第 5 档起：高阶成品枪（非具名）
+      const type=RNG.pick(["rifle","smg","shotgun","sniper"]);
+      const qt=M.clamp(4+RNG.ri(0,1), 4, 6);      // T5~T6
+      const g=blGunGen(14+qt*2, { type, rarity:RAID_TIER_TO_RARITY[qt] });
+      if(typeof ensureGunAffixes==="function") ensureGunAffixes(g);
+      g.uid=raidUniqueUid("cq-gun-"); g.kind="weapon";
+      g.qTier=qt; g.qName=RAID_TIERS[qt].name; g.qColor=RAID_TIERS[qt].color;
+      return { type:"gun", name:gunNameOf(g), label:"枪械「"+gunNameOf(g)+"」",
+        give:(st)=>{ st.weapons.push(g); return gunNameOf(g); } };
+    }
+    if(pick==="namedPart"){                       // 第 5 档起：具名配件
+      const d=RAID_NAMED_PARTS[RNG.ri(0,RAID_NAMED_PARTS.length-1)];
       return { type:"uniqPart", name:d.name, label:"具名配件"+d.name,
         give:(st)=>{ const pt=raidMakeNamedPart(d.id); st.parts=st.parts||[]; st.parts.push(pt); return pt.name; } };
     }
-    if(roll<0.62){
-      const pool=RAID_MATERIALS.filter(x=>x.tier>=5);
-      const pickPool=pool.length?pool:RAID_MATERIALS;
-      const m=pickPool[RNG.ri(0,pickPool.length-1)];
-      const n=Math.round((4+RNG.ri(0,3))*s);
+    if(pick==="part"){                            // 普通配件（品质随档位）
+      const slot=RNG.pick(GUN_SLOTS).id;
+      const rar=[ "white","green","blue","purple","purple" ][M.clamp(rt-1,0,4)];
+      const pt=rollPart(slot, 6+rt*4, rar);
+      return { type:"part", name:partNameOf(pt)||slot, label:"配件「"+(partNameOf(pt)||slot)+"」×1",
+        give:(st)=>{ st.parts=st.parts||[]; st.parts.push(pt); return pt.name; } };
+    }
+    if(pick==="gear" || pick==="gearHi"){         // 低档给低阶护甲 / 头盔；高档给 T4~T6
+      const t = pick==="gear" ? M.clamp(rt, 1, 3) : M.clamp(rt, 4, 6);
+      const isH=RNG.chance(0.5);
+      const it = isH ? raidMakeHelmet(t, M.clamp(t-1,0,8)) : raidMakeArmor(t, M.clamp(t-1,0,8));
+      return { type:"gear", name:it.name, label:(isH?"头盔":"护甲")+"「"+it.name+"」",
+        give:(st)=>{ if(isH){ st.helmets=st.helmets||[]; st.helmets.push(it); } else st.armors.push(it); return it.name; } };
+    }
+    if(pick==="ammo"){
+      const cal=RNG.pick(["light","mid","heavy"]);
+      const lv=M.clamp(rt<=2?1:(rt<=4?2:3), 1, 5);   // 低档民用 / 中档制式 / 高档军规
+      const d=ammoDef(cal, lv);
+      const n=(rt<=3?30:60);
+      return { type:"ammo", id:d.id, n, label:"弹药「"+d.name+"」×"+n,
+        give:(st)=>{ st.ammo=st.ammo||{}; st.ammo[d.id]=(st.ammo[d.id]||0)+n; return d.name+" ×"+n; } };
+    }
+    if(pick==="material"){
+      const [lo,hi]=RAID_CONTRACT_MAT_TIER[rt];
+      const pool2=RAID_MATERIALS.filter(m=>m.tier>=lo && m.tier<=hi);
+      const m=(pool2.length?pool2:RAID_MATERIALS)[RNG.ri(0,(pool2.length?pool2:RAID_MATERIALS).length-1)];
+      const n=1+(rt>=3?1:0)+(rt>=5?1:0);            // 1~3 件，不是以前的一把
       return { type:"material", id:m.id, n, label:"原材料「"+m.name+"」×"+n,
         give:(st)=>{ st.materials=st.materials||[];
           for(let i=0;i<n;i++) st.materials.push(Object.assign({},m,{n:1}));
           return m.name+" ×"+n; } };
     }
-    if(roll<0.80){
-      const cal=RNG.pick(["light","mid","heavy"]);
-      const lv=3+RNG.ri(1,2);                     // T4 / T5 高级弹
-      const d=ammoDef(cal, lv);
-      const n=Math.round(60*s/10)*10;
-      return { type:"ammo", id:d.id, n, label:"弹药「"+d.name+"」×"+n,
-        give:(st)=>{ st.ammo=st.ammo||{}; st.ammo[d.id]=(st.ammo[d.id]||0)+n; return d.name+" ×"+n; } };
-    }
-    if(roll<0.92){
-      const lv=3+RNG.ri(0,2);
-      return { type:"key", lv, label:"「"+RAID_LOCK_NAME[lv]+"钥匙」×1",
-        give:(st)=>{ st.keys=st.keys||[]; const k=raidMakeKey(lv); st.keys.push(k); return k.name; } };
-    }
-    const amount=Math.round((30000+RNG.ri(0,20000))*s/1000)*1000;
+    /* creds：低档只有几千卢布 */
+    const [cl,ch]=RAID_CONTRACT_CREDS[rt];
+    const amount=Math.round((cl+RNG.ri(0,ch-cl))/500)*500;
     return { type:"creds", amount, label:"卢布 ₽"+amount,
       give:(st)=>{ st.creds=(st.creds||0)+amount; return "₽"+amount; } };
   });
 }
 
-/* 难度：完成得越多需求越高（每 2 单抬一档），奖励同步放大（每单 +12%，封顶 2.5 倍） */
+/* 只有需求侧随完成数变难（每 2 单抬一档），奖励改成按 RAID_CONTRACT_DIFF 分档，
+   不再用「完成越多奖励倍率越高」的乘法 —— 那会把低难度任务也抬成大奖。 */
 function raidContractTier(done){ return 1+Math.floor((done||0)/2); }
-function raidContractRewardScale(done){ return Math.min(2.5, 1+(done||0)*0.12); }
 
 /* 当前可接的报价：3 条不同种类，种子 =「天数 + 已完成数」→ 完成即刻换成新的一批 */
 function raidContractOffers(now, done){
   const t=Number(now)||Date.now();
   const day=Math.floor(t/86400000);
   const d=done||0;
-  const tier=raidContractTier(d), scale=raidContractRewardScale(d);
+  const tier=raidContractTier(d);
   const list=[];
   for(let i=0;i<3;i++){
     /* +d*5：每完成一单整体换组（5 与 6 互质，6 单内轮完整个种类表） */
     const kind=RAID_CONTRACT_ORDER[(day*3+i+d*5)%RAID_CONTRACT_ORDER.length];
     const kd=RAID_CONTRACT_KINDS[kind];
     const need=kd.base + kd.step*(tier-1);
-    const seed=raidDealSeed("contract-"+kind, day+d*97, tier);
-    const reward=raidContractRewardFor(kind, seed, scale);
-    list.push({ id:kind+"-"+day+"-"+d, kind, need, tier, progress:0, at:t,
+    const rt=raidContractRewardTier(kind, d);
+    const seed=raidDealSeed("contract-"+kind, day+d*97, rt);
+    const reward=raidContractRewardFor(kind, seed, rt);
+    list.push({ id:kind+"-"+day+"-"+d, kind, need, tier, rt, progress:0, at:t,
       title:kd.title(need), desc:kd.desc, name:kd.name,
-      reward:{ type:reward.type, label:reward.label, seed } });
+      reward:{ type:reward.type, label:reward.label, seed, rt } });
   }
   return list;
 }
@@ -294,20 +358,22 @@ function raidContractActive(stash, now){
 }
 function raidContractAccept(stash, offer, now){
   if(!stash || !offer) return false;
-  stash.contract={ id:offer.id, kind:offer.kind, need:offer.need, tier:offer.tier||1, progress:0,
+  stash.contract={ id:offer.id, kind:offer.kind, need:offer.need, tier:offer.tier||1,
+    rt:offer.rt||1, progress:0,
     at:Number(now)||Date.now(), title:offer.title, desc:offer.desc, name:offer.name,
     reward:offer.reward||null };
   return true;
 }
 function raidContractAbandon(stash){ if(stash) stash.contract=null; }
 
-/* 发奖：按契约上**写明的**那份奖励发放（种子可复算 → 接单看到什么就拿到什么）。
- * 没有任何「集齐后折现」兜底 —— 用户明确要求奖励必须是具体物品。 */
+/* 发奖：按契约上**写明的**那份奖励发放（种子 + 档位可复算 → 接单看到什么就拿到什么）。 */
 function raidContractGrant(stash, contract){
   if(!stash) return null;
   const c=contract||stash.contract||{};
-  const seed=(c.reward && c.reward.seed) || raidDealSeed("contract-"+(c.kind||"boss"), 0, 1);
-  const got=raidContractRewardFor(c.kind||"boss", seed, raidContractRewardScale(stash.contractDone));
+  const kind=c.kind||"boss";
+  const rt=(c.reward && c.reward.rt) || c.rt || raidContractRewardTier(kind, stash.contractDone);
+  const seed=(c.reward && c.reward.seed) || raidDealSeed("contract-"+kind, 0, rt);
+  const got=raidContractRewardFor(kind, seed, rt);
   const name=got.give(stash);
   return { kind:got.type, name:name||got.label, label:got.label, perk:"" };
 }
