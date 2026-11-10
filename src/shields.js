@@ -197,7 +197,9 @@ function shieldPartSum(parts, stat){
 
 /* ----------------------------- 数值计算 ----------------------------- */
 function shieldStats(tier, q, parts, affixes, perks, bonus){
-  const base=SHIELD_BASES[M.clamp(Math.round(tier||1),1,9)]||SHIELD_BASES[1];
+  /* v0.38.0（P1）：底材表已含 T10~T12，但这里 clamp 到 1..9 —— 顶档护盾全部按 T9 算，
+     显示 tier 12、实算 tier 9，属于「死配置」。上界跟随表的最大键。 */
+  const base=SHIELD_BASES[M.clamp(Math.round(tier||1),1,12)]||SHIELD_BASES[1];
   const rar=M.clamp(Math.round(q||0),0,8);
   const grade=1+rar*0.22;                       // 品级带来的全局工程余量
   const aCap=shieldAffixSum(affixes,"capacity")+shieldPartSum(parts,"capacity");

@@ -97,6 +97,12 @@ function hitEnemy(e, p, game){
     const extra = 1 + ((p.owner&&p.owner.stats&&p.owner.stats.critDmgAdd)||0)/100;
     dmg*=critMul*extra; isCrit=true;
   }
+  /* v0.38.0（P1）：stats.elemMul 一直被写入却无人读取 —— 职业的元素倍率（1.5 / 1.0 / 0.9）
+     和技能树的 elemMul 加成都白算了。这里按「特殊弹才吃元素倍率」接线：
+     普通弹种（none）不吃，避免变相全民加伤。 */
+  if(p.element && p.element!=="none" && p.owner && p.owner.stats && p.owner.stats.elemMul){
+    dmg *= p.owner.stats.elemMul;
+  }
   // 弹种对软目标 / 护甲的终点效应由 takeDamage 内部按 AMMO_TYPES.mult 结算
   e.takeDamage(dmg, p.element, e.armorType, game, p.owner);
   const ammo = AMMO_TYPES[p.element] || AMMO_TYPES.none;

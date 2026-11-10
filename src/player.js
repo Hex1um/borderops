@@ -78,7 +78,9 @@ class Player {
     const rm = relicModMap(rl);
     const shieldCap = sh ? sh.capacity : 0;
     // 护甲不再是「职业白送、脱战自动满」：职业只提供薄薄一层缓冲，主体来自装备
-    const maxShield = Math.round(((C.shield*0.32 + shieldCap) * lvSh) * (1+(rm.shieldPct||0)/100));
+    /* v0.38.0（P1）：技能树里 3 个节点给了 maxShieldAdd（护甲容量 +18/+22/+10），
+       但这里从来没加过 —— 加点完全无效。补进底材再乘等级/词条。 */
+    const maxShield = Math.round(((C.shield*0.32 + shieldCap + m.maxShieldAdd) * lvSh) * (1+(rm.shieldPct||0)/100));
     const shieldDelay = Math.max(0.8, (sh ? sh.delay : CFG.player.shieldDelay) - (rm.shieldDelay||0));
     const shieldRate  = sh ? sh.rate : CFG.player.shieldRegen*0.35;
 
@@ -87,7 +89,9 @@ class Player {
       maxShield,
       shieldDelay,
       shieldRate,
-      speed: C.speed * (1+(rm.moveSpeed||0)/100),
+      /* v0.38.0（P1）：负重行军 / 短距冲刺给的是 speedMul（+5%/级、+6%/级），
+         旧版只算随身装备的 moveSpeed，加点不生效。 */
+      speed: C.speed * m.speedMul * (1+(rm.moveSpeed||0)/100),
       damageMul: C.dmgMul * m.dmgMul * (1+pDmg/100) * (1+(rm.dmgPct||0)/100),
       elemMul: C.elemMul * m.elemMul * (1+(rm.elemPct||0)/100),
       fireRateMul: m.fireRateMul * (1+(rm.fireRatePct||0)/100),
@@ -238,7 +242,10 @@ class Player {
   /* ----------------------------- 装备 / 商店 ----------------------------- */
   addWeapon(w){
     if(this.weapons.length>=24){ return false; }   // 背包上限
-    w.mag=w.getMagSize(this);
+    /* v0.38.0（P2）：捡到的枪不再白送满弹匣。旧版任何来源的枪一进背包就
+       mag = 满容量，等于「换枪免费补弹」，配合掉落的枪可无限续弹。
+       现在只给半匣（购买走 buyItem，会显式补满，属于花钱买的）。 */
+    if(w.mag===undefined || w.mag===null) w.mag=Math.max(1, Math.round(w.getMagSize(this)*0.5));
     this.weapons.push(w);
     return true;
   }
@@ -444,7 +451,9 @@ class Player {
     } else if(this.abilityType==="overload"){
       this.abilityActive=5+power*3; game.toast("火力压制！"); game.shake(4);
     }
-    this.abilityCD=this.abilityBaseCD*(1-Math.min(0.4,power*0.2));
+    /* v0.38.0（P1）：技能/装备给的 abilityCDMul 原先只写进 stats 没人读，
+       现在真正参与冷却：基础 CD × 系数 × 威力缩减（威力项最多再减 40%）。 */
+    this.abilityCD=this.abilityBaseCD*(this.stats&&this.stats.abilityCDMul||1)*(1-Math.min(0.4,power*0.2));
     SFX.levelup();
     return true;
   }

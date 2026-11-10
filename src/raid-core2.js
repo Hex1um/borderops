@@ -1070,7 +1070,7 @@ Object.assign(Raid, {
    * 这种对象退回旧行为：不限次数，避免老存档的盾突然变成「一次性的」。 */
   _shieldQuota(s){
     if(!this._ivUsed) this._ivUsed={};
-    const tier=M.clamp(Math.round((s&&s.tier)||0),0,9);
+    const tier=M.clamp(Math.round((s&&s.tier)||0),0,12);   // v0.38.0：T10~T12 的配额是 2^12，被 9 截断会少给 7/8
     const max=tier>0 ? Math.pow(2,tier) : 0;
     const uid=(s&&s.uid)||"anon";
     const used=this._ivUsed[uid]||0;
@@ -1952,3 +1952,17 @@ Object.assign(Raid, {
   }
 });
 
+
+/* v0.38.0（P1）：AI 互殴 / 背景交火的尸体容器补广播 —— 单独 assign 方便回顾 */
+Object.assign(Raid, {
+  /* v0.38.0（P1）：AI 互殴 / 背景交火的尸体也必须广播 —— 联机按**下标**寻址
+     （R.containers[d.i]），房主多、客户端少，队友搜箱就会拿到别人的战利品。 */
+  _dropBotAndBroadcast(victim, silent){
+    const drops=this._dropFromBot(victim, silent);
+    if(this.online && typeof Net!=="undefined" && Net.isHost && drops && drops.length){
+      try{ Net.sendCorpse(victim.x, victim.y, victim.name, drops.slice(0,6)); }
+      catch(e){ warnOnce("raid:sendCorpse", e); }
+    }
+    return drops;
+  },
+});

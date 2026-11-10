@@ -114,6 +114,10 @@ const Raid = {
     this.resetUiState();
     this.carried={ weapons:[], armor:null, helmet:null, shield:null };
     this.medsIn=null; this.bandagesIn=undefined;
+    /* v0.38.0（P1）：破盾无敌配额是本局账本，必须每局清零。
+       旧版只在首次使用时惰性初始化，而 Raid 实例跨局复用 —— 第二局起
+       账本还留着上一局的消耗，高阶护盾的「破盾保命无敌」被静默扣光。 */
+    this._ivUsed={};
     this.cashIn=0; this.tokensIn=0; this.insured=false; this.insuredVal=0;
     this._stashPersisted=false;
     this.map={w:RAID_MAP_W,h:RAID_MAP_H};

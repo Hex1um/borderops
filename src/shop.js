@@ -102,24 +102,43 @@ const Shop = {
     if(item.kind==="relic"  && pl.relics.length>=12)  return { ok:false, msg:"随身装备匣已满（12）" };
     const bal = cur==="eridium" ? pl.eridium : pl.gold;
     if(bal < it.price) return { ok:false, msg:(cur==="eridium"?"美元":"金币")+"不足" };
-    pl.buyItem(item, it.price, cur);
+    /* v0.38.0（P2）：buyItem 会因为「背包满 / 资金不足」返回 false（上面的容量检查
+       只是快速挡一层，addItem 内部还有一次真实判定）。旧版忽略返回值，照样扣标记
+       并把货标成已售 —— 玩家看到「购入成功」，东西却没进背包（幽灵购买）。 */
+    const paid = pl.buyItem(item, it.price, cur);
+    if(!paid) return { ok:false, msg:"购买失败：背包已满或资金不足" };
     it.sold = true;
     return { ok:true, msg:"购入 "+item.name };
   },
 
-  gambleCost(game){ return SHOPS.gamble.basePrice + SHOPS.gamble.lvPrice*(game.player.level-1); },
+  /* v0.38.0（P0）：旧版成本固定 4 金起、产出按 25% 回收 —— 白品一卖就净赚，
+     形成「投币 → 卖枪 → 再投币」的无限刷钱（实测 Lv.1 每次 +869 金，最差也 +128）。
+     现在改成**成本与产出同源**：先按最低门槛挡住没钱的，开出来后按该件实际估值的
+     30% 收钱，而回收只有 25% —— 单件必然亏 ≥5%，连期望都不赚，主力玩法不再被套利。
+     高阶件可能开出来买不起：这时不扣钱也不给货（写清楚原因），避免「白嫖」或「吞钱」。 */
+  gambleCost(game){
+    return SHOPS.gamble.basePrice + SHOPS.gamble.lvPrice*(game.player.level-1);
+  },
+
+  gambleQuote(w){
+    /* 成本 = 估值 × 30%（回收 25%，留 5% 庄家边际）*/
+    return Math.max(1, Math.ceil(weaponPrice(w) * 0.30));
+  },
 
   gamble(game){
     const pl = game.player;
-    const cost = this.gambleCost(game);
+    const minCost = this.gambleCost(game);
     if(pl.weapons.length>=24) return { ok:false, msg:"武器库已满（24）" };
-    if(pl.gold < cost) return { ok:false, msg:"金币不足（需要 "+cost+"）" };
-    pl.gold -= cost;
+    if(pl.gold < minCost) return { ok:false, msg:"金币不足（需要 "+minCost+"）" };
     const base = Math.max(game.world ? game.world.level : 1, pl.level);
     const gm = rollGearMayhem(pl.mayhem||0);
     // v0.21.8：用黑市赌博机专属权重表 —— 最高三档（定制/珍藏/孤品）只能从这里出
     const w = generateWeapon(base+3+gm, { mf: pl.mf, luck:true, mayhem:gm, weights: SHOPS.gamble.weights });
+    const cost = Math.max(minCost, this.gambleQuote(w));
+    if(pl.gold < cost)
+      return { ok:false, msg:"这台机器开出了估值 "+weaponPrice(w)+" 的货，需要 "+cost+" 金币才能带走（当前 "+pl.gold+"）" };
+    pl.gold -= cost;
     pl.buyWeapon(w, 0);
-    return { ok:true, weapon:w, msg:"开出："+w.name };
+    return { ok:true, weapon:w, cost:cost, msg:"开出："+w.name+"（花费 "+cost+" 金币）" };
   },
 };

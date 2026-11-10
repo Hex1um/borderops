@@ -590,7 +590,7 @@ Object.assign(Raid, {
       if(!killer.netKiller) SFX.hit();
     } else if(killer){
       this._feed(killer.name, victim.name, killer.gun?gunNameOf(killer.gun):"徒手", false, "kill");
-      this._dropFromBot(victim, true);
+      this._dropBotAndBroadcast(victim, true);
     } else {
       this._feed("未知", victim.name, "交火", false, "kill");
     }
@@ -1360,7 +1360,7 @@ Object.assign(Raid, {
       const killer=RNG.pick(others);
       victim.alive=false;
       this._feed(killer.name, victim.name, killer.gun?gunNameOf(killer.gun):"交火", false, "kill");
-      this._dropFromBot(victim, true);   // 远处尸体同样留下它的背包
+      this._dropBotAndBroadcast(victim, true);   // 远处尸体同样留下背包 —— 且必须广播
     }
   },
 

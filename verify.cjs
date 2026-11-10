@@ -3794,6 +3794,69 @@ check('开火音效按枪型分档（6 套物理参数）',
 check('AI 开火也有声音（1.5km 内）',
   /SFX\.shoot\(sndKind, \{far:true\}\)/.test(raidSrc)?1:0,1,0.001);
 
+console.log('');
+console.log('=== 56. v0.38.0（P0/P1 修复护栏：崩溃面 / 经济不变量 / 死字段契约）===');
+
+/* ① P0-1：_strafe 必须把 game 传下去（漏参会每帧 TypeError，被帧级 catch 吞成慢性病） */
+const __enemySrc = fs.readFileSync(path.join(SRC,'enemies.js'),'utf8');
+const __strafeSig = /_strafe\(tx,ty,sp,dt,game\)/.test(__enemySrc);
+const __strafeCalls = [...__enemySrc.matchAll(/this\._strafe\([^)]*\)/g)].map(m=>m[0]);
+const __strafeBad = __strafeCalls.filter(c=>!/,game\)$/.test(c));
+check('_strafe 签名带 game 且所有调用点都传了', (__strafeSig && __strafeBad.length===0)?1:0, 1, 0.001);
+check('_step 调用链不再可能拿到 undefined game',
+  /_step\(Math\.cos\(a\)\*sp, Math\.sin\(a\)\*sp, dt, game\)/.test(__enemySrc)?1:0, 1, 0.001);
+
+/* ② P0-2：赌博机经济不变量 —— 单件「回收价 < 成本」，且连期望都不赚 */
+const __gam = JSON.parse(G(`JSON.stringify((()=>{
+  const out={n:0,bad:0,sumCost:0,sumSell:0,refuse:0};
+  const keep=Shop.gambleQuote;
+  const pl={ weapons:[], gold:1e9, level:5, mayhem:0, mf:0,
+             buyWeapon(w){ this.weapons.push(w); return true; } };
+  const game={ player:pl, world:{ level:3 } };
+  for(let i=0;i<300;i++){
+    pl.weapons.length=0; pl.gold=1e9;
+    const r=Shop.gamble(game);
+    if(!r.ok){ out.refuse++; continue; }
+    const sell=Math.max(10, Math.floor(weaponPrice(r.weapon)*0.25));
+    out.n++; out.sumCost+=r.cost; out.sumSell+=sell;
+    if(!(r.cost>sell)) out.bad++;
+  }
+  return out;
+})())`));
+check('赌博机单件必然亏（回收价 < 成本，300 次抽样 0 例外）',
+  (__gam.n>0 && __gam.bad===0)?1:0, 1, 0.001);
+check('赌博机期望不赚（总回收 < 总成本）',
+  (__gam.sumSell < __gam.sumCost)?1:0, 1, 0.001);
+
+/* ③ P1：护盾 T10~T12 不再是死配置 */
+const __sh12 = JSON.parse(G(`JSON.stringify({
+  c9: shieldStats(9,0,[],[],[],0).capacity,
+  c12: shieldStats(12,0,[],[],[],0).capacity,
+  q12: Raid._shieldQuota.call({_ivUsed:{}}, {tier:12, uid:"x"}).max,
+})`));
+check('T12 护盾底材真正生效（容量 > T9）', (__sh12.c12 > __sh12.c9)?1:0, 1, 0.001);
+check('T12 破盾无敌配额为 4096（2^12）', __sh12.q12===4096?1:0, 1, 0.001);
+
+check('_ivUsed 在每局启动时被重置（源码契约）',
+  /this\._ivUsed=\{\}/.test(raidSrc)?1:0, 1, 0.001);
+
+/* ⑤ P1：四个「写了没人读」的字段必须有消费点 */
+const __consume = {
+  maxShieldAdd: /\+ m\.maxShieldAdd/.test(fs.readFileSync(path.join(SRC,'player.js'),'utf8')),
+  speedMul:     /C\.speed \* m\.speedMul/.test(fs.readFileSync(path.join(SRC,'player.js'),'utf8')),
+  abilityCDMul: /stats\.abilityCDMul/.test(fs.readFileSync(path.join(SRC,'player.js'),'utf8')),
+  elemMul:      /stats\.elemMul/.test(fs.readFileSync(path.join(SRC,'combat.js'),'utf8')),
+};
+const __dead = Object.keys(__consume).filter(k=>!__consume[k]);
+check('技能/职业被动字段全部接进结算（'+(__dead.join('、')||'无死字段')+'）', __dead.length, 0, 0.001);
+
+/* ⑥ P1：AI 互殴 / 背景交火的尸体必须广播（否则联机 containers 下标错位） */
+check('两条 AI 尸体路径都走 _dropBotAndBroadcast',
+  (raidSrc.match(/_dropBotAndBroadcast\(/g)||[]).length >= 3?1:0, 1, 0.001);
+
+check('商店 buy 尊重 buyItem 的返回值（源码契约）',
+  /const paid = pl\.buyItem\(item, it\.price, cur\);\s*\n\s*if\(!paid\) return \{ ok:false/.test(fs.readFileSync(path.join(SRC,'shop.js'),'utf8'))?1:0, 1, 0.001);
+
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
  * 某段实现或文案是否仍在的「源码护栏」（对重命名、重构脆弱）。把两者的数量分开

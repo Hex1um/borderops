@@ -106,7 +106,7 @@ class Enemy {
         const ideal=r.range*0.7;
         if(d>ideal+30) this._moveToward(pl.x,pl.y,sp,dt,game);
         else if(d<ideal-30) this._moveAway(pl.x,pl.y,sp,dt,game);
-        else this._strafe(pl.x,pl.y,sp*0.6,dt);
+        else this._strafe(pl.x,pl.y,sp*0.6,dt,game);
       }
       this.fireCd-=dt;
       if(d<r.range && this.fireCd<=0){
@@ -137,7 +137,7 @@ class Enemy {
       const r=this.def.ranged;
       if(d>r.range*0.7+30) this._moveToward(pl.x,pl.y,sp,dt,game);
       else if(d<r.range*0.7-30) this._moveAway(pl.x,pl.y,sp,dt,game);
-      else this._strafe(pl.x,pl.y,sp*0.6,dt);
+      else this._strafe(pl.x,pl.y,sp*0.6,dt,game);
       this.fireCd-=dt;
       if(d<r.range && this.fireCd<=0){
         const lead=this._lead(pl,r.bs);
@@ -151,7 +151,7 @@ class Enemy {
       const r=this.def.ranged;
       if(d>r.range*0.7) this._moveToward(pl.x,pl.y,sp,dt,game);
       else if(d<r.range*0.5) this._moveAway(pl.x,pl.y,sp,dt,game);
-      else this._strafe(pl.x,pl.y,sp*0.7,dt);
+      else this._strafe(pl.x,pl.y,sp*0.7,dt,game);
       this.fireCd-=dt;
       if(d<r.range && this.fireCd<=0){
         const lead=this._lead(pl,r.bs);
@@ -162,7 +162,7 @@ class Enemy {
       const r=this.def.ranged;
       if(d>r.range*0.7) this._moveToward(pl.x,pl.y,sp,dt,game);
       else if(d<r.range*0.5) this._moveAway(pl.x,pl.y,sp,dt,game);
-      else this._strafe(pl.x,pl.y,sp*0.7,dt);
+      else this._strafe(pl.x,pl.y,sp*0.7,dt,game);
       this.fireCd-=dt;
       if(d<r.range && this.fireCd<=0){
         const lead=this._lead(pl,r.bs);
@@ -170,7 +170,7 @@ class Enemy {
         this.fireCd=r.cd;
       }
     } else if(this.behavior==="broodmother"){
-      if(d>180) this._moveToward(pl.x,pl.y,sp,dt,game); else this._strafe(pl.x,pl.y,sp*0.8,dt);
+      if(d>180) this._moveToward(pl.x,pl.y,sp,dt,game); else this._strafe(pl.x,pl.y,sp*0.8,dt,game);
       this.summonCd-=dt;
       if(this.summonCd<=0 && game.enemies.length<20){
         this.summonCd=RNG.fr(5,8);
@@ -183,7 +183,7 @@ class Enemy {
         this.fireCd=1.6;
       }
     } else if(this.behavior==="juggernaut"){
-      if(d>150) this._moveToward(pl.x,pl.y,sp,dt,game); else this._strafe(pl.x,pl.y,sp*0.5,dt);
+      if(d>150) this._moveToward(pl.x,pl.y,sp,dt,game); else this._strafe(pl.x,pl.y,sp*0.5,dt,game);
       this.fireCd-=dt;
       if(d<this.def.ranged.range && this.fireCd<=0){
         const lead=this._lead(pl,this.def.ranged.bs);
@@ -241,7 +241,10 @@ class Enemy {
   }
   _moveToward(tx,ty,sp,dt,game){ const a=M.angle(this.x,this.y,tx,ty); this._step(Math.cos(a)*sp, Math.sin(a)*sp, dt, game); }
   _moveAway(tx,ty,sp,dt,game){ const a=M.angle(tx,ty,this.x,this.y); this._step(Math.cos(a)*sp, Math.sin(a)*sp, dt, game); }
-  _strafe(tx,ty,sp,dt){ const a=M.angle(this.x,this.y,tx,ty)+Math.PI/2*this.strafeDir; this._step(Math.cos(a)*sp, Math.sin(a)*sp, dt); }
+  /* v0.38.0（P0）：原先漏传 game —— _step(vx,vy,dt,game) 要用 game.walls 做碰撞，
+     game 为 undefined 时每帧抛 TypeError，被帧级 try/catch 吞掉后整帧逻辑跳过，
+     表现为「敌人突然不动 / 渲染停住」。横移是远程敌人最常用动作，必踩。 */
+  _strafe(tx,ty,sp,dt,game){ const a=M.angle(this.x,this.y,tx,ty)+Math.PI/2*this.strafeDir; this._step(Math.cos(a)*sp, Math.sin(a)*sp, dt, game); }
   _clamp(game){ if(game.bounds){ this.x=M.clamp(this.x,game.bounds.minX,game.bounds.maxX); this.y=M.clamp(this.y,game.bounds.minY,game.bounds.maxY); } }
   _lead(pl,bs){ const dx=pl.x-this.x, dy=pl.y-this.y; const t=M.dist(this.x,this.y,pl.x,pl.y)/bs; const px=pl.x+(pl.vx||0)*t, py=pl.y+(pl.vy||0)*t; return M.angle(this.x,this.y,px,py); }
   _detonate(game){
@@ -254,7 +257,7 @@ class Enemy {
 
   _boss(dt,game,pl,d,sp){
     // 缓慢靠近
-    if(d>160) this._moveToward(pl.x,pl.y,sp,dt,game); else this._strafe(pl.x,pl.y,sp*0.8,dt);
+    if(d>160) this._moveToward(pl.x,pl.y,sp,dt,game); else this._strafe(pl.x,pl.y,sp*0.8,dt,game);
     const hpPct=this.hp/this.maxHP;
     this.phase = hpPct>0.66?1:(hpPct>0.33?2:3);
     // 径向弹幕
