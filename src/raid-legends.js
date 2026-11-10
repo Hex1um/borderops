@@ -148,3 +148,133 @@ function raidNamedPartFor(uniqueId){
   const d=RAID_NAMED_PARTS.find(p=>p.bindTo===uniqueId);
   return d ? raidMakeNamedPart(d.id) : null;
 }
+
+/* =========================================================================
+ * v0.39.0 — 局外契约（击杀指标 / 搜刮配额）+ 阵亡装备限时赎回
+ *
+ * 为什么放这个文件：契约的奖励载体就是上面的 RAID_UNIQUES 具名装备表；
+ * 而 raid-data.js 只剩 1 行、raid-core3 只剩 4 行，这里还有 150 多行余量。
+ *
+ * 存档只往 stash 上挂两个**可选字段**（contract / buyback），不参与 RaidStash.load
+ * 的迁移白名单 —— 旧档没有这两个字段就是「没有契约 / 没有待赎回」，天然向后兼容。
+ * ========================================================================= */
+const RAID_CONTRACT_HOURS = 24;     // 契约与待赎回装备的有效期
+const RAID_BUYBACK_RATE   = 3.0;    // 赎回价 = 装备估值 ×300%（比重新买一件更贵，但胜在确定）
+
+/* 契约模板：三种都能在引擎里用一行 hook 精确判定的，避免「说好的进度不认」。
+ * need 由天数决定，同一天刷新出的契约对所有人都一样（联机两端不会打架）。 */
+const RAID_CONTRACT_KINDS = {
+  boss:    { name:"猎杀", need:(d)=>1+(d%2), title:(n)=>"击杀 "+n+" 名封锁区指挥官", desc:"Boss 在地图上以黄色标记显示，3 名同时在场" },
+  elite:   { name:"清剿", need:(d)=>2+(d%3), title:(n)=>"击杀 "+n+" 名精锐（★）",       desc:"POI 精英与名字带 ★ 的 Raider 都算" },
+  extract: { name:"搜刮", need:(d)=>6+(d%5), title:(n)=>"带出 "+n+" 件战利品",           desc:"只统计成功撤离的那一趟，装备/配件/材料/钥匙都算" },
+};
+const RAID_CONTRACT_ORDER = ["boss","elite","extract"];
+
+/* 当天的契约报价：种子取「UTC 天数」，同一天刷新结果固定 */
+function raidContractOffers(now){
+  const t=Number(now)||Date.now();
+  const day=Math.floor(t/86400000);
+  const list=[];
+  for(let i=0;i<RAID_CONTRACT_ORDER.length;i++){
+    const kind=RAID_CONTRACT_ORDER[(day+i)%RAID_CONTRACT_ORDER.length];
+    const need=RAID_CONTRACT_KINDS[kind].need(day+i);
+    list.push({ id:kind+"-"+day, kind, need, progress:0, at:t,
+      title:RAID_CONTRACT_KINDS[kind].title(need),
+      desc:RAID_CONTRACT_KINDS[kind].desc,
+      name:RAID_CONTRACT_KINDS[kind].name });
+  }
+  return list;
+}
+function raidContractActive(stash, now){
+  const c=stash && stash.contract;
+  if(!c || !c.id) return null;
+  if((Number(now)||Date.now())-c.at > RAID_CONTRACT_HOURS*3600000){ stash.contract=null; return null; }
+  return c;
+}
+function raidContractAccept(stash, offer, now){
+  if(!stash || !offer) return false;
+  stash.contract={ id:offer.id, kind:offer.kind, need:offer.need, progress:0,
+    at:Number(now)||Date.now(), title:offer.title, desc:offer.desc, name:offer.name };
+  return true;
+}
+function raidContractAbandon(stash){ if(stash) stash.contract=null; }
+
+/* 奖励：一件还没拿到过的具名装备（优先枪，枪都拿过了就给具名配件）。
+ * 全部拿完就折成卢布 —— 契约不能变成「完成但没有奖励」。 */
+function raidContractGrant(stash){
+  if(!stash) return null;
+  const owned=new Set();
+  for(const w of (stash.weapons||[])) if(w && w.unique) owned.add(w.unique);
+  for(const p of (stash.parts||[])) if(p && p.unique) owned.add(p.unique);
+  const guns=RAID_UNIQUES.filter(u=>u.kind==="weapon" && !owned.has(u.id));
+  if(guns.length){
+    const u=guns[Math.floor(Math.random()*guns.length)];
+    const w=raidMakeUnique(u);
+    stash.weapons.push(w);
+    return { kind:"weapon", name:w.name, perk:u.perk };
+  }
+  const parts=RAID_NAMED_PARTS.filter(p=>!owned.has(p.id));
+  if(parts.length){
+    const pt=raidMakeNamedPart(parts[Math.floor(Math.random()*parts.length)].id);
+    stash.parts=stash.parts||[];
+    stash.parts.push(pt);
+    return { kind:"part", name:pt.name, perk:"具名配件（可直接装枪）" };
+  }
+  const cash=120000;
+  stash.creds=(stash.creds||0)+cash;
+  return { kind:"creds", name:"₽"+cash, perk:"具名装备已集齐，折成卢布" };
+}
+
+/* 进度推进。返回 { done, grant } —— 只有 done 的那次会发奖。 */
+function raidContractProgress(stash, kind, n){
+  const c=raidContractActive(stash, Date.now());
+  if(!c || c.kind!==kind) return { done:false };
+  c.progress=Math.min(c.need, (c.progress||0)+(n||1));
+  if(c.progress<c.need) return { done:false };
+  const grant=raidContractGrant(stash);
+  stash.contract=null;
+  return { done:true, grant };
+}
+
+/* ---- 阵亡装备限时赎回 ----
+ * 投保之后仍然「没人捡走」那 35% 里的装备，进赎回池：24 小时内按估值 300% 买回来。
+ * 保险因此从「纯赌运气」变成「65% 免费退回 / 35% 付钱赎回」，阵亡的挫败感有了出口。 */
+function raidBuybackAdd(stash, items, now){
+  if(!stash || !items || !items.length) return 0;
+  const t=Number(now)||Date.now();
+  stash.buyback=raidBuybackList(stash, t);          // 先按 24h 清掉过期项
+  let n=0;
+  for(const it of items){
+    if(!it || !it.kind) continue;
+    if((it.value||0)<=0) continue;
+    stash.buyback.push({ at:t, price:Math.round((it.value||0)*RAID_BUYBACK_RATE), item:it });
+    n++;
+  }
+  if(stash.buyback.length>40) stash.buyback=stash.buyback.slice(-40);
+  return n;
+}
+/* 取出仍在有效期内的待赎清单（顺手清掉过期项，不写盘 —— 调用方负责 save） */
+function raidBuybackList(stash, now){
+  const t=Number(now)||Date.now();
+  const live=[];
+  for(const b of (stash && stash.buyback) || []){
+    if(!b || !b.item) continue;
+    if(t-b.at > RAID_CONTRACT_HOURS*3600000) continue;
+    live.push(b);
+  }
+  return live;
+}
+function raidBuybackBuy(stash, idx, now){
+  const live=raidBuybackList(stash, now);
+  const b=live[idx];
+  if(!b) return { ok:false, msg:"这件已经过期或不存在" };
+  if((stash.creds||0) < b.price) return { ok:false, msg:"卢布不足 ₽"+b.price };
+  stash.creds-=b.price;
+  const it=b.item;
+  if(it.kind==="weapon") stash.weapons.push(it);
+  else if(it.kind==="helmet") stash.helmets.push(it);
+  else if(it.kind==="shield"){ stash.shields=stash.shields||[]; stash.shields.push(it); }
+  else stash.armors.push(it);
+  stash.buyback=(stash.buyback||[]).filter(x=>x!==b);
+  return { ok:true, item:it };
+}

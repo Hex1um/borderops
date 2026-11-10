@@ -948,6 +948,22 @@ const RenderRaid = {
       this.unit(ctx, o, game);
     }
 
+    /* v0.39.0：狙击手激光预警 —— 0.8s 内线会越来越亮、越来越粗，挨枪前够玩家侧身。
+     * 线画到 b.aimAng 锁定的方向（不是实时追踪玩家），所以侧移真的能躲开。 */
+    for(const o of R.ops){
+      if(!o.alive || o.aimAng==null || !(o.aimT>0)) continue;
+      if(o.x>cam.x+vw+60||o.x<cam.x-60||o.y>cam.y+vh+60||o.y<cam.y-60) continue;
+      const t=M.clamp(o.aimT/RAID_SNIPER_AIM, 0, 1);
+      const ex=o.x+Math.cos(o.aimAng)*1500, ey=o.y+Math.sin(o.aimAng)*1500;
+      ctx.save();
+      ctx.strokeStyle=`rgba(255,66,54,${(0.16+0.6*t).toFixed(3)})`;
+      ctx.lineWidth=0.8+t*2.0; ctx.setLineDash(t>0.75?[]:[6,6]);
+      ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle=`rgba(255,66,54,${(0.25+0.55*t).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(o.x,o.y,2.5+t*3.5,0,6.2832); ctx.fill();
+    }
+
     // 涉水涟漪（任何踩在河里的单位脚下都有一圈扩散水波）
     for(const o of R.ops){
       if(!o.alive || !o._wet) continue;

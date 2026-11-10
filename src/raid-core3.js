@@ -220,6 +220,7 @@ Object.assign(Raid, {
     if(!Number.isFinite(dmg)) return;
     if(dmg<0) dmg=0;
     if(!target.alive) return;
+    if(target.isPlayer){ target.hitN=(target.hitN||0)+1; target.hitDmg=(target.hitDmg||0)+dmg; }   // v0.39.0：死亡回放计数
     /* v0.16.0：破盾无敌期间完全免伤（飘字节流，连发不刷屏） */
     if((target.shieldInvuln||0)>0){
       if(this.elapsed-(target._ivTipT||-99)>0.35){
@@ -424,7 +425,7 @@ Object.assign(Raid, {
       if(target.isPlayer) this._feed("防护", "护甲耐久耗尽，已转为无防护", "", false, "warn");
     }
     const absorbedAll=hadShield && d<=0;
-    d=absorbedAll?0:Math.max(1,Math.round(d));
+    d=absorbedAll?0:Math.max(1,Math.round(d*(target.affixDmgTaken||1)));   // v0.39.0：词条「硬化」
     if(d<=0){
       // 伤害被护盾完全吸收：不扣血、不触发流血，但跳弹连锁仍按原命中结算
       if(elem==="radiation" && !opts.chain && dmg>0) this._chainRadiation(target,dmg,attacker,gun);
@@ -459,6 +460,7 @@ Object.assign(Raid, {
       }
       if(target.hp<=0){
         target.hp=0; target.alive=false;
+        target.deathRecap=this._deathRecap(target, attacker, gun);   // v0.39.0：死亡回放（谁、多远、打了几次）
         this._fail("阵亡", attacker, gun);
       }
     } else {
@@ -563,6 +565,7 @@ Object.assign(Raid, {
   },
 
   _onBotDeath(victim, killer){
+    this._contractTick(victim.bounty?"boss":(victim.smart?"elite":null), 1);   // v0.39.0：契约进度（Boss / 精锐）
     if(killer && killer.isPlayer){
       killer.kills++;
       if((killer.shieldPerks||[]).includes("siphon") && killer.maxShield>0){
@@ -1276,6 +1279,7 @@ Object.assign(Raid, {
     this.stash.tokens=(this.stash.tokens||0)+tokenTotal;
     /* v0.32.0：撤离成功即清零连败 —— 补偿只给「真的连续失败」的玩家 */
     this.stash.lossStreak=0;
+    this._contractTick("extract", this.inv.weapons.length+this.inv.armors.length+this.inv.helmets.length+(this.inv.shields||[]).length+this.inv.parts.length+this.inv.materials.length+(this.inv.keys||[]).length);   // v0.39.0：搜刮契约
     if(!RaidStash.save(this.stash) && this.game && this.game.toast)
       this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
     this.game.state="raidover";
@@ -1322,6 +1326,7 @@ Object.assign(Raid, {
     }
     /* v0.32.0：阵亡 / 超时都算一次失败，累计连败用于下一局的补偿 */
     this.stash.lossStreak=Math.min(20,(this.stash.lossStreak||0)+1);
+    this._recordBuyback(this.carried, recovered);   // v0.39.0：投保但没退回的 → 24h 内可 300% 赎回
     if(!RaidStash.save(this.stash) && this.game && this.game.toast)
       this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
     this.game.state="raidover";

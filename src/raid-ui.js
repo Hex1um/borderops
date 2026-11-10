@@ -175,6 +175,38 @@ UI.raidSetup=function(){
   const feeOf=id=>raidExtractFee(RAID_EXTRACT_RULES[id], gearVal);
   const feeMin=feeOf("extP"), feeMax=feeOf("extJ");
 
+  /* v0.39.0（用户选定）：战地契约 + 阵亡装备限时赎回。
+   * 两者都只读 stash 上的可选字段，旧档没有就是「没有契约 / 没有待赎回」。 */
+  const _now=Date.now();
+  const cActive=(typeof raidContractActive==="function")?raidContractActive(stash, _now):null;
+  const cOffers=(!cActive && typeof raidContractOffers==="function")?raidContractOffers(_now):[];
+  const contractHtml = cActive
+    ? `<div class="raid-item sel" style="cursor:default;">
+         <div class="ri-name" style="color:#8fd0ff">${cActive.name}：${cActive.title}</div>
+         <div class="ri-meta">${cActive.desc}</div>
+         <div class="ri-val" style="color:#8fe07a">进度 ${cActive.progress||0} / ${cActive.need}
+           <button class="btn ghost small" data-cx="1" style="margin-left:8px;">放弃</button></div>
+       </div>`
+    : (cOffers.length ? cOffers.map(o=>`<div class="raid-item" style="cursor:default;">
+         <div class="ri-name" style="color:#ffd23f">${o.name}：${o.title}</div>
+         <div class="ri-meta">${o.desc}，奖励：具名装备（集齐后折 ₽120,000）</div>
+         <div class="ri-val"><button class="btn ghost small" data-cc="${o.id}">接取</button></div>
+       </div>`).join('') : `<div class="empty-hint">今天没有可接的契约</div>`);
+
+  const bbList=(typeof raidBuybackList==="function")?raidBuybackList(stash, _now):[];
+  const buybackHtml = bbList.length
+    ? bbList.map((b,i)=>{
+        const it=b.item, left=Math.max(0, Math.ceil((b.at+RAID_CONTRACT_HOURS*3600000-_now)/3600000));
+        const col=it.kind==="shield"?shieldColor(it):(it.kind==="armor"||it.kind==="helmet")?(RAID_RARITY_COLOR[it.rarity|0]||"#dfe7f0"):raidGunColor(it);
+        return `<div class="raid-item" style="cursor:default;">
+          <div class="ri-name" style="color:${col}">${it.name}</div>
+          <div class="ri-meta">阵亡装备，剩余 <b style="color:#ff9a8a">${left} 小时</b></div>
+          <div class="ri-val"><button class="btn ghost small" data-bb="${i}" ${(stash.creds||0)<b.price?'disabled':''}>
+            赎回 ₽${priceText(b.price)}</button></div>
+        </div>`;
+      }).join('')
+    : `<div class="empty-hint">没有待赎回装备（投保后阵亡、且没被退回的那部分会出现在这里，24 小时内可赎）</div>`;
+
   UI._set(`
     <div class="panel raid-setup">
       <h2 class="title-big" style="font-size:34px;">塔科夫模式 · 撤离突袭</h2>
@@ -303,6 +335,18 @@ UI.raidSetup=function(){
         ${gearVal>0&&!canIns?`<span style="color:var(--muted);font-size:12px;">卢布不足，无法投保</span>`:''}
       </div>
 
+      <!-- v0.39.0：战地契约（局外接、局内推进、完成给具名装备）+ 阵亡装备限时赎回 -->
+      <div class="row" style="margin-top:12px;gap:14px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="flex:1 1 340px;min-width:290px;">
+          <div class="raid-result-label" style="margin:0 0 6px;">战地契约</div>
+          <div class="raid-list">${contractHtml}</div>
+        </div>
+        <div style="flex:1 1 340px;min-width:290px;">
+          <div class="raid-result-label" style="margin:0 0 6px;">阵亡装备赎回（24 小时内，300% 赎回）</div>
+          <div class="raid-list">${buybackHtml}</div>
+        </div>
+      </div>
+
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:10px;">
         ${ammoCarried===0?`<div class="raid-tip" style="color:#ff9a8a;width:100%;">未携带弹药：进图后枪是空的，要先搜到 / 买到子弹才能开火（钥匙同样默认不带）</div>`:''}
         <div class="raid-tip">${sel.w.length===0&&!sel.a&&!sel.h&&!sel.s&&cashVal===0?'裸装进场：空手、无甲、无盔、无盾，只带 1 卷绷带 —— 进图翻箱捡枪，捡到即自动上手':`已选 ${sel.w.length} 把枪${sel.a?' + 护甲':''}${sel.h?' + 头盔':''}${sel.s?' + 护盾':''}，装备 ₽${priceText(gearVal)}${cashVal>0?` + 现金 ₽${priceText(cashVal)}`:''}，总价值 <b style="color:#ffd36a">₽${priceText(carryVal)}</b>，局内 Q 循环换枪 / 1~4 直选，多出的枪放背包`}</div>
@@ -378,6 +422,25 @@ UI.raidSetup=function(){
   });
   const insBtn=document.getElementById('btn-raid-ins');
   if(insBtn && !insBtn.disabled) insBtn.onclick=()=>{ UI._raidIns=!UI._raidIns; SFX.ui(); UI.raidSetup(); };
+  /* v0.39.0：契约接取 / 放弃 / 赎回 —— 全部落盘后重开大厅，避免「界面说成功但仓库没变」 */
+  UI.overlay.querySelectorAll('[data-cc]').forEach(el=>{
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const off=raidContractOffers(Date.now()).find(o=>o.id===el.dataset.cc);
+      if(off && raidContractAccept(stash, off, Date.now())){ RaidStash.save(stash); SFX.ui(); UI.raidSetup(); }
+    };
+  });
+  UI.overlay.querySelectorAll('[data-cx]').forEach(el=>{
+    el.onclick=(e)=>{ e.stopPropagation(); raidContractAbandon(stash); RaidStash.save(stash); SFX.ui(); UI.raidSetup(); };
+  });
+  UI.overlay.querySelectorAll('[data-bb]').forEach(el=>{
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const r=raidBuybackBuy(stash, parseInt(el.dataset.bb,10)||0, Date.now());
+      if(r && r.ok){ RaidStash.save(stash); SFX.levelup(); UI.raidSetup(); }
+      else { SFX.hurt(); if(r && r.msg) console.warn("[赎回]", r.msg); }
+    };
+  });
   document.getElementById('btn-raid-shop').onclick=()=>{ SFX.ui(); UI.raidShop({from:'lobby'}); };
   document.getElementById('btn-raid-forge').onclick=()=>{ SFX.ui(); UI.raidForge({from:'lobby'}); };
   document.getElementById('btn-raid-stash').onclick=()=>{ SFX.ui(); UI.raidStash({from:'lobby'}); };
@@ -485,6 +548,11 @@ UI.raidResult=function(res){
   const recoveredHtml = (res.recovered&&res.recovered.length)
     ? `<div class="raid-result-label" style="color:#8fe07a;">保险理赔，无人捡走退回：</div>
        <div class="raid-result-items">${res.recovered.map(it=>`<span style="color:${colOf(it)}">${it.name}</span>`).join("，")}</div>` : "";
+  /* v0.39.0（用户要求）：死亡回放 —— 塔科夫式死因信息，是玩家自我改进的燃料，
+     也是挫败感的泄压阀。数据由 Raid._deathRecap 在致死那一次写好，这里只负责展示。 */
+  const _rc=(!res.success && typeof Raid!=="undefined" && Raid.player) ? Raid.player.deathRecap : null;
+  const recapHtml = _rc ? `<div class="raid-result-label">死因：</div>
+      <div class="raid-result-items" style="color:#ffb0a8;">被 <b>${_rc.label?(_rc.label+"「"):"「"}${_rc.name}」</b>${_rc.dist?("在 "+_rc.dist+"m 外"):"贴身"}击杀${_rc.gun?("（"+_rc.gun+"）"):""}，期间受击 <b>${_rc.hits}</b> 次、累计 <b>-${_rc.dmg}</b>${_rc.elite?("<br>对手词条："+_rc.elite):""}</div>` : "";
   const insNote = res.insured ? `<div class="hint">本次已支付保费 ₽${res.insuredPaid}。</div>` : "";
   const mm=Math.floor(res.time/60), ss=Math.floor(res.time%60);
   UI._set(`
@@ -501,6 +569,7 @@ UI.raidResult=function(res){
       </div>
       <div class="raid-result-label">${res.success?"带出并入库：":"丢失："}</div>
       <div class="raid-result-items">${itemsHtml}</div>
+      ${recapHtml}
       ${recoveredHtml}
       <div class="row" style="justify-content:center;margin-top:18px;">
         <button class="btn" id="btn-raid-again">返回大厅</button>

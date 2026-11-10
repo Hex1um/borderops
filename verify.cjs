@@ -3840,15 +3840,27 @@ check('T12 破盾无敌配额为 4096（2^12）', __sh12.q12===4096?1:0, 1, 0.00
 check('_ivUsed 在每局启动时被重置（源码契约）',
   /this\._ivUsed=\{\}/.test(raidSrc)?1:0, 1, 0.001);
 
-/* ⑤ P1：四个「写了没人读」的字段必须有消费点 */
-const __consume = {
-  maxShieldAdd: /\+ m\.maxShieldAdd/.test(fs.readFileSync(path.join(SRC,'player.js'),'utf8')),
-  speedMul:     /C\.speed \* m\.speedMul/.test(fs.readFileSync(path.join(SRC,'player.js'),'utf8')),
-  abilityCDMul: /stats\.abilityCDMul/.test(fs.readFileSync(path.join(SRC,'player.js'),'utf8')),
-  elemMul:      /stats\.elemMul/.test(fs.readFileSync(path.join(SRC,'combat.js'),'utf8')),
-};
-const __dead = Object.keys(__consume).filter(k=>!__consume[k]);
-check('技能/职业被动字段全部接进结算（'+(__dead.join('、')||'无死字段')+'）', __dead.length, 0, 0.001);
+/* ⑤ P1：技能树里的每个加点字段都必须有消费点
+ *   v0.38.0 时这张表是手写的 4 个字段（maxShieldAdd / speedMul / abilityCDMul / elemMul），
+ *   于是第五个死字段 shieldRegenMul 就这么漏过去了 —— 手写清单永远追不上新增字段。
+ *   v0.39.0 改成**从 skills.js 里直接抽取 per 键名**再做全量扫描：新增字段忘了接线，这里就红。 */
+const __skillSrc = fs.readFileSync(path.join(SRC,'skills.js'),'utf8');
+const __skillKeys = new Set();
+for(const m of __skillSrc.matchAll(/per:\{([^}]*)\}/g))
+  for(const p of m[1].split(",")){ const k=p.split(":")[0].trim(); if(k) __skillKeys.add(k); }
+const __otherFiles = fs.readdirSync(SRC).filter(f=>f.endsWith(".js") && f!=="skills.js");
+const __dead = [...__skillKeys].sort().filter(k=>{
+  let n=0;
+  for(const f of __otherFiles){
+    const t=fs.readFileSync(path.join(SRC,f),'utf8');
+    n += (t.match(new RegExp("\\b"+k+"\\b","g"))||[]).length;
+  }
+  return n===0;
+});
+check('技能/职业被动字段全部接进结算（'+([...__skillKeys].length)+' 个字段，死字段：'+(__dead.join("、")||"无")+'）', __dead.length, 0, 0.001);
+/* 单独钉死本轮新增的那一个：泛化扫描只能证明「有人提到」，这里断言它真的乘进了充能速度 */
+check('shieldRegenMul 乘进护盾充能速度',
+  /\*\s*m\.shieldRegenMul/.test(fs.readFileSync(path.join(SRC,'player.js'),'utf8'))?1:0, 1, 0.001);
 
 /* ⑥ P1：AI 互殴 / 背景交火的尸体必须广播（否则联机 containers 下标错位） */
 check('两条 AI 尸体路径都走 _dropBotAndBroadcast',
@@ -3875,6 +3887,106 @@ check('结算页渲染背包护甲（lootA 有消费点）',
   /res\.lost\.lootA\|\|\[\]/.test(__rui)?1:0, 1, 0.001);
 check('结算页渲染背包护盾（lootS 有消费点）',
   /res\.lost\.lootS\|\|\[\]/.test(__rui)?1:0, 1, 0.001);
+
+/* ---------------- 58. v0.39.0：狙击手 / 医疗兵 / 精英词条 / 契约 / 赎回 / 死亡回放 ---------------- */
+console.log('\n=== 58. v0.39.0（走位型敌人 / 精英词条 / 契约 / 赎回 / 死亡回放）===');
+
+/* ① 两种新精英必须真的进了 AI 表，且编成逻辑把它们放进常规 PMC */
+check('狙击手 / 医疗兵已登记进 RAID_ARCH',
+  (G('!!(RAID_ARCH.sniper && RAID_ARCH.medic)')?1:0), 1, 0.001);
+check('狙击手视距高于 PMC（超视距点名）',
+  G('RAID_ARCH.sniper.sense.sight > RAID_AI_SENSE.pmc.sight')?1:0, 1, 0.001);
+check('常规 PMC 里会编出狙击手 / 医疗兵',
+  /arch=spec;/.test(raidSrc) && /"_sniperTick"|_sniperTick\(/.test(raidSrc)?1:0, 1, 0.001);
+check('狙击手有 0.8s 激光预警窗口',
+  /RAID_SNIPER_AIM\s*=\s*0\.8/.test(fs.readFileSync(path.join(SRC,'raid-core.js'),'utf8'))?1:0, 1, 0.001);
+check('医疗兵不给玩家回血（否则「先杀医疗兵」不成立）',
+  /if\(o===b \|\| !o\.alive \|\| o\.isPlayer \|\| o\.remote \|\| o\.ghost\) continue;/.test(fs.readFileSync(path.join(SRC,'raid-core.js'),'utf8'))?1:0, 1, 0.001);
+
+/* ② 精英词条：五条词条的消费点都在（本轮最容易「写了没人读」的地方） */
+const __coreSrc = fs.readFileSync(path.join(SRC,'raid-core.js'),'utf8');
+const __c2Src   = fs.readFileSync(path.join(SRC,'raid-core2.js'),'utf8');
+const __affixOk = {
+  affixDmgTaken: /target\.affixDmgTaken/.test(__c3),
+  affixJitter:   /b\.affixJitter/.test(__c2Src),
+  affixSummon:   /b\.affixSummon/.test(__c2Src),
+  speed:         /o\.speed=Math\.round/.test(__coreSrc),
+  maxHP:         /o\.maxHP=Math\.round/.test(__coreSrc),
+};
+const __affixDead = Object.keys(__affixOk).filter(k=>!__affixOk[k]);
+check('精英词条全部有消费点（死词条：'+(__affixDead.join("、")||"无")+'）', __affixDead.length, 0, 0.001);
+/* 行为断言：词条真的改写了属性，且 2 条时互不重复 */
+const __affixed = JSON.parse(G(`JSON.stringify((()=>{
+  const o={ isPlayer:false, name:"测试精锐", speed:100, maxHP:100, hp:100, cls:"pmc" };
+  Raid._applyEliteAffixes(o, 2);
+  return { n:(o.affixNames||[]).length, names:o.affixNames||[], speed:o.speed, hp:o.maxHP,
+           dmgTaken:o.affixDmgTaken||1, jitter:o.affixJitter||1, summon:!!o.affixSummon, name:o.name };
+})())`));
+check('精英词条：2 条且不重复（'+__affixed.names.join("/")+'）',
+  (__affixed.n===2 && new Set(__affixed.names).size===2)?1:0, 1, 0.001);
+check('精英词条至少改写了一项属性（不是空标记）',
+  (__affixed.speed!==100 || __affixed.hp!==100 || __affixed.dmgTaken!==1
+   || __affixed.jitter!==1 || __affixed.summon)?1:0, 1, 0.001);
+check('精英名字带词条标签（玩家看得见）', /\[/.test(__affixed.name)?1:0, 1, 0.001);
+
+/* ③ 契约：三种完成条件都必须有引擎侧 hook，且发奖会真的落进仓库 */
+check('契约三种条件都有 hook（boss / elite / extract）',
+  /_contractTick\(victim\.bounty\?"boss"/.test(__c3) && /_contractTick\("extract"/.test(__c3)?1:0, 1, 0.001);
+const __contract = JSON.parse(G(`JSON.stringify((()=>{
+  const now=Date.now();
+  const stash={ creds:0, tokens:0, weapons:[], parts:[], armors:[], helmets:[], shields:[], materials:[], keys:[] };
+  const offers=raidContractOffers(now);
+  const kinds=offers.map(o=>o.kind);
+  const c=offers[0];
+  raidContractAccept(stash, c, now);
+  const active=!!raidContractActive(stash, now);
+  const step=raidContractProgress(stash, c.kind, 1);         // 还差一次
+  const mid={ progress:(stash.contract||{}).progress, done:step.done };
+  const fin=raidContractProgress(stash, c.kind, c.need);      // 收尾
+  return { n:offers.length, kinds, active, mid, done:fin.done,
+           grant:fin.grant?fin.grant.kind:"", cleared:!stash.contract,
+           got:stash.weapons.length+stash.parts.length+((stash.creds||0)>0?1:0) };
+})())`));
+check('每日契约报价 3 条且类型不重复（'+__contract.kinds.join("/")+'）',
+  (__contract.n===3 && new Set(__contract.kinds).size===3)?1:0, 1, 0.001);
+check('接取后进入进行中状态', __contract.active?1:0, 1, 0.001);
+check('进度按次数累加（1/'+Math.max(1,__contract.mid.progress||1)+'）',
+  __contract.mid.done===false && __contract.mid.progress>=1?1:0, 1, 0.001);
+check('达成后发奖并清空契约（奖励类型 '+__contract.grant+'）',
+  (__contract.done && __contract.cleared && __contract.got>0)?1:0, 1, 0.001);
+
+/* ④ 阵亡装备赎回：24h 窗口 / 300% 价 / 扣钱后装备回仓 */
+const __bb = JSON.parse(G(`JSON.stringify((()=>{
+  const now=Date.now();
+  const stash={ creds:5000, weapons:[], armors:[], helmets:[], shields:[], parts:[] };
+  const it={ kind:"weapon", name:"待赎回测试枪", value:1000, uid:"bb1" };
+  const n=raidBuybackAdd(stash, [it], now);
+  const live=raidBuybackList(stash, now);
+  const price=live[0]?live[0].price:0;
+  const poor=raidBuybackBuy({ creds:10, weapons:[], armors:[], helmets:[], shields:[], buyback:stash.buyback }, 0, now);
+  const ok=raidBuybackBuy(stash, 0, now);
+  const expired=raidBuybackList({ buyback:[{ at:now-25*3600000, price:1, item:it }] }, now).length;
+  return { added:n, price, poorOk:!!poor.ok, okOk:!!ok.ok, creds:stash.creds,
+           got:stash.weapons.length, left:(stash.buyback||[]).length, expired };
+})())`));
+check('阵亡装备进赎回池且定价 300%（₽'+__bb.price+'）',
+  (__bb.added===1 && __bb.price===3000)?1:0, 1, 0.001);
+check('钱不够时拒绝赎回（不吞装备也不吞钱）', __bb.poorOk===false?1:0, 1, 0.001);
+check('赎回成功：扣钱 + 装备回仓 + 出池（余额 ₽'+__bb.creds+'）',
+  (__bb.okOk && __bb.creds===2000 && __bb.got===1 && __bb.left===0)?1:0, 1, 0.001);
+check('超过 24h 的待赎回项自动过期（剩余 '+__bb.expired+'）', __bb.expired===0?1:0, 1, 0.001);
+
+/* ⑤ 死亡回放：生产端与消费端都要在 */
+check('死亡回放生产端（_deathRecap 在致死链路里）',
+  /target\.deathRecap=this\._deathRecap\(/.test(__c3)?1:0, 1, 0.001);
+check('死亡回放消费端（结算页读 deathRecap）',
+  /Raid\.player\.deathRecap/.test(__rui)?1:0, 1, 0.001);
+const __recap = JSON.parse(G(`JSON.stringify(Raid._deathRecap(
+  { x:0, y:0, hitN:3, hitDmg:137 },
+  { name:"Slick", cls:"pmc", arch:null, bounty:false, x:42, y:0, affixNames:["迅猛"] },
+  { name:"AK-74N" }))`));
+check('死亡回放字段完整（'+__recap.dist+'m / '+__recap.hits+' 次 / -'+__recap.dmg+'）',
+  (__recap.name==="Slick" && __recap.dist===42 && __recap.hits===3 && __recap.dmg===137)?1:0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

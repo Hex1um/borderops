@@ -1378,6 +1378,10 @@ Object.assign(Raid, {
         const at=(RAID_ARCH.broodmother.callAt||0.6);
         if(b.hp < b.maxHP*at){ b._called=true; this._callReinforce(b); }
       }
+      /* v0.39.0（词条「召唤者」）：半血叫一次增援，复用 broodmother 的同一条链路 */
+      if(b.affixSummon && !b._called && b.hp < b.maxHP*0.5){ b._called=true; this._callReinforce(b); }
+      /* v0.39.0（医疗兵）：不处理掉就一直给前排回血 —— 这条就是它的全部威胁 */
+      if(b.arch==="medic") this._medicTick(b, dt, game);
       // 联机房主：AI 会在「自己 + 所有远端玩家」里挑最近的可见目标
       // AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
       // v0.21.9：基线不再预设玩家原始距离 —— 否则被墙挡住的近处玩家会屏蔽更远但可见的敌对目标
@@ -1539,6 +1543,9 @@ Object.assign(Raid, {
           const arc=(b._arcSide||(b._arcSide=RNG.chance(0.5)?1:-1))*0.62;
           mx+=-Math.sin(b.angle)*arc; my+=Math.cos(b.angle)*arc;
         }
+        /* v0.39.0：狙击手不贴脸 —— 保持在 520~760 的「点名距离」，进了这个带就原地架枪。
+           远了前进、近了后撤，和步枪兵（170/60）完全是两套站位。 */
+        if(b.arch==="sniper"){ const k=ad>760?1:(ad<520?-1:0); mx=Math.cos(b.angle)*k; my=Math.sin(b.angle)*k; }
         // 换弹时不再「端着空枪往前冲」——拉开距离等装填完
         if(b.reloadT>0 && ad<620){ mx=-Math.cos(b.angle); my=-Math.sin(b.angle); b.state="reload"; }
         // 交战时左右游走，不再站桩对射（玩家更难被「固定靶」式预瞄）
@@ -1565,10 +1572,11 @@ Object.assign(Raid, {
           this._moveOp(b, Math.cos(a2)*b.speed*dt, Math.sin(a2)*b.speed*dt);
         } else if(mx||my){ b._fleeT=0; b._fleeA=undefined; }
         // v0.29.0：开火只认严格视野 —— 迟滞期间可以继续朝向 / 追击，但绝不隔墙开枪
-        if(canSee && b.fireCd<=0 && b.reloadT<=0){
+        if(b.arch==="sniper"){ this._sniperTick(b, tgt, canSee, dt, game); }
+        else if(canSee && b.fireCd<=0 && b.reloadT<=0){
           if(b.gun.ammoMag>0){
             // 枪法更准、开火间隔更短（jitter 0.026→0.018 / 0.072→0.050，CD 0.04→0.02 / 0.14→0.085）
-            const jitter = b.smart ? 0.008 : (b.cls==="scav" ? 0.050 : 0.018);
+            const jitter = (b.smart ? 0.008 : (b.cls==="scav" ? 0.050 : 0.018)) * (b.affixJitter||1);   // v0.39.0：词条「神射」
             const cd = b.smart ? 0 : (b.cls==="scav" ? 0.085 : 0.02);
             this._fire(b, b.angle+M.normAngle(Math.random()-0.5)*jitter, game);
             // 修复：额外射击间隔必须放在 _fire 之后 —— _fire 开头会因 fireCd>0 直接 return，

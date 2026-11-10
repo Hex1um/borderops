@@ -82,7 +82,10 @@ class Player {
        但这里从来没加过 —— 加点完全无效。补进底材再乘等级/词条。 */
     const maxShield = Math.round(((C.shield*0.32 + shieldCap + m.maxShieldAdd) * lvSh) * (1+(rm.shieldPct||0)/100));
     const shieldDelay = Math.max(0.8, (sh ? sh.delay : CFG.player.shieldDelay) - (rm.shieldDelay||0));
-    const shieldRate  = sh ? sh.rate : CFG.player.shieldRegen*0.35;
+    /* v0.39.0（P1）：skills.js 的 shieldRegenMul（「防护整备」+12%/级、「掩体运用」+10%/级，
+       描述写的是「整备速度」）一直只写进 stats、没有任何读取点 —— 第五个死字段。
+       接在护盾**充能速度**上：语义最贴「整备速度」，也不会与同节点的 maxShieldAdd 双重放大。 */
+    const shieldRate  = (sh ? sh.rate : CFG.player.shieldRegen*0.35) * m.shieldRegenMul;
 
     this.stats={
       maxHP: Math.round((C.hp + m.maxHPAdd)*m.maxHPMul*lvHp*(1+pHp/100)),

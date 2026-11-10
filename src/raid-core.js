@@ -437,11 +437,26 @@ const Raid = {
         });
         /* v0.27.0：驻守队员带小队标记与归属 POI；游荡者 entry.sid 为空，行为不变。 */
         if(entry.sid){ op.squadId=entry.sid; op.isLeader=!!entry.leader; op.homePoi=entry.poi; }
-        /* v0.32.0：连败补偿 —— 敌人血量最多降 21%（6 层 ×3.5%），不削伤害 */
+        /* v0.39.0：连败补偿 —— 敌人血量最多降 21%（6 层 ×3.5%），不削伤害 */
         if(this.pity){
           op.hp=Math.max(1, Math.round(op.hp*(1-this.pity*0.035)));
           op.maxHP=op.hp;
         }
+        /* v0.39.0：把「改变玩家走位」的两种角色编进常规 PMC —— 约 8% 狙击手 / 7% 医疗兵。
+         * 只从 PMC 里出（Scav 是拾荒者，不该有战术分工）；驻守队（entry.sid）不替换，
+         * 免得整支小队都变成同一个角色。 */
+        if(isPMC && !entry.sid && RNG.chance(0.15)){
+          const spec=RNG.chance(0.53)?"sniper":"medic", sp=RAID_ARCH[spec];
+          op.arch=spec; op.name=op.name+"·"+sp.label; op.r=sp.r; op.speed=sp.speed;
+          op.maxHP=Math.round(op.maxHP*sp.hpMul/2.4); op.hp=op.maxHP;
+          if(spec==="sniper"){
+            const sg=blGunGen(15,{type:"sniper",rarity:"purple"});
+            sg.uid=this._uid(); sg.kind="weapon";
+            op.gun=sg; sg.ammoMag=sg.mag; sg.ammoRes=sg.reserve;
+          }
+        }
+        /* v0.39.0：精英随机词条 —— 精锐（名字带 ★）有 20% 带 1 条词条 */
+        if(op.smart && RNG.chance(0.20)) this._applyEliteAffixes(op, 1);
         this.ops.push(op);
       }
 
@@ -534,11 +549,15 @@ const Raid = {
         });
         // 出生归属：他会追着玩家跑出包围盒，所以「是哪个 POI 的精英」只能记在出生时
         eliteOp.spawnPoi=poi.id;
+        /* v0.39.0：POI 精英必定带词条（一号精英 2 条、其余 1 条）——
+         * 「这个 POI 的招牌威胁」因此每局都不完全一样，但强度可控。 */
+        this._applyEliteAffixes(eliteOp, i===0?2:1);
         this.ops.push(eliteOp);
       }
     }
 
     // 摄像机对准玩家
+    this._ensureTacticalRoles();   // v0.39.0：每局至少各一名狙击手 / 医疗兵
     this.camera.x=px-game.view.w/(2*(game.zoom||1));
     this.camera.y=py-game.view.h/(2*(game.zoom||1));
     this._updateCamera(game);
@@ -1762,5 +1781,170 @@ const Raid = {
         SFX.levelup();
       }
     }
+  },
+
+  /* =========================================================================
+   * v0.39.0（用户选定的一批）：死亡回放 / 精英词条 / 狙击手 / 医疗兵
+   * 全部放在 raid-core.js —— raid-data.js 只剩 1 行余量、raid-core3 只剩 4 行，
+   * 而这里还有 200 多行空间。raid-core2 只在既有分支里插 1~2 行调用。
+   * ========================================================================= */
+
+  /* 死亡回放：谁、多远、打了几发、累计多少伤害。
+   * 数据来自 _damage 里的 hitN / hitDmg 累加与致死那一次的 attacker。
+   * 玩家阵亡结算页直接读 Raid.player.deathRecap，所以 _fail 的签名不用改。 */
+  _deathRecap(target, attacker, gun){
+    const p=this.player||target;
+    const a=(attacker && attacker!==target)?attacker:null;
+    const label = !a ? ""
+      : a.bounty ? "Boss"
+      : a.arch ? ((RAID_ARCH[a.arch]||{}).label||"精锐")
+      : a.cls==="scav" ? "Scav" : "PMC";
+    return {
+      name: a ? (a.name||label||"未知目标") : "",
+      label,
+      dist: a ? Math.round(M.dist(p.x,p.y,a.x,a.y)) : 0,
+      hits: target.hitN||0,
+      /* 累计伤害按「实际能打掉的血量」封顶：原始累加会把溢出伤害也算进去，
+         结算页出现「-100039」这种数字只会让人困惑，读起来也不像塔科夫。 */
+      dmg: Math.min(Math.round(target.hitDmg||0), Math.round(target.maxHP||target.hitDmg||0)),
+      gun: gun ? gunNameOf(gun) : "",
+      elite: a && a.affixNames && a.affixNames.length ? a.affixNames.join(" · ") : "",
+    };
+  },
+
+  /* 保证每局至少各有一名狙击手与医疗兵。
+   * 纯 15% 概率会掷出「整局没有医疗兵」的局（实测就碰上了），而这两种敌人的价值
+   * 恰恰在于「每局都必须应对」—— 缺席一次，玩家的应对习惯就学不到。 */
+  _ensureTacticalRoles(){
+    for(const spec of ["sniper","medic"]){
+      if(this.ops.some(o=>o.arch===spec)) continue;
+      const cand=this.ops.filter(o=>!o.isPlayer && !o.remote && !o.arch && o.cls==="pmc" && o.alive);
+      const op=cand[0];
+      if(!op) continue;
+      const sp=RAID_ARCH[spec];
+      op.arch=spec; op.name=op.name+"·"+sp.label; op.r=sp.r; op.speed=sp.speed;
+      op.maxHP=Math.round(op.maxHP*sp.hpMul/2.4); op.hp=op.maxHP;
+      if(spec==="sniper"){
+        const sg=blGunGen(15,{type:"sniper",rarity:"purple"});
+        sg.uid=this._uid(); sg.kind="weapon";
+        op.gun=sg; sg.ammoMag=sg.mag; sg.ammoRes=sg.reserve;
+      }
+    }
+  },
+
+  /* 精英随机词条：挑 n 条不重复的，直接改写该单位的属性。
+   * 只做「乘区改写」，不新增结算分支 —— 每条都能在现有代码里找到消费点，
+   * 词条生效与否一眼可查（v0.38.0 的死字段事故就是栽在「写了没人读」上）。 */
+  _applyEliteAffixes(op, n){
+    if(!op || op.isPlayer) return op;
+    const pool=RAID_ELITE_AFFIX.slice();
+    const picked=[];
+    const cnt=M.clamp(Math.round(n||1), 0, 2);
+    while(picked.length<cnt && pool.length){
+      const a=pool.splice(RNG.ri(0,pool.length-1),1)[0];
+      a.apply(op); picked.push(a);
+    }
+    op.affixNames=picked.map(a=>a.name);
+    if(picked.length) op.name = op.name+" ["+op.affixNames.join("·")+"]";
+    return op;
+  },
+
+  /* 狙击手：开火前 0.8s 激光预警，且**锁定**朝向 —— 玩家侧移 / 进掩体就能躲开。
+   * 返回 true 表示「本帧的常规开火已被接管」（raid-core2 据此跳过普通 fire 分支）。 */
+  _sniperTick(b, tgt, canSee, dt, game){
+    if(!b.gun || b.reloadT>0 || b.fireCd>0 || !canSee || !tgt || !tgt.alive){
+      b.aimT=0; b.aimAng=null; return true;
+    }
+    if(b.aimAng===null || b.aimAng===undefined){ b.aimAng=b.angle; b.aimT=0; }
+    b.angle=b.aimAng;                                  // 预警期间不再追踪目标
+    b.aimT+=dt;
+    if(b.aimT>=RAID_SNIPER_AIM){
+      b.aimT=0; b.aimAng=null;
+      this._fire(b, b.angle, game);
+      b.fireCd=RAID_SNIPER_CD;
+    }
+    return true;
+  },
+
+  /* 医疗兵：每 RAID_MEDIC_CD 秒给半径内**同阵营**受伤单位回一次血。
+   * 不给自己回 —— 否则「先杀医疗兵」这条对策就不成立了。 */
+  _medicTick(b, dt, game){
+    b.healCd=(b.healCd===undefined?RAID_MEDIC_CD:b.healCd)-dt;
+    if(b.healCd>0) return;
+    b.healCd=RAID_MEDIC_CD;
+    let n=0;
+    for(const o of this.ops){
+      if(o===b || !o.alive || o.isPlayer || o.remote || o.ghost) continue;
+      if(o.cls!==b.cls) continue;
+      if(o.hp>=o.maxHP) continue;
+      if(M.dist(b.x,b.y,o.x,o.y)>RAID_MEDIC_R) continue;
+      o.hp=Math.min(o.maxHP, o.hp+o.maxHP*RAID_MEDIC_PCT);
+      n++;
+    }
+    if(n){ this._float(b.x,b.y-42,"+治疗 ×"+n, "#7dffb0"); this._noise(b.x,b.y,120,null); }
+  },
+
+  /* ---- v0.39.0：契约进度 / 阵亡装备赎回（引擎侧两个 hook 的实现） ---- */
+
+  /* 契约进度。raid-core3 只负责在正确的时机调一行，判定与发奖都在这里 + raid-legends。 */
+  _contractTick(kind, n){
+    if(!kind || !this.stash) return;
+    const r=raidContractProgress(this.stash, kind, n||1);
+    if(!r || !r.done) return;
+    const g=r.grant||{};
+    this._feed("契约", "完成：「"+(g.name||"奖励已发放")+"」"+(g.perk?(" —— "+g.perk):""), "奖励", false, "extract");
+    if(this.game && this.game.toast) this.game.toast("契约完成："+(g.name||"奖励已发放"));
+    if(typeof RaidStash!=="undefined" && RaidStash.save) RaidStash.save(this.stash);
+  },
+
+  /* 阵亡后：把「投保了但没退回来」的装备挂进 24h 赎回池。
+   * 没投保 = 全丢（惩罚不变）；投保了 = 65% 免费退回 + 其余可付 300% 赎回来。 */
+  _recordBuyback(carried, recovered){
+    if(!this.insured || !this.stash) return 0;
+    const back=new Set((recovered||[]).map(it=>it && it.uid));
+    const pool=[];
+    for(const w of (carried && carried.weapons) || []) if(w && !back.has(w.uid)) pool.push(w);
+    for(const k of ["armor","helmet","shield"]){ const it=carried && carried[k]; if(it && !back.has(it.uid)) pool.push(it); }
+    return raidBuybackAdd(this.stash, pool, Date.now());
   }
 };
+
+/* ---- v0.39.0 常量（放在 raid-core.js 尾部：raid-data.js 已无行数余量） ---- */
+const RAID_SNIPER_AIM = 0.8;      // 狙击手激光预警时长（秒）：玩家看到线到挨枪之间的反应窗口
+const RAID_SNIPER_CD  = 2.6;      // 两枪之间的间隔（含预警），远了不敢站桩，近了打不动
+const RAID_MEDIC_CD   = 4.5;      // 医疗兵治疗间隔
+const RAID_MEDIC_R    = 340;      // 治疗半径：站在这个圈里的敌人才吃得到
+const RAID_MEDIC_PCT  = 0.22;     // 每次回复的最大生命比例
+/* 精英随机词条池。每条都只改乘区，消费点分别在：
+ * 速度 → 移动（既有）／生命 → 血条（既有）／受伤 → _damage 里的 affixDmgTaken
+ * ／精度 → AI 开火抖动 affixJitter／召唤 → 半血呼叫增援（复用 _callReinforce） */
+const RAID_ELITE_AFFIX = [
+  { id:"swift",    name:"迅猛",   apply:(o)=>{ o.speed=Math.round(o.speed*1.30); } },
+  { id:"sturdy",   name:"顽强",   apply:(o)=>{ o.maxHP=Math.round(o.maxHP*1.40); o.hp=o.maxHP; } },
+  { id:"hardened", name:"硬化",   apply:(o)=>{ o.affixDmgTaken=0.72; } },
+  { id:"marksman", name:"神射",   apply:(o)=>{ o.affixJitter=0.40; } },
+  { id:"summoner", name:"召唤者", apply:(o)=>{ o.affixSummon=true; } },
+];
+
+/* ---- v0.39.0：两种「改变玩家走位」的精英，挂在既有 RAID_ARCH 表上 ----
+ * 为什么用 Object.assign 而不是直接写进 raid-data.js：那张表所在文件只剩 1 行余量。
+ * 加载顺序 raid-data → raid-core 保证这里赋值时 RAID_ARCH 已存在；
+ * raidAISense() 只在运行时读表，所以晚绑定不会漏。 */
+Object.assign(RAID_ARCH, {
+  /* 狙击手：视距 1500（远超 PMC 900），但一枪之间有 0.8s 激光预警。
+   * 「站在开阔地就会被点名」——正确应对是进掩体 / 断视线，而不是对枪。 */
+  sniper: {
+    label:"狙击手", short:"狙击手", color:"#ff5a4a",
+    sense:{ sight:1500, memory:7.0, react:0.20, hunt:0.55, hear:0.80 },
+    hpMul:2.2, speed:62, r:16, armorTier:4, helmetTier:4, frontShield:0,
+    lootLimit:4, note:"超视距点名，开火前有激光预警 —— 看到红线就进掩体",
+  },
+  /* 医疗兵：自己不打输出，给周围同阵营回血 —— 不先处理掉，前排就是打不死的。
+   * 刻意做成「后排软目标」：血量高、护甲薄、不主动贴脸。 */
+  medic: {
+    label:"医疗兵", short:"医疗兵", color:"#7dffb0",
+    sense:{ sight:820, memory:5.0, react:0.32, hunt:0.45, hear:1.20 },
+    hpMul:3.0, speed:96, r:15, armorTier:2, helmetTier:2, frontShield:0,
+    lootLimit:3, note:"给周围敌人回血，优先击杀，否则前排打不动",
+  },
+});
