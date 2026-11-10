@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.40.2 — 2026-11-10
+
+**为「作品库/社交分享」补齐元信息与封面，并把成品发布到 AI 作品库。**
+
+### 一、index.html 补 OG / description（这两个站都靠它抓卡片）
+
+- 新增 `meta description`、`theme-color`、`og:type/site_name/title/description/image/url`、`twitter:card/title/description/image`。
+- 之前首页只有 `<title>` 和一个 favicon —— 在 deepdemos、DS-Games 这类作品库里会渲染成「只有域名 + 空白缩略图」的卡片。
+
+### 二、封面截图进仓库（`assets/`）
+
+用 Playwright 在真实运行状态抓的 1600×900 截图，不是拼图：
+
+| 文件 | 内容 |
+|---|---|
+| `assets/cover.jpg` | 突袭内实景（2D 俯视：光照锥、敌人、箱子、HUD 全在） |
+| `assets/cover-3d.jpg` | 同一局切到 3D 第一人称（手持武器 + 视角纵深） |
+| `assets/shot-title.jpg` | 标题页 |
+
+`og:image` 指向 `assets/cover.jpg`，并有断言保证**该文件真实存在**（避免指向死图）。
+
+### 三、已发布
+
+| 平台 | 状态 |
+|---|---|
+| **deepdemos.top（AI 全民制作人）** | ✅ 已上传并 **approved**：`https://deepdemos.top/demo/border-ops-73e23136`，标签 `model:dsv4flash / platform:workbuddy / type:game / game:border-ops`，封面已转 webp 入库 |
+| **DS-Games（灰度节点 · 第二轮灰测）** | 📦 已生成可直接提交的补丁包 `dist/ds-games-pr/`（游戏目录 + 封面 + `games` 数组条目 + 提交说明 + PR 文案）；该仓库无写权限，需 fork 后提 PR |
+
+上传包 `dist/upload/border-ops-v0.40.1.zip`（44 个文件 / 829KB，根目录即 index.html）已用**纯静态服务器**验证：32 个脚本全加载、可进战区、0 console error。
+
+### 护栏（+3 条）
+
+`og:title/og:description/og:image` 必须齐、`og:image` 指向的文件必须存在、`meta description` 不得为空。
+
+门禁：`check` 全通过、`verify` **1257 passed / 0 failed**、`eslint` 0 error。
+
+
 ## v0.40.1 — 2026-11-10
 
 **三件事：契约奖励按难度分档（大幅缩水，高级货只有难契约给）、修「护甲已穿上却还显示在背包且按钮全失效」、修「装备无法修复」。**

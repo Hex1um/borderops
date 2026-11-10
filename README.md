@@ -20,6 +20,8 @@
 
 线上地址：`https://hex1um.github.io/borderops/`（GitHub Pages，纯静态托管；联机自动走 WebRTC P2P，无需后端）
 
+已收录：[deepdemos.top（AI 全民制作人）](https://deepdemos.top/demo/border-ops-73e23136)。封面截图见 `assets/`（`cover.jpg` 俯视实景 / `cover-3d.jpg` 第一人称 / `shot-title.jpg` 标题页）。
+
 ## 两个发布线（v0.36.2 起分开）
 
 同一个仓库同时维护两条发布线，**代码内容不同，不要互相 merge**：
@@ -79,7 +81,7 @@ git checkout main
 
 ```sh
 npm start          # 等价于 node server.js，默认 3000 端口
-npm run verify     # 无浏览器逻辑回归（60 组 / 1254 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏 / POI 主题装饰）
+npm run verify     # 无浏览器逻辑回归（60 组 / 1257 条断言：减伤 / 弹种 / 护盾 / 经济 / 联机净化 / 存档迁移 / 文案护栏 / POI 主题装饰）
 npm run bump -- 0.36.4  # 一条命令升版（package.json / CFG.version / index.html ?v= / WIKI），
                    # 改完自动跑 check 自证；不用再手工同步三处
 npm run check      # 校验版本号三处同步 + 脚本缓存串 + README 目录表（无需安装依赖）
@@ -143,7 +145,7 @@ Toy 是纯静态托管，不需要 `server.js`；联机会自动退到 WebRTC P2
 | `fixtures/legacy-saves.json` | 旧存档迁移回归固定样本（verify 组 32 读取） |
 | `check_version.js` | 版本一致性与缓存串校验（`npm run check`） |
 | `src/*.js` 其余 | 通用引擎层与附属模式 |
-| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，1254 项断言） |
+| `verify.cjs` | vm 沙箱逻辑回归（`npm run verify`，1257 项断言） |
 | `tools/bump_version.cjs` | 一条命令升版并把四处版本号同步（`npm run bump -- x.y.z`） |
 | `tools/e2e.cjs` | 浏览器冒烟运行器：随机端口起 server.js、等 `/api/ping`、跑完收尸（`npm run test:e2e`，找不到 Edge 时用自带 chromium） |
 | `playwright_smoke.py` / `probe_mechanics.py` | 真实浏览器冒烟（42 项断言）与只读机制体检 |

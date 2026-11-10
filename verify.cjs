@@ -4169,6 +4169,18 @@ const __repair = JSON.parse(G(`JSON.stringify((()=>{
 check('修理费随耐久缺口变化（半损 ₽'+__repair.low+'，满耐久 ₽'+__repair.full+'）',
   (__repair.low>0 && __repair.full===0)?1:0, 1, 0.001);
 
+/* ⑤ v0.40.2：作品集 / 社交分享的元信息必须齐（缺了在这些站上就是空白卡片）。
+ *   deepdemos、DS-Games 这类 AI 作品库靠 og:* 与 description 抓标题与缩略图。 */
+const __idx = fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+const __ogImg = (__idx.match(/<meta property="og:image" content="([^"]+)"/)||[])[1] || "";
+check('首页有 og:title / og:description / og:image（'+__ogImg+'）',
+  (/<meta property="og:title"/.test(__idx) && /<meta property="og:description"/.test(__idx) && !!__ogImg)?1:0, 1, 0.001);
+check('og:image 指向的文件真实存在（'+__ogImg+'）',
+  (!!__ogImg && fs.existsSync(path.join(ROOT, __ogImg)))?1:0, 1, 0.001);
+check('首页有 meta description（作品库列表会直接用它当简介）',
+  /<meta name="description" content="[^"]{20,}"/.test(__idx)?1:0, 1, 0.001);
+
+
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
