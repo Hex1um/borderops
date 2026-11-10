@@ -1,21 +1,21 @@
-# ⛔ 本分支已冻结（2026-11-09）
+# 本分支（toy）= B 站 Toy 版 · 修改规则
 
-`toy` 分支是 **B 站 Toy 投稿版**，锚定在 **v0.37.0**，**不再接收任何更新**。
+**规则（2026-11-10 起，取代此前的「永久冻结」）**
 
-- 原因：Toy 每次更新文件都要重新审核 + 重新发布，成本高于收益。
-- 冻结内容：商标合规化命名 + `src/toy-sdk.js`（B 站云存档 / 云房间）。
-- **不要**把 `main` 的改动 merge / cherry-pick 到这里。
-- **不要**在这里做任何修改，除非使用者**这一次明确要求**改 B 站版。
+> **只有使用者明确说「改 Toy / 改 B 站版 / 更新 toy」时才动这个分支；
+> 其余一切改动一律走 `main`。**
 
-游戏本体的持续开发在 **`main`** 分支（GitHub Pages：`https://hex1um.github.io/borderops/`）。
-详细约定见 main 分支的 `AGENTS.md` 与 `README.md`。
+- 判定标准写在 `main` 分支的 `AGENTS.md` 里，动手前先看那里。
+- 本分支当前版本：**0.37.1**（上加排行榜：仓库卢布 / GP 币）。
+- 版本序列独立：本分支走 0.37.x，`main` 走自己的序列（跨过时直接用 0.38.0），**两者不要互相比较**。
+- 仍然**禁止**把 `main` 的改动整体 merge 进来：本分支含商标合规改名，被 main 的原版命名覆盖会破坏合规。
 
-## 如果确实需要重新出包
+## 出包
 
 ```sh
 git checkout toy
-node tools/build_toy.cjs        # → dist/borderops-toy-v0.37.0.zip（根目录含 index.html）
-python tools/make_toy_cover.py  # 封面 1920×1080 + 图标 512×512
+node tools/build_toy.cjs        # → dist/borderops-toy-v<版本>.zip（根目录含 index.html）
+python tools/make_toy_cover43.py  # 封面必须 4:3（1200×900），16:9 会被平台裁
 ```
 
-上传到 B 站 Toy 后不需要在这里改版本号 —— 它已经是终版。
+上传后「发布记录 → 更新」即可替换文件，不必新建 Toy。

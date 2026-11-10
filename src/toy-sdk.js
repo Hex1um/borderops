@@ -148,9 +148,101 @@ const ToySdk = (function(){
     },
   };
 
+  /* ------------------------------ 排行榜 ------------------------------
+   * 从公开的 toy-host.js 读到：{kind:"rank", op:"submit"|"list"|"my"}，
+   * 且**预览页只允许 list / my**（submit 会被平台拒绝）。
+   * FAQ 里的三条硬约束，这里直接内建：
+   *   · 单个 Toy 共 5 个榜位 → 本项目只用 0=卢布、1=GP 币，留 3 个备用；
+   *   · 有最大数值限制且跨平台按 Float32 适配 → 上报前 clamp 到 2^24-1（16,777,215），
+   *     这是 Float32 能精确表示整数的上限，超过就可能被截断成错的值；
+   *   · 接口约 50 QPS → 上报去抖 1.2s，列表 8s 内复用缓存。 */
+  const RANK_MAX = 16777215;
+  const rank = {
+    RUB:0, GP:1,          // 榜位编号（0 起）
+    _cache:new Map(),
+    available(){ probe(); return !!(inToy && state.read); },
+    canSubmit(){ return this.available() && state.write && !IS_PREVIEW; },
+    clamp(v){
+      const n=Math.floor(Number(v)||0);
+      return Math.max(0, Math.min(RANK_MAX, isFinite(n)?n:0));
+    },
+    async _call(op, payload){
+      probe();
+      const W=(typeof window!=="undefined")?window:{};
+      const body=Object.assign({ board:payload.board, score:payload.score, limit:payload.limit,
+                                 offset:payload.offset, value:payload.score }, payload);
+      // ① 高级 API：window.toy.rank.submit / list / my
+      if(W.toy && W.toy.rank && typeof W.toy.rank[op]==="function")
+        return await timeout(W.toy.rank[op](body), 4000);
+      // ② 宿主桥：{kind:"rank", op}
+      const host=W.toyHost || (W.BiliJsBridge && (W.BiliJsBridge.call || W.BiliJsBridge.invoke));
+      const fn=(typeof host==="function")?host:(host && host.call);
+      if(typeof fn==="function")
+        return await timeout(fn.call(W.toyHost||W.BiliJsBridge, Object.assign({kind:"rank", op:op}, body)), 5000);
+      throw new Error("no rank api");
+    },
+    async submit(board, score){
+      if(!this.canSubmit()) return false;
+      try{
+        await this._call("submit", { board:board, score:this.clamp(score) });
+        this._cache.delete(board);
+        return true;
+      }catch(e){ state.lastErr=String(e && e.message || e); return false; }
+    },
+    async list(board, limit){
+      if(!this.available()) return null;
+      const key="l"+board;
+      const hit=this._cache.get(key);
+      const now=Date.now();
+      if(hit && now-hit.t<8000) return hit.v;
+      try{
+        const r=await this._call("list", { board:board, limit:limit||20, offset:0 });
+        const v=normalizeRanks(r);
+        this._cache.set(key, { t:now, v:v });
+        return v;
+      }catch(e){ state.lastErr=String(e && e.message || e); return null; }
+    },
+    async my(board){
+      if(!this.available()) return null;
+      try{
+        const r=await this._call("my", { board:board });
+        const v=normalizeRanks(r);
+        return (v && v.length) ? v[0] : null;
+      }catch(e){ state.lastErr=String(e && e.message || e); return null; }
+    },
+  };
+
+  /* 把平台返回的任意形状归一成 [{rank,name,value,self}]。
+     不同版本返回 data/list/items/list 都可能，字段名也不统一 —— 与其猜，
+     不如把「可能是排行榜的数组」找出来再统一映射；找不到就返回 null。 */
+  function normalizeRanks(raw){
+    if(!raw) return null;
+    let arr=null;
+    const dig=(o,depth)=>{
+      if(arr || !o || depth>3) return;
+      if(Array.isArray(o)){
+        if(o.length && o.some(x=>x && (x.score!==undefined || x.value!==undefined))) arr=o;
+        return;
+      }
+      if(typeof o!=="object") return;
+      for(const k of ["data","list","items","ranks","result"]){
+        if(o[k]!==undefined) dig(o[k], depth+1);
+        if(arr) return;
+      }
+    };
+    dig(raw, 0);
+    if(!arr) return null;
+    return arr.map((x,i)=>({
+      rank: Number(x.rank || x.rank_no || x.position || (i+1)),
+      name: String(x.nickname || x.name || x.uname || x.nick || ("玩家 "+(i+1))).slice(0, 24),
+      value: Number(x.score !== undefined ? x.score : x.value) || 0,
+      self: !!(x.is_self || x.self || x.isSelf),
+    }));
+  }
+
   return {
     toyId, inToy, isPreview: IS_PREVIEW,
-    probe,
+    probe, rank, RANK_MAX,
     status(){ probe(); return Object.assign({}, state, { toyId, inToy, isPreview:IS_PREVIEW }); },
     save(json){ debounceSave(json); return flush(json); },
     flush, loadCloud,

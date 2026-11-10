@@ -61,7 +61,7 @@ const LAZY_PARTS = ['world', 'endless', 'dust2', 'br'];   // 生产环境按需�
 // 顺序与 index.html 的常驻脚本一致（main.js 会 new Game() 故跳过）
 const files = ['sanitize', 'config', 'util', 'store', 'weapons', 'items', 'shields', 'skills', 'player', 'enemies', 'combat',
   ...LAZY_PARTS.slice(0, 3), 'shop', 'input', 'render', 'ui', 'viewmode', 'fpview',
-  ...raidModules, 'net', 'net-p2p', 'auction', LAZY_PARTS[3], 'save'];
+  'toy-sdk', ...raidModules, 'net', 'net-p2p', 'auction', LAZY_PARTS[3], 'save', 'toy-rank'];
 let loaded = 0;
 for (const f of files) {
   try {
@@ -3827,6 +3827,61 @@ check('云端更新才覆盖本地（新→采纳 / 旧→忽略 / 坏档→拒�
   (__adopt.fresh===true && __adopt.stale===false && __adopt.junk===false)?1:0,1,0.001);
 check('index.html 在 store.js 之后加载 toy-sdk.js',
   /store\.js[^\n]*\n[^\n]*toy-sdk\.js/.test(fs.readFileSync(path.join(ROOT,'index.html'),'utf8')) ?1:0,1,0.001);
+
+console.log('');
+console.log('=== 55. v0.37.1（Toy 排行榜：仓库卢布 / GP 币）===');
+
+const __rank = fs.readFileSync(path.join(SRC,'toy-rank.js'),'utf8');
+const __sdk  = fs.readFileSync(path.join(SRC,'toy-sdk.js'),'utf8');
+
+/* ① 两个榜位 + Float32 安全上限 */
+const __rk = JSON.parse(G(`JSON.stringify((()=>{
+  const keep={avail:ToySdk.rank.available};
+  ToySdk.rank.available=()=>true;
+  const out={
+    rub:ToyRank.BOARDS[0].id, gp:ToyRank.BOARDS[1].id,
+    max:ToySdk.RANK_MAX,
+    c1:ToySdk.rank.clamp(1e12), c2:ToySdk.rank.clamp(-5), c3:ToySdk.rank.clamp(1234.9),
+  };
+  ToySdk.rank.available=keep.avail;
+  return out;
+})())`));
+check('榜位 0=仓库卢布 / 1=GP 币', (__rk.rub===0 && __rk.gp===1)?1:0, 1, 0.001);
+check('数值 clamp 到 Float32 安全整数上限 2^24-1',
+  (__rk.max===16777215 && __rk.c1===16777215 && __rk.c2===0 && __rk.c3===1234)?1:0, 1, 0.001);
+
+/* ② 预览页只读：canSubmit 必须把 IS_PREVIEW 挡掉 */
+check('预览页禁止上报（canSubmit 依赖 IS_PREVIEW）',
+  /canSubmit\(\)\{[^}]*state\.write[^}]*!IS_PREVIEW/.test(__sdk)?1:0, 1, 0.001);
+
+/* ③ 只在撤离成功处上报，且失败静默 */
+check('撤离成功才上报（_succeed 内调用 ToyRank.submit）',
+  /lossStreak=0;[\s\S]{0,400}ToyRank\.submit\(\)/.test(raidSrc)?1:0, 1, 0.001);
+check('上报失败静默（不 throw、不影响存档）',
+  /submit\(\)\{[\s\S]{0,400}catch\(e\)\{ return false; \}/.test(__rank)?1:0, 1, 0.001);
+
+/* ④ 榜单数值来自仓库字段（creds / tokens） */
+check('榜值读的是仓库 creds / tokens',
+  /st\.creds/.test(__rank) && /st\.tokens/.test(__rank)?1:0, 1, 0.001);
+
+/* ⑤ 非 Toy 环境完全静默：不建按钮、不弹提示 */
+const __noToy = JSON.parse(G(`JSON.stringify((()=>{
+  const keep=ToySdk.inToy; ToySdk.inToy=false;
+  const ok=ToyRank.available();
+  ToySdk.inToy=keep;
+  return { ok };
+})())`));
+check('非 Toy 环境 available()=false（按钮不出现）', __noToy.ok===false?1:0, 1, 0.001);
+
+/* ⑥ 合规：昵称只来自平台返回，绝无玩家输入框 */
+check('榜单不含玩家自建昵称输入（无 input/textarea）',
+  !/<(input|textarea)/i.test(__rank)?1:0, 1, 0.001);
+check('昵称做 HTML 转义后再插入',
+  /_esc\(r\.name\)/.test(__rank) && /&quot;/.test(__rank)?1:0, 1, 0.001);
+
+/* ⑦ 列表有缓存，避免打爆平台 50 QPS */
+check('榜单列表 8s 内走缓存',
+  /8000/.test(__sdk) && /_cache/.test(__sdk)?1:0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

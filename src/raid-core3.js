@@ -1278,6 +1278,9 @@ Object.assign(Raid, {
     this.stash.lossStreak=0;
     if(!RaidStash.save(this.stash) && this.game && this.game.toast)
       this.game.toast("仓库写入失败：localStorage 可能已满，请清理后重试");
+    /* v0.37.1：撤离成功才上报排行榜（卢布 / GP 币）—— 局内现金已并入 stash.creds，
+       所以这里读的是结算后的仓库总额。失败静默，不影响撤离流程。 */
+    if(typeof ToyRank!=="undefined") ToyRank.submit();
     this.game.state="raidover";
     UI.raidResult({
       success:true, zone:zone?zone.name:"撤离点", creds:this.creds,
