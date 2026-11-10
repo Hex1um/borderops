@@ -1332,6 +1332,7 @@ Object.assign(Raid, {
         lootW:this.inv.weapons.filter(w=>!(this.carried.weapons||[]).some(c=>c.uid===w.uid)),
         lootA:this.inv.armors.filter(a=>a!==this.carried.armor),
         lootH:(this.inv.helmets||[]).filter(h=>h!==this.carried.helmet),
+        lootS:(this.inv.shields||[]).filter(s=>s!==this.carried.shield),
         lootP:this.inv.parts||[], lootM:this.inv.materials||[],
       }, kills:this.player.kills, time:this.raidDuration-this.timer,
       insured:this.insured, insuredPaid:this.insuredVal, recovered,
@@ -1714,7 +1715,7 @@ Object.assign(Raid, {
         <div class="ir-main"><div class="ir-name" style="color:${col||"#dfe7f0"}">${esc(name)}</div>
         <div class="ir-meta">${esc(meta||"")}</div></div>
         ${use?`<button class="inv-take" data-use="${use}">使用</button>`:""}
-        ${equip?`<button class="inv-take" data-equip="${equip}">拿在手上</button>`:""}
+        ${equip?`<button class="inv-take" data-equip="${equip}">${{armors:"穿上护甲",helmets:"戴上头盔",shields:"装上护盾"}[String(equip).split(":")[0]]||"拿在手上"}</button>`:""}
         ${stow?`<button class="inv-take" data-stow="${stow}">放回背包</button>`:""}
         ${salvage?`<button class="inv-take" data-salvage="${salvage}">拆解</button>`:""}
         ${drop?`<button class="inv-drop" data-drop="${drop}">✕ 丢弃</button>`:""}
@@ -1840,7 +1841,7 @@ Object.assign(Raid, {
     el.innerHTML=`<div class="inv-card">
       <div class="inv-head"><b>物品栏</b><span class="inv-sub">${Input.isTouch?"点背包键关闭":"Tab 关闭"}，游戏继续运行</span></div>
       <div class="inv-body">${rows.join("")}</div>
-      <div class="inv-foot">背包枪点「拿在手上」可立即换枪（旧枪自动回背包）；丢弃会把物品放在脚下（发光小包裹），腾出格子后可以再捡回来；阵亡或超时则全部丢失。</div>
+      <div class="inv-foot">背包里的枪点「拿在手上」立即换枪，护甲 / 头盔 / 护盾点「穿上 / 戴上 / 装上」立即装备（换下的旧件自动回背包）；丢弃会把物品放在脚下（发光小包裹），腾出格子后可以再捡回来；阵亡或超时则全部丢失。</div>
     </div>`;
     const nb=el.querySelector('.inv-body');
     if(nb) nb.scrollTop=scroll;

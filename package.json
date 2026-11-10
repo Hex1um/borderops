@@ -1,6 +1,6 @@
 {
   "name": "border-ops",
-  "version": "0.38.0",
+  "version": "0.38.1",
   "private": true,
   "description": "边境行动 · BORDER OPS — 拟真俯视角撤离射击，含合作联机房间",
   "main": "server.js",

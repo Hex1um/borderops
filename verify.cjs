@@ -3857,6 +3857,25 @@ check('两条 AI 尸体路径都走 _dropBotAndBroadcast',
 check('商店 buy 尊重 buyItem 的返回值（源码契约）',
   /const paid = pl\.buyItem\(item, it\.price, cur\);\s*\n\s*if\(!paid\) return \{ ok:false/.test(fs.readFileSync(path.join(SRC,'shop.js'),'utf8'))?1:0, 1, 0.001);
 
+/* ⑦ v0.38.1（用户反馈）：物品栏里的防具不能再显示「拿在手上」
+ *   枪是「拿在手上」，护甲 / 头盔 / 护盾是「穿上 / 戴上 / 装上」——文案错会让人以为
+ *   点它只是拿起来。这里既断言种类映射存在，也断言旧的硬编码模板已经被replace掉。 */
+const __c3 = fs.readFileSync(path.join(SRC,'raid-core3.js'),'utf8');
+check('物品栏防具按钮按种类给词（护甲/头盔/护盾）',
+  /armors:"穿上护甲",helmets:"戴上头盔",shields:"装上护盾"/.test(__c3)?1:0, 1, 0.001);
+check('物品栏不再把防具硬编码成「拿在手上」',
+  /data-equip="\$\{equip\}">拿在手上</.test(__c3)?0:1, 1, 0.001);
+
+/* ⑧ v0.38.1：阵亡结算的「丢失」清单必须覆盖背包里的护甲 / 护盾
+ *   lootA 曾由 _fail 生产却无人读取，背包护盾连数据都没带上 —— 生产端与消费端都要断言。 */
+const __rui = fs.readFileSync(path.join(SRC,'raid-ui.js'),'utf8');
+check('_fail 把背包护盾也带进丢失清单（lootS）',
+  /lootS:\(this\.inv\.shields\|\|\[\]\)\.filter/.test(__c3)?1:0, 1, 0.001);
+check('结算页渲染背包护甲（lootA 有消费点）',
+  /res\.lost\.lootA\|\|\[\]/.test(__rui)?1:0, 1, 0.001);
+check('结算页渲染背包护盾（lootS 有消费点）',
+  /res\.lost\.lootS\|\|\[\]/.test(__rui)?1:0, 1, 0.001);
+
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查
  * 某段实现或文案是否仍在的「源码护栏」（对重命名、重构脆弱）。把两者的数量分开

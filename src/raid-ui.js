@@ -470,6 +470,10 @@ UI.raidResult=function(res){
     if(res.lost.shield) lost.push(`<span style="color:${shieldColor(res.lost.shield)}">${res.lost.shield.name}(护盾)</span>`);
     for(const w of (res.lost.lootW||[])) lost.push(`<span style="color:${colOf(w)}">${gunNameOf(w)}(物品栏)</span>`);
     for(const h of (res.lost.lootH||[])) lost.push(`<span style="color:${colOf(h)}">${h.name}(物品栏)</span>`);
+    /* v0.38.1：背包里的护甲 / 护盾阵亡后根本没进「丢失」清单 —— lootA 由 _fail 生产却无人读取，
+       背包护盾连数据都没带上（只列了身上那件）。两处一起补，避免玩家以为没丢东西。 */
+    for(const a of (res.lost.lootA||[])) lost.push(`<span style="color:${colOf(a)}">${a.name}(物品栏)</span>`);
+    for(const s of (res.lost.lootS||[])) lost.push(`<span style="color:${shieldColor(s)}">${s.name}(物品栏护盾)</span>`);
     for(const pt of (res.lost.lootP||[])) lost.push(`<span style="color:${colOf(pt)}">${partNameOf(pt)}(配件)</span>`);
     { const g=[]; for(const m of (res.lost.lootM||[])){
         const s=g.find(x=>x.id===m.id); if(s) s.n++; else g.push({ id:m.id, m, n:1 });
