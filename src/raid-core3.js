@@ -123,7 +123,13 @@ Object.assign(Raid, {
     /* v0.36.0：开火音效按枪型分层（手枪 / 冲锋枪 / 步枪 / 霰弹 / 狙击 / 榴弹各有音色），
        并且**敌我都能听到** —— 远处 AI 的枪声是重要情报，以前完全静音。 */
     const sndKind = sh.gun.cat || sh.gun.type;
-    if(sh.isPlayer){ this.spawnGrace=0; SFX.shoot(sndKind, {far:false}); }
+    if(sh.isPlayer){
+      this.spawnGrace=0; SFX.shoot(sndKind, {far:false});
+      /* v0.41.0：开火的后坐震屏按枪型给量 —— 手枪 0.9px、步枪 1.6px、狙击/霰弹 2.6px */
+      const kk=(sh.gun.cat==="sniper"||sh.gun.type==="sniper"||sh.gun.type==="shotgun")?2.6
+              :(sh.gun.cat==="smg"||sh.gun.type==="smg")?1.1:1.6;
+      this.shake=Math.max(this.shake||0, kk);
+    }
     else if(!sh.remote && !sh.ghost && this.player){
       if(M.dist(sh.x,sh.y,this.player.x,this.player.y) < 1500) SFX.shoot(sndKind, {far:true});
     }
@@ -451,6 +457,9 @@ Object.assign(Raid, {
 
     if(target.isPlayer){
       this.hitFlash=Math.min(0.35, this.hitFlash+0.18);
+      /* v0.41.0：受击震屏 —— 伤害越高震得越狠（上限 7px），HUD 不跟着抖 */
+      this.shake=Math.max(this.shake||0, Math.min(7, 1.6+d*0.06));
+      this._hurtDir=attacker ? Math.atan2(attacker.y-target.y, attacker.x-target.x) : null;
       SFX.hurt();
       this._float(target.x, target.y-24, "-"+Math.round(d), "#ff6a6a");
       // 塔科夫式流血：被击中有几率开始流血（最多叠 3 层）
@@ -471,7 +480,10 @@ Object.assign(Raid, {
         target.investigate={ x:attacker.x, y:attacker.y, t:Math.max((target.investigate&&target.investigate.t)||0, 6.5) };
       }
       this._float(target.x, target.y-24, "-"+Math.round(d), dmgCol);
-      this.spawnHit(target.x, target.y, dmgCol);
+      /* v0.41.0：受击白闪（渲染侧 0.14s 淡出）+ 按弹道方向散火花 —— 打击感全靠这一下 */
+      target._hitT=0.14;
+      this.spawnHit(target.x, target.y, dmgCol,
+        attacker ? Math.atan2(attacker.y-target.y, attacker.x-target.x) : undefined);
       if(target.hp<=0){
         target.hp=0; target.alive=false;
         this._onBotDeath(target, attacker);
@@ -1488,42 +1500,18 @@ Object.assign(Raid, {
       this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.5,maxLife:0.5,color:i%2?"#ffd23f":"#ff7a1f",size:3}); }
     this.blasts.push({x,y,r:R*0.45,life:0.34,maxLife:0.34});
     this._float(x, y-30, "爆炸", "#ffb020");
+    /* v0.41.0：爆炸按距离震屏（玩家 700px 外不震） */
+    const pd=this.player ? M.dist(x,y,this.player.x,this.player.y) : 9999;
+    if(pd<700) this.shake=Math.max(this.shake||0, 8*(1-pd/700));
     SFX.boom();
   },
 
-  /* ----------------------------- 视觉工具 ----------------------------- */
-  spawnHit(x,y,color){
-    for(let i=0;i<6;i++){ const a=Math.random()*6.28, s=Math.random()*120+40;
-      this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.3,maxLife:0.3,color,size:2.6}); }
-  },
-  // v0.14.10：冰冻命中的冰晶散射（配合 unit() 里的冰霜环 / 结晶）
-  _freezeBurst(x,y){
-    for(let i=0;i<9;i++){ const a=Math.random()*6.28, s=Math.random()*80+30;
-      this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.55,maxLife:0.55,
-        color:i%2?"#bdefff":"#6fd6ff",size:2.4}); }
-  },
-  _float(x,y,text,color){ this.floats.push({x,y,text,color:color||"#fff",life:0.9,maxLife:0.9,vy:-30,size:13}); },
-  /* v0.21.4：3D 拾取提示
-   * 2D 的 _float 是画在**世界坐标系**里的（scene() 内 ctx 已 translate 到相机），
-   * 第一人称渲染器不铺那层世界变换，所以「+ 5.45×39 PS」这类浮动文字在 3D 下完全看不见。
-   * 拾取 / 丢弃 / 治疗这类即时反馈改成额外推一条屏幕空间提示条，由 hud() 在 3D 时绘制。 */
-  _toast(text, color){
-    if(!text) return;
-    if(typeof ViewMode==="undefined" || !ViewMode.is3D()) return;
-    this.toasts=this.toasts||[];
-    this.toasts.push({ text:String(text), color:color||"#dfe7f0", life:3.0, maxLife:3.0 });
-    if(this.toasts.length>6) this.toasts.splice(0, this.toasts.length-6);
-  },
-  /* 双通道：2D 走世界浮动文字，3D 走屏幕提示条（_toast 内部会自己判断维度） */
-  _pick(x,y,text,color){ this._float(x,y,text,color); this._toast(text,color); },
-  _feed(a,v,gun,mine,type){ this.killfeed.unshift({a,v,gun,mine:!!mine,type:type||"kill",t:6}); if(this.killfeed.length>6) this.killfeed.pop(); },
-
-  _screenToWorld(sx,sy,game){
-    const z=game.zoom||1;
-    return { x:this.camera.x+sx/z, y:this.camera.y+sy/z };
-  },
-
-  _updateCamera(game){
+  _updateCamera(game, dt){
+    /* v0.41.0：帧率无关的跟随（旧版每帧固定 lerp 0.2 —— 144Hz 下贴得死紧、
+       30Hz 下拖半拍，同一操作在不同机器上手感不一样）。另加瞬移吸附：
+       重生 / 救援这类几百像素的位置跳变不该让镜头滑一段。 */
+    const dts=Math.max(0.0001, dt||1/60);
+    this.shake=Math.max(0,(this.shake||0)-dts*16);          // v0.41.0：震屏 ~0.4s 内衰减到 0
     const v=game.view, z=game.zoom||1, p=this.player;
     const vw=v.w/z, vh=v.h/z;
     let fx=p.x, fy=p.y;
@@ -1534,8 +1522,11 @@ Object.assign(Raid, {
     let tx=fx-vw/2, ty=fy-vh/2;
     tx = RAID_MAP_W<=vw ? (RAID_MAP_W-vw)/2 : M.clamp(tx,0,RAID_MAP_W-vw);
     ty = RAID_MAP_H<=vh ? (RAID_MAP_H-vh)/2 : M.clamp(ty,0,RAID_MAP_H-vh);
-    this.camera.x=M.lerp(this.camera.x,tx,0.2);
-    this.camera.y=M.lerp(this.camera.y,ty,0.2);
+    const k=1-Math.pow(1-0.2, Math.min(4, dts*60));
+    const jump=(Math.abs(tx-this.camera.x)>600 || Math.abs(ty-this.camera.y)>600);
+    const kk=jump?1:k;
+    this.camera.x+= (tx-this.camera.x)*kk;
+    this.camera.y+= (ty-this.camera.y)*kk;
     // v0.14.11：塔科夫模式原本只维护 Raid.camera，game.camera 一直停在 (0,0)，
     // 导致 game.worldToScreen() / 任何按屏幕坐标定位的 UI 在 raid 模式下全部算错。
     game.camera.x=this.camera.x; game.camera.y=this.camera.y;

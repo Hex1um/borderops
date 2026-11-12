@@ -53,7 +53,7 @@ vm.createContext(sandbox);
  * verify 用「聚合清单」加载：拆分后自动改用分片，未拆分时回退单文件 raid.js。
  * 懒加载模块（world/endless/dust2/br 等）在生产 HTML 里延迟注入，但 vm 逻辑回归
  * 仍全量加载，保证断言覆盖不因懒加载而缩水。 */
-const RAID_PARTS = ['raid-data','raid-legends','raid-geometry','raid-core','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
+const RAID_PARTS = ['raid-data','raid-legends','raid-geometry','raid-core','raid-ai','raid-fx','raid-core2','raid-core3','raid-render','raid-ui','raid-ui2'];
 const hasParts = RAID_PARTS.every(n => fs.existsSync(path.join(SRC, n + '.js')));
 const raidModules = hasParts ? RAID_PARTS : ['raid'];
 const LAZY_PARTS = ['world', 'endless', 'dust2', 'br'];   // 生产环境按需加载，vm 里始终加载
@@ -447,6 +447,9 @@ dmgOn(plBase, 100, phys); dmgOn(pl, 100, phys);
 check('护甲保全减少耐久损耗 35%', (1000 - pl.armor) / (1000 - plBase.armor), 0.65, 0.01);
 check('plate 折扣绝对值', 1000 - pl.armor, 29.25, 0.6);
 // surge：破盾迟滞周围目标
+/* v0.41.0：验证命中火花需要真实实现，先把原函数留一份（下面仍 stub 掉，避免刷屏） */
+const REAL_SPAWN_HIT = Raid.spawnHit;
+sandbox.__realHit = REAL_SPAWN_HIT;   // 注入沙箱，供第 62 组断言调用
 Raid.spawnHit = () => {};
 const org = mkSOp({ shield: 1, maxShield: 1, shieldInvulnBase: 0, shieldPerks: ['surge'], x: 0, y: 0 });
 const near = mkTarget({ x: 50, y: 0 }), far = mkTarget({ x: 400, y: 0 });
@@ -953,8 +956,11 @@ check('未选的口径一发不带', carryDefault.some.light, 200, 0.001);
 check('仓库按携带量扣减', carryDefault.some.stash, 240, 0.001);
 check('钥匙默认一把不带', /if\(!Array\.isArray\(UI\._raidKeys\)\) UI\._raidKeys=\[\];/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('开始突袭不再兜底全带钥匙', /UI\._raidKeys\.slice\(\):\[\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
-/* v0.32.0：默认改成带 3 条（90 发），原「默认 0 发」的契约作废 */
-check('大厅弹药默认带 3 条（90 发）', /RAID_AMMO_STACK\*3/.test(raidSrc) ? 1 : 0, 1, 0.001);
+/* v0.41.0（用户要求改回）：**默认一发都不带**，玩家自己拖；
+   页脚必须有「未携带弹药」的红字提醒，避免又变成「以为功能坏了」 */
+check('大厅弹药默认一发不带 + 有红字提醒',
+  (/const n=\(sel && sel\.id===cur\.id\) \? Math\.max\(0, Math\.min\(sel\.n\|0, cap\)\) : 0;/.test(raidSrc)
+   && /未携带弹药：进图后枪里没有弹匣/.test(raidSrc)) ? 1 : 0, 1, 0.001);
 
 /* v0.21.1：显示密度「精简 / 完整」—— 折中方案，显示层决定，不改写存档名 */
 const dispTest = JSON.parse(G(`JSON.stringify((()=>{
@@ -2752,7 +2758,8 @@ check('_damage 挂上 raidHitLock（玩家与 AI 共用）',
 check('自瞄受击例外但仍要 _los',
   /hb && hb\.alive && \(o\.hitByT\|\|0\)>M\.now\(\)/.test(raidSrc) &&
   /this\._los\(o\.x,o\.y,hb\.x,hb\.y\)\) return hb;/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('AI 受击目标优先级最高（-4000）', /locked \? -4000/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 受击目标优先级最高（受击锁定抢先返回）',
+  /if\(raidHitLocked\(b,o\)\)\{ if\(dd<lockD\)/.test(raidSrc) && /if\(lock\) return \{ tgt:lock, locked:true \}/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* --- ③ 黑市只卖 5~8 档（枪 / 盾 / 甲 / 盔） --- */
 check('黑市档位表为 [5,6,7,8]', /const TIERS=\[5,6,7,8\]/.test(raidSrc) ? 1 : 0, 1, 0.001);
@@ -3056,8 +3063,8 @@ check('护甲 T8+T9 抽样占比 <0.2%',
 /* ③ AI 视角：角度归一 + dt 归一转向 + 感知迟滞 + 不隔墙开枪 */
 check('lerpAngle 输出归一化（恒在 [-π,π]）',
   Math.abs(G('M.lerpAngle(3.0,-3.0,1)')) <= Math.PI+1e-9 ? 1 : 0, 1, 0.001);
-check('AI 转向按 dt 归一（_face 存在且用 pow）',
-  (typeof G('Raid._face')==='function' && /Math\.pow\(1 - /.test(raidSrc))?1:0, 1, 0.001);
+check('AI 转向按 dt 归一（_face 用 pow 换算帧率）',
+  (typeof G('Raid._face')==='function' && /Math\.pow\(1-M\.clamp\(/.test(raidSrc))?1:0, 1, 0.001);
 check('AI 感知迟滞 0.6s（消除视角抖动）',
   /b\._seenHold = 0\.6/.test(raidSrc) && /const aware = canSee \|\| \(b\._seenHold>0/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('迟滞期间不隔墙开枪（开火仍只认 canSee）',
@@ -3178,9 +3185,9 @@ check('瞄准镜参与 2D 瞄具渲染',
 
 /* ④ AI 手电不再跳动：角速度上限 + 目标黏性 + 预判限幅  ⑤ 循光 */
 check('AI 转向有角速度上限（光锥不会甩）',
-  /const cap = \(maxTurn\|\|6\.0\) \* Math\.max\(0\.0001, dt\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('AI 目标黏性（不再每帧切目标）',
-  /const stick = \(o===b\._tgt && o\.alive\) \? -140 : 0/.test(raidSrc) ? 1 : 0, 1, 0.001);
+  /const cap=maxTurn\|\|6\.0;/.test(raidSrc) && /M\.clamp\(d\*Math\.min\(1,t\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 目标黏性 260px（不再每帧切目标）',
+  /const score=dd\+pri\+\(sticky\?-260:0\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('AI 预判速度做了限幅 + 一阶低通',
   /b\._tvx = \(b\._tvx===undefined\) \? ivx : b\._tvx\*0\.82 \+ ivx\*0\.18/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('AI 被手电照到会循光找来源',
@@ -3226,8 +3233,8 @@ check('反应进度衰减放慢（1.5 → 0.6）',
   /_detectT\|\|0\)-dt\*0\.6/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('预判偏移限幅（≤ min(70px, 10% 距离)）',
   /lmax=Math\.min\(70, d\*0\.10\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('贴边吸附（残差 <0.10rad 直接对齐）',
-  /if\(Math\.abs\(M\.normAngle\(realAng-b\.angle\)\) < 0\.10\) b\.angle=M\.normAngle\(realAng\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('贴边吸附改成换瞄准点（同帧只转一次，角速度不叠加）',
+  /if\(Math\.abs\(M\.normAngle\(realAng-b\.angle\)\) < 0\.10\)\{ aimX=tgt\.x; aimY=tgt\.y; \}/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('循光不劫持已警觉单位（!b.lastSeen）',
   /if\(!aware && !b\.investigate && !b\.lastSeen && b\.gun\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
@@ -3262,7 +3269,7 @@ check('注意锥：隔墙不察觉', (!__t53.err && __t53.walled===false)?1:0, 1
 check('窄锥 _aiAware 仍只认光锥（侧向不算看见 → 不开火）',
   (!__t53.err && __t53.awareSide===false)?1:0, 1, 0.001);
 check('候选筛选用注意锥（_aiNotice）',
-  /!this\._aiNotice\(b,o\.x,o\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
+  /!R\._aiNotice\(b,o\.x,o\.y\)/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('注意保持窗 0.6s（避免边界转头抖）',
   /b\._noticeHold = 0\.6/.test(raidSrc) ? 1 : 0, 1, 0.001);
 check('未进光锥时转身对焦（suspect，不开火）',
@@ -3493,7 +3500,8 @@ check('提供存档文件文本导出', /exportFileText/.test(saveSrc) ? 1 : 0, 
 
 /* ② 弹药双向 */
 check('撤离把局内弹药并回仓库', /this\.stash\.ammo\[aid\]=\(this\.stash\.ammo\[aid\]\|\|0\)\+n/.test(raidSrc) ? 1 : 0, 1, 0.001);
-check('配装默认带 3 条（90 发）', /RAID_AMMO_STACK\*3/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('配装默认不带弹药（0 发）',
+  /: 0;\s*\n\s*UI\._raidAmmo\[cal\]=\{ id:cur\.id, n, cap \};/.test(raidSrc) ? 1 : 0, 1, 0.001);
 
 /* ③ 黑市提价 */
 check('黑市 5~8 档 GP 价 45/85/160/300',
@@ -4274,6 +4282,139 @@ if (!__engage.skip) {
   check('空投前的玩家能被守卫看见（lit='+__engage.lit+'，距离 '+__engage.d+'px）',
     (__engage.lit===true || __engage.los===true)?1:0, 1, 0.001);
 }
+
+/* ---------------- 62. v0.41.0：AI 索敌黏性 / 二阶转向 / 打击感 ---------------- */
+console.log('\n=== 62. v0.41.0（AI 索敌黏性 / 二阶转向 / 弹药默认 / 打击感）===');
+
+/* ① 目标选举：黏性续锁 —— 玩家与更近的 AI 同时在候选里，目标不能逐帧来回切 */
+const __pick = JSON.parse(G(`JSON.stringify((()=>{
+  const mk=()=>{
+    const P={ x:600, y:0, alive:true, isPlayer:true, r:14 };
+    const A={ x:150, y:0, alive:true, cls:"scav", r:14 };
+    const b={ x:0, y:0, angle:0, alive:true, cls:"pmc", gun:{}, r:14, _seenHold:0.6,
+              lastSeen:{x:600,y:0,t:3} };
+    const R={ player:P, ops:[P,b,A], online:false,
+              _aiNotice:()=>true, _los:()=>true };
+    b._tgt=P;
+    return {R,b,P,A};
+  };
+  // 正常 60 帧：目标应始终是玩家
+  const f1=mk(); const seq=[];
+  for(let i=0;i<60;i++){ const r=raidAiPickTarget(f1.R,f1.b,raidAISense(f1.b)); seq.push(r.tgt===f1.P?"P":"A"); }
+  const switches=seq.reduce((n,v,i)=>n+((i&&v!==seq[i-1])?1:0),0);
+
+  // 注意锥 / 视线逐帧翻转（模拟光锥边缘）：目标仍应保持玩家
+  const f2=mk(); let flip=0, kept=0;
+  for(let i=0;i<60;i++){
+    const on=(i%2===0);
+    f2.R._aiNotice=()=>on; f2.R._los=()=>on;
+    const r=raidAiPickTarget(f2.R,f2.b,raidAISense(f2.b));
+    if(r.tgt===f2.P) kept++;
+    else flip++;
+  }
+
+  // 玩家死亡 → 目标应正常切到最近的 AI
+  const f3=mk(); f3.P.alive=false;
+  const after=raidAiPickTarget(f3.R,f3.b,raidAISense(f3.b));
+
+  // 玩家在视距外（2000px > sight）→ 不该被选中（旧版 d 是加权分数，会误判「在视距内」）
+  const f4=mk(); f4.P.x=2000;
+  const far=raidAiPickTarget(f4.R,f4.b,raidAISense(f4.b));
+
+  return { switches, kept, flip, afterDead:(after.tgt===f3.A), farPicked:(far.tgt===f4.P),
+           sight:raidAISense(f1.b).sight };
+})())`));
+check('AI 目标黏性：60 帧内不换目标（实测切换 '+__pick.switches+' 次）',
+  __pick.switches===0?1:0, 1, 0.001);
+check('注意锥/视线逐帧翻转时仍锁着玩家（保持 '+__pick.kept+'/60 帧）',
+  __pick.kept>=54?1:0, 1, 0.001);
+check('玩家阵亡后目标正常切到最近的 AI', __pick.afterDead?1:0, 1, 0.001);
+check('视距外的玩家不会被选中（sight='+__pick.sight+'px，玩家 2000px）',
+  __pick.farPicked?0:1, 1, 0.001);
+
+/* ② 真实距离：目标选举后 d 必须是欧氏距离，不能是带优先级的加权分 */
+check('目标距离用真实欧氏距离（不再拿加权分当距离）',
+  /const d = M\.dist\(b\.x, b\.y, tgt\.x, tgt\.y\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('目标选举外移到 raid-ai.js（含受击锁定 + 续锁）',
+  /function raidAiPickTarget\(R, b, sense\)/.test(raidSrc)
+  && /const known = sticky &&/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('帧初统一快照位置（多 AI 抢同一目标时速度不再算成 0）',
+  /function raidAiSnapshot\(R\)/.test(raidSrc) && /raidAiSnapshot\(this\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('engage 分支不再逐帧改写 tgt._px',
+  /tgt\._px=tgt\.x/.test(raidSrc) ? 0 : 1, 1, 0.001);
+
+/* ③ 二阶转向：起步角速度从 0 加速，不是「一上来就满速」 */
+const __turn = JSON.parse(G(`JSON.stringify((()=>{
+  const b={ x:0,y:0,angle:0 };
+  const vs=[];
+  for(let i=0;i<10;i++){
+    Raid._face(b, 1.2, 0.26, 1/60, 7.5);
+    vs.push(Math.abs(+(b._angVel||0).toFixed(4)));
+  }
+  // 收尾：目标角已经很近时角速度应回落
+  const b2={ x:0,y:0,angle:0, _angVel:7 };
+  Raid._face(b2, 0.02, 0.26, 1/60, 7.5);
+  return { vs, first:vs[0], peak:Math.max(...vs), slow:Math.abs(b2._angVel) };
+})())`));
+check('二阶转向：首帧角速度从小值起步（'+__turn.first.toFixed(3)+' rad/s）',
+  (__turn.first>0 && __turn.first < __turn.peak*0.6)?1:0, 1, 0.001);
+check('二阶转向：角速度会累计到 peak '+__turn.peak.toFixed(2)+' rad/s 且不超上限',
+  (__turn.peak>0.5 && __turn.peak<=7.6)?1:0, 1, 0.001);
+check('二阶转向：临到目标角会减速（'+__turn.slow.toFixed(3)+' rad/s）',
+  __turn.slow < 7?1:0, 1, 0.001);
+
+/* ④ 摄像机：帧率无关 + 瞬移吸附 */
+check('摄像机跟随帧率无关（pow 换算）+ 瞬移吸附',
+  /const k=1-Math\.pow\(1-0\.2, Math\.min\(4, dts\*60\)\)/.test(raidSrc)
+  && /Math\.abs\(tx-this\.camera\.x\)>600/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑤ 打击感：震屏 / 受击白闪 / 方向性火花 / AI 枪口火光 / 受击方向弧 */
+const __fx = JSON.parse(G(`JSON.stringify((()=>{
+  const saveP=Raid.particles;
+  const take=(ang)=>{
+    const fk={ particles:[] };
+    if(ang===undefined) __realHit.call(fk,0,0,"#fff");
+    else __realHit.call(fk,0,0,"#fff",ang);
+    const out=fk.particles.map(q=>Math.atan2(q.vy,q.vx));
+    const n=fk.particles.length;
+    const back=fk.particles.filter(q=>q.vx<0).length;
+    return { n, out, back };
+  };
+  const plain=take(undefined);
+  let mn=9, mx=-9;
+  for(const x of plain.out){ if(x<mn)mn=x; if(x>mx)mx=x; }
+  const spreadAll=+(mx-mn).toFixed(2);
+  const dir=take(0);
+  const fk3={ shake:0 };
+  Raid.shakeAdd.call(fk3, 999);
+  const cap=fk3.shake;
+  const R2={ shake:8, player:{x:0,y:0}, camera:{x:0,y:0}, spectate:false };
+  Raid._updateCamera.call(R2, { view:{w:1000,h:700}, zoom:1, camera:{} }, 0.5);
+  return { n1:plain.n, spreadAll, back:dir.back, total:dir.n, cap, decayed:+R2.shake.toFixed(2) };
+})())`));
+check('命中火花无方向时 360° 均布（'+__fx.n1+' 颗，跨度 '+__fx.spreadAll+' rad）',
+  (__fx.n1===6 && __fx.spreadAll>3)?1:0, 1, 0.001);
+check('命中火花带方向时按反弹锥散开（'+__fx.back+'/'+__fx.total+' 颗朝来向反侧）',
+  __fx.back>=5?1:0, 1, 0.001);
+check('震屏有上限（999 → '+__fx.cap+'px）', (__fx.cap>0 && __fx.cap<=10)?1:0, 1, 0.001);
+check('震屏按 dt 衰减（0.5s 后剩 '+__fx.decayed+'px）', __fx.decayed<8?1:0, 1, 0.001);
+check('受击白闪 0.14s（_hitT 写入 + 衰减）',
+  /target\._hitT=0\.14;/.test(raidSrc) && /if\(o\._hitT>0\) o\._hitT=Math\.max\(0,o\._hitT-dt\);/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('AI 开火有枪口火光（muzzleT 驱动）',
+  /if\(!o\.isPlayer && !o\.remote && \(o\.muzzleT\|\|0\)>0 && o\.gun\)\{/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('HUD 有受击方向弧 + 低血量脉冲暗角',
+  /R\._hurtDir!=null\)\{/.test(raidSrc) && /rgba\(150,12,12,/.test(raidSrc) ? 1 : 0, 1, 0.001);
+check('世界层震屏（HUD 不跟着抖）',
+  /const _shk=R\.shake\|\|0;/.test(raidSrc) ? 1 : 0, 1, 0.001);
+
+/* ⑥ 弹药默认一发不带 */
+const __ammo0 = JSON.parse(G(`JSON.stringify((()=>{
+  const st=RaidStash.load ? RaidStash.load() : { ammo:{} };
+  return { keys:Object.keys(st.ammo||{}).length };
+})())`));
+check('弹药默认全不带（大厅页脚有红字提醒）',
+  (/Math\.max\(0, Math\.min\(sel\.n\|0, cap\)\) : 0;/.test(raidSrc)
+   && /未携带弹药：进图后枪里没有弹匣/.test(raidSrc)) ? 1 : 0, 1, 0.001);
 
 /* ---- 断言构成可见化（v0.26.1）----
  * verify 里混着两类断言：在 vm 中真实调用结算 / 生成逻辑的「行为断言」，和检查

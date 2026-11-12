@@ -555,6 +555,7 @@ Object.assign(Raid, {
       if(this._tickElementStatus(o,dt)) return;
       o.fireCd=Math.max(0,o.fireCd-dt);
       o.muzzleT=Math.max(0,(o.muzzleT||0)-dt);
+      if(o._hitT>0) o._hitT=Math.max(0,o._hitT-dt);   // v0.41.0: hit flash fade
       o.kick=Math.max(0,(o.kick||0)-dt*11);
       if(o.reloadT>0){
         o.reloadT-=dt;
@@ -633,7 +634,7 @@ Object.assign(Raid, {
       }
     }
 
-    this._updateCamera(game);
+    this._updateCamera(game, dt);
 
     // 粒子/飘字
     for(let i=this.tracers.length-1;i>=0;i--){
@@ -1324,62 +1325,13 @@ Object.assign(Raid, {
             RNG.fr(b.y+40, Math.max(b.y+41, b.y+b.h-40))];
   },
 
-  /* v0.29.0：按 dt 归一化的平滑转向。
-     旧写法每帧固定 lerp 系数（0.08~0.26），帧率越高转得越快、掉帧时又突然很慢，
-     观感就是「视角一顿一顿 / 抖动」。这里换算成「每秒等效转向比例」，帧率无关。
-     v0.30.0：再加**角速度上限**（maxTurn, 弧度/秒）与死区 —— 目标位置每帧都在变
-     （走位、切目标、预判点抖动）时，旧版 lerp 会带着手电光锥一起甩；限速后
-     无论目标怎么动，每帧最多转 maxTurn*dt，光锥只会平滑扫过去，不会跳。 */
-  _face(b, targetAngle, perFrameRate, dt, maxTurn){
-    const cur = b.angle||0;
-    const d = M.normAngle(targetAngle - cur);
-    if(Math.abs(d) < 0.006){ b.angle = M.normAngle(cur); return; }   // 死区：微小抖动直接忽略
-    const t = 1 - Math.pow(1 - M.clamp(perFrameRate||0.14, 0.001, 0.99), Math.max(0.0001, dt*60));
-    let step = d * Math.min(1, t);
-    const cap = (maxTurn||6.0) * Math.max(0.0001, dt);
-    if(Math.abs(step) > cap) step = (step>0?1:-1) * cap;
-    b.angle = M.normAngle(cur + step);
-  },
-
-  /* v0.30.1：AI 感知判定 —— **用视线（_rayWall，灌木不挡）**，不再用手电光路（_rayLight，灌木挡光）。
-   * 手电仍然决定「能看多远 / 多宽」（reach + aiHalf），但一丛灌木不该让 AI 完全看不见 2 米外的人。
-   * 旧实现用 raidBeamLit（_rayLight），玩家站在灌木投下的光锥阴影边缘时，判定逐帧真假翻转：
-   *   _detectT 永远攒不到 react → 永不交战/开火，朝向在实时目标与陈旧 lastSeen 之间来回切 → 抖动。
-   * 近距离（<near）放宽到 360°：贴脸时不该因为目标在侧面就把人当空气。 */
-  _aiAware(b, x, y){
-    if(!b) return false;
-    const reach = (typeof raidAiBeamReach==="function") ? raidAiBeamReach(b) : 560;
-    const dx=x-b.x, dy=y-b.y, d=Math.hypot(dx,dy);
-    if(d>reach || d<1) return false;
-    if(d>110){    // 贴身（110px 内）不看朝向
-      const off = Math.abs(M.normAngle(Math.atan2(dy,dx)-(b.angle||0)));
-      if(off > RAID_LIT.aiHalf) return false;
-    }
-    return this._los(b.x,b.y,x,y);
-  },
-
-  /* v0.30.2：外围「注意锥」—— 只用来**转身对焦**，不用来开火。
-   * 之前的 _aiAware 只认光锥（0.55rad）内的目标，光锥外的人根本进不了候选：
-   *   AI 不会转身去把光锥扫过去，玩家贴着边缘站着就只会反复擦边 → 看起来一直抖。
-   * 这里给一个更宽的锥（近距离几乎全向、远处仍要求目标在手电附近），
-   * 命中后 AI 会朝目标转身；真正开火仍由 _aiAware（窄锥）决定。 */
-  _aiNotice(b, x, y){
-    if(!b) return false;
-    const reach = (typeof raidAiBeamReach==="function") ? raidAiBeamReach(b) : 560;
-    const dx=x-b.x, dy=y-b.y, d=Math.hypot(dx,dy);
-    if(d>reach || d<1) return false;
-    /* 320px 内注意角从 0.55 线性放宽到 1.30（≈74°）；再远就纯看光锥。
-       这样「贴脸侧后方」能被察觉，远处黑暗里的目标仍然藏得住。 */
-    const extra = M.clamp((320-d)/320, 0, 1) * 0.75;
-    const half = RAID_LIT.aiHalf + extra;
-    if(Math.abs(M.normAngle(Math.atan2(dy,dx)-(b.angle||0))) > half) return false;
-    return this._los(b.x,b.y,x,y);
-  },
-
   _botsUpdate(dt, game){
     // 联机非房主：AI 完全由房主模拟，这里只渲染影子
     if(this.online && typeof Net!=="undefined" && !Net.isHost) return;
     if(this.spawnGrace>0) this.spawnGrace=Math.max(0,this.spawnGrace-dt);   // 整帧只递减一次
+    /* v0.41.0：本帧位置快照统一在这里做一次（engage 的弹道预判要用上一帧坐标）。
+       旧版在每个 AI 的 engage 分支里写 tgt._px，多个 AI 共用同一目标时只有第一个算得出速度。 */
+    raidAiSnapshot(this);
     let p=this.player;
     for(const b of this.ops){
       if(b.isPlayer||b.remote||b.ghost||!b.alive) continue;
@@ -1395,39 +1347,14 @@ Object.assign(Raid, {
       if(b.affixSummon && !b._called && b.hp < b.maxHP*0.5){ b._called=true; this._callReinforce(b); }
       /* v0.39.0（医疗兵）：不处理掉就一直给前排回血 —— 这条就是它的全部威胁 */
       if(b.arch==="medic") this._medicTick(b, dt, game);
-      // 联机房主：AI 会在「自己 + 所有远端玩家」里挑最近的可见目标
-      // AI 之间也会交火 —— 把「其他敌对 AI」也纳入候选目标（同小队不互打、流浪 Scav 之间友好）
-      // v0.21.9：基线不再预设玩家原始距离 —— 否则被墙挡住的近处玩家会屏蔽更远但可见的敌对目标
-      let tgt=null, d=Infinity;
-      const _consider=(o)=>{
-        if(o===b || !o.alive || o.ghost) return;
-        let enemy;
-        if(o.isPlayer || o.remote) enemy=true;                              // 玩家永远是敌人
-        else if(b.bounty || o.bounty) enemy=true;                           // Boss 敌对所有
-        else if(b.cls==="scav" && o.cls==="scav") enemy=false;             // 流浪 Scav 之间友好
-        else if(o.squadId && o.squadId===b.squadId && b.squadId) enemy=false; // 同小队不互打
-        else enemy=true;
-        if(!enemy) return;
-        const dd=M.dist(b.x,b.y,o.x,o.y);
-        // 视距按 Scav / PMC / Boss 分级；玩家在近身范围内仍强行抢目标
-        const sight = sense.sight;
-        /* v0.26.0：AI 只在**自己手电**照到的地方能发现目标；受击 3 秒内例外，
-           且例外目标自带最高优先级（打我的人优先）。_los 依旧保留，光和子弹都不穿墙。 */
-        const locked = raidHitLocked(b,o);
-        /* v0.30.2：候选筛选用「注意锥」（比光锥宽），这样光锥外的目标也能被 AI 发现并转身对焦 */
-        if(!locked && !this._aiNotice(b,o.x,o.y)) return;
-        const pri = locked ? -4000
-                  : (o.isPlayer||o.remote) ? (dd<720 ? -2000 : 0) : 0;
-        /* v0.30.0：目标黏性 —— 当前目标只要还活着且可见，就给它 -140 的「续锁」优惠，
-           除非另一个候选比它近 140px 以上才换人。否则两个距离相近的敌人会让 AI
-           每帧在目标之间来回切，手电光锥跟着左右甩（这就是「手电筒经常跳动」的主因之一）。 */
-        const stick = (o===b._tgt && o.alive) ? -140 : 0;
-        if((dd+pri+stick)<d && dd<sight && this._los(b.x,b.y,o.x,o.y)){ d=dd; tgt=o; }
-      };
-      _consider(p);
-      if(this.online){ for(const o of this.ops){ if(o.isPlayer||o.remote) _consider(o); } }
-      for(const o of this.ops){ if(!o.isPlayer && !o.remote) _consider(o); }
-      if(!tgt || !tgt.alive) tgt=p;
+      /* v0.41.0：目标选举外移到 raid-ai.js 的 raidAiPickTarget —— 黏性续锁 + 受击锁定。
+       * 旧实现在这里逐帧重排候选，并且把「加权分数」赋给了 d 当距离用：
+       * 玩家 720px 内有 -2000 的优先级，d 会被写成负数，于是后面 d<sense.sight 恒成立，
+       * 5000px 外的目标也算「在视距内」（真机上表现为 AI 隔半张地图朝你转身）。
+       * 现在 d 是真实的欧氏距离。 */
+      const pick = raidAiPickTarget(this, b, sense);
+      let tgt = pick.tgt;
+      const d = M.dist(b.x, b.y, tgt.x, tgt.y);
       b._tgt = tgt;
       /* 索敌分级：Scav 视距短、反应慢、忘得快；PMC 更警觉；Boss 几乎即时锁定。
        * _detectT 累积「持续看见」的时间，视线中断会快速衰减；已警觉的 AI 重新发现目标时不再重复反应延迟。 */
@@ -1537,14 +1464,14 @@ Object.assign(Raid, {
           if(lm>lmax){ lx=lx/lm*lmax; ly=ly/lm*lmax; }
           aimX += lx; aimY += ly;
         } else { b._tvx=0; b._tvy=0; }
-        tgt._px=tgt.x; tgt._py=tgt.y;
-        this._face(b, M.angle(b.x,b.y,aimX,aimY), b.smart?0.26:0.19, dt, b.smart?7.5:6.0);
-        /* v0.30.1：贴边吸附 —— 残差 <0.10rad 时直接对齐真实目标角，
-           杜绝「在光锥边缘来回抖动」的驻留状态（玩家永远停在正中）。 */
+        /* v0.30.1 / v0.41.0：贴边吸附改成「换瞄准点」而不是「再转一次」。
+           残差 <0.10rad 时把预判点换成真实目标位置，让下面唯一那次 _face 精确对齐 ——
+           旧版在同一帧调第二次 _face，两次角速度叠加，等效上限翻倍（实测 11.5 rad/s）。 */
         if(canSee){
           const realAng=M.angle(b.x,b.y,tgt.x,tgt.y);
-          if(Math.abs(M.normAngle(realAng-b.angle)) < 0.10) b.angle=M.normAngle(realAng);
+          if(Math.abs(M.normAngle(realAng-b.angle)) < 0.10){ aimX=tgt.x; aimY=tgt.y; }
         }
+        this._face(b, M.angle(b.x,b.y,aimX,aimY), b.smart?0.26:0.19, dt, b.smart?7.5:6.0);
         const ad=M.dist(b.x,b.y,aimX,aimY);           // 用「所知位置」算距离，丢失视线时不用实时坐标
         let mx=0,my=0;
         // 压得更狠（170 才开始保持距离，60 以内才后退）

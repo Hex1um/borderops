@@ -19,7 +19,14 @@ const RenderRaid = {
       /* 维度切换：只替换世界层，暗角 / HUD / DOM 物品栏全部复用同一套 */
       FPView.render(ctx, game, R);
     } else {
-      ctx.save(); ctx.scale(z,z); ctx.translate(-cam.x,-cam.y);
+      ctx.save(); ctx.scale(z,z);
+      /* v0.41.0：震屏只抖世界层 —— HUD / 暗角 / 准星 / 物品栏都不动，
+         否则玩家会以为整个界面在飘。幅度与衰减由 Raid.shake 统一管（_updateCamera 里减）。 */
+      const _shk=R.shake||0;
+      if(_shk>0.05){
+        const _sa=Math.random()*6.2832, _sm=_shk*(0.55+Math.random()*0.45);
+        ctx.translate(-cam.x+Math.cos(_sa)*_sm, -cam.y+Math.sin(_sa)*_sm);
+      } else ctx.translate(-cam.x,-cam.y);
       this.scene(ctx, game, cam, z);
       ctx.restore();
     }
@@ -1180,6 +1187,28 @@ const RenderRaid = {
     ctx.beginPath(); ctx.arc(o.x,o.y,r,0,6.2832);
     ctx.fillStyle=o.color; ctx.fill();
     ctx.lineWidth=3; ctx.strokeStyle=(o.isPlayer||o.remote)?"#0a2a33":"#0d0a07"; ctx.stroke();
+    /* v0.41.0：受击白闪 —— 命中瞬间本体泛白并很快退掉。俯视角下没有受击动画时，
+       「打中了没有」全靠这一下（配合方向性火花，能立刻看出打没打穿）。 */
+    if((o._hitT||0)>0){
+      ctx.save();
+      ctx.globalAlpha=Math.min(0.72,(o._hitT/0.14)*0.72);
+      ctx.fillStyle="#fff";
+      ctx.beginPath(); ctx.arc(o.x,o.y,r*0.96,0,6.2832); ctx.fill();
+      ctx.restore();
+    }
+    /* v0.41.0：AI 的枪口火光。以前只有玩家 / 队友的持枪模型有 muzzleT 特效，
+       几十个 AI 开火只有一条曳光线，看不出「谁在打你」。这里在枪线末端补一小团暖光。 */
+    if(!o.isPlayer && !o.remote && (o.muzzleT||0)>0 && o.gun){
+      const _gl={pistol:r+10,smg:r+14,shotgun:r+18,rifle:r+20,sniper:r+30,launcher:r+16}[o.gun.type]||r+16;
+      const _mx=o.x+Math.cos(o.angle)*_gl, _my=o.y+Math.sin(o.angle)*_gl;
+      ctx.save(); ctx.globalCompositeOperation="lighter";
+      const _g=ctx.createRadialGradient(_mx,_my,0,_mx,_my,9);
+      _g.addColorStop(0,"rgba(255,240,200,0.85)");
+      _g.addColorStop(0.5,"rgba(255,178,80,0.42)");
+      _g.addColorStop(1,"rgba(255,140,40,0)");
+      ctx.fillStyle=_g; ctx.beginPath(); ctx.arc(_mx,_my,9,0,6.2832); ctx.fill();
+      ctx.restore();
+    }
     // v0.14.10：装甲型单位一圈黄色描边，和黄色血条呼应
     if(at==="armor"){
       ctx.beginPath(); ctx.arc(o.x,o.y,r+2,0,6.2832);
@@ -1318,6 +1347,22 @@ const RenderRaid = {
     // 受击红晕
     if(R.hitFlash>0){
       ctx.fillStyle=`rgba(200,30,30,${R.hitFlash*0.5})`; ctx.fillRect(0,0,v.w,v.h);
+    }
+    /* v0.41.0：受击方向弧 —— 在屏幕边缘、朝伤害来源的那一侧画一段暗红弧。
+       俯视角被打时经常不知道子弹从哪来；HUD 给方向，比让玩家回头看更符合战术射击。 */
+    if((R.hitFlash||0)>0.06 && R._hurtDir!=null){
+      const _r2=Math.min(v.w,v.h)*0.40;
+      ctx.save(); ctx.globalAlpha=Math.min(0.38,R.hitFlash*1.4);
+      ctx.strokeStyle="#ff3b30"; ctx.lineWidth=Math.min(16, v.h*0.032);
+      ctx.beginPath(); ctx.arc(v.w/2,v.h/2,_r2,R._hurtDir-Math.PI*0.21,R._hurtDir+Math.PI*0.21);
+      ctx.stroke(); ctx.restore();
+    }
+    if(p.alive && p.maxHP>0 && 1-M.clamp(p.hp/p.maxHP,0,1) > 0.68){
+      const hr=(1-M.clamp(p.hp/p.maxHP,0,1)-0.68)/0.32;
+      const al=hr*(0.16+0.16*(0.5+0.5*Math.sin(M.now()/240)));
+      const g2=ctx.createRadialGradient(v.w/2,v.h/2,Math.min(v.w,v.h)*0.34,v.w/2,v.h/2,Math.max(v.w,v.h)*0.70);
+      g2.addColorStop(0,"rgba(0,0,0,0)"); g2.addColorStop(1,`rgba(150,12,12,${al.toFixed(3)})`);
+      ctx.fillStyle=g2; ctx.fillRect(0,0,v.w,v.h);
     }
 
     /* --- 左上角击杀提示 --- */

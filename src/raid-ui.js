@@ -118,12 +118,12 @@ UI.raidSetup=function(){
       </div>` };
     }
     const cap=Math.min(cur.n, RAID_AMMO_CAP);
-    /* v0.32.0（用户反馈「仓库弹药带不进去」）：默认改成**带 3 条（90 发）**。
-       v0.20.1 原本默认 0 发，理由是「弹药要自己负责」，但结果是玩家拖都没拖就空枪进图、
-       以为功能坏了。现在默认够打一两轮遭遇战，不够打完一局 —— 仍然要自己负责搜刮。
+    /* v0.41.0（用户要求）：**默认一發都不带**，全部靠玩家自己拖。
+       v0.32.0 曾默认带 90 发（理由是「拖都没拖就空枪进图，以为功能坏了」），
+       但那等于免费送一场遭遇战的弹药，跟「弹药要自己负责」的搜刮经济冲突。
+       现在默认 0，并在页脚常驻红字提醒「未携带弹药 → 进图枪是空的」，
        玩家拖过滑动条后以他选的数量为准（sel 存在就不覆盖）。 */
-    const n=(sel && sel.id===cur.id) ? Math.max(0, Math.min(sel.n|0, cap))
-                                    : Math.min(cap, RAID_AMMO_STACK*3);
+    const n=(sel && sel.id===cur.id) ? Math.max(0, Math.min(sel.n|0, cap)) : 0;
     UI._raidAmmo[cal]={ id:cur.id, n, cap };
     /* v0.21.3：携带数量改成滑动条（和带入现金一致）—— 0 ~ 该口径库存，步长 30 发。
      * 购买入口全部撤掉，买子弹去军火超市的「子弹」页 / 工坊合成。 */
@@ -358,7 +358,7 @@ UI.raidSetup=function(){
       </div>
 
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:10px;">
-        ${ammoCarried===0?`<div class="raid-tip" style="color:#ff9a8a;width:100%;">未携带弹药：进图后枪是空的，要先搜到 / 买到子弹才能开火（钥匙同样默认不带）</div>`:''}
+        ${ammoCarried===0?`<div class="raid-tip" style="color:#ff9a8a;width:100%;">未携带弹药：进图后枪里没有弹匣，要先搜到 / 买到子弹才能开火（钥匙同样默认不带）</div>`:''}
         <div class="raid-tip">${sel.w.length===0&&!sel.a&&!sel.h&&!sel.s&&cashVal===0?'裸装进场：空手、无甲、无盔、无盾，只带 1 卷绷带 —— 进图翻箱捡枪，捡到即自动上手':`已选 ${sel.w.length} 把枪${sel.a?' + 护甲':''}${sel.h?' + 头盔':''}${sel.s?' + 护盾':''}，装备 ₽${priceText(gearVal)}${cashVal>0?` + 现金 ₽${priceText(cashVal)}`:''}，总价值 <b style="color:#ffd36a">₽${priceText(carryVal)}</b>，局内 Q 循环换枪 / 1~4 直选，多出的枪放背包`}</div>
       </div>
     </div>`);
